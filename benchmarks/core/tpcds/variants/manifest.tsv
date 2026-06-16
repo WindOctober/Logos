@@ -1,0 +1,15 @@
+case_id	query_number	before_template	after_template	feature_tags
+query005	005	query_templates/query5.tpl	query_variants/query5a.tpl	top,rollup,union,union_all,with
+query010	010	query_templates/query10.tpl	query_variants/query10a.tpl	top,union,union_all
+query014	014	query_templates/query14.tpl	query_variants/query14a.tpl	top,rollup,union,union_all,intersect,with
+query018	018	query_templates/query18.tpl	query_variants/query18a.tpl	top,rollup,union,union_all,with
+query022	022	query_templates/query22.tpl	query_variants/query22a.tpl	top,rollup,union,union_all,with
+query027	027	query_templates/query27.tpl	query_variants/query27a.tpl	top,rollup,grouping,union,union_all,with
+query035	035	query_templates/query35.tpl	query_variants/query35a.tpl	top,union,union_all
+query036	036	query_templates/query36.tpl	query_variants/query36a.tpl	top,rollup,grouping,rank,window,union,with
+query051	051	query_templates/query51.tpl	query_variants/query51a.tpl	top,window,full_outer,with
+query067	067	query_templates/query67.tpl	query_variants/query67a.tpl	top,rollup,rank,window,union,union_all,with
+query070	070	query_templates/query70.tpl	query_variants/query70a.tpl	top,rollup,grouping,rank,window,union,with
+query077	077	query_templates/query77.tpl	query_variants/query77a.tpl	top,rollup,union,union_all,with
+query080	080	query_templates/query80.tpl	query_variants/query80a.tpl	top,rollup,union,union_all,with
+query086	086	query_templates/query86.tpl	query_variants/query86a.tpl	top,rollup,grouping,rank,window,union,with
