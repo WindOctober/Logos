@@ -1,0 +1,10 @@
+/.opam/
+/_build/
+*.aux
+*.glob
+*.vo
+*.vos
+*.vok
+*.vio
+*.cmxs
+*.native
