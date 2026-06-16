@@ -1,4 +1,4 @@
-.PHONY: submodules formal-sql smoke status
+.PHONY: submodules formal-sql smoke calcite-ir status
 
 OPAM ?= opam
 OPAM_SWITCH ?= ../FormalSQL/.opam-rocq
@@ -15,6 +15,9 @@ formal-sql: submodules
 
 smoke: formal-sql
 	$(OPAM) exec --switch=$(OPAM_SWITCH_PATH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories LogosSmoke theories/Smoke.v
+
+calcite-ir:
+	scripts/calcite-ir --schema frontend/calcite-wrapper/examples/schema.sql --sql frontend/calcite-wrapper/examples/query.sql
 
 status:
 	git submodule status

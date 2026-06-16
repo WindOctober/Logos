@@ -1,5 +1,7 @@
 /.opam/
 /_build/
+/.cache/
+frontend/calcite-wrapper/target/
 *.aux
 *.glob
 *.vo

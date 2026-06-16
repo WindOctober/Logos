@@ -1,14 +1,14 @@
 # Logos
 
-Logos 是一个用于辅助 LLM 验证 SQL schema rewrites 等价性的自动化定理证明器。项目目标是使用 Rocq 构建可检查的证明对象，让 LLM 负责提出 rewrite、lemma 和归纳结构，而最终等价性结论由证明器验证。
+Logos is a Rocq-based theorem-proving workspace for LLM-assisted verification of SQL schema rewrite equivalence. The intended trust boundary is explicit: LLMs may propose rewrites, lemmas, proof plans, and proof scripts, but equivalence claims must be checked by Rocq.
 
-## SQL 形式化语义
+## Formal SQL Semantics
 
-Logos 的 SQL 形式化语义部分基于已有的 SQLCoq 工作：
+Logos builds on the existing SQLCoq/SQLFormalSemantics development instead of redefining SQL semantics from scratch:
 
-- `vendor/FormalSQL`: SQLCoq/SQLFormalSemantics 的 Rocq 迁移 fork，包含 SQL 抽象语法、bag semantics、SQLAlgebra，以及 `eval_sql_query` / `eval_query` 等语义定义。
+- `vendor/FormalSQL`: a Rocq-modernized fork of SQLCoq/SQLFormalSemantics. It provides SQL abstract syntax, bag semantics, SQLAlgebra, and semantic functions such as `eval_sql_query` and `eval_query`.
 
-我们计划优先把 Logos 的等价性证明层建立在 SQLCoq 的语义定义之上，而不是重新定义 SQL 语义。典型证明目标会接近：
+The verification layer is expected to generate proof goals against those definitions. A typical theorem shape is:
 
 ```coq
 forall instance env,
@@ -16,25 +16,27 @@ forall instance env,
   eval_sql_query env q_before =BE= eval_sql_query env q_after.
 ```
 
-对于更适合代数化推理的 rewrite，可以使用 SQLCoq 自带的 `SQLAlgebra` 层证明等价。Logos 不再 vendor SQLToNRACert/DBCert，也不把 SQL 翻译到 Q*Cert NRAEnv 或 JavaScript 编译链；这些路径是为 certified SQL-to-JS 服务的，不是当前 rewrite 等价性验证的核心依赖。
+For rewrites that are easier to reason about algebraically, Logos should translate SQL queries through SQLCoq's `SQLAlgebra` layer and prove equivalence over `eval_query`.
 
-## 子模块
+Logos does not vendor SQLToNRACert, DBCert, or the Q*Cert NRAEnv-to-JavaScript compilation path. Those components target certified SQL-to-JavaScript compilation, while Logos focuses on SQL rewrite equivalence.
 
-本仓库通过 Git submodule 固定 SQLCoq 相关依赖：
+## Submodules
+
+The SQLCoq dependency is pinned as a Git submodule:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-当前配置如下：
+Current configuration:
 
 ```text
 vendor/FormalSQL  git@github.com:WindOctober/FormalSQL.git  branch master
 ```
 
-## 构建说明
+## Build
 
-Logos 使用 `vendor/FormalSQL` 中已经迁移到 Rocq 的 SQLCoq fork。默认使用同一工作区中 `../FormalSQL/.opam-rocq` 这个 Rocq 9.2 switch；需要其它 switch 时可以覆盖 `OPAM_SWITCH`。
+Logos uses the Rocq-compatible SQLCoq fork in `vendor/FormalSQL`. By default, the Makefile expects a Rocq 9.2 opam switch at `../FormalSQL/.opam-rocq`. Override `OPAM_SWITCH` if your switch lives elsewhere.
 
 ```bash
 make submodules
@@ -42,20 +44,51 @@ make formal-sql
 make smoke
 ```
 
-这个 smoke test 会编译 `theories/Smoke.v`，确认 Logos 本地 Rocq 文件能够导入 SQLCoq 的 `SQLFS` 语义库。
+The smoke test compiles `theories/Smoke.v` and checks that Logos can import the SQLCoq `SQLFS` semantics library.
 
-如果已经手动创建了兼容环境，也可以只运行：
+If a compatible Rocq environment is already available and you only want to inspect the submodule state, run:
 
 ```bash
 make submodules
 make status
 ```
 
-## SQLCoq 维护状态
+## Calcite Frontend Prototype
 
-上游 SQLCoq 仓库不是面向现代 Rocq 的活跃维护栈：
+Logos includes a minimal Apache Calcite CLI wrapper for testing whether a Java frontend can turn SQL schemas and queries into an intermediate representation suitable for later Rocq code generation. The wrapper is a small Maven-managed Java project; its `pom.xml` declares the Calcite dependency, Java version, and CLI entry point.
 
-- upstream `sqlformalsemantics` 当前仍以 Coq 8.11.2 为基线。
-- `vendor/FormalSQL` 是 `WindOctober/FormalSQL` 的 `master` 分支，fork 自 `formaldata/sqlformalsemantics`，目标是在保持 SQL 形式化语义不变的基础上支持 Rocq 9.2。
+The wrapper lives in:
 
-因此，Logos 当前只依赖 FormalSQL 的 SQL 语义和 SQLAlgebra，不依赖 SQLToNRACert、DBCert 或 Q*Cert 的 NRA/JavaScript 编译链。
+```text
+frontend/calcite-wrapper
+```
+
+Run the bundled example with:
+
+```bash
+make calcite-ir
+```
+
+Or invoke the wrapper directly:
+
+```bash
+scripts/calcite-ir \
+  --schema frontend/calcite-wrapper/examples/schema.sql \
+  --sql frontend/calcite-wrapper/examples/query.sql
+```
+
+The command emits JSON with two main views:
+
+- `sqlAst`: Calcite's `SqlNode` syntax tree, useful for inspecting parser output.
+- `rel`: Calcite's validated `RelNode` algebra tree, intended as the primary input for a future FormalSQL `SQLAlgebra` emitter.
+
+The current DDL reader only covers simple `CREATE TABLE (...)` declarations. It exists to bootstrap Calcite validation and is not part of the trusted semantics. Logos should treat Calcite output as frontend IR, then generate explicit FormalSQL/Rocq definitions, theorems, and obligations for kernel checking.
+
+## SQLCoq Maintenance Status
+
+The upstream SQLCoq repository is not currently maintained as a modern Rocq stack:
+
+- The upstream `sqlformalsemantics` project targets Coq 8.11.2.
+- `vendor/FormalSQL` tracks `WindOctober/FormalSQL` on branch `master`, forked from `formaldata/sqlformalsemantics`, with the goal of supporting Rocq 9.2 while preserving the original formal SQL semantics.
+
+Accordingly, Logos currently depends only on FormalSQL's SQL semantics and SQLAlgebra definitions.

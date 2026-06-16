@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MAVEN_VERSION="${MAVEN_VERSION:-3.9.11}"
+MAVEN_DIR="$ROOT_DIR/.cache/apache-maven-$MAVEN_VERSION"
+MAVEN_BIN="$MAVEN_DIR/bin/mvn"
+
+if [[ ! -x "$MAVEN_BIN" ]]; then
+  mkdir -p "$ROOT_DIR/.cache"
+  archive="$ROOT_DIR/.cache/apache-maven-$MAVEN_VERSION-bin.tar.gz"
+  if [[ ! -f "$archive" ]]; then
+    curl -fsSL "https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz" -o "$archive"
+  fi
+  tar -xzf "$archive" -C "$ROOT_DIR/.cache"
+fi
+
+exec "$MAVEN_BIN" -q -f "$ROOT_DIR/frontend/calcite-wrapper/pom.xml" \
+  compile \
+  exec:java -Dexec.args="$*"
