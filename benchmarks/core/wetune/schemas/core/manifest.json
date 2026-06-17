@@ -1,0 +1,302 @@
+[
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/diaspora.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.base.schema.constraints.json",
+    "tables": 49,
+    "columns": 375,
+    "typeLowerings": 372,
+    "primaryKeys": 46,
+    "uniqueKeys": 44,
+    "uniqueIndexes": 0,
+    "foreignKeys": 31,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 65
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/diaspora.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.opt.schema.constraints.json",
+    "tables": 49,
+    "columns": 375,
+    "typeLowerings": 372,
+    "primaryKeys": 46,
+    "uniqueKeys": 44,
+    "uniqueIndexes": 0,
+    "foreignKeys": 31,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 65
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/discourse.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/discourse.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/discourse.base.schema.constraints.json",
+    "tables": 155,
+    "columns": 1378,
+    "typeLowerings": 622,
+    "primaryKeys": 145,
+    "uniqueKeys": 114,
+    "uniqueIndexes": 20,
+    "foreignKeys": 15,
+    "checks": 2,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {},
+    "alterConstraints": {
+      "dropped_nonsemantic_alter_table": 137,
+      "kept_primary": 145,
+      "kept_foreign": 15
+    },
+    "indexConstraints": {
+      "kept_simple_unique_index": 114,
+      "kept_structured_unique_index": 20
+    },
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/discourse.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/discourse.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/discourse.opt.schema.constraints.json",
+    "tables": 155,
+    "columns": 1378,
+    "typeLowerings": 622,
+    "primaryKeys": 145,
+    "uniqueKeys": 114,
+    "uniqueIndexes": 22,
+    "foreignKeys": 15,
+    "checks": 2,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {},
+    "alterConstraints": {
+      "dropped_nonsemantic_alter_table": 137,
+      "kept_primary": 145,
+      "kept_foreign": 15
+    },
+    "indexConstraints": {
+      "kept_simple_unique_index": 114,
+      "kept_structured_unique_index": 22
+    },
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/gitlab.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/gitlab.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/gitlab.base.schema.constraints.json",
+    "tables": 332,
+    "columns": 3141,
+    "typeLowerings": 1552,
+    "primaryKeys": 313,
+    "uniqueKeys": 222,
+    "uniqueIndexes": 29,
+    "foreignKeys": 509,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {},
+    "alterConstraints": {
+      "dropped_nonsemantic_alter_table": 296,
+      "kept_primary": 313,
+      "kept_foreign": 509
+    },
+    "indexConstraints": {
+      "kept_simple_unique_index": 222,
+      "kept_structured_unique_index": 29
+    },
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/gitlab.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/gitlab.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/gitlab.opt.schema.constraints.json",
+    "tables": 332,
+    "columns": 3141,
+    "typeLowerings": 1552,
+    "primaryKeys": 313,
+    "uniqueKeys": 226,
+    "uniqueIndexes": 32,
+    "foreignKeys": 509,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {},
+    "alterConstraints": {
+      "dropped_nonsemantic_alter_table": 296,
+      "kept_primary": 313,
+      "kept_foreign": 509
+    },
+    "indexConstraints": {
+      "kept_simple_unique_index": 226,
+      "kept_structured_unique_index": 32
+    },
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/lobsters.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.base.schema.constraints.json",
+    "tables": 22,
+    "columns": 178,
+    "typeLowerings": 166,
+    "primaryKeys": 21,
+    "uniqueKeys": 13,
+    "uniqueIndexes": 0,
+    "foreignKeys": 39,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 56
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/lobsters.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.opt.schema.constraints.json",
+    "tables": 22,
+    "columns": 178,
+    "typeLowerings": 166,
+    "primaryKeys": 21,
+    "uniqueKeys": 13,
+    "uniqueIndexes": 0,
+    "foreignKeys": 39,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 56
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/redmine.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.base.schema.constraints.json",
+    "tables": 56,
+    "columns": 407,
+    "typeLowerings": 321,
+    "primaryKeys": 47,
+    "uniqueKeys": 12,
+    "uniqueIndexes": 0,
+    "foreignKeys": 0,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 100
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/redmine.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.opt.schema.constraints.json",
+    "tables": 56,
+    "columns": 407,
+    "typeLowerings": 321,
+    "primaryKeys": 47,
+    "uniqueKeys": 12,
+    "uniqueIndexes": 0,
+    "foreignKeys": 0,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 100
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/solidus.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.base.schema.constraints.json",
+    "tables": 98,
+    "columns": 808,
+    "typeLowerings": 623,
+    "primaryKeys": 98,
+    "uniqueKeys": 18,
+    "uniqueIndexes": 0,
+    "foreignKeys": 6,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 164
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/solidus.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.opt.schema.constraints.json",
+    "tables": 98,
+    "columns": 808,
+    "typeLowerings": 623,
+    "primaryKeys": 98,
+    "uniqueKeys": 18,
+    "uniqueIndexes": 0,
+    "foreignKeys": 6,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 164
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/spree.base.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.base.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.base.schema.constraints.json",
+    "tables": 85,
+    "columns": 724,
+    "typeLowerings": 533,
+    "primaryKeys": 85,
+    "uniqueKeys": 33,
+    "uniqueIndexes": 0,
+    "foreignKeys": 3,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 200
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  },
+  {
+    "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/spree.opt.schema.sql",
+    "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.opt.schema.sql",
+    "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.opt.schema.constraints.json",
+    "tables": 85,
+    "columns": 724,
+    "typeLowerings": 533,
+    "primaryKeys": 85,
+    "uniqueKeys": 33,
+    "uniqueIndexes": 0,
+    "foreignKeys": 3,
+    "checks": 0,
+    "unsupportedSemanticConstraints": 0,
+    "droppedTableItems": {
+      "secondary_index": 200
+    },
+    "alterConstraints": {},
+    "indexConstraints": {},
+    "semanticConstraintsPreservedIn": "constraints sidecar JSON"
+  }
+]

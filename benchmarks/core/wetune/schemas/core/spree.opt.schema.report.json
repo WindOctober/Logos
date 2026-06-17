@@ -1,0 +1,20 @@
+{
+  "alterConstraints": {},
+  "checks": 0,
+  "columns": 724,
+  "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.opt.schema.constraints.json",
+  "droppedTableItems": {
+    "secondary_index": 200
+  },
+  "foreignKeys": 3,
+  "indexConstraints": {},
+  "primaryKeys": 85,
+  "semanticConstraintsPreservedIn": "constraints sidecar JSON",
+  "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/spree.opt.schema.sql",
+  "tables": 85,
+  "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/spree.opt.schema.sql",
+  "typeLowerings": 533,
+  "uniqueIndexes": 0,
+  "uniqueKeys": 33,
+  "unsupportedSemanticConstraints": 0
+}

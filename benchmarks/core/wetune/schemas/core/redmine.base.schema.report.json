@@ -1,0 +1,20 @@
+{
+  "alterConstraints": {},
+  "checks": 0,
+  "columns": 407,
+  "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.base.schema.constraints.json",
+  "droppedTableItems": {
+    "secondary_index": 100
+  },
+  "foreignKeys": 0,
+  "indexConstraints": {},
+  "primaryKeys": 47,
+  "semanticConstraintsPreservedIn": "constraints sidecar JSON",
+  "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/redmine.base.schema.sql",
+  "tables": 56,
+  "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/redmine.base.schema.sql",
+  "typeLowerings": 321,
+  "uniqueIndexes": 0,
+  "uniqueKeys": 12,
+  "unsupportedSemanticConstraints": 0
+}

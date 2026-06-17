@@ -201,8 +201,9 @@
           "after_sql"
         ],
         "caseId": "{id}",
-        "schema": "benchmarks/core/wetune/schemas/{app_name}.base.schema.sql",
-        "alternateSchema": "benchmarks/core/wetune/schemas/{app_name}.opt.schema.sql",
+        "schema": "benchmarks/core/wetune/schemas/core/{app_name}.base.schema.sql",
+        "alternateSchema": "benchmarks/core/wetune/schemas/core/{app_name}.opt.schema.sql",
+        "constraints": "benchmarks/core/wetune/schemas/core/{app_name}.base.schema.constraints.json",
         "beforeSql": "before_sql",
         "afterSql": "after_sql"
       },
@@ -232,7 +233,7 @@
       "frontendTargetDialectPurpose": "calcite_syntax_only",
       "semanticProfile": "formal-sql-core",
       "constraintScope": "application",
-      "materialization": "Generate temporary before.sql and after.sql from each TSV row, use the app-level base schema by default, normalize Rails/ActiveRecord SQL through the per-application SQLGlot dialect, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+      "materialization": "Generate temporary before.sql and after.sql from each TSV row, use the sanitized app-level core base schema plus its constraint sidecar by default, normalize Rails/ActiveRecord SQL through the per-application SQLGlot dialect, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
     }
   ]
 }

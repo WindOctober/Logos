@@ -1,0 +1,3151 @@
+{
+  "checks": [],
+  "foreignKeys": [
+    {
+      "actions": "",
+      "columns": [
+        "hat_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "hats",
+      "source": "create_table",
+      "table": "comments"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "parent_comment_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "comments",
+      "source": "create_table",
+      "table": "comments"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "comments"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "comments"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "hat_requests"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "granted_by_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "hats"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "hats"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "hidden_stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "hidden_stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "new_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "invitations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "invitations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "hat_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "hats",
+      "source": "create_table",
+      "table": "messages"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "author_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "messages"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "recipient_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "messages"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "moderator_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "mod_notes"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "mod_notes"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "comment_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "comments",
+      "source": "create_table",
+      "table": "moderations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "moderator_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "moderations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "moderations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "tag_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "tags",
+      "source": "create_table",
+      "table": "moderations"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "read_ribbons"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "read_ribbons"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "saved_stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "saved_stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "domain_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "domains",
+      "source": "create_table",
+      "table": "stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "merged_story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "stories"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "suggested_taggings"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "tag_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "tags",
+      "source": "create_table",
+      "table": "suggested_taggings"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "suggested_taggings"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "suggested_titles"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "suggested_titles"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "tag_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "tags",
+      "source": "create_table",
+      "table": "tag_filters"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "tag_filters"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "story_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "stories",
+      "source": "create_table",
+      "table": "taggings"
+    },
+    {
+      "actions": "ON DELETE CASCADE ON UPDATE CASCADE",
+      "columns": [
+        "tag_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "tags",
+      "source": "create_table",
+      "table": "taggings"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "banned_by_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "users"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "disabled_invite_by_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "users"
+    },
+    {
+      "actions": "",
+      "columns": [
+        "invited_by_user_id"
+      ],
+      "refColumns": [
+        "id"
+      ],
+      "refTable": "users",
+      "source": "create_table",
+      "table": "users"
+    }
+  ],
+  "primaryKeys": [
+    {
+      "columns": [
+        "key"
+      ],
+      "table": "ar_internal_metadata"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "comments"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "domains"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "hat_requests"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "hats"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "hidden_stories"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "invitation_requests"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "invitations"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "messages"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "mod_notes"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "moderations"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "read_ribbons"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "saved_stories"
+    },
+    {
+      "columns": [
+        "version"
+      ],
+      "table": "schema_migrations"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "stories"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "suggested_taggings"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "suggested_titles"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "tag_filters"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "taggings"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "tags"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "table": "users"
+    }
+  ],
+  "semanticSchema": {
+    "tables": [
+      {
+        "columns": [
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "key",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`key` varchar(255) CHARACTER SET utf8 NOT NULL",
+            "sourceType": "varchar(255) CHARACTER SET utf8"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "value",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`value` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          }
+        ],
+        "name": "ar_internal_metadata"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`updated_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "short_id",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`short_id` varchar(10) NOT NULL DEFAULT ''",
+            "sourceType": "varchar(10)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "parent_comment_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`parent_comment_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "thread_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`thread_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "comment",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`comment` mediumtext NOT NULL",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "upvotes",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`upvotes` int(11) NOT NULL DEFAULT '0'",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "downvotes",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`downvotes` int(11) NOT NULL DEFAULT '0'",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0.0000000000000000000'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "confidence",
+            "normalizedFrontendType": "FLOAT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`confidence` decimal(20,19) NOT NULL DEFAULT '0.0000000000000000000'",
+            "sourceType": "decimal(20,19)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "markeddown_comment",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`markeddown_comment` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_deleted",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_deleted` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_moderated",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_moderated` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_from_email",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_from_email` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hat_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`hat_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "comments"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "domain",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`domain` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_tracker",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`is_tracker` tinyint(1) NOT NULL DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_by_user_id",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_by_user_id` int(11) DEFAULT NULL",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_reason",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_reason` varchar(200) DEFAULT NULL",
+            "sourceType": "varchar(200)"
+          }
+        ],
+        "name": "domains"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`created_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`updated_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hat",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`hat` varchar(255) NOT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "link",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`link` varchar(255) NOT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "comment",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`comment` text NOT NULL",
+            "sourceType": "text"
+          }
+        ],
+        "name": "hat_requests"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`created_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`updated_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "granted_by_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`granted_by_user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hat",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`hat` varchar(255) NOT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "link",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`link` varchar(255) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(255) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "modlog_use",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`modlog_use` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "doffed_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`doffed_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          }
+        ],
+        "name": "hats"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "hidden_stories"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "code",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`code` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_verified",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_verified` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "email",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`email` varchar(255) NOT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "name",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`name` varchar(255) NOT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "memo",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`memo` text",
+            "sourceType": "text"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "ip_address",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`ip_address` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          }
+        ],
+        "name": "invitation_requests"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "email",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`email` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "code",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`code` varchar(255) DEFAULT NULL",
+            "sourceType": "varchar(255)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "memo",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`memo` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "used_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`used_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "new_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`new_user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "invitations"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "key",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`key` varchar(50) NOT NULL DEFAULT ''",
+            "sourceType": "varchar(50)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "value",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`value` bigint(20) DEFAULT NULL",
+            "sourceType": "bigint(20)"
+          }
+        ],
+        "name": "keystores"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`created_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "author_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`author_user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "recipient_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`recipient_user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "has_been_read",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`has_been_read` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "subject",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`subject` varchar(100) DEFAULT NULL",
+            "sourceType": "varchar(100)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "body",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`body` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "short_id",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`short_id` varchar(30) DEFAULT NULL",
+            "sourceType": "varchar(30)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "deleted_by_author",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`deleted_by_author` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "deleted_by_recipient",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`deleted_by_recipient` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hat_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`hat_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "messages"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "moderator_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`moderator_user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "note",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`note` text NOT NULL",
+            "sourceType": "text"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "markeddown_note",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`markeddown_note` text NOT NULL",
+            "sourceType": "text"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          }
+        ],
+        "name": "mod_notes"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "moderator_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`moderator_user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "comment_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`comment_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "action",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`action` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "reason",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`reason` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_from_suggestions",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_from_suggestions` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "tag_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`tag_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "domain_id",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`domain_id` int(11) DEFAULT NULL",
+            "sourceType": "int(11)"
+          }
+        ],
+        "name": "moderations"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'1'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_following",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_following` tinyint(1) DEFAULT '1'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "read_ribbons"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "saved_stories"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "version",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`version` varchar(255) CHARACTER SET utf8 NOT NULL",
+            "sourceType": "varchar(255) CHARACTER SET utf8"
+          }
+        ],
+        "name": "schema_migrations"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`created_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "url",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`url` varchar(250) DEFAULT ''",
+            "sourceType": "varchar(250)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "title",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`title` varchar(150) NOT NULL DEFAULT ''",
+            "sourceType": "varchar(150)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "description",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`description` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "short_id",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`short_id` varchar(6) NOT NULL DEFAULT ''",
+            "sourceType": "varchar(6)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_expired",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`is_expired` tinyint(1) NOT NULL DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "upvotes",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`upvotes` int(10) unsigned NOT NULL DEFAULT '0'",
+            "sourceType": "int(10) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "downvotes",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`downvotes` int(10) unsigned NOT NULL DEFAULT '0'",
+            "sourceType": "int(10) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_moderated",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`is_moderated` tinyint(1) NOT NULL DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0.0000000000'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hotness",
+            "normalizedFrontendType": "FLOAT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`hotness` decimal(20,10) NOT NULL DEFAULT '0.0000000000'",
+            "sourceType": "decimal(20,10)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "markeddown_description",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`markeddown_description` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_cache",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`story_cache` mediumtext",
+            "sourceType": "mediumtext"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "comments_count",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`comments_count` int(11) NOT NULL DEFAULT '0'",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "merged_story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`merged_story_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "unavailable_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`unavailable_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "twitter_id",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`twitter_id` varchar(20) DEFAULT NULL",
+            "sourceType": "varchar(20)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_is_author",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`user_is_author` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_is_following",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_is_following` tinyint(1) NOT NULL DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "domain_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`domain_id` bigint(20) DEFAULT NULL",
+            "sourceType": "bigint(20)"
+          }
+        ],
+        "name": "stories"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "tag_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`tag_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "suggested_taggings"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "title",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`title` varchar(150) CHARACTER SET utf8mb4 NOT NULL DEFAULT ''",
+            "sourceType": "varchar(150) CHARACTER SET utf8mb4"
+          }
+        ],
+        "name": "suggested_titles"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`created_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "updated_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`updated_at` datetime NOT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`user_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "tag_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`tag_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "tag_filters"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "story_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`story_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "tag_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`tag_id` bigint(20) unsigned NOT NULL",
+            "sourceType": "bigint(20) unsigned"
+          }
+        ],
+        "name": "taggings"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "tag",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`tag` varchar(25) NOT NULL",
+            "sourceType": "varchar(25)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "description",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`description` varchar(100) DEFAULT NULL",
+            "sourceType": "varchar(100)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "privileged",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`privileged` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_media",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_media` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "inactive",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`inactive` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "hotness_mod",
+            "normalizedFrontendType": "FLOAT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`hotness_mod` float DEFAULT '0'",
+            "sourceType": "float"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'1'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "permit_by_new_users",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`permit_by_new_users` tinyint(1) NOT NULL DEFAULT '1'",
+            "sourceType": "tinyint(1)"
+          }
+        ],
+        "name": "tags"
+      },
+      {
+        "columns": [
+          {
+            "autoIncrement": true,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "username",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`username` varchar(50) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(50) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "email",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`email` varchar(100) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(100) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "password_digest",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`password_digest` varchar(75) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(75) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "created_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`created_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_admin",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_admin` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "password_reset_token",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`password_reset_token` varchar(75) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(75) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "''",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "session_token",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`session_token` varchar(75) CHARACTER SET utf8mb4 NOT NULL DEFAULT ''",
+            "sourceType": "varchar(75) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "about",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`about` mediumtext CHARACTER SET utf8mb4",
+            "sourceType": "mediumtext CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "invited_by_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`invited_by_user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "is_moderator",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`is_moderator` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "pushover_mentions",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`pushover_mentions` tinyint(1) DEFAULT '0'",
+            "sourceType": "tinyint(1)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "rss_token",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`rss_token` varchar(75) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(75) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "mailing_list_token",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`mailing_list_token` varchar(75) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(75) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "mailing_list_mode",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`mailing_list_mode` int(11) DEFAULT '0'",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "'0'",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "karma",
+            "normalizedFrontendType": "INTEGER",
+            "notNull": true,
+            "nullable": false,
+            "sourceDeclaration": "`karma` int(11) NOT NULL DEFAULT '0'",
+            "sourceType": "int(11)"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_by_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_by_user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "banned_reason",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`banned_reason` varchar(200) CHARACTER SET utf8mb4 DEFAULT NULL",
+            "sourceType": "varchar(200) CHARACTER SET utf8mb4"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "deleted_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`deleted_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "disabled_invite_at",
+            "normalizedFrontendType": "TIMESTAMP",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`disabled_invite_at` datetime DEFAULT NULL",
+            "sourceType": "datetime"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "disabled_invite_by_user_id",
+            "normalizedFrontendType": "BIGINT",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`disabled_invite_by_user_id` bigint(20) unsigned DEFAULT NULL",
+            "sourceType": "bigint(20) unsigned"
+          },
+          {
+            "autoIncrement": false,
+            "default": "",
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "disabled_invite_reason",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`disabled_invite_reason` varchar(200) DEFAULT NULL",
+            "sourceType": "varchar(200)"
+          },
+          {
+            "autoIncrement": false,
+            "default": null,
+            "generated": false,
+            "inlinePrimary": false,
+            "inlineUnique": false,
+            "name": "settings",
+            "normalizedFrontendType": "VARCHAR(255)",
+            "notNull": false,
+            "nullable": true,
+            "sourceDeclaration": "`settings` text",
+            "sourceType": "text"
+          }
+        ],
+        "name": "users"
+      }
+    ],
+    "typeSemantics": "sourceType/sourceDeclaration are authoritative for benchmark semantics; normalizedFrontendType is a tool-facing lowering."
+  },
+  "uniqueIndexes": [],
+  "uniqueKeys": [
+    {
+      "columns": [
+        "short_id"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "comments"
+    },
+    {
+      "columns": [
+        "user_id",
+        "story_id"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "hidden_stories"
+    },
+    {
+      "columns": [
+        "key"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "keystores"
+    },
+    {
+      "columns": [
+        "short_id"
+      ],
+      "nullableColumns": [
+        "short_id"
+      ],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "messages"
+    },
+    {
+      "columns": [
+        "user_id",
+        "story_id"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "saved_stories"
+    },
+    {
+      "columns": [
+        "short_id"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "stories"
+    },
+    {
+      "columns": [
+        "story_id",
+        "tag_id"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "taggings"
+    },
+    {
+      "columns": [
+        "tag"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "tags"
+    },
+    {
+      "columns": [
+        "session_token"
+      ],
+      "nullableColumns": [],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "mailing_list_token"
+      ],
+      "nullableColumns": [
+        "mailing_list_token"
+      ],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "password_reset_token"
+      ],
+      "nullableColumns": [
+        "password_reset_token"
+      ],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "rss_token"
+      ],
+      "nullableColumns": [
+        "rss_token"
+      ],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "username"
+      ],
+      "nullableColumns": [
+        "username"
+      ],
+      "semantics": "sql_unique_allows_multiple_nulls",
+      "table": "users"
+    }
+  ],
+  "unsupportedSemanticConstraints": []
+}

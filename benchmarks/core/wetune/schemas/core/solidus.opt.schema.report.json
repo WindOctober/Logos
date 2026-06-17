@@ -1,0 +1,20 @@
+{
+  "alterConstraints": {},
+  "checks": 0,
+  "columns": 808,
+  "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.opt.schema.constraints.json",
+  "droppedTableItems": {
+    "secondary_index": 164
+  },
+  "foreignKeys": 6,
+  "indexConstraints": {},
+  "primaryKeys": 98,
+  "semanticConstraintsPreservedIn": "constraints sidecar JSON",
+  "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/solidus.opt.schema.sql",
+  "tables": 98,
+  "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/solidus.opt.schema.sql",
+  "typeLowerings": 623,
+  "uniqueIndexes": 0,
+  "uniqueKeys": 18,
+  "unsupportedSemanticConstraints": 0
+}

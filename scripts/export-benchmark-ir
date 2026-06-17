@@ -203,6 +203,11 @@ def iter_tsv_cases(benchmark: dict[str, Any]):
         for row in reader:
             case_id = render_template(spec["caseId"], row)
             schema_path = resolve_path(spec["schema"].format(**row))
+            constraints_path = (
+                resolve_path(spec["constraints"].format(**row))
+                if spec.get("constraints")
+                else None
+            )
             app_name = row.get("app_name", "")
             read_dialect = benchmark.get("readDialectByApp", {}).get(
                 app_name, benchmark.get("readDialect")
@@ -216,7 +221,9 @@ def iter_tsv_cases(benchmark: dict[str, Any]):
                 schema_sql=schema_path.read_text(),
                 before_sql=row["before_sql"],
                 after_sql=row["after_sql"],
-                constraints=[],
+                constraints=json.loads(constraints_path.read_text())
+                if constraints_path and constraints_path.exists()
+                else [],
                 feature_tags=[row.get("rewrite_type", "")],
                 source_metadata={
                     "source": benchmark["source"],
@@ -225,6 +232,9 @@ def iter_tsv_cases(benchmark: dict[str, Any]):
                     "rewrite_type": row.get("rewrite_type"),
                     "commit_url": row.get("commit_url"),
                     "schema": str(schema_path.relative_to(ROOT)),
+                    "constraints": str(constraints_path.relative_to(ROOT))
+                    if constraints_path and constraints_path.exists()
+                    else None,
                 },
                 read_dialect=read_dialect,
                 source_dialect=source_dialect,

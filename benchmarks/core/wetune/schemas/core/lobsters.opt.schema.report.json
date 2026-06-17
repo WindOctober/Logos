@@ -1,0 +1,20 @@
+{
+  "alterConstraints": {},
+  "checks": 0,
+  "columns": 178,
+  "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.opt.schema.constraints.json",
+  "droppedTableItems": {
+    "secondary_index": 56
+  },
+  "foreignKeys": 39,
+  "indexConstraints": {},
+  "primaryKeys": 21,
+  "semanticConstraintsPreservedIn": "constraints sidecar JSON",
+  "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/lobsters.opt.schema.sql",
+  "tables": 22,
+  "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/lobsters.opt.schema.sql",
+  "typeLowerings": 166,
+  "uniqueIndexes": 0,
+  "uniqueKeys": 13,
+  "unsupportedSemanticConstraints": 0
+}

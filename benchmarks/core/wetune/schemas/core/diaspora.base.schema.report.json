@@ -1,0 +1,20 @@
+{
+  "alterConstraints": {},
+  "checks": 0,
+  "columns": 375,
+  "constraints": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.base.schema.constraints.json",
+  "droppedTableItems": {
+    "secondary_index": 65
+  },
+  "foreignKeys": 31,
+  "indexConstraints": {},
+  "primaryKeys": 46,
+  "semanticConstraintsPreservedIn": "constraints sidecar JSON",
+  "source": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/diaspora.base.schema.sql",
+  "tables": 49,
+  "target": "/ssd/ssd_backup/home/kejingyu/Workflow/sql-logos-workflow/Logos/benchmarks/core/wetune/schemas/core/diaspora.base.schema.sql",
+  "typeLowerings": 372,
+  "uniqueIndexes": 0,
+  "uniqueKeys": 44,
+  "unsupportedSemanticConstraints": 0
+}
