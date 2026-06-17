@@ -69,7 +69,7 @@ Run the bundled example with:
 make calcite-ir
 ```
 
-Or invoke the wrapper directly:
+The Makefile target runs the default ingestion pipeline, which normalizes SQL through the SQLGlot dialect adapter and then invokes Calcite. To bypass dialect normalization and invoke the Calcite wrapper directly:
 
 ```bash
 scripts/calcite-ir \
@@ -83,6 +83,60 @@ The command emits JSON with two main views:
 - `rel`: Calcite's validated `RelNode` algebra tree, intended as the primary input for a future FormalSQL `SQLAlgebra` emitter.
 
 The current DDL reader only covers simple `CREATE TABLE (...)` declarations. It exists to bootstrap Calcite validation and is not part of the trusted semantics. Logos should treat Calcite output as frontend IR, then generate explicit FormalSQL/Rocq definitions, theorems, and obligations for kernel checking.
+
+## SQLGlot Dialect Adapter
+
+Logos also includes an optional SQLGlot adapter for translating vendor SQL dialects into Calcite-friendly SQL before invoking the Calcite wrapper. This adapter is intended for benchmark and ingestion compatibility; it is not part of the trusted semantics.
+
+The adapter lives in:
+
+```text
+frontend/sqlglot-adapter
+```
+
+Normalize a SQL file explicitly:
+
+```bash
+scripts/sqlglot-normalize \
+  --input input.sql \
+  --output normalized.sql \
+  --report normalized.report.json \
+  --read tsql \
+  --write postgres \
+  --identify
+```
+
+Or run the full SQLGlot-to-Calcite pipeline:
+
+```bash
+scripts/calcite-ir-sqlglot \
+  --schema path/to/schema.sql \
+  --sql path/to/query.sql \
+  --read tsql \
+  --write postgres \
+  --normalized-output normalized.sql \
+  --report normalized.report.json
+```
+
+The adapter currently performs three kinds of work:
+
+- SQLGlot transpilation, for example translating T-SQL-style `SELECT TOP n` into Calcite-accepted `LIMIT n`.
+- Identifier quoting via `--identify`, which avoids parser conflicts with aliases such as `year` or `returns`.
+- Small Calcite-compatibility patches for TPC-DS date arithmetic, such as `+/- n days` and simple date-column `+/- integer` expressions.
+
+See `frontend/sqlglot-adapter/README.md` for the current patch list. These patches are frontend compatibility rewrites, not trusted proof rules.
+
+The generated report records adapter-side normalizations. Downstream proof generation should preserve that metadata so that Logos can distinguish between full SQL semantics and normalized frontend compatibility.
+
+## Benchmarks
+
+The initial core rewrite benchmark seed lives in:
+
+```text
+benchmarks/core
+```
+
+It contains selected VeriEQL, R-Bot, and WeTune cases for frontend and equivalence-pipeline development without vendoring the full upstream repositories. See `benchmarks/core/README.md` for source commits, file layout, and size notes.
 
 ## SQLCoq Maintenance Status
 

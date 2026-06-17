@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+READ_DIALECT="tsql"
+WRITE_DIALECT="postgres"
+IDENTIFY=1
+SCHEMA=""
+SQL=""
+NORMALIZED_OUTPUT=""
+REPORT_OUTPUT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --schema)
+      SCHEMA="$2"
+      shift 2
+      ;;
+    --sql)
+      SQL="$2"
+      shift 2
+      ;;
+    --read)
+      READ_DIALECT="$2"
+      shift 2
+      ;;
+    --write)
+      WRITE_DIALECT="$2"
+      shift 2
+      ;;
+    --no-identify)
+      IDENTIFY=0
+      shift
+      ;;
+    --normalized-output)
+      NORMALIZED_OUTPUT="$2"
+      shift 2
+      ;;
+    --report)
+      REPORT_OUTPUT="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$SCHEMA" || -z "$SQL" ]]; then
+  echo "Usage: calcite-ir-sqlglot --schema <schema.sql> --sql <query.sql> [--read tsql] [--write postgres] [--no-identify] [--normalized-output out.sql] [--report report.json]" >&2
+  exit 2
+fi
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+NORMALIZED_SQL="$TMP_DIR/query.normalized.sql"
+REPORT="$TMP_DIR/query.normalized.report.json"
+NORMALIZE_ARGS=(
+  --input "$SQL"
+  --output "$NORMALIZED_SQL"
+  --report "$REPORT"
+  --read "$READ_DIALECT"
+  --write "$WRITE_DIALECT"
+)
+
+if [[ "$IDENTIFY" -eq 1 ]]; then
+  NORMALIZE_ARGS+=(--identify)
+fi
+
+"$ROOT_DIR/scripts/sqlglot-normalize" "${NORMALIZE_ARGS[@]}" >&2
+
+if [[ -n "$NORMALIZED_OUTPUT" ]]; then
+  cp "$NORMALIZED_SQL" "$NORMALIZED_OUTPUT"
+fi
+
+if [[ -n "$REPORT_OUTPUT" ]]; then
+  cp "$REPORT" "$REPORT_OUTPUT"
+fi
+
+"$ROOT_DIR/scripts/calcite-ir" --schema "$SCHEMA" --sql "$NORMALIZED_SQL"

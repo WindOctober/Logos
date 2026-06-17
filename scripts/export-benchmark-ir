@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass
+class Case:
+    benchmark: dict[str, Any]
+    case_id: str
+    schema_sql: str
+    before_sql: str
+    after_sql: str
+    constraints: Any
+    feature_tags: list[str]
+    source_metadata: dict[str, Any]
+    read_dialect: str | None = None
+    write_dialect: str | None = None
+    source_dialect: str | None = None
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Export core SQL rewrite benchmarks to final Calcite JSON IR."
+    )
+    parser.add_argument(
+        "--config",
+        default="benchmarks/core/ingestion.json",
+        help="Ingestion config path relative to the Logos root.",
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="append",
+        help="Benchmark id to export. May be repeated. Defaults to all benchmarks.",
+    )
+    parser.add_argument(
+        "--case",
+        action="append",
+        help="Case id regex to export. May be repeated.",
+    )
+    parser.add_argument("--limit", type=int, help="Maximum number of cases to export.")
+    parser.add_argument(
+        "--keep-intermediate",
+        action="store_true",
+        help="Keep source SQL, schema SQL, normalized SQL, and normalization reports under debug/.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite already generated IR files.",
+    )
+    parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Continue exporting other cases after a frontend command fails.",
+    )
+    args = parser.parse_args()
+
+    config_path = resolve_path(args.config)
+    config = json.loads(config_path.read_text())
+    selected = set(args.benchmark or [])
+    case_patterns = [re.compile(pattern) for pattern in args.case or []]
+    output_root = resolve_path(config["target"]["outputRoot"])
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    exported = 0
+    failed = 0
+    for benchmark in config["benchmarks"]:
+        benchmark_id = benchmark["id"]
+        if selected and benchmark_id not in selected:
+            continue
+        for case in iter_cases(config, benchmark):
+            if case_patterns and not any(pattern.search(case.case_id) for pattern in case_patterns):
+                continue
+            if args.limit is not None and exported >= args.limit:
+                return finish(exported, failed)
+            try:
+                export_case(config, case, output_root, args.keep_intermediate, args.force)
+                exported += 1
+                print(f"exported {benchmark_id}/{case.case_id}", file=sys.stderr)
+            except Exception as exc:
+                failed += 1
+                print(f"failed {benchmark_id}/{case.case_id}: {exc}", file=sys.stderr)
+                if not args.continue_on_error:
+                    raise
+    return finish(exported, failed)
+
+
+def finish(exported: int, failed: int) -> int:
+    print(f"summary: exported={exported} failed={failed}", file=sys.stderr)
+    return 1 if failed else 0
+
+
+def resolve_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else ROOT / candidate
+
+
+def iter_cases(config: dict[str, Any], benchmark: dict[str, Any]):
+    kind = benchmark["caseSource"]["kind"]
+    if kind == "jsonlines":
+        yield from iter_jsonlines_cases(benchmark)
+    elif kind == "directory-pairs":
+        yield from iter_directory_pair_cases(benchmark)
+    elif kind == "manifest-directory-pairs":
+        yield from iter_manifest_pair_cases(benchmark)
+    elif kind == "tsv":
+        yield from iter_tsv_cases(benchmark)
+    else:
+        raise ValueError(f"unsupported caseSource kind: {kind}")
+
+
+def iter_jsonlines_cases(benchmark: dict[str, Any]):
+    source = resolve_path(benchmark["source"])
+    spec = benchmark["caseSource"]
+    with source.open() as handle:
+        for line_no, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            case_id = render_template(spec["caseId"], row)
+            pair = row[spec["beforeSql"].split("[")[0]] if False else row["pair"]
+            yield Case(
+                benchmark=benchmark,
+                case_id=sanitize_case_id(case_id),
+                schema_sql=schema_object_to_sql(row["schema"]),
+                before_sql=pair[0],
+                after_sql=pair[1],
+                constraints=row.get("constraint", []),
+                feature_tags=[],
+                source_metadata={
+                    "source": benchmark["source"],
+                    "line": line_no,
+                    "benchmark": row.get("benchmark"),
+                    "name": row.get("name"),
+                    "index": row.get("index"),
+                },
+            )
+
+
+def iter_directory_pair_cases(benchmark: dict[str, Any]):
+    source = resolve_path(benchmark["source"])
+    spec = benchmark["caseSource"]
+    schema_sql = (source / spec["schema"]).read_text()
+    for case_dir in sorted(source.glob(spec["caseGlob"])):
+        if not case_dir.is_dir():
+            continue
+        case_id = case_dir.name
+        yield Case(
+            benchmark=benchmark,
+            case_id=sanitize_case_id(case_id),
+            schema_sql=schema_sql,
+            before_sql=(source / spec["beforeSql"].format(caseId=case_id)).read_text(),
+            after_sql=(source / spec["afterSql"].format(caseId=case_id)).read_text(),
+            constraints=[],
+            feature_tags=[],
+            source_metadata={"source": benchmark["source"], "directory": case_id},
+        )
+
+
+def iter_manifest_pair_cases(benchmark: dict[str, Any]):
+    source = resolve_path(benchmark["source"])
+    spec = benchmark["caseSource"]
+    schema_sql = (source / spec["schema"]).read_text()
+    with (source / spec["manifest"]).open(newline="") as handle:
+        for row in csv.DictReader(handle, delimiter="\t"):
+            case_id = row[spec["caseIdColumn"]]
+            feature_tags = split_tags(row.get(spec.get("featureTagsColumn", ""), ""))
+            yield Case(
+                benchmark=benchmark,
+                case_id=sanitize_case_id(case_id),
+                schema_sql=schema_sql,
+                before_sql=(source / spec["beforeSql"].format(**row)).read_text(),
+                after_sql=(source / spec["afterSql"].format(**row)).read_text(),
+                constraints=[],
+                feature_tags=feature_tags,
+                source_metadata={
+                    "source": benchmark["source"],
+                    "manifest": spec["manifest"],
+                    **row,
+                },
+            )
+
+
+def iter_tsv_cases(benchmark: dict[str, Any]):
+    source = resolve_path(benchmark["source"])
+    spec = benchmark["caseSource"]
+    columns = spec["columns"]
+    with source.open(newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t", fieldnames=columns)
+        for row in reader:
+            case_id = render_template(spec["caseId"], row)
+            schema_path = resolve_path(spec["schema"].format(**row))
+            app_name = row.get("app_name", "")
+            read_dialect = benchmark.get("readDialectByApp", {}).get(
+                app_name, benchmark.get("readDialect")
+            )
+            source_dialect = benchmark.get("sourceDialectByApp", {}).get(
+                app_name, benchmark.get("sourceDialect")
+            )
+            yield Case(
+                benchmark=benchmark,
+                case_id=sanitize_case_id(case_id),
+                schema_sql=schema_path.read_text(),
+                before_sql=row["before_sql"],
+                after_sql=row["after_sql"],
+                constraints=[],
+                feature_tags=[row.get("rewrite_type", "")],
+                source_metadata={
+                    "source": benchmark["source"],
+                    "id": row.get("id"),
+                    "app_name": row.get("app_name"),
+                    "rewrite_type": row.get("rewrite_type"),
+                    "commit_url": row.get("commit_url"),
+                    "schema": str(schema_path.relative_to(ROOT)),
+                },
+                read_dialect=read_dialect,
+                source_dialect=source_dialect,
+            )
+
+
+def export_case(
+    config: dict[str, Any],
+    case: Case,
+    output_root: Path,
+    keep_intermediate: bool,
+    force: bool,
+) -> None:
+    benchmark_id = case.benchmark["id"]
+    case_dir = output_root / benchmark_id / case.case_id
+    before_ir = case_dir / "before.calcite-ir.json"
+    after_ir = case_dir / "after.calcite-ir.json"
+    metadata_path = case_dir / "metadata.json"
+
+    if not force and before_ir.exists() and after_ir.exists() and metadata_path.exists():
+        return
+
+    case_dir.mkdir(parents=True, exist_ok=True)
+    metadata = build_metadata(config, case)
+
+    with tempfile.TemporaryDirectory(prefix="logos-benchmark-ir-") as tmp:
+        work_dir = Path(tmp)
+        if keep_intermediate:
+            work_dir = case_dir / "debug"
+            if work_dir.exists() and force:
+                shutil.rmtree(work_dir)
+            work_dir.mkdir(parents=True, exist_ok=True)
+
+        schema_path = write_text(work_dir / "schema.sql", case.schema_sql)
+        before_sql_path = write_text(work_dir / "before.sql", ensure_sql_terminated(case.before_sql))
+        after_sql_path = write_text(work_dir / "after.sql", ensure_sql_terminated(case.after_sql))
+
+        run_frontend(config, case, schema_path, before_sql_path, before_ir, "before", keep_intermediate)
+        run_frontend(config, case, schema_path, after_sql_path, after_ir, "after", keep_intermediate)
+        write_text(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+
+
+def run_frontend(
+    config: dict[str, Any],
+    case: Case,
+    schema_path: Path,
+    sql_path: Path,
+    ir_path: Path,
+    side: str,
+    keep_intermediate: bool,
+) -> None:
+    adapter = case.benchmark.get("adapter", config["defaults"].get("adapter", "none"))
+    if adapter == "none":
+        command = config["commands"]["calcite"]["argv"]
+        values = {
+            "schema": str(schema_path),
+            "sql": str(sql_path),
+            "ir": str(ir_path),
+        }
+        argv = [fill(arg, values) for arg in command]
+    elif adapter == "sqlglot":
+        command_name = "debugArgv" if keep_intermediate else "argv"
+        command = config["commands"]["sqlglotCalcite"][command_name]
+        values = {
+            "schema": str(schema_path),
+            "sql": str(sql_path),
+            "ir": str(ir_path),
+            "readDialect": case.read_dialect or case.benchmark["readDialect"],
+            "writeDialect": case.write_dialect or case.benchmark["writeDialect"],
+            "normalizedSql": str(sql_path.with_name(f"{side}.normalized.sql")),
+            "normalizationReport": str(sql_path.with_name(f"{side}.normalization.json")),
+        }
+        argv = [fill(arg, values) for arg in command]
+    else:
+        raise ValueError(f"unsupported adapter: {adapter}")
+
+    completed = subprocess.run(
+        [str(resolve_path(argv[0])), *argv[1:]],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.stderr:
+        sys.stderr.write(completed.stderr)
+    if completed.returncode != 0:
+        raise RuntimeError(f"{argv[0]} exited with {completed.returncode}")
+    parsed = json.loads(completed.stdout)
+    errors = collect_ir_errors(parsed)
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    write_text(ir_path, json.dumps(parsed, indent=2, sort_keys=True) + "\n")
+
+
+def collect_ir_errors(ir: dict[str, Any]) -> list[str]:
+    errors = []
+    for idx, query in enumerate(ir.get("queries", [])):
+        if "error" in query:
+            errors.append(f"query[{idx}] {query['error']}")
+    return errors
+
+
+def build_metadata(config: dict[str, Any], case: Case) -> dict[str, Any]:
+    defaults = config["defaults"]
+    benchmark = case.benchmark
+    return {
+        "sourceBenchmark": benchmark["id"],
+        "sourceCase": case.case_id,
+        "source": case.source_metadata,
+        "schemaScope": benchmark["schemaScope"],
+        "constraintScope": benchmark.get("constraintScope", "none"),
+        "constraints": case.constraints,
+        "adapter": benchmark.get("adapter", defaults.get("adapter", "none")),
+        "sourceDialect": case.source_dialect or benchmark.get("sourceDialect"),
+        "readDialect": case.read_dialect or benchmark.get("readDialect"),
+        "writeDialect": case.write_dialect
+        or benchmark.get("writeDialect", defaults.get("writeDialect")),
+        "frontendTargetDialectPurpose": benchmark.get(
+            "frontendTargetDialectPurpose",
+            defaults.get("frontendTargetDialectPurpose"),
+        ),
+        "semanticProfile": benchmark.get("semanticProfile", defaults["semanticProfile"]),
+        "bagSemantics": benchmark.get("bagSemantics", defaults["bagSemantics"]),
+        "nullSemantics": benchmark.get("nullSemantics", defaults["nullSemantics"]),
+        "featureTags": case.feature_tags,
+    }
+
+
+def schema_object_to_sql(schema: dict[str, dict[str, str]]) -> str:
+    statements = []
+    for table, columns in schema.items():
+        column_sql = ",\n  ".join(
+            f"{quote_ident(name)} {normalize_type(type_name)}"
+            for name, type_name in columns.items()
+        )
+        statements.append(f"CREATE TABLE {quote_ident(table)} (\n  {column_sql}\n);")
+    return "\n\n".join(statements) + "\n"
+
+
+def quote_ident(name: str) -> str:
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        return name
+    return '"' + name.replace('"', '""') + '"'
+
+
+def normalize_type(type_name: str) -> str:
+    normalized = type_name.upper()
+    if normalized == "STRING":
+        return "VARCHAR"
+    if normalized.startswith("VARCHAR"):
+        return "VARCHAR"
+    return normalized
+
+
+def render_template(template: str, values: dict[str, Any]) -> str:
+    return template.format(**{key: "" if value is None else value for key, value in values.items()})
+
+
+def fill(template: str, values: dict[str, str]) -> str:
+    return template.format(**values)
+
+
+def split_tags(value: str) -> list[str]:
+    return [tag for tag in (part.strip() for part in value.split(",")) if tag]
+
+
+def sanitize_case_id(case_id: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_.=-]+", "-", str(case_id)).strip("-")
+    return sanitized or "case"
+
+
+def ensure_sql_terminated(sql: str) -> str:
+    stripped = sql.strip()
+    if not stripped:
+        return "\n"
+    return stripped if stripped.endswith(";") else stripped + ";\n"
+
+
+def write_text(path: Path, content: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return path
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

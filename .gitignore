@@ -1,7 +1,10 @@
 /.opam/
 /_build/
 /.cache/
+/benchmarks/core/.generated/
 frontend/calcite-wrapper/target/
+__pycache__/
+*.pyc
 *.aux
 *.glob
 *.vo

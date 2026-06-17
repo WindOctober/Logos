@@ -316,8 +316,10 @@ public final class CalciteIrCli {
 
   private static List<TableDef> parseCreateTables(String schemaSql) {
     List<TableDef> tables = new ArrayList<>();
+    String identifier = "(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]+\"|`[^`]+`)";
     Pattern tableStartPattern = Pattern.compile(
-        "(?is)create\\s+table\\s+([A-Za-z_][A-Za-z0-9_]*|\"[^\"]+\"|`[^`]+`)\\s*\\(");
+        "(?is)create\\s+table\\s+(?:" + identifier + "\\s*\\.\\s*)?(" + identifier
+            + ")\\s*\\(");
     Matcher matcher = tableStartPattern.matcher(schemaSql);
     while (matcher.find()) {
       String tableName = matcher.group(1);
@@ -393,6 +395,10 @@ public final class CalciteIrCli {
     return lower.startsWith("primary ")
         || lower.startsWith("foreign ")
         || lower.startsWith("unique ")
+        || lower.startsWith("key ")
+        || lower.startsWith("index ")
+        || lower.startsWith("fulltext ")
+        || lower.startsWith("spatial ")
         || lower.startsWith("constraint ")
         || lower.startsWith("check ");
   }

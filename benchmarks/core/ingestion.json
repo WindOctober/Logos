@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "description": "Ingestion plan for exporting Logos core SQL rewrite benchmarks to final Calcite JSON IR.",
+  "pathsAreRelativeTo": "Logos",
+  "target": {
+    "format": "logos.calcite-json-ir",
+    "outputRoot": "benchmarks/core/.generated/calcite-ir",
+    "caseLayout": {
+      "beforeIr": "{outputRoot}/{benchmarkId}/{caseId}/before.calcite-ir.json",
+      "afterIr": "{outputRoot}/{benchmarkId}/{caseId}/after.calcite-ir.json",
+      "metadata": "{outputRoot}/{benchmarkId}/{caseId}/metadata.json"
+    },
+    "metadata": {
+      "sourceBenchmark": "{benchmarkId}",
+      "sourceCase": "{caseId}",
+      "schemaScope": "{schemaScope}",
+      "adapter": "{adapter}",
+      "readDialect": "{readDialect}",
+      "writeDialect": "{writeDialect}",
+      "featureTags": "{featureTags}",
+      "constraints": "{constraints}"
+    }
+  },
+  "defaults": {
+    "semanticProfile": "formal-sql-core",
+    "bagSemantics": true,
+    "nullSemantics": "sql-three-valued-logic",
+    "writeDialect": "postgres",
+    "frontendTargetDialectPurpose": "calcite_syntax_only",
+    "adapter": "none",
+    "keepIntermediate": false,
+    "debugLayout": {
+      "schema": "{outputRoot}/{benchmarkId}/{caseId}/debug/schema.sql",
+      "beforeSql": "{outputRoot}/{benchmarkId}/{caseId}/debug/before.sql",
+      "afterSql": "{outputRoot}/{benchmarkId}/{caseId}/debug/after.sql",
+      "beforeNormalizedSql": "{outputRoot}/{benchmarkId}/{caseId}/debug/before.normalized.sql",
+      "afterNormalizedSql": "{outputRoot}/{benchmarkId}/{caseId}/debug/after.normalized.sql",
+      "beforeNormalizationReport": "{outputRoot}/{benchmarkId}/{caseId}/debug/before.normalization.json",
+      "afterNormalizationReport": "{outputRoot}/{benchmarkId}/{caseId}/debug/after.normalization.json"
+    }
+  },
+  "commands": {
+    "calcite": {
+      "argv": [
+        "scripts/calcite-ir",
+        "--schema",
+        "{schema}",
+        "--sql",
+        "{sql}"
+      ],
+      "stdout": "{ir}"
+    },
+    "sqlglotCalcite": {
+      "argv": [
+        "scripts/calcite-ir-sqlglot",
+        "--schema",
+        "{schema}",
+        "--sql",
+        "{sql}",
+        "--read",
+        "{readDialect}",
+        "--write",
+        "{writeDialect}"
+      ],
+      "stdout": "{ir}",
+      "debugArgv": [
+        "scripts/calcite-ir-sqlglot",
+        "--schema",
+        "{schema}",
+        "--sql",
+        "{sql}",
+        "--read",
+        "{readDialect}",
+        "--write",
+        "{writeDialect}",
+        "--normalized-output",
+        "{normalizedSql}",
+        "--report",
+        "{normalizationReport}"
+      ]
+    }
+  },
+  "benchmarks": [
+    {
+      "id": "verieql-literature",
+      "source": "benchmarks/core/verieql/literature/literature-rewrite.jsonlines",
+      "caseSource": {
+        "kind": "jsonlines",
+        "caseId": "{benchmark}-{index}",
+        "schema": "schema object on the same JSON line",
+        "constraints": "constraint array on the same JSON line",
+        "beforeSql": "pair[0]",
+        "afterSql": "pair[1]"
+      },
+      "schemaScope": "pair",
+      "adapter": "none",
+      "sourceDialect": "ansi_like",
+      "readDialect": "postgres",
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "pair",
+      "materialization": "Generate temporary schema.sql, before.sql, and after.sql from each JSON line, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+    },
+    {
+      "id": "verieql-calcite",
+      "source": "benchmarks/core/verieql/calcite/calcite2.jsonlines",
+      "caseSource": {
+        "kind": "jsonlines",
+        "caseId": "calcite-{index}",
+        "schema": "schema object on the same JSON line",
+        "constraints": "constraint array on the same JSON line",
+        "beforeSql": "pair[0]",
+        "afterSql": "pair[1]"
+      },
+      "schemaScope": "pair",
+      "adapter": "none",
+      "sourceDialect": "calcite",
+      "readDialect": "postgres",
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "pair",
+      "materialization": "Generate temporary schema.sql, before.sql, and after.sql from each JSON line, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+    },
+    {
+      "id": "rbot-tpch",
+      "source": "benchmarks/core/rbot/tpch",
+      "caseSource": {
+        "kind": "directory-pairs",
+        "caseGlob": "query*",
+        "caseId": "{directoryName}",
+        "schema": "create_tables.sql",
+        "beforeSql": "{caseId}/{caseId}_0.sql",
+        "afterSql": "{caseId}/{caseId}_1.sql"
+      },
+      "schemaScope": "workload",
+      "adapter": "none",
+      "sourceDialect": "ansi_like",
+      "readDialect": "postgres",
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "none",
+      "materialization": "Use the shared schema and existing SQL pair, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+    },
+    {
+      "id": "rbot-dsb",
+      "source": "benchmarks/core/rbot/dsb",
+      "caseSource": {
+        "kind": "directory-pairs",
+        "caseGlob": "query*",
+        "caseId": "{directoryName}",
+        "schema": "create_tables.sql",
+        "beforeSql": "{caseId}/{caseId}_0.sql",
+        "afterSql": "{caseId}/{caseId}_1.sql"
+      },
+      "schemaScope": "workload",
+      "adapter": "none",
+      "sourceDialect": "ansi_like",
+      "readDialect": "postgres",
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "none",
+      "materialization": "Use the shared schema and existing SQL pair, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+    },
+    {
+      "id": "tpcds-variants",
+      "source": "benchmarks/core/tpcds/variants",
+      "caseSource": {
+        "kind": "manifest-directory-pairs",
+        "manifest": "manifest.tsv",
+        "caseIdColumn": "case_id",
+        "schema": "create_tables.sql",
+        "beforeSql": "{case_id}/{case_id}_0.sql",
+        "afterSql": "{case_id}/{case_id}_1.sql",
+        "featureTagsColumn": "feature_tags"
+      },
+      "schemaScope": "workload",
+      "adapter": "sqlglot",
+      "sourceDialect": "tsql_like",
+      "readDialect": "tsql",
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "none",
+      "materialization": "Use the shared schema and existing SQL pair, run SQLGlot only as a frontend adapter, then keep only before/after Calcite IR JSON plus metadata by default. Normalized SQL and reports are debug-only artifacts."
+    },
+    {
+      "id": "wetune-issues",
+      "source": "benchmarks/core/wetune/issues/issues.tsv",
+      "caseSource": {
+        "kind": "tsv",
+        "columns": [
+          "id",
+          "app_name",
+          "rewrite_type",
+          "commit_url",
+          "before_sql",
+          "after_sql"
+        ],
+        "caseId": "{id}",
+        "schema": "benchmarks/core/wetune/schemas/{app_name}.base.schema.sql",
+        "alternateSchema": "benchmarks/core/wetune/schemas/{app_name}.opt.schema.sql",
+        "beforeSql": "before_sql",
+        "afterSql": "after_sql"
+      },
+      "schemaScope": "application",
+      "adapter": "sqlglot",
+      "sourceDialect": "rails_active_record_mixed",
+      "sourceDialectByApp": {
+        "diaspora": "rails_active_record_mysql",
+        "discourse": "rails_active_record_postgres",
+        "gitlab": "rails_active_record_postgres",
+        "lobsters": "rails_active_record_mysql",
+        "redmine": "rails_active_record_postgres",
+        "solidus": "rails_active_record_mysql",
+        "spree": "rails_active_record_mysql"
+      },
+      "readDialect": "postgres",
+      "readDialectByApp": {
+        "diaspora": "mysql",
+        "discourse": "postgres",
+        "gitlab": "postgres",
+        "lobsters": "mysql",
+        "redmine": "postgres",
+        "solidus": "mysql",
+        "spree": "mysql"
+      },
+      "writeDialect": "postgres",
+      "frontendTargetDialectPurpose": "calcite_syntax_only",
+      "semanticProfile": "formal-sql-core",
+      "constraintScope": "application",
+      "materialization": "Generate temporary before.sql and after.sql from each TSV row, use the app-level base schema by default, normalize Rails/ActiveRecord SQL through the per-application SQLGlot dialect, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
+    }
+  ]
+}

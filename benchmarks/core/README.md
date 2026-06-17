@@ -5,14 +5,15 @@ This directory contains a small, local benchmark seed for SQL rewrite equivalenc
 ## Contents
 
 ```text
-verieql/literature/literature-rewrite.jsonlines  64 query pairs
-verieql/calcite/calcite2.jsonlines               397 query pairs
+verieql/literature/literature-rewrite.jsonlines  30 query pairs
+verieql/calcite/calcite2.jsonlines               236 query pairs
 rbot/tpch/                                      22 query pairs plus schema
 rbot/dsb/                                       37 query pairs plus schema
 tpcds/variants/                                14 TPC-DS base/variant query pairs plus schema
 wetune/issues/issues.tsv                        50 real-world rewrite issue pairs
 wetune/schemas/                                 14 schemas for 7 WeTune applications
 licenses/                                       upstream license files
+ingestion.json                                  benchmark-to-Calcite-IR ingestion plan
 ```
 
 The WeTune schema subset is restricted to the applications referenced by `wetune/issues/issues.tsv`: `diaspora`, `discourse`, `gitlab`, `lobsters`, `redmine`, `solidus`, and `spree`.
@@ -47,6 +48,8 @@ one JSON line -> one schema/constraint environment -> one query pair
 Different lines may reuse the same schema, but consumers should not assume a single global schema for the whole file. When generating solver inputs, the schema must be reconstructed from the `schema` field of the same JSON line as the query pair, and supported constraints should be translated from the same line's `constraint` field.
 
 The `literature` subset contains compact rewrite examples from prior query-equivalence literature. The `calcite` subset contains rewrite examples derived from Apache Calcite optimizer tests.
+
+Only the standard-SQL subset is vendored here. Tool-specific VeriEQL inputs were removed, including symbolic predicates such as `B1(x)`, Calcite-internal dollar identifiers such as `$cor0.$f`, unquoted reserved identifiers such as `USER` and `YEAR`, and cases rejected by Calcite's standard SQL parser/validator as ambiguous or malformed. The upstream files originally contained 64 literature pairs and 397 Calcite pairs; this benchmark seed keeps 30 literature pairs and 236 Calcite pairs.
 
 ### R-Bot TPC-H and DSB
 
@@ -149,6 +152,15 @@ one issue pair -> one application -> that application's schema
 
 Both `base` and `opt` schemas are preserved because WeTune records application schemas before and after schema-level optimization passes. For query equivalence experiments, the default conservative choice is to use `<app_name>.base.schema.sql` unless the specific issue or rewrite explicitly requires the optimized schema.
 
+The SQL input is best treated as Rails/ActiveRecord application SQL rather than a single standard dialect. The ingestion config currently normalizes queries through SQLGlot with a per-application reader:
+
+```text
+discourse, gitlab, redmine -> postgres
+diaspora, lobsters, solidus, spree -> mysql
+```
+
+The schema files are real application dumps. PostgreSQL dumps may use schema-qualified declarations such as `CREATE TABLE public.posts (...)`, while MySQL dumps may include index declarations such as `KEY ...`; the Calcite wrapper strips those frontend-only schema details when constructing the in-memory Calcite schema.
+
 The current schema subset contains only the applications referenced by `issues.tsv`, not the full WeTune schema collection.
 
 ## Solver Input Mapping
@@ -177,6 +189,38 @@ WeTune:
 ```
 
 SQLSolver expects separate `schema`, `sql1`, and `sql2` files. QED expects one `.sql` file containing `CREATE TABLE` declarations followed by exactly two `SELECT` statements, which can then be converted to QED JSON by `PaperTools/scripts/qed-parser`.
+
+## Calcite IR Ingestion
+
+Machine-readable ingestion rules live in:
+
+```text
+ingestion.json
+```
+
+The config records how each benchmark family should be exported to Logos' final Calcite JSON IR benchmark. The core generated layout is:
+
+```text
+benchmarks/core/.generated/calcite-ir/<benchmark-id>/<case-id>/
+  before.calcite-ir.json
+  after.calcite-ir.json
+  metadata.json
+```
+
+`metadata.json` records source case information, schema scope, frontend adapter choice, dialects, feature tags, and constraints. Intermediate SQL files, normalized SQL, and normalization reports are debug-only artifacts and are not part of the core IR benchmark unless a runner explicitly enables `keepIntermediate`.
+
+Export the configured benchmarks with:
+
+```bash
+scripts/export-benchmark-ir
+```
+
+Useful development options:
+
+```bash
+scripts/export-benchmark-ir --benchmark tpcds-variants --limit 1 --keep-intermediate
+scripts/export-benchmark-ir --benchmark verieql-literature --case ex1sigmod92
+```
 
 ## Sources
 

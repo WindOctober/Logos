@@ -17,7 +17,7 @@ smoke: formal-sql
 	$(OPAM) exec --switch=$(OPAM_SWITCH_PATH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories LogosSmoke theories/Smoke.v
 
 calcite-ir:
-	scripts/calcite-ir --schema frontend/calcite-wrapper/examples/schema.sql --sql frontend/calcite-wrapper/examples/query.sql
+	scripts/calcite-ir-sqlglot --schema frontend/calcite-wrapper/examples/schema.sql --sql frontend/calcite-wrapper/examples/query.sql --read postgres
 
 status:
 	git submodule status
