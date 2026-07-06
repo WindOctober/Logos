@@ -115,18 +115,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     if args.all:
         source_dir = resolve(root, args.source_dir)
         output_dir = resolve(root, args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        combined = []
         for source in sorted(source_dir.glob("*.schema.sql")):
             target = output_dir / source.name
-            report = output_dir / f"{source.stem}.report.json"
-            audit = sanitize_file(source, target, report)
-            combined.append(audit)
-        (output_dir / "manifest.json").write_text(json.dumps(combined, indent=2) + "\n")
+            sanitize_file(source, target, None)
         return 0
 
     if not args.input or not args.output:

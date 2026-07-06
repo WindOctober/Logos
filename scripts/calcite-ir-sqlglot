@@ -69,7 +69,7 @@ if [[ "$IDENTIFY" -eq 1 ]]; then
   NORMALIZE_ARGS+=(--identify)
 fi
 
-"$ROOT_DIR/scripts/sqlglot-normalize" "${NORMALIZE_ARGS[@]}" >&2
+"$ROOT_DIR/benchmarks/scripts/sqlglot-normalize" "${NORMALIZE_ARGS[@]}" >&2
 
 if [[ -n "$NORMALIZED_OUTPUT" ]]; then
   cp "$NORMALIZED_SQL" "$NORMALIZED_OUTPUT"

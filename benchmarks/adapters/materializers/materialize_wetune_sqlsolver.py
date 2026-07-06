@@ -126,14 +126,9 @@ def main() -> int:
         help="Case id regex to materialize. May be repeated.",
     )
     parser.add_argument("--force", action="store_true", help="Overwrite existing case directories.")
-    parser.add_argument(
-        "--allow-unsafe-lowering",
-        action="store_true",
-        help="Materialize cases even when a query observes a type lowering that may change semantics.",
-    )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     issues_path = resolve(root, args.issues)
     schema_dir = resolve(root, args.schema_dir)
     output_dir = resolve(root, args.output_dir)
@@ -141,7 +136,6 @@ def main() -> int:
     case_patterns = [re.compile(pattern) for pattern in args.case or []]
 
     materialized = 0
-    unsupported = 0
     with issues_path.open(newline="") as handle:
         for row in csv.reader(handle, delimiter="\t"):
             case_id, app_name, rewrite_type, commit_url, before_sql, after_sql = row
@@ -163,17 +157,12 @@ def main() -> int:
                 schema_path=schema_path,
                 before_sql=before_sql,
                 after_sql=after_sql,
-                allow_unsafe_lowering=args.allow_unsafe_lowering,
             )
-            if status == "materialized":
-                materialized += 1
-                print(f"materialized wetune-issues/{case_id}", file=sys.stderr)
-            else:
-                unsupported += 1
-                print(f"unsupported wetune-issues/{case_id}: {status}", file=sys.stderr)
+            materialized += 1
+            print(f"materialized wetune-issues/{case_id}", file=sys.stderr)
 
     print(
-        f"summary: materialized={materialized} unsupported={unsupported}",
+        f"summary: materialized={materialized}",
         file=sys.stderr,
     )
     return 0
@@ -194,7 +183,6 @@ def materialize_case(
     schema_path: Path,
     before_sql: str,
     after_sql: str,
-    allow_unsafe_lowering: bool,
 ) -> str:
     with tempfile.TemporaryDirectory(prefix="wetune-sqlsolver-") as tmp:
         tmp_dir = Path(tmp)
@@ -221,36 +209,6 @@ def materialize_case(
             normalized_before + "\n" + normalized_after,
             semantic_constraints,
         )
-        if lowering_audit["unsafeLowerings"] and not allow_unsafe_lowering:
-            write_text(
-                case_dir / "metadata.json",
-                json.dumps(
-                    build_metadata(
-                        root=root,
-                        case_id=case_id,
-                        app_name=app_name,
-                        rewrite_type=rewrite_type,
-                        commit_url=commit_url,
-                        schema_path=schema_path,
-                        constraints_path=constraints_path,
-                        read_dialect=read_dialect,
-                        referenced_tables=referenced_tables,
-                        materialized_tables=[],
-                        semantic_constraints=semantic_constraints,
-                        rename_map={},
-                        lowering_audit=lowering_audit,
-                        status="unsupported",
-                        unsupported_reason=(
-                            "The query observes a source column whose parser-facing type "
-                            "lowering may change equivalence results."
-                        ),
-                    ),
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-            )
-            return "unsafe-lowering"
         rename_map = build_rename_map(selected_tables, normalized_before + "\n" + normalized_after)
 
         rendered_schema = render_schema(selected_tables, rename_map)
@@ -278,7 +236,6 @@ def materialize_case(
                     rename_map=rename_map,
                     lowering_audit=lowering_audit,
                     status="materialized",
-                    unsupported_reason=None,
                 ),
                 indent=2,
                 sort_keys=True,
@@ -291,7 +248,7 @@ def materialize_case(
 def normalize_query(root: Path, source: Path, target: Path, read_dialect: str) -> None:
     completed = subprocess.run(
         [
-            str(root / "scripts/sqlglot-normalize"),
+            str(root / "benchmarks/scripts/sqlglot-normalize"),
             "--input",
             str(source),
             "--output",
@@ -327,7 +284,6 @@ def build_metadata(
     rename_map: dict[str, str],
     lowering_audit: dict,
     status: str,
-    unsupported_reason: str | None,
 ) -> dict:
     metadata = {
         "sourceBenchmark": "wetune-issues",
@@ -365,8 +321,6 @@ def build_metadata(
         },
         "semanticNote": "Identifier alpha-renaming over the full application core schema; constraints are retained in the sidecar metadata and not lowered into SQLSolver DDL when unsupported by the tool frontend.",
     }
-    if unsupported_reason:
-        metadata["unsupportedReason"] = unsupported_reason
     return metadata
 
 

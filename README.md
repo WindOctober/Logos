@@ -36,7 +36,7 @@ vendor/FormalSQL  git@github.com:WindOctober/FormalSQL.git  branch master
 
 ## Build
 
-Logos uses the Rocq-compatible SQLCoq fork in `vendor/FormalSQL`. By default, the Makefile expects a Rocq 9.2 opam switch at `../FormalSQL/.opam-rocq`. Override `OPAM_SWITCH` if your switch lives elsewhere.
+Logos uses the Rocq-compatible SQLCoq fork in `vendor/FormalSQL`. The workspace `.envrc` exports `ROCQ_OPAM_SWITCH`, `OPAM_SWITCH`, `ROCQLIB`, and `OCAMLFIND_CONF` for the Rocq 9.2 environment. Rocq build targets require `ROCQ_OPAM_SWITCH` or `OPAM_SWITCH`; run `direnv allow` at the workspace root or set one of those variables explicitly before invoking `make formal-sql` or `make smoke`.
 
 ```bash
 make submodules
@@ -97,7 +97,7 @@ frontend/sqlglot-adapter
 Normalize a SQL file explicitly:
 
 ```bash
-scripts/sqlglot-normalize \
+benchmarks/scripts/sqlglot-normalize \
   --input input.sql \
   --output normalized.sql \
   --report normalized.report.json \

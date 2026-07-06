@@ -25,17 +25,23 @@ def patch_tpcds_intervals(sql: str, normalizations: list[dict]) -> str:
 
 
 def patch_calcite_interval_literals(sql: str, normalizations: list[dict]) -> str:
-    pattern = re.compile(r"(?i)INTERVAL\s+'([0-9]+)\s+(DAY|DAYS)'")
+    pattern = re.compile(
+        r"(?i)INTERVAL\s+'([0-9]+)\s+"
+        r"(DAY|DAYS|HOUR|HOURS|MINUTE|MINUTES|MONTH|MONTHS|QUARTER|QUARTERS|SECOND|SECONDS|WEEK|WEEKS|YEAR|YEARS)'"
+    )
 
     def repl(match: re.Match) -> str:
+        unit = match.group(2).upper()
+        if unit.endswith("S"):
+            unit = unit[:-1]
         normalizations.append(
             {
                 "kind": "calcite_interval_literal",
                 "source": match.group(0),
-                "target": f"INTERVAL '{match.group(1)}' DAY",
+                "target": f"INTERVAL '{match.group(1)}' {unit}",
             }
         )
-        return f"INTERVAL '{match.group(1)}' DAY"
+        return f"INTERVAL '{match.group(1)}' {unit}"
 
     return pattern.sub(repl, sql)
 

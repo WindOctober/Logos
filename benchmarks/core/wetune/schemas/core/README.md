@@ -6,7 +6,7 @@ from the raw WeTune application schema dumps in `../`.
 Regenerate the files with:
 
 ```bash
-scripts/wetune-schema-sanitize --all
+benchmarks/scripts/wetune-schema-sanitize --all
 ```
 
 The sanitizer is intentionally conservative and auditable:
@@ -26,11 +26,6 @@ The sanitizer is intentionally conservative and auditable:
 - strips deployment/runtime DDL such as `SET`, `CREATE EXTENSION`,
   `CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP TABLE`, ordinary non-unique
   indexes, table storage options, and MySQL versioned dump comments.
-
-Each `*.report.json` file records the number of retained tables, columns, type
-lowerings, keys, unique constraints, extracted semantic constraints, unsupported
-semantic constraints, and non-semantic dropped table-level items for the corresponding
-source schema.
 
 The normalized DDL alone is not the full schema semantics. Consumers that need
 semantics-preserving verification should load both `*.schema.sql` and the matching
