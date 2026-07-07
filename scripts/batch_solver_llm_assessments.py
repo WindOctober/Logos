@@ -171,8 +171,7 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
         case.calcite_ir_command,
         "--llm-assessment-only",
         "--disable-proof-agent",
-        "--output",
-        "json",
+        "--quiet",
         "--llm-assessment-cache-dir",
         str(args.cache_dir),
         "--log-dir",
@@ -184,13 +183,18 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
         cmd.append("--force-llm-assessment")
 
     completed = subprocess.run(cmd, text=True, capture_output=True)
+    report_path = log_dir / "report.json"
     report = None
     error = None
-    if completed.stdout.strip():
+    if report_path.exists():
         try:
-            report = json.loads(completed.stdout)
+            report = json.loads(report_path.read_text())
         except json.JSONDecodeError as exc:
-            error = f"failed to parse solver JSON output: {exc}"
+            error = f"failed to parse solver report {report_path}: {exc}"
+    elif completed.returncode == 0:
+        error = f"solver did not write report.json at {report_path}"
+    if completed.stdout.strip() and error is None:
+        error = "solver wrote unexpected stdout in --quiet mode"
     if completed.returncode != 0 and error is None:
         error = completed.stderr.strip() or f"solver exited with code {completed.returncode}"
 
@@ -200,6 +204,7 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
         "sourceCaseId": case.source_case_id,
         "caseDir": str(case.case_dir),
         "logDir": str(log_dir),
+        "reportPath": str(report_path),
         "calciteIrCommand": case.calcite_ir_command,
         "status": "ok" if completed.returncode == 0 and error is None else "failed",
         "elapsedMs": int((time.monotonic() - started) * 1000),

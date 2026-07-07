@@ -30,7 +30,7 @@ The checker treats positional output types as part of query equivalence. If the 
 
 The proof path remains separate: when Logos lowers queries into FormalSQL/Rocq, equivalence obligations are checked against the formal semantics available there. PostgreSQL-based counterexamples are used as deterministic evidence for non-equivalence in the executable frontend pipeline, while Rocq proof obligations are the intended trust boundary for formal equivalence claims.
 
-The CLI reflects this distinction in its result display. `NOT EQUIVALENT` is shown as a red terminal result when a PostgreSQL witness is validated. A proof-agent run that exits successfully is reported as `proof_agent_run_completed`, but the overall solver result remains `equivalence_verification_incomplete` unless Logos has actually identified and checked a complete equivalence theorem. Machine consumers should use `--output json`; the default `--output pretty` is intended for interactive terminal use.
+The CLI reflects this distinction in its result display. `NOT EQUIVALENT` is shown as a red terminal result when a PostgreSQL witness is validated. A proof-agent run that exits successfully is reported as `proof_agent_run_completed`, but the overall solver result remains `equivalence_verification_incomplete` unless Logos has actually identified and checked a complete equivalence theorem. The default CLI prints a pretty terminal summary and writes the machine-readable JSON report to `<log_dir>/report.json`; batch runners can pass `--quiet` to suppress the pretty stdout while keeping the JSON report file.
 
 ## Submodules
 

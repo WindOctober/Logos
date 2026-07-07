@@ -2,7 +2,6 @@ mod artifacts;
 mod core;
 mod engine;
 mod error;
-mod output;
 
 mod proposal;
 mod runtime;
@@ -12,10 +11,13 @@ use std::path::PathBuf;
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::VerificationInput;
-use crate::engine::{Config, DEFAULT_PROOF_AGENT_COMMAND, solve};
+use crate::engine::{
+    BackendStatus, Config, DEFAULT_PROOF_AGENT_COMMAND, Evidence, SolverOutcome, SolverReport,
+    solve,
+};
 use crate::error::Result;
-use crate::output::print_report;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
+use colored::{ColoredString, Colorize};
 
 const DEFAULT_CODEX_PROPOSAL_COMMAND: &str =
     "codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -";
@@ -87,16 +89,9 @@ enum Command {
         proof_rocq_opam_switch: Option<PathBuf>,
         #[arg(long, env = "LOGOS_REPO_ROOT")]
         logos_repo_root: Option<PathBuf>,
-        #[arg(long, value_enum, default_value_t = CliOutputFormat::Pretty)]
-        output: CliOutputFormat,
+        #[arg(long)]
+        quiet: bool,
     },
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum CliOutputFormat {
-    Pretty,
-    Json,
-    Both,
 }
 
 fn main() -> Result<()> {
@@ -124,7 +119,7 @@ fn main() -> Result<()> {
             proof_docker_image,
             proof_rocq_opam_switch,
             logos_repo_root,
-            output,
+            quiet,
         } => {
             let logos_repo_root = logos_repo_root.unwrap_or_else(runtime::repo_root);
             let calcite_ir_command =
@@ -158,18 +153,84 @@ fn main() -> Result<()> {
                 },
                 artifacts,
             )?;
-            print_report(&report, output.into())?;
+            if !quiet {
+                print_report(&report);
+            }
         }
     }
     Ok(())
 }
 
-impl From<CliOutputFormat> for output::OutputFormat {
-    fn from(value: CliOutputFormat) -> Self {
-        match value {
-            CliOutputFormat::Pretty => output::OutputFormat::Pretty,
-            CliOutputFormat::Json => output::OutputFormat::Json,
-            CliOutputFormat::Both => output::OutputFormat::Both,
+fn print_report(report: &SolverReport) {
+    println!("{}", outcome_label(report));
+    println!("Reason: {}", report.reason);
+
+    if let Some(evidence) = report.counterexample.as_ref() {
+        print_evidence(evidence);
+    }
+
+    if let Some(proof) = report.proof.as_ref() {
+        let proof_label = match proof.backend_status {
+            BackendStatus::ProofComplete => "proof complete".bright_green().bold(),
+            BackendStatus::ProofAgentRunCompleted => {
+                "proof agent completed; proof not marked complete"
+                    .bright_yellow()
+                    .bold()
+            }
+            BackendStatus::WorkspaceGenerated => "proof workspace generated".bright_cyan().bold(),
+            BackendStatus::ProofAgentFailed => "proof agent failed".bright_red().bold(),
+        };
+        println!("Proof stage: {proof_label}");
+        if let Some(agent) = proof.proof_agent.as_ref() {
+            println!(
+                "Proof agent: success={} elapsed={}ms",
+                agent.success, agent.elapsed_ms
+            );
         }
+    }
+
+    println!("Logs: {}", report.log_dir);
+    println!("JSON report: {}/report.json", report.log_dir);
+    println!("Elapsed: {}ms", report.elapsed_ms);
+}
+
+fn outcome_label(report: &SolverReport) -> ColoredString {
+    match report.outcome {
+        SolverOutcome::Equivalent => "EQUIVALENCE PROVED".bright_green().bold(),
+        SolverOutcome::NotEquivalent => "NOT EQUIVALENT".bright_red().bold(),
+        SolverOutcome::TransformOnly => "TRANSFORM COMPLETE".bright_cyan().bold(),
+        SolverOutcome::EquivalenceVerificationIncomplete => {
+            "EQUIVALENCE VERIFICATION INCOMPLETE".bright_yellow().bold()
+        }
+        SolverOutcome::NeedsManualReview => "MANUAL REVIEW REQUIRED".bright_yellow().bold(),
+        SolverOutcome::LlmAssessmentOnly => "LLM ASSESSMENT COMPLETE".bright_cyan().bold(),
+    }
+}
+
+fn print_evidence(evidence: &Evidence) {
+    match evidence {
+        Evidence::DataDifference {
+            witness_sql,
+            diff_sample,
+            ..
+        } => {
+            println!("Evidence: {}", "data difference".bright_red().bold());
+            println!("Witness SQL: {}", one_line(witness_sql));
+            println!("Diff sample: {}", one_line(diff_sample));
+        }
+        Evidence::OutputSchemaMismatch { witness_sql, .. } => {
+            println!("Evidence: {}", "output schema mismatch".bright_red().bold());
+            println!("Witness SQL: {}", one_line(witness_sql));
+        }
+    }
+}
+
+fn one_line(value: &str) -> String {
+    const LIMIT: usize = 240;
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.len() <= LIMIT {
+        compact
+    } else {
+        format!("{}...", compact.chars().take(LIMIT).collect::<String>())
     }
 }
