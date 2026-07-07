@@ -81,7 +81,8 @@ impl LoweringContext {
             SqlType::Float | SqlType::Double | SqlType::Decimal => Some(FormalAttributeType::Float),
             SqlType::Varchar => Some(FormalAttributeType::String),
             SqlType::Boolean => Some(FormalAttributeType::Bool),
-            SqlType::Date | SqlType::Time | SqlType::Timestamp => Some(FormalAttributeType::String),
+            SqlType::Date => Some(FormalAttributeType::Date),
+            SqlType::Time | SqlType::Timestamp => Some(FormalAttributeType::String),
             SqlType::Any | SqlType::Null => {
                 self.error(
                     path,
@@ -98,11 +99,11 @@ impl LoweringContext {
         path: &str,
         column: &Column,
     ) -> Option<String> {
-        if is_temporal_type(&column.ty) {
+        if is_unsupported_temporal_type(&column.ty) {
             self.warning(
                 path,
                 "temporal_type_encoded_as_string",
-                "FormalSQL proof-of-concept attributes have no Date/Time/Timestamp constructor; this query-visible attribute is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
+                "FormalSQL proof-of-concept attributes have no Time/Timestamp constructor; this query-visible attribute is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
             );
         }
         Some(formal_attribute_constructor(self.lower_schema_type(path, &column.ty)?).to_owned())

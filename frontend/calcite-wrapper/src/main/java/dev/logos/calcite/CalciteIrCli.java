@@ -25,6 +25,10 @@ import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.core.SetOp;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.SqlCall;
@@ -225,14 +229,30 @@ public final class CalciteIrCli {
         out.value(project.getProjects().get(i).toString());
       }
       out.endArray();
+      out.comma();
+      out.name("projectRex");
+      out.beginArray();
+      for (int i = 0; i < project.getProjects().size(); i++) {
+        if (i > 0) {
+          out.comma();
+        }
+        emitRexNode(out, project.getProjects().get(i));
+      }
+      out.endArray();
     } else if (rel instanceof Filter filter) {
       out.comma();
       out.name("condition").value(filter.getCondition().toString());
+      out.comma();
+      out.name("conditionRex");
+      emitRexNode(out, filter.getCondition());
     } else if (rel instanceof Join join) {
       out.comma();
       out.name("joinType").value(join.getJoinType().name());
       out.comma();
       out.name("condition").value(join.getCondition().toString());
+      out.comma();
+      out.name("conditionRex");
+      emitRexNode(out, join.getCondition());
     } else if (rel instanceof Aggregate aggregate) {
       out.comma();
       out.name("groupSet").value(String.valueOf(aggregate.getGroupSet()));
@@ -261,6 +281,16 @@ public final class CalciteIrCli {
         out.value(aggregate.getAggCallList().get(i).toString());
       }
       out.endArray();
+      out.comma();
+      out.name("aggCallDetails");
+      out.beginArray();
+      for (int i = 0; i < aggregate.getAggCallList().size(); i++) {
+        if (i > 0) {
+          out.comma();
+        }
+        emitAggregateCall(out, aggregate.getAggCallList().get(i));
+      }
+      out.endArray();
     } else if (rel instanceof SetOp setOp) {
       out.comma();
       out.name("setOp").value(setOp.kind.name());
@@ -273,10 +303,16 @@ public final class CalciteIrCli {
       if (sort.fetch != null) {
         out.comma();
         out.name("fetch").value(sort.fetch.toString());
+        out.comma();
+        out.name("fetchRex");
+        emitRexNode(out, sort.fetch);
       }
       if (sort.offset != null) {
         out.comma();
         out.name("offset").value(sort.offset.toString());
+        out.comma();
+        out.name("offsetRex");
+        emitRexNode(out, sort.offset);
       }
     }
 
@@ -294,6 +330,141 @@ public final class CalciteIrCli {
     out.endObject();
   }
 
+  private static void emitRexNode(Json out, RexNode rex) {
+    if (rex == null) {
+      out.nullValue();
+      return;
+    }
+
+    out.beginObject();
+    out.name("kind").value(rex.getKind().name());
+    out.comma();
+    out.name("class").value(rex.getClass().getSimpleName());
+    out.comma();
+    out.name("text").value(rex.toString());
+    out.comma();
+    out.name("type").value(rex.getType().getSqlTypeName().getName());
+    out.comma();
+    out.name("nullable").value(rex.getType().isNullable());
+    emitTypeMetadata(out, rex.getType());
+
+    if (rex instanceof RexInputRef inputRef) {
+      out.comma();
+      out.name("index").value(inputRef.getIndex());
+    } else if (rex instanceof RexLiteral literal) {
+      emitRexLiteralFields(out, literal);
+    } else if (rex instanceof RexCall call) {
+      out.comma();
+      out.name("operator").value(call.getOperator().getName());
+      out.comma();
+      out.name("opKind").value(call.getOperator().getKind().name());
+      out.comma();
+      out.name("operands");
+      out.beginArray();
+      for (int i = 0; i < call.getOperands().size(); i++) {
+        if (i > 0) {
+          out.comma();
+        }
+        emitRexNode(out, call.getOperands().get(i));
+      }
+      out.endArray();
+    }
+
+    out.endObject();
+  }
+
+  private static void emitRexLiteralFields(Json out, RexLiteral literal) {
+    out.comma();
+    out.name("literalTypeName").value(literal.getTypeName().getName());
+    out.comma();
+    out.name("literalValue").value(nullableToString(literal.getValue()));
+    out.comma();
+    out.name("literalValue2").value(nullableToString(literal.getValue2()));
+    String valueAsString = literalValueAsString(literal);
+    if (valueAsString != null) {
+      out.comma();
+      out.name("literalValueAsString").value(valueAsString);
+    }
+
+    if (literal.getTypeName().getName().startsWith("INTERVAL")) {
+      out.comma();
+      out.name("intervalTypeName").value(literal.getTypeName().getName());
+      if (valueAsString != null) {
+        out.comma();
+        out.name("intervalLiteral").value(valueAsString);
+      }
+      out.comma();
+      out.name("intervalInternalValue").value(nullableToString(literal.getValue()));
+      String unit = intervalUnit(literal.getTypeName());
+      if (unit != null) {
+        out.comma();
+        out.name("intervalUnit").value(unit);
+      }
+    }
+  }
+
+  private static String literalValueAsString(RexLiteral literal) {
+    try {
+      return literal.getValueAs(String.class);
+    } catch (RuntimeException | AssertionError e) {
+      return null;
+    }
+  }
+
+  private static String intervalUnit(SqlTypeName typeName) {
+    String name = typeName.getName();
+    if (!name.startsWith("INTERVAL_")) {
+      return null;
+    }
+    return name.substring("INTERVAL_".length());
+  }
+
+  private static String nullableToString(Object value) {
+    return value == null ? "null" : value.toString();
+  }
+
+  private static void emitAggregateCall(Json out, org.apache.calcite.rel.core.AggregateCall call) {
+    out.beginObject();
+    out.name("text").value(call.toString());
+    out.comma();
+    out.name("function").value(call.getAggregation().getName());
+    out.comma();
+    out.name("kind").value(call.getAggregation().getKind().name());
+    out.comma();
+    out.name("distinct").value(call.isDistinct());
+    out.comma();
+    out.name("approximate").value(call.isApproximate());
+    out.comma();
+    out.name("ignoreNulls").value(call.ignoreNulls());
+    out.comma();
+    out.name("filterArg").value(call.filterArg);
+    out.comma();
+    out.name("argList");
+    out.beginArray();
+    for (int i = 0; i < call.getArgList().size(); i++) {
+      if (i > 0) {
+        out.comma();
+      }
+      out.value(call.getArgList().get(i));
+    }
+    out.endArray();
+    if (call.distinctKeys != null) {
+      out.comma();
+      out.name("distinctKeys").value(call.distinctKeys.toString());
+    }
+    if (call.getCollation() != null) {
+      out.comma();
+      out.name("collation");
+      emitCollation(out, call.getCollation());
+    }
+    if (call.getType() != null) {
+      out.comma();
+      out.name("type").value(call.getType().getSqlTypeName().getName());
+      emitTypeMetadata(out, call.getType());
+    }
+    out.endObject();
+  }
+
   private static void emitRowType(Json out, RelDataType rowType) {
     out.beginArray();
     for (int i = 0; i < rowType.getFieldList().size(); i++) {
@@ -307,9 +478,27 @@ public final class CalciteIrCli {
       out.name("type").value(field.getType().getSqlTypeName().getName());
       out.comma();
       out.name("nullable").value(field.getType().isNullable());
+      emitTypeMetadata(out, field.getType());
       out.endObject();
     }
     out.endArray();
+  }
+
+  private static void emitTypeMetadata(Json out, RelDataType type) {
+    out.comma();
+    out.name("fullType").value(type.getFullTypeString());
+    out.comma();
+    out.name("precision").value(type.getPrecision());
+    out.comma();
+    out.name("scale").value(type.getScale());
+    if (type.getCharset() != null) {
+      out.comma();
+      out.name("charset").value(type.getCharset().name());
+    }
+    if (type.getCollation() != null) {
+      out.comma();
+      out.name("typeCollation").value(type.getCollation().toString());
+    }
   }
 
   private static void emitCollation(Json out, RelCollation collation) {
@@ -324,6 +513,8 @@ public final class CalciteIrCli {
       out.name("fieldIndex").value(field.getFieldIndex());
       out.comma();
       out.name("direction").value(field.getDirection().name());
+      out.comma();
+      out.name("nullDirection").value(field.nullDirection.name());
       out.endObject();
     }
     out.endArray();
@@ -448,6 +639,9 @@ public final class CalciteIrCli {
     }
     if (type.startsWith("TIMESTAMP") || type.startsWith("DATETIME")) {
       return SqlTypeName.TIMESTAMP;
+    }
+    if (type.startsWith("TIME")) {
+      return SqlTypeName.TIME;
     }
     return SqlTypeName.ANY;
   }

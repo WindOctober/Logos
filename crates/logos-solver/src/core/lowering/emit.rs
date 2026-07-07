@@ -506,6 +506,7 @@ fn emit_rocq_attribute(constructor: &str, name: &str) -> String {
         "Attr_string" => "AttrString",
         "Attr_bool" => "AttrBool",
         "Attr_float" => "AttrFloat",
+        "Attr_date" => "AttrDate",
         other => other,
     };
     format!("{constructor} {}", rocq_string_literal(name))
@@ -517,6 +518,7 @@ fn identity_select_constructor(attribute_constructor: &str) -> Option<&'static s
         "Attr_string" => Some("SelectString"),
         "Attr_bool" => Some("SelectBool"),
         "Attr_float" => Some("SelectFloat"),
+        "Attr_date" => Some("SelectDate"),
         _ => None,
     }
 }
@@ -536,6 +538,7 @@ fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
         "Attr_string" => "StringColumn",
         "Attr_bool" => "BoolColumn",
         "Attr_float" => "FloatColumn",
+        "Attr_date" => "DateColumn",
         _ => return None,
     };
     Some(format!(
@@ -550,6 +553,7 @@ fn dot_constructor(attribute_constructor: &str) -> Option<&'static str> {
         "Attr_string" => Some("DotString"),
         "Attr_bool" => Some("DotBool"),
         "Attr_float" => Some("DotFloat"),
+        "Attr_date" => Some("DotDate"),
         _ => None,
     }
 }
@@ -562,6 +566,7 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             Some(FormalAttributeType::String) | None => "NullString".to_owned(),
             Some(FormalAttributeType::Bool) => "NullBool".to_owned(),
             Some(FormalAttributeType::Float) => "NullFloat".to_owned(),
+            Some(FormalAttributeType::Date) => "NullDate".to_owned(),
         };
     }
     if trimmed.eq_ignore_ascii_case("true") {
@@ -569,6 +574,11 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
     }
     if trimmed.eq_ignore_ascii_case("false") {
         return "CstBool false".to_owned();
+    }
+    if matches!(ty, Some(FormalAttributeType::Date)) {
+        if let Some(days) = parse_date_literal(trimmed) {
+            return format!("CstDate ({days})");
+        }
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("CstString {}", rocq_string_literal(&unquoted));
@@ -591,6 +601,7 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             Some(FormalAttributeType::String) | None => "Value_string None".to_owned(),
             Some(FormalAttributeType::Bool) => "Value_bool None".to_owned(),
             Some(FormalAttributeType::Float) => "Value_float None".to_owned(),
+            Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
         };
     }
     if trimmed.eq_ignore_ascii_case("true") {
@@ -598,6 +609,11 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
     }
     if trimmed.eq_ignore_ascii_case("false") {
         return "Value_bool (Some false)".to_owned();
+    }
+    if matches!(ty, Some(FormalAttributeType::Date)) {
+        if let Some(days) = parse_date_literal(trimmed) {
+            return format!("Value_date (Some ({days})%Z)");
+        }
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("Value_string (Some {})", rocq_string_literal(&unquoted));
@@ -667,4 +683,47 @@ fn indent_rocq_nested_expr(expr: &str, spaces: usize) -> String {
 
 fn rocq_string_literal(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\"\""))
+}
+
+fn parse_date_literal(raw: &str) -> Option<i64> {
+    let value = sql_string_literal_content(raw).unwrap_or_else(|| raw.trim().to_owned());
+    if let Ok(days) = value.parse::<i64>() {
+        return Some(days);
+    }
+    let mut parts = value.split('-');
+    let year = parts.next()?.parse::<i64>().ok()?;
+    let month = parts.next()?.parse::<i64>().ok()?;
+    let day = parts.next()?.parse::<i64>().ok()?;
+    if parts.next().is_some() || !valid_ymd(year, month, day) {
+        return None;
+    }
+    Some(days_from_civil(year, month, day))
+}
+
+fn valid_ymd(year: i64, month: i64, day: i64) -> bool {
+    (1..=12).contains(&month) && (1..=days_in_month(year, month)).contains(&day)
+}
+
+fn is_leap_year(year: i64) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let yoe = year - era * 400;
+    let mp = if month > 2 { month - 3 } else { month + 9 };
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
 }

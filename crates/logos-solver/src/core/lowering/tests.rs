@@ -86,7 +86,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 .as_ref()
                 .unwrap()
                 .rocq_create_schema
-                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_string \"HIREDATE\" :: nil")
+                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: nil")
         );
     assert!(
         lowered
@@ -106,7 +106,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     );
     assert!(
         lowered.diagnostics.is_empty(),
-        "schema-only lowering should not warn for temporal columns until they are query-visible"
+        "schema-only lowering should not warn for supported DATE columns"
     );
 }
 

@@ -45,6 +45,13 @@ pub enum Error {
         expected: &'static str,
         actual: usize,
     },
+    #[error("{node}.{field} expected {expected} item(s), found {actual}")]
+    FieldArity {
+        node: &'static str,
+        field: &'static str,
+        expected: usize,
+        actual: usize,
+    },
     #[error("{node} is missing required Calcite field `{field}`")]
     MissingField {
         node: &'static str,

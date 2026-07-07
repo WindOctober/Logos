@@ -104,6 +104,7 @@ pub enum FormalAttributeType {
     Z,
     Bool,
     Float,
+    Date,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

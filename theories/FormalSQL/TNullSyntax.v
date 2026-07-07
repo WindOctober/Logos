@@ -126,12 +126,14 @@ Definition AttrZ (name : string) := Attr_Z name.
 Definition AttrString (name : string) := Attr_string name.
 Definition AttrBool (name : string) := Attr_bool name.
 Definition AttrFloat (name : string) := Attr_float name.
+Definition AttrDate (name : string) := Attr_date name.
 
 Inductive ColumnRef : Type :=
   | ZColumn : string -> ColumnRef
   | StringColumn : string -> ColumnRef
   | BoolColumn : string -> ColumnRef
-  | FloatColumn : string -> ColumnRef.
+  | FloatColumn : string -> ColumnRef
+  | DateColumn : string -> ColumnRef.
 
 Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   match column with
@@ -139,12 +141,14 @@ Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   | StringColumn name => AttrString name
   | BoolColumn name => AttrBool name
   | FloatColumn name => AttrFloat name
+  | DateColumn name => AttrDate name
   end.
 
 Definition DotZ (name : string) : AggTerm := AExpr (Dot (AttrZ name)).
 Definition DotString (name : string) : AggTerm := AExpr (Dot (AttrString name)).
 Definition DotBool (name : string) : AggTerm := AExpr (Dot (AttrBool name)).
 Definition DotFloat (name : string) : AggTerm := AExpr (Dot (AttrFloat name)).
+Definition DotDate (name : string) : AggTerm := AExpr (Dot (AttrDate name)).
 
 Definition DotColumn (column : ColumnRef) : AggTerm :=
   match column with
@@ -152,17 +156,20 @@ Definition DotColumn (column : ColumnRef) : AggTerm :=
   | StringColumn name => DotString name
   | BoolColumn name => DotBool name
   | FloatColumn name => DotFloat name
+  | DateColumn name => DotDate name
   end.
 
 Definition CstZ (z : Z) : AggTerm := AExpr (Constant (Value_Z (Some z))).
 Definition CstString (s : string) : AggTerm := AExpr (Constant (Value_string (Some s))).
 Definition CstBool (b : bool) : AggTerm := AExpr (Constant (Value_bool (Some b))).
 Definition CstFloat (f : float) : AggTerm := AExpr (Constant (Value_float (Some f))).
+Definition CstDate (date : Z) : AggTerm := AExpr (Constant (Value_date (Some date))).
 
 Definition NullZ : AggTerm := AExpr (Constant (Value_Z None)).
 Definition NullString : AggTerm := AExpr (Constant (Value_string None)).
 Definition NullBool : AggTerm := AExpr (Constant (Value_bool None)).
 Definition NullFloat : AggTerm := AExpr (Constant (Value_float None)).
+Definition NullDate : AggTerm := AExpr (Constant (Value_date None)).
 
 Definition SelectZ (name : string) : SelectItemT := SelectAs (DotZ name) (AttrZ name).
 Definition SelectString (name : string) : SelectItemT :=
@@ -170,6 +177,8 @@ Definition SelectString (name : string) : SelectItemT :=
 Definition SelectBool (name : string) : SelectItemT := SelectAs (DotBool name) (AttrBool name).
 Definition SelectFloat (name : string) : SelectItemT :=
   SelectAs (DotFloat name) (AttrFloat name).
+Definition SelectDate (name : string) : SelectItemT :=
+  SelectAs (DotDate name) (AttrDate name).
 
 Definition SelectColumn (column : ColumnRef) : SelectItemT :=
   SelectAs (DotColumn column) (ColumnAttribute column).

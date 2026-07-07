@@ -142,16 +142,15 @@ fn query_attribute_type(ty: &SqlType) -> FormalAttributeType {
     match ty {
         SqlType::Integer | SqlType::BigInt => FormalAttributeType::Z,
         SqlType::Float | SqlType::Double | SqlType::Decimal => FormalAttributeType::Float,
-        SqlType::Varchar | SqlType::Date | SqlType::Time | SqlType::Timestamp => {
-            FormalAttributeType::String
-        }
+        SqlType::Varchar | SqlType::Time | SqlType::Timestamp => FormalAttributeType::String,
+        SqlType::Date => FormalAttributeType::Date,
         SqlType::Boolean => FormalAttributeType::Bool,
         SqlType::Any | SqlType::Null => FormalAttributeType::String,
     }
 }
 
-fn is_temporal_type(ty: &SqlType) -> bool {
-    matches!(ty, SqlType::Date | SqlType::Time | SqlType::Timestamp)
+fn is_unsupported_temporal_type(ty: &SqlType) -> bool {
+    matches!(ty, SqlType::Time | SqlType::Timestamp)
 }
 
 fn disjoint_columns(left: &[Column], right: &[Column]) -> bool {

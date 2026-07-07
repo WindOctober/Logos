@@ -55,7 +55,10 @@ pub struct CalciteRel {
     pub table: Vec<String>,
     #[serde(default)]
     pub projects: Vec<String>,
+    #[serde(default)]
+    pub project_rex: Vec<CalciteRex>,
     pub condition: Option<String>,
+    pub condition_rex: Option<CalciteRex>,
     pub join_type: Option<String>,
     pub group_set: Option<String>,
     pub group_sets: Option<Vec<String>>,
@@ -66,7 +69,39 @@ pub struct CalciteRel {
     #[serde(default)]
     pub collation: Vec<CalciteCollation>,
     pub fetch: Option<String>,
+    pub fetch_rex: Option<CalciteRex>,
     pub offset: Option<String>,
+    pub offset_rex: Option<CalciteRex>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalciteRex {
+    pub kind: Option<String>,
+    pub class: Option<String>,
+    pub text: Option<String>,
+    #[serde(rename = "type")]
+    pub ty: Option<String>,
+    #[serde(default)]
+    pub nullable: bool,
+    pub full_type: Option<String>,
+    pub precision: Option<i32>,
+    pub scale: Option<i32>,
+    pub charset: Option<String>,
+    pub type_collation: Option<String>,
+    pub index: Option<usize>,
+    pub operator: Option<String>,
+    pub op_kind: Option<String>,
+    #[serde(default)]
+    pub operands: Vec<CalciteRex>,
+    pub literal_type_name: Option<String>,
+    pub literal_value: Option<String>,
+    pub literal_value2: Option<String>,
+    pub literal_value_as_string: Option<String>,
+    pub interval_type_name: Option<String>,
+    pub interval_literal: Option<String>,
+    pub interval_internal_value: Option<String>,
+    pub interval_unit: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -76,6 +111,11 @@ pub struct CalciteField {
     pub ty: String,
     #[serde(default)]
     pub nullable: bool,
+    pub full_type: Option<String>,
+    pub precision: Option<i32>,
+    pub scale: Option<i32>,
+    pub charset: Option<String>,
+    pub type_collation: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -83,4 +123,6 @@ pub struct CalciteCollation {
     #[serde(rename = "fieldIndex")]
     pub field_index: usize,
     pub direction: String,
+    #[serde(rename = "nullDirection")]
+    pub null_direction: Option<String>,
 }
