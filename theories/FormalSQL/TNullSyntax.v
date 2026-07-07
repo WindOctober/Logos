@@ -28,6 +28,9 @@ Definition SetDiff := Diff.
 Definition NaturalJoin (left right : Query) : Query :=
   @Q_NaturalJoin TNull relname left right.
 
+Definition CrossJoin (left right : Query) : Query :=
+  @Q_CrossJoin TNull relname left right.
+
 Definition Pi (select : SelectListT) (input : Query) : Query :=
   @Q_Pi TNull relname select input.
 
@@ -80,6 +83,9 @@ Definition Or (left right : Formula) : Formula :=
 Definition Not (formula : Formula) : Formula :=
   @Sql_Not TNull Query formula.
 
+Definition ExistsQuery (query : Query) : Formula :=
+  @Sql_Exists TNull Query query.
+
 Definition conj_and := And.
 
 Definition eval_query_in_env (db : db_state) (env : Env.env TNull) (q : Query) :=
@@ -110,7 +116,7 @@ Definition eval_formula_in_state (db : db_state) (t : tuple TNull) (f : Formula)
 Definition query_equiv (db : db_state) (q1 q2 : Query) : Prop :=
   eval_query_in_state db q1 =BE= eval_query_in_state db q2.
 
-Definition formula_true_on_output (db : db_state) (q : Query) (f : Formula) : Prop :=
+Definition query_satisfies (db : db_state) (q : Query) (f : Formula) : Prop :=
   forall t, t inBE eval_query_in_state db q -> eval_formula_in_state db t f = true.
 
 Definition projected_tuple (env : Env.env TNull) (s : SelectListT) (t : tuple TNull) :=

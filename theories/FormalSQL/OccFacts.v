@@ -88,15 +88,15 @@ apply Febag.filter_eq.
 - exact Hq.
 - intros x1 x2 _ Hx.
   change (eval_formula_in_env db nil x1 f = eval_formula_in_env db nil x2 f).
-  apply eval_formula_in_env_eq.
+  apply eval_formula_in_env_eq_tuple.
   exact Hx.
 Qed.
 
-Lemma formula_true_on_output_equiv :
+Lemma query_satisfies_of_equiv :
   forall db q1 q2 f,
     query_equiv db q1 q2 ->
-    formula_true_on_output db q1 f ->
-    formula_true_on_output db q2 f.
+    query_satisfies db q1 f ->
+    query_satisfies db q2 f.
 Proof.
 intros db q1 q2 f Hq Htrue t Ht.
 apply Htrue.

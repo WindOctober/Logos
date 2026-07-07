@@ -237,6 +237,21 @@ public final class CalciteIrCli {
       out.comma();
       out.name("groupSet").value(String.valueOf(aggregate.getGroupSet()));
       out.comma();
+      out.name("groupSets");
+      out.beginArray();
+      var groupSets = aggregate.getGroupSets();
+      if (groupSets == null) {
+        out.value(String.valueOf(aggregate.getGroupSet()));
+      } else {
+        for (int i = 0; i < groupSets.size(); i++) {
+          if (i > 0) {
+            out.comma();
+          }
+          out.value(String.valueOf(groupSets.get(i)));
+        }
+      }
+      out.endArray();
+      out.comma();
       out.name("aggCalls");
       out.beginArray();
       for (int i = 0; i < aggregate.getAggCallList().size(); i++) {

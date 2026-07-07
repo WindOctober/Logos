@@ -61,17 +61,17 @@ Lemma sigma_congr :
     query_equiv db (Sigma f q1) (Sigma f q2).
 ```
 
-### `formula_true_on_output_equiv` [`theories/FormalSQL/OccFacts.v`]
+### `query_satisfies_of_equiv` [`theories/FormalSQL/OccFacts.v`]
 
 an invariant that holds for all output tuples of a
 query also holds for any bag-equivalent query.
 
 ```coq
-Lemma formula_true_on_output_equiv :
+Lemma query_satisfies_of_equiv :
   forall db q1 q2 f,
     query_equiv db q1 q2 ->
-    formula_true_on_output db q1 f ->
-    formula_true_on_output db q2 f.
+    query_satisfies db q1 f ->
+    query_satisfies db q2 f.
 ```
 
 ## Projection Facts
@@ -170,14 +170,14 @@ Lemma nonempty_pi_equiv_iff_sort_and_occ :
 
 ## Selection Rewrite Facts
 
-### `formula_implies_on_output` [`theories/FormalSQL/RewriteSpec.v`]
+### `query_entails` [`theories/FormalSQL/RewriteSpec.v`]
 
 on every tuple output by query `q`, truth of
 `premise` implies truth of `conclusion`.  Use this as the generic hook for
 case-specific arithmetic or predicate reasoning.
 
 ```coq
-Definition formula_implies_on_output
+Definition query_entails
     (db : db_state) (q : Query) (premise conclusion : Formula) : Prop :=
   forall t,
     t inBE eval_query_in_state db q ->
@@ -185,50 +185,97 @@ Definition formula_implies_on_output
     eval_formula_in_state db t conclusion = true.
 ```
 
-### `selected_rows_satisfy_filter` [`theories/FormalSQL/RewriteSpec.v`]
+### `eval_formula_in_env_eq_tuple` [`theories/FormalSQL/RewriteSpec.v`]
+
+formula evaluation is compatible with tuple setoid equality.
+
+```coq
+Lemma eval_formula_in_env_eq_tuple :
+  forall db env f t1 t2,
+    t1 =t= t2 ->
+    eval_formula_in_env db env t1 f = eval_formula_in_env db env t2 f.
+```
+
+### `sigma_outputs_satisfy_predicate` [`theories/FormalSQL/RewriteSpec.v`]
 
 every tuple output by `Sigma f q` satisfies `f`.
 
 ```coq
-Lemma selected_rows_satisfy_filter :
+Lemma sigma_outputs_satisfy_predicate :
   forall db q f,
-    formula_true_on_output db (Sigma f q) f.
+    query_satisfies db (Sigma f q) f.
 ```
 
-### `formula_implies_filter_outputs` [`theories/FormalSQL/RewriteSpec.v`]
+### `sigma_outputs_satisfy_entailed` [`theories/FormalSQL/RewriteSpec.v`]
 
 if `premise` implies `conclusion` on the base query
 output, then every tuple output by `Sigma premise q` satisfies `conclusion`.
 
 ```coq
-Lemma formula_implies_filter_outputs :
+Lemma sigma_outputs_satisfy_entailed :
   forall db q premise conclusion,
-    formula_implies_on_output db q premise conclusion ->
-    formula_true_on_output db (Sigma premise q) conclusion.
+    query_entails db q premise conclusion ->
+    query_satisfies db (Sigma premise q) conclusion.
 ```
 
-### `eval_conj_and_true_iff` [`theories/FormalSQL/RewriteSpec.v`]
+### `eval_conj_and` [`theories/FormalSQL/RewriteSpec.v`]
 
 evaluating `p AND h` is the Boolean conjunction of
 evaluating `p` and evaluating `h`.
 
 ```coq
-Lemma eval_conj_and_true_iff :
+Lemma eval_conj_and :
   forall db env t p h,
     eval_formula_in_env db env t (conj_and p h) =
     (eval_formula_in_env db env t p && eval_formula_in_env db env t h)%bool.
 ```
 
-### `redundant_conjunct_under_query_invariant` [`theories/FormalSQL/RewriteSpec.v`]
+### `query_satisfies_conj_l` [`theories/FormalSQL/RewriteSpec.v`]
+
+if every output tuple satisfies `p AND h`, then every output tuple satisfies
+`p`.
+
+```coq
+Lemma query_satisfies_conj_l :
+  forall db q p h,
+    query_satisfies db q (conj_and p h) ->
+    query_satisfies db q p.
+```
+
+### `query_satisfies_conj_r` [`theories/FormalSQL/RewriteSpec.v`]
+
+if every output tuple satisfies `p AND h`, then every output tuple satisfies
+`h`.
+
+```coq
+Lemma query_satisfies_conj_r :
+  forall db q p h,
+    query_satisfies db q (conj_and p h) ->
+    query_satisfies db q h.
+```
+
+### `sigma_id_of_query_satisfies` [`theories/FormalSQL/RewriteSpec.v`]
+
+if every output tuple of `q` already satisfies `f`, then filtering `q` by `f`
+does not change the query result.
+
+```coq
+Lemma sigma_id_of_query_satisfies :
+  forall db q f,
+    query_satisfies db q f ->
+    query_equiv db (Sigma f q) q.
+```
+
+### `sigma_drop_redundant_conjunct` [`theories/FormalSQL/RewriteSpec.v`]
 
 if predicate `h` is true on every output tuple of
 `q`, then adding `h` as an extra conjunct under a selection does not change the
 query result.
 
 ```coq
-Lemma redundant_conjunct_under_query_invariant :
+Lemma sigma_drop_redundant_conjunct :
   forall db q p h,
-    formula_true_on_output db q h ->
+    query_satisfies db q h ->
     query_equiv db (Sigma (conj_and p h) q) (Sigma p q).
 ```
 
@@ -243,60 +290,125 @@ Lemma sigma_sigma_merge :
     query_equiv db (Sigma outer (Sigma inner q)) (Sigma (conj_and outer inner) q).
 ```
 
+### `andb3_indicator_mul_factor` [`theories/FormalSQL/RewriteSpec.v`]
+
+low-level arithmetic helper for factoring the `true3` indicator of `andb3`.
+Most generated proofs should prefer higher-level `Sigma` lemmas.
+
+```coq
+Lemma andb3_indicator_mul_factor :
+  forall n outer_value inner_value,
+    (n *
+      (if match andb3 outer_value inner_value with
+          | true3 => true
+          | _ => false
+          end
+       then 1
+       else 0))%N =
+    (n *
+      (if match inner_value with
+          | true3 => true
+          | _ => false
+          end
+       then 1
+       else 0) *
+      (if match outer_value with
+          | true3 => true
+          | _ => false
+          end
+       then 1
+       else 0))%N.
+```
+
 ## Projection Preservation
 
-### `select_list_preserves_formula` [`theories/FormalSQL/RewriteSpec.v`]
+### `select_list_directly_selects_attr` [`theories/FormalSQL/RewriteSpec.v`]
+
+`s` contains a direct projection of attribute `a` to the same output attribute.
+This is a syntactic premise for simple attribute-preservation proofs.
+
+```coq
+Definition select_list_directly_selects_attr
+    (s : SelectListT) (a : attribute TNull) : Prop :=
+  match s with
+  | @_Select_List _ l => In (@Select_As TNull (@A_Expr TNull (@F_Dot TNull a)) a) l
+  end.
+```
+
+### `select_list_has_unique_outputs` [`theories/FormalSQL/RewriteSpec.v`]
+
+the select list has no duplicate output attributes.
+
+```coq
+Definition select_list_has_unique_outputs (s : SelectListT) : Prop :=
+  match s with
+  | @_Select_List _ l => all_diff (map fst (map (@pair_of_select TNull) l))
+  end.
+```
+
+### `projection_preserves_attr` [`theories/FormalSQL/RewriteSpec.v`]
+
+projecting with `s` preserves the value of attribute `a` for tuples that
+contain `a`.
+
+```coq
+Definition projection_preserves_attr
+    (env : Env.env TNull) (s : SelectListT) (a : attribute TNull) : Prop :=
+  forall t, a inS labels TNull t -> @dot TNull (projected_tuple env s t) a = @dot TNull t a.
+```
+
+### `select_list_preserves_formula_eval` [`theories/FormalSQL/RewriteSpec.v`]
 
 projecting with select list `s` preserves the truth
 value of formula `f` on every tuple.  This is the generic predicate-level
 projection-preservation premise.
 
 ```coq
-Definition select_list_preserves_formula
+Definition select_list_preserves_formula_eval
     (db : db_state) (s : SelectListT) (f : Formula) : Prop :=
   forall t,
     eval_formula_in_state db (projected_tuple nil s t) f =
     eval_formula_in_state db t f.
 ```
 
-### `direct_projection_preserves_attr_value` [`theories/FormalSQL/RewriteSpec.v`]
+### `direct_projection_preserves_attr` [`theories/FormalSQL/RewriteSpec.v`]
 
 if a select list directly preserves an attribute under
 the same output name and has distinct output attributes, then projection
 preserves that attribute's value.
 
 ```coq
-Lemma direct_projection_preserves_attr_value :
+Lemma direct_projection_preserves_attr :
   forall env s a,
-    select_list_directly_preserves_attr s a ->
-    select_list_outputs_distinct_attrs s ->
-    projection_preserves_attr_value env s a.
+    select_list_directly_selects_attr s a ->
+    select_list_has_unique_outputs s ->
+    projection_preserves_attr env s a.
 ```
 
-### `projected_filter_outputs_satisfy_preserved_predicate` [`theories/FormalSQL/RewriteSpec.v`]
+### `pi_sigma_outputs_satisfy_preserved` [`theories/FormalSQL/RewriteSpec.v`]
 
 if a projection preserves predicate `f`, then
 `Pi s (Sigma f q)` still satisfies `f` after the projection.
 
 ```coq
-Lemma projected_filter_outputs_satisfy_preserved_predicate :
+Lemma pi_sigma_outputs_satisfy_preserved :
   forall db q s f,
-    select_list_preserves_formula db s f ->
-    formula_true_on_output db (Pi s (Sigma f q)) f.
+    select_list_preserves_formula_eval db s f ->
+    query_satisfies db (Pi s (Sigma f q)) f.
 ```
 
-### `projected_filter_outputs_satisfy_implied_predicate` [`theories/FormalSQL/RewriteSpec.v`]
+### `pi_sigma_outputs_satisfy_entailed` [`theories/FormalSQL/RewriteSpec.v`]
 
 if `premise` implies `conclusion` on `q`, and the
 projection preserves `conclusion`, then `Pi s (Sigma premise q)` satisfies
 `conclusion`.
 
 ```coq
-Lemma projected_filter_outputs_satisfy_implied_predicate :
+Lemma pi_sigma_outputs_satisfy_entailed :
   forall db q s premise conclusion,
-    select_list_preserves_formula db s conclusion ->
-    formula_implies_on_output db q premise conclusion ->
-    formula_true_on_output db (Pi s (Sigma premise q)) conclusion.
+    select_list_preserves_formula_eval db s conclusion ->
+    query_entails db q premise conclusion ->
+    query_satisfies db (Pi s (Sigma premise q)) conclusion.
 ```
 
 ## Standard Rocq Tools Available

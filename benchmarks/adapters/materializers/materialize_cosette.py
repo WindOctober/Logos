@@ -68,6 +68,7 @@ CASE_SPECIFIC_BLOCKERS = {
     "nonwetune-flat__verieql-literature__conditional-ex2sigmod92simpl-3": "This literature rewrite depends on key/uniqueness constraints not encoded in Cosette's public DSL materialization.",
     "nonwetune-flat__verieql-literature__conditional-index_sigmod82-6": "This source pair is not a constraint-free bag-equivalence benchmark under the current Cosette materialization.",
     "nonwetune-flat__verieql-literature__conditional-missing-pred-8": "This case needs SQL NULL/three-valued-logic assumptions not represented in the current Cosette materialization.",
+    "nonwetune-flat__verieql-literature__sqlrewrites-SelfJoin1-19": "This self-join identity rewrite requires NOT NULL assumptions not encoded in the current Cosette materialization.",
     "nonwetune-flat__verieql-literature__sqlrewrites-SelfJoin2-20": "This self-join identity rewrite requires NOT NULL assumptions not encoded in the current Cosette materialization.",
     "nonwetune-flat__verieql-literature__sqlrewrites-countProject-24": "COUNT(column) versus COUNT(*) requires NOT NULL assumptions not encoded in the current Cosette materialization.",
     "nonwetune-flat__verieql-calcite__calcite-216": "This correlated aggregate subquery still needs scoped column qualification or a scalar-aggregate EXISTS rewrite before it can be trusted as Cosette-clean.",
@@ -248,11 +249,18 @@ def materialize_case(input_root: Path, case_dir: Path, target: Path, case_id: st
     compatibility = combine_compatibility(q1, q2)
     metadata_blockers = detect_source_metadata_blockers(source_metadata)
     pair_blockers = detect_pair_semantic_blockers(sql1, sql2, source_metadata)
+    type_blockers = detect_type_lowering_blockers(sql1, sql2, tables)
     case_blockers = detect_case_specific_blockers(case_id)
-    if metadata_blockers or pair_blockers or case_blockers:
+    if metadata_blockers or pair_blockers or type_blockers or case_blockers:
         compatibility = Compatibility(
             status="flagged",
-            blockers=dedupe(compatibility.blockers + metadata_blockers + pair_blockers + case_blockers),
+            blockers=dedupe(
+                compatibility.blockers
+                + metadata_blockers
+                + pair_blockers
+                + type_blockers
+                + case_blockers
+            ),
             transformations=compatibility.transformations,
         )
     cosette = render_cosette(tables, q1.sql, q2.sql)
@@ -443,6 +451,25 @@ def projection_group_by_without_aggregate(sql: str) -> bool:
     if re.search(r"\bhaving\b", scanned, flags=re.IGNORECASE):
         return False
     return True
+
+
+def detect_type_lowering_blockers(sql1: str, sql2: str, tables: list[Table]) -> list[str]:
+    decimal_columns: set[str] = set()
+    for table in tables:
+        for column in table.columns:
+            lowered = column.source_type.lower()
+            if any(marker in lowered for marker in ("decimal", "numeric", "real", "float", "double")):
+                decimal_columns.add(column.name.lower())
+                decimal_columns.add(f"{table.name.lower()}.{column.name.lower()}")
+    if not decimal_columns:
+        return []
+    scanned = mask_string_literals(f"{sql1}\n{sql2}").lower()
+    for column in sorted(decimal_columns, key=len, reverse=True):
+        if re.search(rf"(?<![.\w]){re.escape(column)}(?!\w)", scanned):
+            return [
+                "This case references DECIMAL/FLOAT schema columns, but Cosette's public DSL materialization lowers them to int rather than preserving SQL numeric semantics."
+            ]
+    return []
 
 
 def materialize_query(sql: str, tables: list[Table], facts: SourceFacts) -> QueryMaterialization:
