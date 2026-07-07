@@ -20,6 +20,18 @@ For rewrites that are easier to reason about algebraically, Logos should transla
 
 Logos does not vendor SQLToNRACert, DBCert, or the Q*Cert NRAEnv-to-JavaScript compilation path. Those components target certified SQL-to-JavaScript compilation, while Logos focuses on SQL rewrite equivalence.
 
+## Counterexample Semantics
+
+The deterministic counterexample checker currently executes candidate witnesses with PostgreSQL semantics. This is a deliberate engineering boundary, not a claim that PostgreSQL is the SQL standard itself.
+
+In principle, query equivalence should be stated against a precise SQL semantics. In practice, there is no widely used, executable, full standard-SQL reference interpreter that covers the benchmark dialects we use. Existing tools and benchmark sources each expose their own accepted SQL subset or dialect. Logos therefore uses PostgreSQL as the concrete execution semantics for counterexample validation: inputs are normalized toward PostgreSQL-compatible SQL, and a validated counterexample means the two queries differ under PostgreSQL's interpretation.
+
+The checker treats positional output types as part of query equivalence. If the two queries return different numbers of columns or incompatible PostgreSQL output types, Logos records this as a verified output-schema mismatch. Output column names are not part of the comparison; columns are compared by ordinal position.
+
+The proof path remains separate: when Logos lowers queries into FormalSQL/Rocq, equivalence obligations are checked against the formal semantics available there. PostgreSQL-based counterexamples are used as deterministic evidence for non-equivalence in the executable frontend pipeline, while Rocq proof obligations are the intended trust boundary for formal equivalence claims.
+
+The CLI reflects this distinction in its result display. `NOT EQUIVALENT` is shown as a red terminal result when a PostgreSQL witness is validated. A proof-agent run that exits successfully is reported as `proof_agent_run_completed`, but the overall solver result remains `equivalence_verification_incomplete` unless Logos has actually identified and checked a complete equivalence theorem. Machine consumers should use `--output json`; the default `--output pretty` is intended for interactive terminal use.
+
 ## Submodules
 
 The SQLCoq dependency is pinned as a Git submodule:

@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/logos-ir", "crates/logos-solver"]
+resolver = "2"
