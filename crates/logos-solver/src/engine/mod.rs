@@ -64,8 +64,13 @@ pub fn solve(
     };
 
     let verification_report = run_proof_stage(&artifacts, &input, &options)?;
+    let outcome = if verification_report.backend_status == BackendStatus::ProofComplete {
+        SolverOutcome::Equivalent
+    } else {
+        SolverOutcome::EquivalenceVerificationIncomplete
+    };
     let report = SolverReport::finished(
-        SolverOutcome::EquivalenceVerificationIncomplete,
+        outcome,
         verification_report.status_reason.clone(),
         counterexample_report.rounds,
         None,

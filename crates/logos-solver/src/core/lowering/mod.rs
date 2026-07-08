@@ -7,9 +7,10 @@ use crate::core::VerificationIr;
 use super::coverage::feature_coverage;
 use super::syntax::{
     DiagnosticSeverity, FormalAggregateTerm, FormalAttribute, FormalAttributeType, FormalFormula,
-    FormalFunctionTerm, FormalProofModule, FormalQuery, FormalQueryModule, FormalSchema,
-    FormalSelectItem, FormalSetOp, FormalTable, LoweredQuery, LoweredSchema, LoweringDiagnostic,
-    LoweringStatus, ProofLoweringReport,
+    FormalFunctionTerm, FormalListQuery, FormalNullDirection, FormalProofModule, FormalQuery,
+    FormalQueryModule, FormalSchema, FormalSelectItem, FormalSetOp, FormalSortDirection,
+    FormalSortKey, FormalTable, LoweredQuery, LoweredSchema, LoweringDiagnostic, LoweringStatus,
+    ProofLoweringReport,
 };
 use scalar::formal_attribute_constructor;
 
@@ -28,14 +29,19 @@ pub fn lower_verification_input_with_config(
     let schema = lower_schema_with_config(input.schema_ir(), config);
     let source = lower_query_with_config(input.source_query_ir(), config);
     let target = lower_query_with_config(input.target_query_ir(), config);
-    let query_module = match (&source.query, &target.query) {
+    let query_module = match (&source.list_query, &target.list_query) {
         (Some(source_query), Some(target_query)) => {
             Some(emit_rocq_query_module(source_query, target_query))
         }
         _ => None,
     };
-    let proof_module = match (&schema.schema, &source.query, &target.query) {
-        (Some(_), Some(_), Some(_)) => Some(emit_rocq_proof_module()),
+    let proof_module = match (&schema.schema, &source.list_query, &target.list_query) {
+        (Some(_), Some(source_query), Some(target_query))
+            if can_emit_bag_bridge_proof(source_query, target_query) =>
+        {
+            Some(emit_rocq_bag_bridge_proof_module())
+        }
+        (Some(_), Some(_), Some(_)) => Some(emit_rocq_list_proof_module()),
         _ => None,
     };
     ProofLoweringReport {
@@ -76,7 +82,15 @@ pub fn lower_query(query: &Query) -> LoweredQuery {
 pub fn lower_query_with_config(query: &Query, config: &LoweringConfig) -> LoweredQuery {
     let feature_coverage = feature_coverage(&query.features);
     let mut context = LoweringContext::new(config.clone());
-    let lowered = context.lower_rel("rel", &query.rel);
+    let (lowered, list_lowered) = if rel_has_list_observation(&query.rel) {
+        (None, context.lower_list_rel("rel", &query.rel))
+    } else {
+        let lowered = context.lower_rel("rel", &query.rel);
+        let list_lowered = lowered.clone().map(|query| FormalListQuery::Bag {
+            input: Box::new(query),
+        });
+        (lowered, list_lowered)
+    };
     let status = if context.has_errors() {
         LoweringStatus::Blocked
     } else {
@@ -85,9 +99,14 @@ pub fn lower_query_with_config(query: &Query, config: &LoweringConfig) -> Lowere
     LoweredQuery {
         status,
         query: lowered,
+        list_query: list_lowered,
         diagnostics: context.diagnostics,
         feature_coverage,
     }
+}
+
+fn rel_has_list_observation(rel: &logos_ir::ir::RelExpr) -> bool {
+    matches!(rel, logos_ir::ir::RelExpr::Sort { .. })
 }
 
 #[derive(Debug, Clone)]
@@ -202,7 +221,10 @@ mod schema;
 #[cfg(test)]
 mod tests;
 
-use emit::{emit_rocq_proof_module, emit_rocq_query_module};
+use emit::{
+    can_emit_bag_bridge_proof, emit_rocq_bag_bridge_proof_module, emit_rocq_list_proof_module,
+    emit_rocq_query_module,
+};
 
 impl LoweringContext {
     fn new(config: LoweringConfig) -> Self {

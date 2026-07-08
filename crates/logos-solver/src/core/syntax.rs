@@ -26,6 +26,8 @@ pub struct LoweredSchema {
 pub struct LoweredQuery {
     pub status: LoweringStatus,
     pub query: Option<FormalQuery>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_query: Option<FormalListQuery>,
     pub diagnostics: Vec<LoweringDiagnostic>,
     pub feature_coverage: FeatureCoverage,
 }
@@ -147,6 +149,60 @@ pub enum FormalQuery {
         having: FormalFormula,
         input: Box<FormalQuery>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum FormalListQuery {
+    Bag {
+        input: Box<FormalQuery>,
+    },
+    OrderBy {
+        keys: Vec<FormalSortKey>,
+        input: Box<FormalListQuery>,
+    },
+    Offset {
+        count: u64,
+        input: Box<FormalListQuery>,
+    },
+    Fetch {
+        count: u64,
+        input: Box<FormalListQuery>,
+    },
+}
+
+impl FormalListQuery {
+    pub fn as_bag_query(&self) -> Option<&FormalQuery> {
+        match self {
+            FormalListQuery::Bag { input } => Some(input),
+            FormalListQuery::OrderBy { .. }
+            | FormalListQuery::Offset { .. }
+            | FormalListQuery::Fetch { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormalSortKey {
+    pub attribute_name: String,
+    pub attribute_constructor: String,
+    pub direction: FormalSortDirection,
+    pub null_direction: FormalNullDirection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FormalSortDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FormalNullDirection {
+    First,
+    Last,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

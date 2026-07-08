@@ -23,6 +23,9 @@ for file in \
   "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/proof_of_concept/SqlSyntax.vo" \
   "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/proof_of_concept/GenericInstance.vo" \
   "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/sql/SqlAlgebra.vo" \
+  "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/sql/SqlOrder.vo" \
+  "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/sql/SqlListAlgebra.vo" \
+  "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/data/sql/SqlListFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/TNullSyntax.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/RewriteSpec.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/OccFacts.vo" \

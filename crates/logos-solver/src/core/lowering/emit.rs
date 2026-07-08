@@ -32,15 +32,31 @@ Check generated_schema.
 }
 
 pub(super) fn emit_rocq_query_module(
-    source: &FormalQuery,
-    target: &FormalQuery,
+    source: &FormalListQuery,
+    target: &FormalListQuery,
 ) -> FormalQueryModule {
-    let readable = RocqQueryDefinitions::from_query_pair(source, target);
+    let readable = RocqQueryDefinitions::from_list_query_pair(source, target);
     let shared_definitions = readable.emit_definitions();
-    let source_definition = readable.emit_query_definition("source_query", source);
-    let target_definition = readable.emit_query_definition("target_query", target);
+    let source_bag_definition = source
+        .as_bag_query()
+        .map(|query| readable.emit_query_definition("source_query", query));
+    let target_bag_definition = target
+        .as_bag_query()
+        .map(|query| readable.emit_query_definition("target_query", query));
+    let source_definition = readable.emit_list_query_definition("source_list_query", source);
+    let target_definition = readable.emit_list_query_definition("target_list_query", target);
+    let mut query_definitions = Vec::new();
+    if let Some(definition) = source_bag_definition {
+        query_definitions.push(definition);
+    }
+    if let Some(definition) = target_bag_definition {
+        query_definitions.push(definition);
+    }
+    query_definitions.push(source_definition.clone());
+    query_definitions.push(target_definition.clone());
     let rocq_module = format!(
         "\
+From SQLFS Require Import SqlSyntax GenericInstance SqlOrder SqlListAlgebra.
 From Logos Require Import FormalSQL.TNullSyntax.
 From Stdlib Require Import String ZArith List.
 Import ListNotations.
@@ -51,12 +67,11 @@ Open Scope Z_scope.
 
 {}
 
-{}
-
-Check source_query.
-Check target_query.
+Check source_list_query.
+Check target_list_query.
 ",
-        shared_definitions, source_definition, target_definition
+        shared_definitions,
+        query_definitions.join("\n\n")
     );
     FormalQueryModule {
         source_definition,
@@ -65,10 +80,17 @@ Check target_query.
     }
 }
 
-pub(super) fn emit_rocq_proof_module() -> FormalProofModule {
+pub(super) fn can_emit_bag_bridge_proof(
+    source: &FormalListQuery,
+    target: &FormalListQuery,
+) -> bool {
+    source.as_bag_query().is_some() && target.as_bag_query().is_some()
+}
+
+pub(super) fn emit_rocq_bag_bridge_proof_module() -> FormalProofModule {
     let rocq_module = format!(
         "\
-From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra FiniteBag FiniteSet Bool3.
+From SQLFS Require Import SqlSyntax GenericInstance Values SqlAlgebra SqlListAlgebra SqlListFacts FiniteBag FiniteSet Bool3.
 From Logos Require Import FormalSQL.OccFacts FormalSQL.PiFacts FormalSQL.RewriteSpec.
 From LogosGenerated Require Import Schema Queries.
 From Stdlib Require Import String ZArith NArith List Lia.
@@ -89,22 +111,99 @@ Definition eval_generated_query (db : db_state) (q : @query TNull relname) :=
     nil
     q.
 
+Definition generated_value_is_null (v : value) : bool :=
+  NullValues.is_null_value v.
+
+Definition generated_list_query_equiv
+    (db : db_state)
+    (q1 q2 : @list_query TNull relname) : Prop :=
+  @list_query_equiv TNull relname
+    (@_basesort TNull db)
+    (@_instance TNull db)
+    unknown3
+    contains_nulls
+    generated_value_is_null
+    nil
+    q1
+    q2.
+
 Definition generated_equivalence_input :=
-  (generated_schema, source_query, target_query).
+  (generated_schema, source_list_query, target_list_query).
 
 Theorem generated_queries_equivalent :
   forall db : db_state,
     generated_schema_conforms db ->
-    eval_generated_query db source_query =BE= eval_generated_query db target_query.
+    generated_list_query_equiv db source_list_query target_list_query.
 Proof.
-  (* LOGOS_PROOF_HOLE: replace this proof with a complete proof ending in Qed. *)
+  intros db Hschema.
+  unfold generated_list_query_equiv, source_list_query, target_list_query.
+  apply list_equiv_l_bag_of_bag_query_equiv.
+  unfold bag_query_equiv.
+  (* LOGOS_PROOF_HOLE: prove the remaining bag equality and end with Qed. *)
 Abort.
 
 Check generated_schema_conforms.
 Check eval_generated_query.
+Check generated_list_query_equiv.
 Check generated_schema.
 Check source_query.
 Check target_query.
+Check source_list_query.
+Check target_list_query.
+Check generated_equivalence_input.
+"
+    );
+    FormalProofModule { rocq_module }
+}
+
+pub(super) fn emit_rocq_list_proof_module() -> FormalProofModule {
+    let rocq_module = format!(
+        "\
+From SQLFS Require Import SqlSyntax GenericInstance Values SqlAlgebra SqlListAlgebra SqlListFacts FiniteBag FiniteSet Bool3.
+From Logos Require Import FormalSQL.OccFacts FormalSQL.PiFacts FormalSQL.RewriteSpec.
+From LogosGenerated Require Import Schema Queries.
+From Stdlib Require Import String ZArith NArith List Lia.
+Import ListNotations.
+Open Scope string_scope.
+Open Scope Z_scope.
+
+Definition generated_schema_conforms (db : db_state) : Prop :=
+  @_relnames TNull db = @_relnames TNull generated_schema /\\
+  forall r, @_basesort TNull db r =S= @_basesort TNull generated_schema r.
+
+Definition generated_value_is_null (v : value) : bool :=
+  NullValues.is_null_value v.
+
+Definition generated_list_query_equiv
+    (db : db_state)
+    (q1 q2 : @list_query TNull relname) : Prop :=
+  @list_query_equiv TNull relname
+    (@_basesort TNull db)
+    (@_instance TNull db)
+    unknown3
+    contains_nulls
+    generated_value_is_null
+    nil
+    q1
+    q2.
+
+Definition generated_equivalence_input :=
+  (generated_schema, source_list_query, target_list_query).
+
+Theorem generated_queries_equivalent :
+  forall db : db_state,
+    generated_schema_conforms db ->
+    generated_list_query_equiv db source_list_query target_list_query.
+Proof.
+  intros db Hschema.
+  (* LOGOS_PROOF_HOLE: prove the list-observation equivalence and end with Qed. *)
+Abort.
+
+Check generated_schema_conforms.
+Check generated_list_query_equiv.
+Check generated_schema.
+Check source_list_query.
+Check target_list_query.
 Check generated_equivalence_input.
 "
     );
@@ -126,19 +225,29 @@ struct RocqQueryDefinitions {
 }
 
 impl RocqQueryDefinitions {
-    fn from_query_pair(source: &FormalQuery, target: &FormalQuery) -> Self {
+    fn from_list_query_pair(source: &FormalListQuery, target: &FormalListQuery) -> Self {
         let mut definitions = Self::default();
-        definitions.collect_select_lists(source);
-        definitions.collect_select_lists(target);
-        definitions.collect_predicates(source);
-        definitions.collect_predicates(target);
+        definitions.collect_list_query(source);
+        definitions.collect_list_query(target);
 
         let mut query_counts = HashMap::new();
         let mut query_order = Vec::new();
-        collect_query_counts(source, &mut query_counts, &mut query_order);
-        collect_query_counts(target, &mut query_counts, &mut query_order);
+        collect_list_query_counts(source, &mut query_counts, &mut query_order);
+        collect_list_query_counts(target, &mut query_counts, &mut query_order);
         definitions.shared_queries = select_shared_queries(query_order, &query_counts);
         definitions
+    }
+
+    fn collect_list_query(&mut self, query: &FormalListQuery) {
+        match query {
+            FormalListQuery::Bag { input } => {
+                self.collect_select_lists(input);
+                self.collect_predicates(input);
+            }
+            FormalListQuery::OrderBy { input, .. }
+            | FormalListQuery::Offset { input, .. }
+            | FormalListQuery::Fetch { input, .. } => self.collect_list_query(input),
+        }
     }
 
     fn collect_select_lists(&mut self, query: &FormalQuery) {
@@ -213,6 +322,30 @@ impl RocqQueryDefinitions {
             "Definition {name} : Query :=\n{}.",
             indent_rocq_expr(&self.emit_query(query, true), 2)
         )
+    }
+
+    fn emit_list_query_definition(&self, name: &str, query: &FormalListQuery) -> String {
+        format!(
+            "Definition {name} : ListQuery :=\n{}.",
+            indent_rocq_expr(&self.emit_list_query(query), 2)
+        )
+    }
+
+    fn emit_list_query(&self, query: &FormalListQuery) -> String {
+        match query {
+            FormalListQuery::Bag { input } => format!("Bag ({})", self.emit_query(input, true)),
+            FormalListQuery::OrderBy { keys, input } => format!(
+                "OrderBy ({}) ({})",
+                emit_rocq_list(keys, emit_rocq_sort_key),
+                self.emit_list_query(input)
+            ),
+            FormalListQuery::Offset { count, input } => {
+                format!("Offset ({}%nat) ({})", count, self.emit_list_query(input))
+            }
+            FormalListQuery::Fetch { count, input } => {
+                format!("Fetch ({}%nat) ({})", count, self.emit_list_query(input))
+            }
+        }
     }
 
     fn emit_query(&self, query: &FormalQuery, allow_query_refs: bool) -> String {
@@ -319,6 +452,19 @@ fn collect_query_counts(
     }
 }
 
+fn collect_list_query_counts(
+    query: &FormalListQuery,
+    counts: &mut HashMap<FormalQuery, usize>,
+    order: &mut Vec<FormalQuery>,
+) {
+    match query {
+        FormalListQuery::Bag { input } => collect_query_counts(input, counts, order),
+        FormalListQuery::OrderBy { input, .. }
+        | FormalListQuery::Offset { input, .. }
+        | FormalListQuery::Fetch { input, .. } => collect_list_query_counts(input, counts, order),
+    }
+}
+
 fn select_shared_queries(
     query_order: Vec<FormalQuery>,
     query_counts: &HashMap<FormalQuery, usize>,
@@ -382,6 +528,26 @@ fn emit_rocq_set_op(op: FormalSetOp) -> &'static str {
         FormalSetOp::UnionMax => "SetUnionMax",
         FormalSetOp::Inter => "SetInter",
         FormalSetOp::Diff => "SetDiff",
+    }
+}
+
+fn emit_rocq_sort_key(key: &FormalSortKey) -> String {
+    format!(
+        "{} ({})",
+        emit_rocq_sort_key_constructor(key.direction, key.null_direction),
+        emit_rocq_attribute(&key.attribute_constructor, &key.attribute_name)
+    )
+}
+
+fn emit_rocq_sort_key_constructor(
+    direction: FormalSortDirection,
+    null_direction: FormalNullDirection,
+) -> &'static str {
+    match (direction, null_direction) {
+        (FormalSortDirection::Asc, FormalNullDirection::First) => "SortAscNullsFirst",
+        (FormalSortDirection::Asc, FormalNullDirection::Last) => "SortAscNullsLast",
+        (FormalSortDirection::Desc, FormalNullDirection::First) => "SortDescNullsFirst",
+        (FormalSortDirection::Desc, FormalNullDirection::Last) => "SortDescNullsLast",
     }
 }
 

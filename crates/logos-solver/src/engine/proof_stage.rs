@@ -60,17 +60,23 @@ pub(super) fn run_proof_stage(
         None
     };
     let backend_status = match &proof_agent {
+        Some(run) if run.success && run.audit.passed => BackendStatus::ProofComplete,
         Some(run) if run.success => BackendStatus::ProofAgentRunCompleted,
         Some(_) => BackendStatus::ProofAgentFailed,
         None => BackendStatus::WorkspaceGenerated,
     };
-    let status_reason = match &proof_agent {
-        Some(run) if run.success => {
-            "FormalSQL/Rocq proof agent run completed; equivalence proof is not marked complete yet"
+    let status_reason = match backend_status {
+        BackendStatus::ProofComplete => {
+            "FormalSQL/Rocq proof agent produced an audited proof accepted by Rocq".to_owned()
+        }
+        BackendStatus::ProofAgentRunCompleted => {
+            "FormalSQL/Rocq proof agent run completed, but the generated workspace did not pass the proof audit"
                 .to_owned()
         }
-        Some(_) => "FormalSQL/Rocq proof agent failed; see proof-stage/proof-agent logs".to_owned(),
-        None => {
+        BackendStatus::ProofAgentFailed => {
+            "FormalSQL/Rocq proof agent failed; see proof-stage/proof-agent logs".to_owned()
+        }
+        BackendStatus::WorkspaceGenerated => {
             "FormalSQL/Rocq proof backend generated a proof workspace; automated proof search is not enabled"
                 .to_owned()
         }

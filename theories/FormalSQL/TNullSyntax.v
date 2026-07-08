@@ -1,4 +1,4 @@
-From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env.
+From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra SqlOrder SqlListAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env.
 From Stdlib Require Import List String ZArith Floats.
 
 Import ListNotations.
@@ -8,11 +8,13 @@ Open Scope string_scope.
 Open Scope Z_scope.
 
 Definition Query := @query TNull relname.
+Definition ListQuery := @list_query TNull relname.
 Definition Formula := @sql_formula TNull Query.
 Definition SelectListT := @_select_list TNull.
 Definition SelectItemT := @select TNull.
 Definition AggTerm := @aggterm TNull.
 Definition FunTerm := @funterm TNull.
+Definition SortKeyT := sort_key TNull.
 
 Definition Table (name : string) : Query :=
   @Q_Table TNull relname (Rel name).
@@ -43,6 +45,18 @@ Definition Gamma
     (having : Formula)
     (input : Query) : Query :=
   @Q_Gamma TNull relname select group_by having input.
+
+Definition Bag (input : Query) : ListQuery :=
+  @L_Bag TNull relname input.
+
+Definition OrderBy (keys : list SortKeyT) (input : ListQuery) : ListQuery :=
+  @L_OrderBy TNull relname keys input.
+
+Definition Offset (count : nat) (input : ListQuery) : ListQuery :=
+  @L_Offset TNull relname count input.
+
+Definition Fetch (count : nat) (input : ListQuery) : ListQuery :=
+  @L_Fetch TNull relname count input.
 
 Definition SelectList (items : list SelectItemT) : SelectListT :=
   @_Select_List TNull items.
@@ -129,6 +143,29 @@ Definition AttrFloat (name : string) := Attr_float name.
 Definition AttrDate (name : string) := Attr_date name.
 Definition AttrTimestamp (name : string) (precision : Z) := Attr_timestamp name precision.
 Definition AttrTimestamptz (name : string) (precision : Z) := Attr_timestamptz name precision.
+
+Definition SortAsc := Sort_Asc.
+Definition SortDesc := Sort_Desc.
+Definition NullsFirst := Nulls_First.
+Definition NullsLast := Nulls_Last.
+
+Definition SortKey
+    (attribute : attribute TNull)
+    (direction : sort_direction)
+    (nulls : null_direction) : SortKeyT :=
+  @mk_sort_key TNull attribute direction nulls.
+
+Definition SortAscNullsFirst (attribute : attribute TNull) : SortKeyT :=
+  SortKey attribute SortAsc NullsFirst.
+
+Definition SortAscNullsLast (attribute : attribute TNull) : SortKeyT :=
+  SortKey attribute SortAsc NullsLast.
+
+Definition SortDescNullsFirst (attribute : attribute TNull) : SortKeyT :=
+  SortKey attribute SortDesc NullsFirst.
+
+Definition SortDescNullsLast (attribute : attribute TNull) : SortKeyT :=
+  SortKey attribute SortDesc NullsLast.
 
 Inductive ColumnRef : Type :=
   | ZColumn : string -> ColumnRef

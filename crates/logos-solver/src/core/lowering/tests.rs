@@ -3,7 +3,7 @@ use logos_ir::ir::ScalarOp;
 
 use logos_ir::ir::{
     Column, Feature, JoinType, Query, RelExpr, ScalarAst, ScalarClass, ScalarExpr, Schema, SetOp,
-    SqlType, Table, ValuesTuples,
+    SortDirection, SortNullDirection, SqlType, Table, ValuesTuples,
 };
 
 #[test]
@@ -199,8 +199,8 @@ fn lowers_timestamp_literals_and_interval_arithmetic() {
     assert_eq!(target.status, LoweringStatus::Lowered);
 
     let module = emit_rocq_query_module(
-        source.query.as_ref().unwrap(),
-        target.query.as_ref().unwrap(),
+        source.list_query.as_ref().unwrap(),
+        target.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("TimestampColumn \"ts\" 6"));
     assert!(module.rocq_module.contains("CstTimestamp (1000001)"));
@@ -242,8 +242,8 @@ fn lowers_date_to_timestamp_cast() {
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().unwrap(),
-        lowered.query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("AttrTimestamp \"ts\" 0"));
     assert!(
@@ -284,8 +284,8 @@ fn lowers_timestamp_to_date_cast() {
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().unwrap(),
-        lowered.query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("AttrDate \"d\""));
     assert!(
@@ -328,8 +328,8 @@ fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().unwrap(),
-        lowered.query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("CstTimestamptz (0)"));
 }
@@ -367,8 +367,8 @@ fn normalizes_timestamp_tz_literals_with_named_time_zone() {
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().unwrap(),
-        lowered.query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("CstTimestamptz (0)"));
 }
@@ -406,8 +406,8 @@ fn accepts_timestamp_tz_local_literal_in_named_time_zone() {
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().unwrap(),
-        lowered.query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
     );
     assert!(module.rocq_module.contains("CstTimestamptz (0)"));
 }
@@ -517,13 +517,13 @@ fn emits_source_and_target_query_rocq_module() {
         input: Box::new(source.clone()),
     };
 
+    let source = bag_list_query(source);
+    let target = bag_list_query(target);
     let module = emit_rocq_query_module(&source, &target);
 
-    assert!(
-        module
-            .rocq_module
-            .starts_with("From Logos Require Import FormalSQL.TNullSyntax.")
-    );
+    assert!(module.rocq_module.starts_with(
+        "From SQLFS Require Import SqlSyntax GenericInstance SqlOrder SqlListAlgebra."
+    ));
     assert!(
         module
             .rocq_module
@@ -568,6 +568,8 @@ fn suppresses_nested_shared_queries_covered_by_larger_shared_query() {
         }),
     };
 
+    let source = bag_list_query(source);
+    let target = bag_list_query(target);
     let module = emit_rocq_query_module(&source, &target);
 
     assert!(module.rocq_module.contains("Definition shared_query_0"));
@@ -599,6 +601,8 @@ fn keeps_nested_shared_query_when_it_is_used_independently() {
     };
     let target = parent;
 
+    let source = bag_list_query(source);
+    let target = bag_list_query(target);
     let module = emit_rocq_query_module(&source, &target);
 
     assert!(module.rocq_module.contains("Definition shared_query_0"));
@@ -647,8 +651,8 @@ fn lowers_left_join_with_exists_desugaring() {
 
     let lowered = lower_query(&query);
     let module = emit_rocq_query_module(
-        lowered.query.as_ref().expect("left join should lower"),
-        lowered.query.as_ref().expect("left join should lower"),
+        lowered.list_query.as_ref().expect("left join should lower"),
+        lowered.list_query.as_ref().expect("left join should lower"),
     );
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
@@ -666,12 +670,24 @@ fn lowers_semi_and_anti_join_with_correlated_exists() {
     let semi_lowered = lower_query(&semi);
     let anti_lowered = lower_query(&anti);
     let semi_module = emit_rocq_query_module(
-        semi_lowered.query.as_ref().expect("semi join should lower"),
-        semi_lowered.query.as_ref().expect("semi join should lower"),
+        semi_lowered
+            .list_query
+            .as_ref()
+            .expect("semi join should lower"),
+        semi_lowered
+            .list_query
+            .as_ref()
+            .expect("semi join should lower"),
     );
     let anti_module = emit_rocq_query_module(
-        anti_lowered.query.as_ref().expect("anti join should lower"),
-        anti_lowered.query.as_ref().expect("anti join should lower"),
+        anti_lowered
+            .list_query
+            .as_ref()
+            .expect("anti join should lower"),
+        anti_lowered
+            .list_query
+            .as_ref()
+            .expect("anti join should lower"),
     );
 
     assert_eq!(semi_lowered.status, LoweringStatus::Lowered);
@@ -685,7 +701,7 @@ fn lowers_semi_and_anti_join_with_correlated_exists() {
 
 #[test]
 fn emits_proof_rocq_module_with_schema_and_query_pair() {
-    let module = emit_rocq_proof_module();
+    let module = emit_rocq_bag_bridge_proof_module();
 
     assert!(
         module
@@ -696,6 +712,16 @@ fn emits_proof_rocq_module_with_schema_and_query_pair() {
         module
             .rocq_module
             .contains("Definition generated_equivalence_input :=")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("Definition generated_list_query_equiv")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("apply list_equiv_l_bag_of_bag_query_equiv.")
     );
     assert!(
         module
@@ -712,7 +738,28 @@ fn emits_proof_rocq_module_with_schema_and_query_pair() {
 }
 
 #[test]
-fn rejects_sort_because_formal_sql_is_bag_valued() {
+fn bag_bridge_proof_is_only_for_bag_queries() {
+    let source = FormalQuery::Projection {
+        select: vec![],
+        input: Box::new(FormalQuery::Table {
+            relation: "t".to_owned(),
+        }),
+    };
+    let target = FormalQuery::Selection {
+        predicate: FormalFormula::True,
+        input: Box::new(FormalQuery::Table {
+            relation: "t".to_owned(),
+        }),
+    };
+
+    assert!(can_emit_bag_bridge_proof(
+        &bag_list_query(source),
+        &bag_list_query(target)
+    ));
+}
+
+#[test]
+fn lowers_identity_sort_to_list_bag_observation() {
     let rel = RelExpr::Sort {
         input: Box::new(RelExpr::TableScan {
             table: vec!["t".to_owned()],
@@ -734,14 +781,113 @@ fn rejects_sort_because_formal_sql_is_bag_valued() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert_eq!(lowered.query, None);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "sort_limit_offset_not_supported")
-    );
+    assert!(matches!(
+        lowered.list_query,
+        Some(FormalListQuery::Bag { .. })
+    ));
+}
+
+#[test]
+fn lowers_sort_offset_fetch_to_list_observation() {
+    let output = vec![column("a"), column("b")];
+    let rel = RelExpr::Sort {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["t".to_owned()],
+            output: output.clone(),
+        }),
+        collation: vec![logos_ir::ir::SortKey {
+            field_index: 1,
+            direction: SortDirection::Descending,
+            null_direction: Some(SortNullDirection::First),
+        }],
+        fetch: Some(scalar(ScalarAst::Literal {
+            raw: "10".to_owned(),
+        })),
+        offset: Some(scalar(ScalarAst::Literal {
+            raw: "2".to_owned(),
+        })),
+        output: output.clone(),
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output,
+        features: vec![Feature::Sort, Feature::Limit, Feature::Offset],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert_eq!(lowered.query, None);
+    let list_query = lowered.list_query.expect("sort should lower as list query");
+    let FormalListQuery::Fetch { count, input } = list_query else {
+        panic!("expected top-level Fetch");
+    };
+    assert_eq!(count, 10);
+    let FormalListQuery::Offset { count, input } = *input else {
+        panic!("expected Offset under Fetch");
+    };
+    assert_eq!(count, 2);
+    let FormalListQuery::OrderBy { keys, input } = *input else {
+        panic!("expected OrderBy under Offset");
+    };
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].attribute_name, "b");
+    assert_eq!(keys[0].attribute_constructor, "Attr_Z");
+    assert_eq!(keys[0].direction, FormalSortDirection::Desc);
+    assert_eq!(keys[0].null_direction, FormalNullDirection::First);
+    assert!(matches!(*input, FormalListQuery::Bag { .. }));
+}
+
+#[test]
+fn lowers_nested_fetch_zero_to_empty_bag_query() {
+    let rel = RelExpr::Sort {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["t".to_owned()],
+            output: vec![column("a")],
+        }),
+        collation: vec![logos_ir::ir::SortKey {
+            field_index: 0,
+            direction: SortDirection::Ascending,
+            null_direction: Some(SortNullDirection::Last),
+        }],
+        fetch: Some(scalar(ScalarAst::Literal {
+            raw: "0".to_owned(),
+        })),
+        offset: None,
+        output: vec![column("a")],
+    };
+    let nested_rel = rel.clone();
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("a")],
+        features: vec![Feature::Sort, Feature::Limit],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalListQuery::Fetch { count, input }) = lowered.list_query else {
+        panic!("expected top-level list Fetch");
+    };
+    assert_eq!(count, 0);
+    assert!(matches!(*input, FormalListQuery::OrderBy { .. }));
+
+    let nested = LoweringContext::new(LoweringConfig::default()).lower_rel("rel", &nested_rel);
+    assert!(matches!(
+        nested,
+        Some(FormalQuery::Selection {
+            predicate: FormalFormula::False,
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -849,6 +995,12 @@ fn timestamp_column(name: &str, precision: Option<u32>) -> Column {
         ty: SqlType::Timestamp,
         nullable: true,
         precision,
+    }
+}
+
+fn bag_list_query(query: FormalQuery) -> FormalListQuery {
+    FormalListQuery::Bag {
+        input: Box::new(query),
     }
 }
 

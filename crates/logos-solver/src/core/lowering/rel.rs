@@ -3,9 +3,63 @@ use super::scalar::{
     formal_attribute_constructor,
 };
 use super::*;
-use logos_ir::ir::{AggregateCall, JoinType, RelExpr, ScalarAst, SetOp, ValuesTuples};
+use logos_ir::ir::{
+    AggregateCall, JoinType, RelExpr, ScalarAst, ScalarExpr, SetOp, SortDirection,
+    SortNullDirection, ValuesTuples,
+};
 
 impl LoweringContext {
+    pub(super) fn lower_list_rel(&mut self, path: &str, rel: &RelExpr) -> Option<FormalListQuery> {
+        match rel {
+            RelExpr::Sort {
+                input,
+                collation,
+                fetch,
+                offset,
+                output,
+            } => {
+                let input_output = input.output();
+                if output.len() != input_output.len() {
+                    self.error(
+                        path,
+                        "sort_output_shape_changed",
+                        "FormalSQL list lowering expects Sort to preserve its input row arity.",
+                    );
+                    return None;
+                }
+                let input_query = self.lower_rel(&format!("{path}.input"), input)?;
+                let mut list_query = FormalListQuery::Bag {
+                    input: Box::new(input_query),
+                };
+                if !collation.is_empty() {
+                    let keys = self.lower_sort_keys(path, collation, input_output)?;
+                    list_query = FormalListQuery::OrderBy {
+                        keys,
+                        input: Box::new(list_query),
+                    };
+                }
+                if let Some(offset) = offset {
+                    let count = self.lower_row_count(&format!("{path}.offset"), offset)?;
+                    list_query = FormalListQuery::Offset {
+                        count,
+                        input: Box::new(list_query),
+                    };
+                }
+                if let Some(fetch) = fetch {
+                    let count = self.lower_row_count(&format!("{path}.fetch"), fetch)?;
+                    list_query = FormalListQuery::Fetch {
+                        count,
+                        input: Box::new(list_query),
+                    };
+                }
+                Some(list_query)
+            }
+            _ => self.lower_rel(path, rel).map(|query| FormalListQuery::Bag {
+                input: Box::new(query),
+            }),
+        }
+    }
+
     pub(super) fn lower_rel(&mut self, path: &str, rel: &RelExpr) -> Option<FormalQuery> {
         match rel {
             RelExpr::TableScan { table, .. } => Some(FormalQuery::Table {
@@ -80,11 +134,21 @@ impl LoweringContext {
                 inputs,
                 output: _,
             } => self.lower_set(path, *op, *all, inputs),
-            RelExpr::Sort { .. } => {
+            RelExpr::Sort { input, fetch, .. } => {
+                if let Some(fetch) = fetch {
+                    let count = self.lower_row_count(&format!("{path}.fetch"), fetch)?;
+                    if count == 0 {
+                        let input_query = self.lower_rel(&format!("{path}.input"), input)?;
+                        return Some(FormalQuery::Selection {
+                            predicate: FormalFormula::False,
+                            input: Box::new(input_query),
+                        });
+                    }
+                }
                 self.error(
                     path,
                     "sort_limit_offset_not_supported",
-                    "FormalSQL's algebraic query model is bag-valued and has no ORDER BY, LIMIT, or OFFSET constructor.",
+                    "FormalSQL bag queries cannot directly encode non-empty ORDER BY, LIMIT, or OFFSET; use list-query lowering.",
                 );
                 None
             }
@@ -115,6 +179,77 @@ impl LoweringContext {
                         "Calcite did not expose VALUES tuples, so the query cannot be lowered soundly.",
                     ),
                 }
+                None
+            }
+        }
+    }
+
+    fn lower_sort_keys(
+        &mut self,
+        path: &str,
+        collation: &[logos_ir::ir::SortKey],
+        output: &[Column],
+    ) -> Option<Vec<FormalSortKey>> {
+        let mut keys = Vec::with_capacity(collation.len());
+        for (index, key) in collation.iter().enumerate() {
+            let Some(column) = output.get(key.field_index) else {
+                self.error(
+                    &format!("{path}.collation[{index}]"),
+                    "sort_key_index_out_of_bounds",
+                    "Sort key field index is outside the Sort output schema.",
+                );
+                return None;
+            };
+            let direction = match key.direction {
+                SortDirection::Ascending | SortDirection::StrictlyAscending => {
+                    FormalSortDirection::Asc
+                }
+                SortDirection::Descending | SortDirection::StrictlyDescending => {
+                    FormalSortDirection::Desc
+                }
+                SortDirection::Clustered => {
+                    self.error(
+                        &format!("{path}.collation[{index}]"),
+                        "clustered_sort_not_supported",
+                        "FormalSQL list semantics supports ASC/DESC ordering, not Calcite clustered collation.",
+                    );
+                    return None;
+                }
+            };
+            let Some(null_direction) = key
+                .null_direction
+                .or_else(|| key.direction.default_null_direction())
+            else {
+                self.error(
+                    &format!("{path}.collation[{index}]"),
+                    "sort_null_direction_missing",
+                    "FormalSQL list ordering requires explicit NULLS FIRST/LAST semantics.",
+                );
+                return None;
+            };
+            let null_direction = match null_direction {
+                SortNullDirection::First => FormalNullDirection::First,
+                SortNullDirection::Last => FormalNullDirection::Last,
+            };
+            keys.push(FormalSortKey {
+                attribute_name: column.name.clone(),
+                attribute_constructor: formal_attribute_constructor(query_attribute_type(column)),
+                direction,
+                null_direction,
+            });
+        }
+        Some(keys)
+    }
+
+    fn lower_row_count(&mut self, path: &str, expr: &ScalarExpr) -> Option<u64> {
+        match unsigned_integer_literal_ast(&expr.parsed) {
+            Some(value) => Some(value),
+            None => {
+                self.error(
+                    path,
+                    "row_count_not_supported",
+                    "FormalSQL list lowering currently supports only non-negative integer literal LIMIT/OFFSET counts.",
+                );
                 None
             }
         }
@@ -759,5 +894,26 @@ impl LoweringContext {
                 scope,
             )?,
         })
+    }
+}
+
+fn unsigned_integer_literal_ast(ast: &ScalarAst) -> Option<u64> {
+    match ast {
+        ScalarAst::Literal { raw } => parse_unsigned_integer_literal(raw),
+        ScalarAst::TypeAnnotation { expr, .. } => unsigned_integer_literal_ast(expr),
+        _ => None,
+    }
+}
+
+fn parse_unsigned_integer_literal(raw: &str) -> Option<u64> {
+    let value = raw.trim();
+    if value.is_empty() || value.starts_with('-') {
+        return None;
+    }
+    let value = value.strip_prefix('+').unwrap_or(value);
+    if value.chars().all(|ch| ch.is_ascii_digit()) {
+        value.parse().ok()
+    } else {
+        None
     }
 }
