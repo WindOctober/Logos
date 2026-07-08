@@ -4,6 +4,35 @@ This guide lists Logos-local lemmas available to proof agents.  These files are
 read-only proof context; generated proof attempts should edit only the generated
 problem workspace.
 
+## Bag/List Bridge
+
+### `list_equiv_l_bag_iff_bag_query_equiv` [`vendor/FormalSQL/src/data/sql/SqlListFacts.v`]
+
+For queries embedded into the list observation layer with `L_Bag`, list-query
+equivalence is exactly the existing FormalSQL bag equivalence.  Generated
+problem files use this bridge to reduce order-insensitive goals back to the
+bag theory.
+
+```coq
+Theorem list_equiv_l_bag_iff_bag_query_equiv :
+  forall value_is_null env q1 q2,
+    list_query_equiv value_is_null env (L_Bag q1) (L_Bag q2) <->
+    bag_query_equiv env q1 q2.
+```
+
+### `list_equiv_l_bag_of_bag_query_equiv` [`vendor/FormalSQL/src/data/sql/SqlListFacts.v`]
+
+Forward direction used by generated proof skeletons: proving the remaining bag
+equality is sufficient for a top-level list-equivalence goal when both sides
+are plain `L_Bag` queries.
+
+```coq
+Lemma list_equiv_l_bag_of_bag_query_equiv :
+  forall value_is_null env q1 q2,
+    bag_query_equiv env q1 q2 ->
+    list_query_equiv value_is_null env (L_Bag q1) (L_Bag q2).
+```
+
 ## Occurrence Semantics
 
 ### `query_occ` [`theories/FormalSQL/OccFacts.v`]
