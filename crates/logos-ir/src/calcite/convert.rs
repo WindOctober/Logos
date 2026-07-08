@@ -11,11 +11,15 @@ use crate::calcite::scalar::{
 };
 use crate::calcite::text_plan::parse_calcite_text_plan;
 use crate::calcite::ty::parse_calcite_sql_type;
-use crate::calcite::{CalciteFile, CalciteRel, CalciteRex};
+use crate::calcite::{
+    CalciteAggregateCall, CalciteFile, CalciteRel, CalciteRex, CalciteSarg, CalciteSargRange,
+    CalciteWindow,
+};
 use crate::error::{Error, Result};
 use crate::ir::{
-    AggregateCall, Column, Feature, JoinType, LogosIrFile, Query, RelExpr, ScalarAst, ScalarExpr,
-    Schema, SetOp, SortDirection, SortKey, SortNullDirection, SqlType, Table, ValuesTuples,
+    AggregateCall, AggregateModifiers, Column, Feature, JoinType, LogosIrFile, Query, RelExpr,
+    SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, Schema, SetOp, SortDirection,
+    SortKey, SortNullDirection, SqlType, Table, ValuesTuples, WindowAst, WindowOrderKey,
 };
 
 pub fn convert_file(path: impl AsRef<Path>) -> Result<LogosIrFile> {
@@ -123,7 +127,8 @@ fn convert_rel(
         "LogicalProject" => {
             features.insert(Feature::Projection);
             let input = one_input("LogicalProject", raw.inputs, features, schema_index)?;
-            let exprs = convert_project_exprs(raw.projects, raw.project_rex)?;
+            let exprs =
+                convert_project_exprs(raw.projects, raw.project_rex, features, schema_index)?;
             let mut output = convert_row_type(raw.row_type)?;
             inherit_project_input_ref_types(&mut output, &exprs, input.output());
             inherit_project_type_annotation_types(&mut output, &exprs)?;
@@ -136,8 +141,13 @@ fn convert_rel(
         "LogicalFilter" => {
             features.insert(Feature::Selection);
             let input = one_input("LogicalFilter", raw.inputs, features, schema_index)?;
-            let condition =
-                required_rex_scalar("LogicalFilter", "conditionRex", raw.condition_rex)?;
+            let condition = required_rex_scalar(
+                "LogicalFilter",
+                "conditionRex",
+                raw.condition_rex,
+                features,
+                schema_index,
+            )?;
             Ok(RelExpr::Filter {
                 input: Box::new(input),
                 predicate: condition,
@@ -186,7 +196,13 @@ fn convert_rel(
                     features.insert(Feature::FormalSqlUnsupported);
                 }
             }
-            let condition = required_rex_scalar("LogicalJoin", "conditionRex", raw.condition_rex)?;
+            let condition = required_rex_scalar(
+                "LogicalJoin",
+                "conditionRex",
+                raw.condition_rex,
+                features,
+                schema_index,
+            )?;
             Ok(RelExpr::Join {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -220,11 +236,13 @@ fn convert_rel(
                     features.insert(Feature::FormalSqlUnsupported);
                 }
             }
-            let agg_calls: Vec<_> = raw
-                .agg_calls
-                .into_iter()
-                .map(parse_aggregate_call)
-                .collect::<Result<Vec<_>>>()?;
+            let agg_calls = convert_aggregate_calls(
+                raw.agg_call_details,
+                raw.agg_calls,
+                input.output(),
+                features,
+                schema_index,
+            )?;
             for call in &agg_calls {
                 collect_aggregate_features(call, features);
                 if call.distinct {
@@ -280,12 +298,21 @@ fn convert_rel(
             Ok(RelExpr::Sort {
                 input: Box::new(input),
                 collation,
-                fetch: optional_rex_scalar("LogicalSort", "fetchRex", raw.fetch, raw.fetch_rex)?,
+                fetch: optional_rex_scalar(
+                    "LogicalSort",
+                    "fetchRex",
+                    raw.fetch,
+                    raw.fetch_rex,
+                    features,
+                    schema_index,
+                )?,
                 offset: optional_rex_scalar(
                     "LogicalSort",
                     "offsetRex",
                     raw.offset,
                     raw.offset_rex,
+                    features,
+                    schema_index,
                 )?,
                 output: convert_row_type(raw.row_type)?,
             })
@@ -325,10 +352,25 @@ fn convert_rel(
         }
         "LogicalValues" => {
             features.insert(Feature::Values);
-            features.insert(Feature::ValuesTuplesUnavailable);
-            features.insert(Feature::FormalSqlUnsupported);
+            let tuples = match raw.tuples {
+                Some(rows) => ValuesTuples::Rows {
+                    rows: rows
+                        .into_iter()
+                        .map(|row| {
+                            row.into_iter()
+                                .map(|value| calcite_rex_scalar(value, features, schema_index))
+                                .collect::<Result<Vec<_>>>()
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                },
+                None => {
+                    features.insert(Feature::ValuesTuplesUnavailable);
+                    features.insert(Feature::FormalSqlUnsupported);
+                    ValuesTuples::UnavailableFromCalcite
+                }
+            };
             Ok(RelExpr::Values {
-                tuples: ValuesTuples::UnavailableFromCalcite,
+                tuples,
                 output: convert_row_type(raw.row_type)?,
             })
         }
@@ -339,6 +381,8 @@ fn convert_rel(
 fn convert_project_exprs(
     projects: Vec<String>,
     project_rex: Vec<CalciteRex>,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
 ) -> Result<Vec<ScalarExpr>> {
     if project_rex.len() != projects.len() {
         return Err(if project_rex.is_empty() {
@@ -355,15 +399,20 @@ fn convert_project_exprs(
             }
         });
     }
-    project_rex.into_iter().map(calcite_rex_scalar).collect()
+    project_rex
+        .into_iter()
+        .map(|rex| calcite_rex_scalar(rex, features, schema_index))
+        .collect()
 }
 
 fn required_rex_scalar(
     node: &'static str,
     field: &'static str,
     rex: Option<CalciteRex>,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
 ) -> Result<ScalarExpr> {
-    calcite_rex_scalar(required_field(node, field, rex)?)
+    calcite_rex_scalar(required_field(node, field, rex)?, features, schema_index)
 }
 
 fn optional_rex_scalar(
@@ -371,9 +420,11 @@ fn optional_rex_scalar(
     rex_field: &'static str,
     text: Option<String>,
     rex: Option<CalciteRex>,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
 ) -> Result<Option<ScalarExpr>> {
     match (text, rex) {
-        (_, Some(rex)) => calcite_rex_scalar(rex).map(Some),
+        (_, Some(rex)) => calcite_rex_scalar(rex, features, schema_index).map(Some),
         (Some(_), None) => Err(Error::MissingField {
             node,
             field: rex_field,
@@ -382,29 +433,56 @@ fn optional_rex_scalar(
     }
 }
 
-fn calcite_rex_scalar(rex: CalciteRex) -> Result<ScalarExpr> {
+fn calcite_rex_scalar(
+    rex: CalciteRex,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
+) -> Result<ScalarExpr> {
     let raw = rex
         .text
         .clone()
         .unwrap_or_else(|| "<structured RexNode>".to_owned());
-    let parsed = calcite_rex_ast(&rex)?;
+    let parsed = calcite_rex_ast(&rex, features, schema_index)?;
     let class = classify_calcite_scalar(&raw);
     Ok(ScalarExpr { raw, class, parsed })
 }
 
-fn calcite_rex_ast(rex: &CalciteRex) -> Result<ScalarAst> {
+fn calcite_rex_ast(
+    rex: &CalciteRex,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
+) -> Result<ScalarAst> {
     if is_rex_subquery(rex) {
-        let text = rex
-            .text
-            .as_deref()
+        let subquery_rel = rex
+            .subquery_rel
+            .as_ref()
+            .ok_or_else(|| Error::MissingField {
+                node: "RexSubQuery",
+                field: "subqueryRel",
+            })?;
+        let operator = rex
+            .operator
+            .clone()
+            .or_else(|| rex.op_kind.clone())
             .ok_or_else(|| Error::InvalidScalar(rex_debug_text(rex)))?;
-        return parse_calcite_scalar_ast(text);
+        let mut args = rex
+            .operands
+            .iter()
+            .map(|operand| calcite_rex_ast(operand, features, schema_index))
+            .collect::<Result<Vec<_>>>()?;
+        let rel = convert_rel((**subquery_rel).clone(), features, schema_index)?;
+        args.push(ScalarAst::RelSubquery { rel: Box::new(rel) });
+        let op = classify_scalar_op(&operator);
+        return Ok(ScalarAst::Call { operator, op, args });
     }
     if let Some(index) = rex.index {
         return Ok(ScalarAst::InputRef { index });
     }
     if is_rex_literal(rex) {
         return calcite_rex_literal_ast(rex);
+    }
+    if let Some(window) = &rex.window {
+        return calcite_rex_window_ast(rex, window, features, schema_index);
     }
     if is_rex_call(rex) {
         let operator = rex
@@ -415,7 +493,7 @@ fn calcite_rex_ast(rex: &CalciteRex) -> Result<ScalarAst> {
         let args = rex
             .operands
             .iter()
-            .map(calcite_rex_ast)
+            .map(|operand| calcite_rex_ast(operand, features, schema_index))
             .collect::<Result<Vec<_>>>()?;
         let op = classify_scalar_op(&operator);
         let call = ScalarAst::Call { operator, op, args };
@@ -433,6 +511,12 @@ fn calcite_rex_ast(rex: &CalciteRex) -> Result<ScalarAst> {
 }
 
 fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
+    if let Some(sarg) = &rex.sarg {
+        return Ok(ScalarAst::Sarg {
+            raw: sarg.text.clone(),
+            parsed: calcite_sarg_ast(sarg),
+        });
+    }
     if let Some(ty) = rex_interval_annotation(rex) {
         let raw = rex
             .interval_literal
@@ -545,6 +629,217 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
                 .unwrap_or_default()
         }),
     })
+}
+
+fn convert_aggregate_calls(
+    details: Vec<CalciteAggregateCall>,
+    text_calls: Vec<String>,
+    input_output: &[Column],
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
+) -> Result<Vec<AggregateCall>> {
+    if !details.is_empty() {
+        return details
+            .into_iter()
+            .map(|detail| convert_aggregate_call_detail(detail, input_output, features))
+            .collect();
+    }
+    text_calls
+        .into_iter()
+        .map(|call| parse_aggregate_call_with_context(call, features, schema_index))
+        .collect()
+}
+
+fn convert_aggregate_call_detail(
+    detail: CalciteAggregateCall,
+    input_output: &[Column],
+    features: &mut BTreeSet<Feature>,
+) -> Result<AggregateCall> {
+    let collation = detail
+        .collation
+        .iter()
+        .map(|key| {
+            Ok(SortKey {
+                field_index: key.field_index,
+                direction: parse_sort_direction(&key.direction)?,
+                null_direction: key
+                    .null_direction
+                    .as_deref()
+                    .map(parse_sort_null_direction)
+                    .transpose()?
+                    .flatten(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if detail.approximate
+        || detail.ignore_nulls
+        || !detail.distinct_keys.is_empty()
+        || !collation.is_empty()
+    {
+        features.insert(Feature::AdvancedAggregateFunction);
+        features.insert(Feature::FormalSqlUnsupported);
+    }
+    let modifiers = AggregateModifiers {
+        approximate: detail.approximate,
+        ignore_nulls: detail.ignore_nulls,
+        distinct_keys: detail.distinct_keys,
+        collation,
+    };
+    let args = detail
+        .arg_list
+        .into_iter()
+        .map(|index| {
+            if index < input_output.len() {
+                Ok(input_ref_scalar(index))
+            } else {
+                Err(Error::InvalidScalar(format!(
+                    "invalid aggregate argList index {index}"
+                )))
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let filter = detail
+        .filter_arg
+        .filter(|index| *index >= 0)
+        .map(|index| {
+            usize::try_from(index)
+                .ok()
+                .filter(|index| *index < input_output.len())
+                .map(input_ref_scalar)
+                .ok_or_else(|| Error::InvalidScalar(format!("invalid aggregate filterArg {index}")))
+        })
+        .transpose()?;
+    Ok(AggregateCall {
+        raw: detail.text,
+        function: detail.function,
+        distinct: detail.distinct,
+        modifiers,
+        args,
+        filter,
+    })
+}
+
+fn input_ref_scalar(index: usize) -> ScalarExpr {
+    ScalarExpr {
+        raw: format!("${index}"),
+        class: ScalarClass::InputRef { index },
+        parsed: ScalarAst::InputRef { index },
+    }
+}
+
+fn calcite_rex_window_ast(
+    rex: &CalciteRex,
+    window: &CalciteWindow,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
+) -> Result<ScalarAst> {
+    let function = rex
+        .operator
+        .clone()
+        .or_else(|| rex.op_kind.clone())
+        .ok_or_else(|| Error::InvalidScalar(rex_debug_text(rex)))?;
+    let args = rex
+        .operands
+        .iter()
+        .map(|operand| calcite_rex_ast(operand, features, schema_index))
+        .collect::<Result<Vec<_>>>()?;
+    let partition_by = window
+        .partition_keys
+        .iter()
+        .map(|key| calcite_rex_ast(key, features, schema_index))
+        .collect::<Result<Vec<_>>>()?;
+    let order_by = window
+        .order_keys
+        .iter()
+        .map(|key| {
+            Ok(WindowOrderKey {
+                expr: calcite_rex_ast(&key.expr, features, schema_index)?,
+                direction: Some(parse_sort_direction(&key.direction)?),
+                null_direction: parse_sort_null_direction(&key.null_direction)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let frame = match (&window.lower_bound, &window.upper_bound) {
+        (Some(lower), Some(upper)) => Some(format!(
+            "{} BETWEEN {} AND {}",
+            if window.is_rows { "ROWS" } else { "RANGE" },
+            lower.text,
+            upper.text
+        )),
+        (Some(bound), None) | (None, Some(bound)) => Some(format!(
+            "{} {}",
+            if window.is_rows { "ROWS" } else { "RANGE" },
+            bound.text
+        )),
+        (None, None) => None,
+    };
+    Ok(ScalarAst::Window {
+        raw: rex_debug_text(rex),
+        structured: true,
+        parsed: WindowAst {
+            function,
+            args,
+            partition_by,
+            order_by,
+            distinct: rex.distinct.unwrap_or(false),
+            ignore_nulls: rex.ignore_nulls.unwrap_or(false),
+            exclude: window.exclude.clone(),
+            frame,
+        },
+    })
+}
+
+fn calcite_sarg_ast(sarg: &CalciteSarg) -> SargAst {
+    SargAst {
+        items: sarg.ranges.iter().map(calcite_sarg_item).collect(),
+        null_as: sarg.null_as.clone(),
+        point_count: sarg.point_count,
+        is_all: sarg.is_all,
+        is_none: sarg.is_none,
+        is_points: sarg.is_points,
+        is_complemented_points: sarg.is_complemented_points,
+        ty: None,
+    }
+}
+
+fn calcite_sarg_item(range: &CalciteSargRange) -> SargItem {
+    let lower = range
+        .lower
+        .as_ref()
+        .map(|raw| SargBound { raw: raw.clone() });
+    let upper = range
+        .upper
+        .as_ref()
+        .map(|raw| SargBound { raw: raw.clone() });
+    if range.has_lower_bound
+        && range.has_upper_bound
+        && range.lower == range.upper
+        && range
+            .lower_bound_type
+            .as_deref()
+            .is_some_and(|ty| ty.eq_ignore_ascii_case("CLOSED"))
+        && range
+            .upper_bound_type
+            .as_deref()
+            .is_some_and(|ty| ty.eq_ignore_ascii_case("CLOSED"))
+    {
+        return SargItem::Point {
+            raw: range.lower.clone().unwrap_or_else(|| range.text.clone()),
+        };
+    }
+    SargItem::Range {
+        raw: range.text.clone(),
+        lower,
+        upper,
+        lower_inclusive: range
+            .lower_bound_type
+            .as_deref()
+            .is_some_and(|ty| ty.eq_ignore_ascii_case("CLOSED")),
+        upper_inclusive: range
+            .upper_bound_type
+            .as_deref()
+            .is_some_and(|ty| ty.eq_ignore_ascii_case("CLOSED")),
+    }
 }
 
 fn rex_interval_annotation(rex: &CalciteRex) -> Option<String> {
@@ -1156,9 +1451,18 @@ fn parse_aggregate_call(raw: String) -> Result<AggregateCall> {
         raw,
         function,
         distinct,
+        modifiers: AggregateModifiers::default(),
         args,
         filter,
     })
+}
+
+fn parse_aggregate_call_with_context(
+    raw: String,
+    _features: &mut BTreeSet<Feature>,
+    _schema_index: &SchemaColumnIndex,
+) -> Result<AggregateCall> {
+    parse_aggregate_call(raw)
 }
 
 fn collect_aggregate_features(call: &AggregateCall, features: &mut BTreeSet<Feature>) {
@@ -1309,6 +1613,7 @@ fn collect_scalar_features(rel: &RelExpr, features: &mut BTreeSet<Feature>) {
 mod tests {
     use super::*;
     use crate::calcite::CalciteFile;
+    use crate::ir::ScalarOp;
 
     #[test]
     fn converts_basic_project_filter_scan() {
@@ -2237,5 +2542,95 @@ mod tests {
         } else {
             panic!("expected project");
         }
+    }
+
+    #[test]
+    fn structured_rex_subquery_preserves_rel_tree() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [
+                {"name": "EMP", "columns": [{"name": "DEPTNO", "type": "INTEGER"}]},
+                {"name": "DEPT", "columns": [{"name": "DEPTNO", "type": "INTEGER"}]}
+              ],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalFilter",
+                  "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                  "condition": "IN($0, { LogicalProject(DEPTNO=[$0]) })",
+                  "conditionRex": {
+                    "kind": "IN",
+                    "class": "RexSubQuery",
+                    "text": "IN($0, { LogicalProject(DEPTNO=[$0]) })",
+                    "type": "BOOLEAN",
+                    "nullable": true,
+                    "operator": "IN",
+                    "opKind": "IN",
+                    "operands": [{"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "INTEGER", "index": 0}],
+                    "subqueryRel": {
+                      "type": "LogicalProject",
+                      "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                      "projects": ["$0"],
+                      "projectRex": [{"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "INTEGER", "index": 0}],
+                      "inputs": [{
+                        "type": "LogicalTableScan",
+                        "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                        "table": ["DEPT"],
+                        "inputs": []
+                      }]
+                    }
+                  },
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                    "table": ["EMP"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Filter { predicate, .. } = &ir.queries[0].rel else {
+            panic!("expected filter");
+        };
+        let ScalarAst::Call { op, args, .. } = &predicate.parsed else {
+            panic!("expected IN call");
+        };
+        assert_eq!(op, &ScalarOp::In);
+        assert!(matches!(args.last(), Some(ScalarAst::RelSubquery { .. })));
+    }
+
+    #[test]
+    fn structured_values_tuples_do_not_require_text_hydration() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "queries": [{
+                "rel": {
+                  "type": "LogicalValues",
+                  "rowType": [{"name": "EXPR$0", "type": "INTEGER", "nullable": false}],
+                  "tuples": [[{"kind": "LITERAL", "class": "RexLiteral", "text": "1", "type": "INTEGER", "nullable": false, "literalTypeName": "DECIMAL", "literalValue": "1"}]],
+                  "inputs": []
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert!(
+            !ir.queries[0]
+                .features
+                .contains(&Feature::ValuesTuplesUnavailable)
+        );
+        let RelExpr::Values { tuples, .. } = &ir.queries[0].rel else {
+            panic!("expected values");
+        };
+        assert!(matches!(tuples, ValuesTuples::Rows { rows } if rows.len() == 1));
     }
 }

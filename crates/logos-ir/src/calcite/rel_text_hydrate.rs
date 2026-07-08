@@ -291,6 +291,7 @@ mod tests {
                 raw: "COUNT()".to_owned(),
                 function: "COUNT".to_owned(),
                 distinct: false,
+                modifiers: crate::ir::AggregateModifiers::default(),
                 args: Vec::new(),
                 filter: None,
             }],

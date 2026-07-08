@@ -1,6 +1,5 @@
 use std::collections::BTreeSet;
 
-use crate::calcite::text_plan::parse_calcite_text_plan;
 use crate::error::{Error, Result};
 use crate::ir::{
     Feature, SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, ScalarOp,
@@ -28,7 +27,7 @@ pub fn classify_calcite_scalar(raw: &str) -> ScalarClass {
     } else if trimmed.contains("$cor") {
         ScalarClass::CorrelatedRef
     } else if trimmed.starts_with("Logical") {
-        ScalarClass::CalciteRelText
+        ScalarClass::Opaque
     } else if is_literal_like(trimmed) {
         ScalarClass::Literal
     } else if trimmed.contains('(') {
@@ -46,16 +45,12 @@ pub fn parse_calcite_scalar_ast(raw: &str) -> Result<ScalarAst> {
     if is_window_scalar(trimmed) {
         return Ok(ScalarAst::Window {
             raw: trimmed.to_owned(),
+            structured: false,
             parsed: parse_window_ast(trimmed)?,
         });
     }
-    if let Some(rel) = parse_braced_rel_text(trimmed) {
-        let plan =
-            parse_calcite_text_plan(rel).ok_or_else(|| Error::InvalidScalar(trimmed.to_owned()))?;
-        return Ok(ScalarAst::RelText {
-            raw: rel.to_owned(),
-            plan,
-        });
+    if parse_braced_rel_text(trimmed).is_some() {
+        return Err(Error::InvalidScalar(trimmed.to_owned()));
     }
     if is_sarg_literal(trimmed) {
         return Ok(ScalarAst::Sarg {
@@ -236,7 +231,7 @@ pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) 
             features.insert(Feature::OpaqueScalar);
             features.insert(Feature::FormalSqlUnsupported);
         }
-        ScalarClass::Call | ScalarClass::CalciteRelText | ScalarClass::Opaque => {
+        ScalarClass::Call | ScalarClass::Opaque => {
             features.insert(Feature::OpaqueScalar);
             features.insert(Feature::FormalSqlUnsupported);
         }
@@ -298,6 +293,12 @@ fn parse_sarg_ast(value: &str) -> Result<SargAst> {
     };
     Ok(SargAst {
         items,
+        null_as: None,
+        point_count: None,
+        is_all: false,
+        is_none: false,
+        is_points: false,
+        is_complemented_points: false,
         ty: ty.map(ToOwned::to_owned),
     })
 }
@@ -461,6 +462,9 @@ fn parse_window_ast(value: &str) -> Result<WindowAst> {
         args,
         partition_by: parsed_spec.partition_by,
         order_by: parsed_spec.order_by,
+        distinct: false,
+        ignore_nulls: false,
+        exclude: None,
         frame: parsed_spec.frame,
     })
 }
@@ -747,7 +751,7 @@ fn contains_scalar_op(ast: &ScalarAst, target: &ScalarOp) -> bool {
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
-        | ScalarAst::RelText { .. }
+        | ScalarAst::RelSubquery { .. }
         | ScalarAst::Sarg { .. } => false,
         ScalarAst::Call { op, args, .. } => {
             op == target || args.iter().any(|arg| contains_scalar_op(arg, target))
@@ -774,20 +778,13 @@ mod tests {
         assert_eq!(classify_calcite_scalar("=($0, 1)"), ScalarClass::Call);
         assert_eq!(
             classify_calcite_scalar("LogicalProject(a=[$0])"),
-            ScalarClass::CalciteRelText
+            ScalarClass::Opaque
         );
     }
 
     #[test]
-    fn classifies_and_tags_subquery() {
-        let expr = calcite_scalar("EXISTS({\nLogicalFilter(condition=[=($0, 1)])\n})");
-        assert_eq!(expr.class, ScalarClass::Subquery);
-
-        let mut features = BTreeSet::new();
-        collect_scalar_expr(&expr, &mut features);
-        assert!(features.contains(&Feature::SubqueryPredicate));
-        assert!(features.contains(&Feature::OpaqueScalar));
-        assert!(features.contains(&Feature::FormalSqlUnsupported));
+    fn rejects_legacy_text_subquery_scalars() {
+        assert!(try_calcite_scalar("EXISTS({\nLogicalFilter(condition=[=($0, 1)])\n})").is_err());
     }
 
     #[test]
@@ -957,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn splits_argument_lists_with_rel_text_and_sarg() {
+    fn splits_argument_lists_with_braced_text_and_sarg() {
         assert_eq!(
             split_calcite_arg_list("$0, {\nLogicalProject(a=[$0])\n}, Sarg[(30..60]]").unwrap(),
             vec!["$0", "{\nLogicalProject(a=[$0])\n}", "Sarg[(30..60]]"]
@@ -970,11 +967,8 @@ mod tests {
     }
 
     #[test]
-    fn parses_rel_text_sarg_and_bare_date_literals() {
-        assert!(matches!(
-            parse_calcite_scalar_ast("{\nLogicalProject(a=[$0])\n}"),
-            Ok(ScalarAst::RelText { .. })
-        ));
+    fn parses_sarg_and_bare_date_literals() {
+        assert!(parse_calcite_scalar_ast("{\nLogicalProject(a=[$0])\n}").is_err());
         assert!(matches!(
             parse_calcite_scalar_ast("Sarg[(30..60]]"),
             Ok(ScalarAst::Sarg { .. })

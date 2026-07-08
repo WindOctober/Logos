@@ -857,6 +857,14 @@ impl LoweringContext {
             );
             return None;
         }
+        if !call.modifiers.is_empty() {
+            self.error(
+                &call_path,
+                "aggregate_modifier_not_supported",
+                "FormalSQL aggregate lowering does not support approximate aggregates, IGNORE NULLS, DISTINCT keys, or aggregate-local ORDER BY.",
+            );
+            return None;
+        }
         if call.args.is_empty() && call.function.eq_ignore_ascii_case("COUNT") {
             self.warning(
                 &call_path,

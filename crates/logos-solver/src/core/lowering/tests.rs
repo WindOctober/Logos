@@ -880,7 +880,8 @@ fn lowers_nested_fetch_zero_to_empty_bag_query() {
     assert_eq!(count, 0);
     assert!(matches!(*input, FormalListQuery::OrderBy { .. }));
 
-    let nested = LoweringContext::new(LoweringConfig::default()).lower_rel("rel", &nested_rel);
+    let nested =
+        LoweringContext::new(LoweringConfig::default(), None).lower_rel("rel", &nested_rel);
     assert!(matches!(
         nested,
         Some(FormalQuery::Selection {
@@ -888,6 +889,68 @@ fn lowers_nested_fetch_zero_to_empty_bag_query() {
             ..
         })
     ));
+}
+
+#[test]
+fn lowers_predicate_in_subquery_to_exists() {
+    let schema = Schema {
+        tables: vec![
+            Table {
+                name: "EMP".to_owned(),
+                columns: vec![column("DEPTNO")],
+            },
+            Table {
+                name: "DEPT".to_owned(),
+                columns: vec![column("DEPTNO"), column("LOC")],
+            },
+        ],
+    };
+    let subquery_rel = RelExpr::Project {
+        input: Box::new(RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["DEPT".to_owned()],
+                output: vec![column("DEPTNO"), column("LOC")],
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "=".to_owned(),
+                op: ScalarOp::Eq,
+                args: vec![
+                    ScalarAst::InputRef { index: 1 },
+                    ScalarAst::Literal {
+                        raw: "3".to_owned(),
+                    },
+                ],
+            }),
+            output: vec![column("DEPTNO"), column("LOC")],
+        }),
+        exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+        output: vec![column("DEPTNO")],
+    };
+    let rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["EMP".to_owned()],
+            output: vec![column("DEPTNO")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "IN".to_owned(),
+            op: ScalarOp::In,
+            args: vec![
+                ScalarAst::InputRef { index: 0 },
+                ScalarAst::RelSubquery {
+                    rel: Box::new(subquery_rel),
+                },
+            ],
+        }),
+        output: vec![column("DEPTNO")],
+    };
+
+    let lowered = LoweringContext::new(LoweringConfig::default(), Some(&schema))
+        .lower_rel("rel", &rel)
+        .expect("IN subquery should lower");
+    let module = emit_rocq_query_module(&bag_list_query(lowered.clone()), &bag_list_query(lowered));
+
+    assert!(module.rocq_module.contains("ExistsQuery"));
+    assert!(module.rocq_module.contains("__logos_in_0"));
 }
 
 #[test]

@@ -396,7 +396,7 @@ fn root_ast_op(ast: &ScalarAst) -> Option<ScalarOp> {
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
-        | ScalarAst::RelText { .. }
+        | ScalarAst::RelSubquery { .. }
         | ScalarAst::Sarg { .. } => None,
     }
 }
@@ -428,7 +428,7 @@ fn first_failing_ast_op(ast: &ScalarAst) -> Option<ScalarOp> {
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
-        | ScalarAst::RelText { .. }
+        | ScalarAst::RelSubquery { .. }
         | ScalarAst::Sarg { .. } => None,
     }
 }

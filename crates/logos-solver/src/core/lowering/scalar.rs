@@ -1,5 +1,5 @@
 use super::*;
-use logos_ir::ir::{ScalarAst, ScalarOp};
+use logos_ir::ir::{RelExpr, ScalarAst, ScalarOp};
 
 impl LoweringContext {
     pub(super) fn lower_formula(
@@ -66,6 +66,7 @@ impl LoweringContext {
                     );
                     None
                 }
+                ScalarOp::In => self.lower_in_formula(path, args, scope),
                 ScalarOp::Case => {
                     let lowered = self.lower_aggregate_term(path, ast, scope)?;
                     self.warning(
@@ -97,6 +98,162 @@ impl LoweringContext {
                 None
             }
         }
+    }
+
+    fn lower_in_formula(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalFormula> {
+        let Some((right, left_args)) = args.split_last() else {
+            self.error(
+                path,
+                "in_predicate_arity_mismatch",
+                "IN predicate requires at least one left expression and one right operand.",
+            );
+            return None;
+        };
+        match right {
+            ScalarAst::RelSubquery { rel } => {
+                self.lower_in_rel_subquery_formula(path, left_args, rel, scope)
+            }
+            _ => {
+                // TODO: Support literal/expression IN lists by expanding SQL's three-valued
+                // membership semantics, including NULL and row-value cases.
+                self.error(
+                    path,
+                    "in_list_not_supported",
+                    "IN predicates are currently supported only when the right operand is a structured Calcite subquery.",
+                );
+                None
+            }
+        }
+    }
+
+    fn lower_in_rel_subquery_formula(
+        &mut self,
+        path: &str,
+        left_args: &[ScalarAst],
+        rel: &RelExpr,
+        scope: &Scope,
+    ) -> Option<FormalFormula> {
+        let query = self.lower_rel(&format!("{path}.subquery"), rel)?;
+        let output = rel.output().to_vec();
+        if left_args.len() != output.len() {
+            self.error(
+                path,
+                "in_predicate_arity_mismatch",
+                "IN predicate left arity does not match subquery output arity.",
+            );
+            return None;
+        }
+        let (renamed_query, renamed_output) =
+            self.rename_in_subquery_output(path, query, &output, scope)?;
+        let equality = self.in_equality_formula(path, left_args, &renamed_output, scope)?;
+        Some(FormalFormula::Exists {
+            query: Box::new(FormalQuery::Selection {
+                predicate: equality,
+                input: Box::new(renamed_query),
+            }),
+        })
+    }
+
+    fn rename_in_subquery_output(
+        &mut self,
+        path: &str,
+        query: FormalQuery,
+        output: &[Column],
+        outer_scope: &Scope,
+    ) -> Option<(FormalQuery, Vec<Column>)> {
+        let mut renamed = Vec::with_capacity(output.len());
+        for (index, column) in output.iter().enumerate() {
+            let fresh_name = format!("__logos_in_{index}");
+            if outer_scope
+                .attributes
+                .iter()
+                .any(|attribute| attribute.name == fresh_name)
+                || output.iter().any(|column| column.name == fresh_name)
+            {
+                self.error(
+                    path,
+                    "in_subquery_fresh_name_collision",
+                    "Generated IN-subquery attribute name collides with an existing attribute.",
+                );
+                return None;
+            }
+            renamed.push(Column {
+                name: fresh_name,
+                ty: column.ty.clone(),
+                nullable: column.nullable,
+                precision: column.precision,
+            });
+        }
+        let select = output
+            .iter()
+            .zip(&renamed)
+            .enumerate()
+            .map(|(index, (input, output))| {
+                Some(FormalSelectItem {
+                    expr: FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Attribute {
+                            name: input.name.clone(),
+                            constructor: formal_attribute_constructor(query_attribute_type(input)),
+                        },
+                    },
+                    alias: output.name.clone(),
+                    alias_constructor: self.lower_query_attribute_constructor(
+                        &format!("{path}.output[{index}]"),
+                        output,
+                    )?,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some((
+            FormalQuery::Projection {
+                select,
+                input: Box::new(query),
+            },
+            renamed,
+        ))
+    }
+
+    fn in_equality_formula(
+        &mut self,
+        path: &str,
+        left_args: &[ScalarAst],
+        right_output: &[Column],
+        outer_scope: &Scope,
+    ) -> Option<FormalFormula> {
+        let mut terms = left_args.iter().zip(right_output).enumerate().map(
+            |(index, (left_arg, right_column))| {
+                let left = self.lower_aggregate_term(
+                    &format!("{path}.left[{index}]"),
+                    left_arg,
+                    outer_scope,
+                )?;
+                let right = FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute {
+                        name: right_column.name.clone(),
+                        constructor: formal_attribute_constructor(query_attribute_type(
+                            right_column,
+                        )),
+                    },
+                };
+                Some(FormalFormula::Predicate {
+                    predicate: "=".to_owned(),
+                    args: vec![left, right],
+                })
+            },
+        );
+        let mut acc = terms.next()??;
+        for term in terms {
+            acc = FormalFormula::And {
+                left: Box::new(acc),
+                right: Box::new(term?),
+            };
+        }
+        Some(acc)
     }
 
     fn lower_variadic_formula(
@@ -403,9 +560,22 @@ impl LoweringContext {
                     args,
                 })
             }
+            ScalarAst::Call {
+                op: ScalarOp::In, ..
+            } => {
+                // TODO: Support boolean-valued IN in SELECT/projection expressions.
+                // Predicate-context IN is lowered by `lower_formula`; SELECT-list IN needs a
+                // value-level encoding of SQL's three-valued boolean result.
+                self.error(
+                    path,
+                    "select_in_not_supported",
+                    "IN predicates in SELECT expressions require boolean-valued predicate lowering.",
+                );
+                None
+            }
             ScalarAst::Sarg { .. }
             | ScalarAst::Window { .. }
-            | ScalarAst::RelText { .. }
+            | ScalarAst::RelSubquery { .. }
             | ScalarAst::Flag { .. }
             | ScalarAst::Call { .. } => {
                 self.error(
@@ -574,7 +744,7 @@ impl LoweringContext {
             }
             ScalarAst::Flag { .. }
             | ScalarAst::Window { .. }
-            | ScalarAst::RelText { .. }
+            | ScalarAst::RelSubquery { .. }
             | ScalarAst::Sarg { .. } => None,
         }
     }

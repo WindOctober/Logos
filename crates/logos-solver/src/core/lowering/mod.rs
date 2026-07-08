@@ -27,8 +27,8 @@ pub fn lower_verification_input_with_config(
     config: &LoweringConfig,
 ) -> ProofLoweringReport {
     let schema = lower_schema_with_config(input.schema_ir(), config);
-    let source = lower_query_with_config(input.source_query_ir(), config);
-    let target = lower_query_with_config(input.target_query_ir(), config);
+    let source = lower_query_with_schema_config(input.source_query_ir(), input.schema_ir(), config);
+    let target = lower_query_with_schema_config(input.target_query_ir(), input.schema_ir(), config);
     let query_module = match (&source.list_query, &target.list_query) {
         (Some(source_query), Some(target_query)) => {
             Some(emit_rocq_query_module(source_query, target_query))
@@ -60,7 +60,7 @@ pub fn lower_schema(schema: &Schema) -> LoweredSchema {
 }
 
 pub fn lower_schema_with_config(schema: &Schema, config: &LoweringConfig) -> LoweredSchema {
-    let mut context = LoweringContext::new(config.clone());
+    let mut context = LoweringContext::new(config.clone(), None);
     let lowered = context.lower_schema("schema", schema);
     let status = if context.has_errors() {
         LoweringStatus::Blocked
@@ -80,8 +80,24 @@ pub fn lower_query(query: &Query) -> LoweredQuery {
 }
 
 pub fn lower_query_with_config(query: &Query, config: &LoweringConfig) -> LoweredQuery {
+    lower_query_with_optional_schema_config(query, None, config)
+}
+
+fn lower_query_with_schema_config(
+    query: &Query,
+    schema: &Schema,
+    config: &LoweringConfig,
+) -> LoweredQuery {
+    lower_query_with_optional_schema_config(query, Some(schema), config)
+}
+
+fn lower_query_with_optional_schema_config(
+    query: &Query,
+    schema: Option<&Schema>,
+    config: &LoweringConfig,
+) -> LoweredQuery {
     let feature_coverage = feature_coverage(&query.features);
-    let mut context = LoweringContext::new(config.clone());
+    let mut context = LoweringContext::new(config.clone(), schema);
     let (lowered, list_lowered) = if rel_has_list_observation(&query.rel) {
         (None, context.lower_list_rel("rel", &query.rel))
     } else {
@@ -227,7 +243,7 @@ use emit::{
 };
 
 impl LoweringContext {
-    fn new(config: LoweringConfig) -> Self {
+    fn new(config: LoweringConfig, _schema: Option<&Schema>) -> Self {
         Self {
             diagnostics: Vec::new(),
             config,

@@ -38,7 +38,7 @@ impl CoreScalarLowerer {
             }),
             ScalarAst::Call { .. }
             | ScalarAst::Flag { .. }
-            | ScalarAst::RelText { .. }
+            | ScalarAst::RelSubquery { .. }
             | ScalarAst::Sarg { .. } => Err(CoreScalarUnsupported::UnsupportedOperator),
         }
     }
@@ -83,7 +83,7 @@ impl CoreScalarLowerer {
             | ScalarAst::Literal { .. }
             | ScalarAst::Flag { .. }
             | ScalarAst::Window { .. }
-            | ScalarAst::RelText { .. }
+            | ScalarAst::RelSubquery { .. }
             | ScalarAst::Sarg { .. } => CoreScalarFailure {
                 reason,
                 operator: None,
@@ -98,7 +98,7 @@ impl CoreScalarLowerer {
             ScalarAst::Window { raw, .. } => Ok(CoreValueExpr::WindowFunction { raw: raw.clone() }),
             ScalarAst::TypeAnnotation { expr, ty } => self.lower_value_type_annotation(expr, ty),
             ScalarAst::Call { op, args, .. } => self.lower_value_call(op, args),
-            ScalarAst::Flag { .. } | ScalarAst::RelText { .. } | ScalarAst::Sarg { .. } => {
+            ScalarAst::Flag { .. } | ScalarAst::RelSubquery { .. } | ScalarAst::Sarg { .. } => {
                 Err(CoreScalarUnsupported::UnsupportedOperator)
             }
         }
@@ -226,9 +226,7 @@ impl CoreScalarLowerer {
         args: &[ScalarAst],
     ) -> Result<CoreValueExpr, CoreScalarUnsupported> {
         require_arity(args, 1)?;
-        Ok(CoreValueExpr::ScalarSubquery {
-            rel: expect_rel_text(&args[0])?.to_owned(),
-        })
+        Err(CoreScalarUnsupported::UnsupportedOperator)
     }
 
     fn lower_extract_value(
@@ -295,7 +293,7 @@ impl CoreScalarLowerer {
             | ScalarAst::Window { .. } => Ok(CorePredicateExpr::BooleanValue {
                 expr: Box::new(self.lower_value(ast)?),
             }),
-            ScalarAst::Flag { .. } | ScalarAst::RelText { .. } | ScalarAst::Sarg { .. } => {
+            ScalarAst::Flag { .. } | ScalarAst::RelSubquery { .. } | ScalarAst::Sarg { .. } => {
                 Err(CoreScalarUnsupported::UnsupportedOperator)
             }
         }
@@ -379,7 +377,6 @@ impl CoreScalarLowerer {
             ScalarOp::Case => self.lower_case_predicate(args),
             ScalarOp::Exists => self.lower_exists_predicate(args),
             ScalarOp::In => self.lower_in_predicate(args),
-            ScalarOp::Search => self.lower_search_predicate(args),
             op if is_value_op(op) => Err(CoreScalarUnsupported::ExpectedPredicate),
             _ => Err(CoreScalarUnsupported::UnsupportedOperator),
         }
@@ -409,9 +406,7 @@ impl CoreScalarLowerer {
         args: &[ScalarAst],
     ) -> Result<CorePredicateExpr, CoreScalarUnsupported> {
         require_arity(args, 1)?;
-        Ok(CorePredicateExpr::Exists {
-            rel: expect_rel_text(&args[0])?.to_owned(),
-        })
+        Err(CoreScalarUnsupported::UnsupportedOperator)
     }
 
     fn lower_in_predicate(
@@ -419,25 +414,7 @@ impl CoreScalarLowerer {
         args: &[ScalarAst],
     ) -> Result<CorePredicateExpr, CoreScalarUnsupported> {
         require_min_arity(args, 2)?;
-        let rel_arg = args.last().expect("IN arity checked");
-        Ok(CorePredicateExpr::InSubquery {
-            values: args[..args.len() - 1]
-                .iter()
-                .map(|arg| self.lower_value_or_predicate_value(arg))
-                .collect::<Result<Vec<_>, _>>()?,
-            rel: expect_rel_text(rel_arg)?.to_owned(),
-        })
-    }
-
-    fn lower_search_predicate(
-        &self,
-        args: &[ScalarAst],
-    ) -> Result<CorePredicateExpr, CoreScalarUnsupported> {
-        require_arity(args, 2)?;
-        Ok(CorePredicateExpr::Search {
-            value: Box::new(self.lower_value_or_predicate_value(&args[0])?),
-            sarg: expect_sarg(&args[1])?.to_owned(),
-        })
+        Err(CoreScalarUnsupported::UnsupportedOperator)
     }
 
     fn lower_values(
@@ -467,20 +444,6 @@ impl CoreScalarLowerer {
         args: &[ScalarAst],
     ) -> Result<Vec<CorePredicateExpr>, CoreScalarUnsupported> {
         args.iter().map(|arg| self.lower_predicate(arg)).collect()
-    }
-}
-
-fn expect_rel_text(ast: &ScalarAst) -> Result<&str, CoreScalarUnsupported> {
-    match ast {
-        ScalarAst::RelText { raw, .. } => Ok(raw),
-        _ => Err(CoreScalarUnsupported::ExpectedValue),
-    }
-}
-
-fn expect_sarg(ast: &ScalarAst) -> Result<&str, CoreScalarUnsupported> {
-    match ast {
-        ScalarAst::Sarg { raw, .. } => Ok(raw),
-        _ => Err(CoreScalarUnsupported::ExpectedValue),
     }
 }
 

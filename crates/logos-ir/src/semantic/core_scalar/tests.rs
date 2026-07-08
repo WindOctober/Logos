@@ -164,46 +164,11 @@ fn lowers_function_and_like_shapes() {
 }
 
 #[test]
-fn lowers_subquery_and_search_predicate_shapes() {
-    let exists = calcite_scalar("EXISTS({\nLogicalFilter(condition=[=($0, 1)])\n})");
-    assert_eq!(
-        lower_core_scalar(&exists.parsed),
-        Ok(CoreScalarExpr::Predicate {
-            expr: CorePredicateExpr::Exists {
-                rel: "LogicalFilter(condition=[=($0, 1)])".to_owned(),
-            },
-        })
-    );
-
-    let row_in_subquery = calcite_scalar("IN($0, $1, {\nLogicalAggregate(group=[{0, 1}])\n})");
-    assert_eq!(
-        lower_core_scalar(&row_in_subquery.parsed),
-        Ok(CoreScalarExpr::Predicate {
-            expr: CorePredicateExpr::InSubquery {
-                values: vec![
-                    CoreValueExpr::InputRef { index: 0 },
-                    CoreValueExpr::InputRef { index: 1 },
-                ],
-                rel: "LogicalAggregate(group=[{0, 1}])".to_owned(),
-            },
-        })
-    );
-
+fn rejects_search_predicate_shape_until_sarg_lowering_exists() {
     let search = calcite_scalar("SEARCH(-($23, $0), Sarg[(30..60]])");
     assert_eq!(
         lower_core_scalar(&search.parsed),
-        Ok(CoreScalarExpr::Predicate {
-            expr: CorePredicateExpr::Search {
-                value: Box::new(CoreValueExpr::Arithmetic {
-                    op: CoreArithmeticOp::Minus,
-                    args: vec![
-                        CoreValueExpr::InputRef { index: 23 },
-                        CoreValueExpr::InputRef { index: 0 },
-                    ],
-                }),
-                sarg: "Sarg[(30..60]]".to_owned(),
-            },
-        })
+        Err(CoreScalarUnsupported::UnsupportedOperator)
     );
 }
 

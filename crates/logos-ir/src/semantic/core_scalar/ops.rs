@@ -40,7 +40,6 @@ pub(super) fn is_predicate_op(op: &ScalarOp) -> bool {
             | ScalarOp::Like
             | ScalarOp::In
             | ScalarOp::Exists
-            | ScalarOp::Search
             | ScalarOp::And
             | ScalarOp::Or
             | ScalarOp::Not

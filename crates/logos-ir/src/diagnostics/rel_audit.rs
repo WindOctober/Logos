@@ -78,12 +78,10 @@ pub enum RelStructuralMarker {
     QueryRelPlanShapeUnknown,
     QueryRelValuesTuplesParsed,
     QueryRelValuesTuplesMissing,
-    ScalarWindowPlaceholder,
+    ScalarWindowStructured,
+    ScalarWindowTextParsed,
     ScalarWindowParsed,
-    ScalarEmbeddedRelText,
-    ScalarEmbeddedRelPlanParsed,
-    ScalarEmbeddedRelShapeKnown,
-    ScalarEmbeddedRelShapeUnknown,
+    ScalarEmbeddedRelStructured,
     ScalarSarg,
     ScalarSargParsed,
 }
@@ -343,18 +341,16 @@ fn collect_scalar_structural_markers(scalar: &ScalarExpr, out: &mut Vec<RelStruc
 
 fn collect_scalar_ast_markers(ast: &ScalarAst, out: &mut Vec<RelStructuralMarker>) {
     match ast {
-        ScalarAst::Window { .. } => {
-            out.push(RelStructuralMarker::ScalarWindowPlaceholder);
+        ScalarAst::Window { structured, .. } => {
+            if *structured {
+                out.push(RelStructuralMarker::ScalarWindowStructured);
+            } else {
+                out.push(RelStructuralMarker::ScalarWindowTextParsed);
+            }
             out.push(RelStructuralMarker::ScalarWindowParsed);
         }
-        ScalarAst::RelText { plan, .. } => {
-            out.push(RelStructuralMarker::ScalarEmbeddedRelText);
-            out.push(RelStructuralMarker::ScalarEmbeddedRelPlanParsed);
-            if text_rel_plan_has_only_known_shapes(plan) {
-                out.push(RelStructuralMarker::ScalarEmbeddedRelShapeKnown);
-            } else {
-                out.push(RelStructuralMarker::ScalarEmbeddedRelShapeUnknown);
-            }
+        ScalarAst::RelSubquery { .. } => {
+            out.push(RelStructuralMarker::ScalarEmbeddedRelStructured);
         }
         ScalarAst::Sarg { .. } => {
             out.push(RelStructuralMarker::ScalarSarg);
@@ -453,7 +449,7 @@ mod tests {
             1
         );
         assert_eq!(
-            marker_row(&summary, RelStructuralMarker::ScalarWindowPlaceholder)
+            marker_row(&summary, RelStructuralMarker::ScalarWindowTextParsed)
                 .unwrap()
                 .occurrences,
             1

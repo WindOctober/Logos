@@ -123,7 +123,7 @@ fn collect_ast_ops(ast: &ScalarAst, visit: &mut impl FnMut(&ScalarOp)) {
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
-        | ScalarAst::RelText { .. }
+        | ScalarAst::RelSubquery { .. }
         | ScalarAst::Sarg { .. } => {}
         ScalarAst::Call { op, args, .. } => {
             visit(op);

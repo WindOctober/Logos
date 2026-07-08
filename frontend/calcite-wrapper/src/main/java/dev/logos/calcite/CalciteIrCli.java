@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.common.collect.Range;
+
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelFieldCollation;
@@ -23,13 +25,19 @@ import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.core.SetOp;
+import org.apache.calcite.rel.core.Values;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
 import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexFieldCollation;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexOver;
+import org.apache.calcite.rex.RexSubQuery;
+import org.apache.calcite.rex.RexWindow;
+import org.apache.calcite.rex.RexWindowBound;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.SqlCall;
@@ -43,6 +51,7 @@ import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
+import org.apache.calcite.util.Sarg;
 import org.apache.calcite.util.TimestampString;
 
 public final class CalciteIrCli {
@@ -326,6 +335,25 @@ public final class CalciteIrCli {
         out.name("offsetRex");
         emitRexNode(out, sort.offset);
       }
+    } else if (rel instanceof Values values) {
+      out.comma();
+      out.name("tuples");
+      out.beginArray();
+      for (int i = 0; i < values.getTuples().size(); i++) {
+        if (i > 0) {
+          out.comma();
+        }
+        out.beginArray();
+        var tuple = values.getTuples().get(i);
+        for (int j = 0; j < tuple.size(); j++) {
+          if (j > 0) {
+            out.comma();
+          }
+          emitRexNode(out, tuple.get(j));
+        }
+        out.endArray();
+      }
+      out.endArray();
     }
 
     out.comma();
@@ -373,25 +401,112 @@ public final class CalciteIrCli {
       out.name("index").value(inputRef.getIndex());
     } else if (rex instanceof RexLiteral literal) {
       emitRexLiteralFields(out, literal);
+    } else if (rex instanceof RexSubQuery subQuery) {
+      emitRexCallFields(out, subQuery, sourceSql);
+      out.comma();
+      out.name("subqueryRel");
+      emitRelNode(out, subQuery.rel, null);
+    } else if (rex instanceof RexOver over) {
+      emitRexCallFields(out, over, sourceSql);
+      out.comma();
+      out.name("window");
+      emitRexWindow(out, over.getWindow());
+      out.comma();
+      out.name("distinct").value(over.isDistinct());
+      out.comma();
+      out.name("ignoreNulls").value(over.ignoreNulls());
     } else if (rex instanceof RexCall call) {
-      out.comma();
-      out.name("operator").value(call.getOperator().getName());
-      out.comma();
-      out.name("opKind").value(call.getOperator().getKind().name());
-      out.comma();
-      out.name("operands");
-      out.beginArray();
-      List<SqlNode> sourceOperands = sourceOperands(sourceSql);
-      for (int i = 0; i < call.getOperands().size(); i++) {
-        if (i > 0) {
-          out.comma();
-        }
-        SqlNode sourceOperand = i < sourceOperands.size() ? sourceOperands.get(i) : null;
-        emitRexNode(out, call.getOperands().get(i), sourceOperand);
-      }
-      out.endArray();
+      emitRexCallFields(out, call, sourceSql);
     }
 
+    out.endObject();
+  }
+
+  private static void emitRexCallFields(Json out, RexCall call, SqlNode sourceSql) {
+    out.comma();
+    out.name("operator").value(call.getOperator().getName());
+    out.comma();
+    out.name("opKind").value(call.getOperator().getKind().name());
+    out.comma();
+    out.name("operands");
+    out.beginArray();
+    List<SqlNode> sourceOperands = sourceOperands(sourceSql);
+    for (int i = 0; i < call.getOperands().size(); i++) {
+      if (i > 0) {
+        out.comma();
+      }
+      SqlNode sourceOperand = i < sourceOperands.size() ? sourceOperands.get(i) : null;
+      emitRexNode(out, call.getOperands().get(i), sourceOperand);
+    }
+    out.endArray();
+  }
+
+  private static void emitRexWindow(Json out, RexWindow window) {
+    out.beginObject();
+    out.name("partitionKeys");
+    out.beginArray();
+    for (int i = 0; i < window.partitionKeys.size(); i++) {
+      if (i > 0) {
+        out.comma();
+      }
+      emitRexNode(out, window.partitionKeys.get(i));
+    }
+    out.endArray();
+    out.comma();
+    out.name("orderKeys");
+    out.beginArray();
+    for (int i = 0; i < window.orderKeys.size(); i++) {
+      if (i > 0) {
+        out.comma();
+      }
+      emitRexFieldCollation(out, window.orderKeys.get(i));
+    }
+    out.endArray();
+    out.comma();
+    out.name("isRows").value(window.isRows());
+    out.comma();
+    out.name("lowerBound");
+    emitRexWindowBound(out, window.getLowerBound());
+    out.comma();
+    out.name("upperBound");
+    emitRexWindowBound(out, window.getUpperBound());
+    out.comma();
+    out.name("exclude").value(window.getExclude().name());
+    out.endObject();
+  }
+
+  private static void emitRexFieldCollation(Json out, RexFieldCollation field) {
+    out.beginObject();
+    out.name("expr");
+    emitRexNode(out, field.left);
+    out.comma();
+    out.name("direction").value(field.getDirection().name());
+    out.comma();
+    out.name("nullDirection").value(field.getNullDirection().name());
+    out.endObject();
+  }
+
+  private static void emitRexWindowBound(Json out, RexWindowBound bound) {
+    out.beginObject();
+    out.name("text").value(bound.toString());
+    out.comma();
+    out.name("unbounded").value(bound.isUnbounded());
+    out.comma();
+    out.name("unboundedPreceding").value(bound.isUnboundedPreceding());
+    out.comma();
+    out.name("unboundedFollowing").value(bound.isUnboundedFollowing());
+    out.comma();
+    out.name("preceding").value(bound.isPreceding());
+    out.comma();
+    out.name("following").value(bound.isFollowing());
+    out.comma();
+    out.name("currentRow").value(bound.isCurrentRow());
+    RexNode offset = bound.getOffset();
+    if (offset != null) {
+      out.comma();
+      out.name("offset");
+      emitRexNode(out, offset);
+    }
     out.endObject();
   }
 
@@ -466,6 +581,64 @@ public final class CalciteIrCli {
         out.name("intervalUnit").value(unit);
       }
     }
+
+    Object value = literal.getValue();
+    if (value instanceof Sarg<?> sarg) {
+      out.comma();
+      out.name("sarg");
+      emitSarg(out, sarg);
+    }
+  }
+
+  private static void emitSarg(Json out, Sarg<?> sarg) {
+    out.beginObject();
+    out.name("text").value(sarg.toString());
+    out.comma();
+    out.name("nullAs").value(sarg.nullAs.name());
+    out.comma();
+    out.name("pointCount").value(sarg.pointCount);
+    out.comma();
+    out.name("isAll").value(sarg.isAll());
+    out.comma();
+    out.name("isNone").value(sarg.isNone());
+    out.comma();
+    out.name("isPoints").value(sarg.isPoints());
+    out.comma();
+    out.name("isComplementedPoints").value(sarg.isComplementedPoints());
+    out.comma();
+    out.name("ranges");
+    out.beginArray();
+    int index = 0;
+    for (Range<?> range : sarg.rangeSet.asRanges()) {
+      if (index++ > 0) {
+        out.comma();
+      }
+      emitRange(out, range);
+    }
+    out.endArray();
+    out.endObject();
+  }
+
+  private static void emitRange(Json out, Range<?> range) {
+    out.beginObject();
+    out.name("text").value(range.toString());
+    out.comma();
+    out.name("hasLowerBound").value(range.hasLowerBound());
+    if (range.hasLowerBound()) {
+      out.comma();
+      out.name("lower").value(String.valueOf(range.lowerEndpoint()));
+      out.comma();
+      out.name("lowerBoundType").value(range.lowerBoundType().name());
+    }
+    out.comma();
+    out.name("hasUpperBound").value(range.hasUpperBound());
+    if (range.hasUpperBound()) {
+      out.comma();
+      out.name("upper").value(String.valueOf(range.upperEndpoint()));
+      out.comma();
+      out.name("upperBoundType").value(range.upperBoundType().name());
+    }
+    out.endObject();
   }
 
   private static String literalValueAsString(RexLiteral literal) {
@@ -528,7 +701,16 @@ public final class CalciteIrCli {
     out.endArray();
     if (call.distinctKeys != null) {
       out.comma();
-      out.name("distinctKeys").value(call.distinctKeys.toString());
+      out.name("distinctKeys");
+      out.beginArray();
+      int index = 0;
+      for (int key : call.distinctKeys) {
+        if (index++ > 0) {
+          out.comma();
+        }
+        out.value(key);
+      }
+      out.endArray();
     }
     if (call.getCollation() != null) {
       out.comma();

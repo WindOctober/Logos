@@ -190,8 +190,32 @@ pub struct AggregateCall {
     pub raw: String,
     pub function: String,
     pub distinct: bool,
+    #[serde(default, skip_serializing_if = "AggregateModifiers::is_empty")]
+    pub modifiers: AggregateModifiers,
     pub args: Vec<ScalarExpr>,
     pub filter: Option<ScalarExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AggregateModifiers {
+    #[serde(default)]
+    pub approximate: bool,
+    #[serde(default)]
+    pub ignore_nulls: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub distinct_keys: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collation: Vec<SortKey>,
+}
+
+impl AggregateModifiers {
+    pub fn is_empty(&self) -> bool {
+        !self.approximate
+            && !self.ignore_nulls
+            && self.distinct_keys.is_empty()
+            && self.collation.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,7 +241,6 @@ pub enum ScalarClass {
     Literal,
     Call,
     Subquery,
-    CalciteRelText,
     Opaque,
 }
 
@@ -244,11 +267,12 @@ pub enum ScalarAst {
     },
     Window {
         raw: String,
+        #[serde(default)]
+        structured: bool,
         parsed: WindowAst,
     },
-    RelText {
-        raw: String,
-        plan: TextRelNode,
+    RelSubquery {
+        rel: Box<RelExpr>,
     },
     Sarg {
         raw: String,
@@ -263,6 +287,12 @@ pub struct WindowAst {
     pub args: Vec<ScalarAst>,
     pub partition_by: Vec<ScalarAst>,
     pub order_by: Vec<WindowOrderKey>,
+    #[serde(default)]
+    pub distinct: bool,
+    #[serde(default)]
+    pub ignore_nulls: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frame: Option<String>,
 }
@@ -281,6 +311,18 @@ pub struct WindowOrderKey {
 #[serde(rename_all = "camelCase")]
 pub struct SargAst {
     pub items: Vec<SargItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub null_as: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub point_count: Option<i32>,
+    #[serde(default)]
+    pub is_all: bool,
+    #[serde(default)]
+    pub is_none: bool,
+    #[serde(default)]
+    pub is_points: bool,
+    #[serde(default)]
+    pub is_complemented_points: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ty: Option<String>,
 }

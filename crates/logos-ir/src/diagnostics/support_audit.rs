@@ -347,11 +347,7 @@ fn is_support_blocker_feature(feature: Feature) -> bool {
 }
 
 fn is_structural_gap_marker(marker: RelStructuralMarker) -> bool {
-    matches!(
-        marker,
-        RelStructuralMarker::SortNullDirectionMissing
-            | RelStructuralMarker::ScalarEmbeddedRelShapeUnknown
-    )
+    matches!(marker, RelStructuralMarker::SortNullDirectionMissing)
 }
 
 #[cfg(test)]
@@ -360,7 +356,7 @@ mod tests {
     use crate::calcite::scalar::calcite_scalar;
     use crate::ir::{
         Column, Query, RelExpr, ScalarAst, ScalarClass, ScalarExpr, Schema, SortDirection, SortKey,
-        SqlType, TextRelAttr, TextRelNode, TextRelNodeKind, TextRelShape, ValuesTuples,
+        SqlType, ValuesTuples,
     };
 
     #[test]
@@ -407,73 +403,6 @@ mod tests {
             1
         );
         assert!(summary.structural_gaps.is_empty());
-    }
-
-    #[test]
-    fn parsed_embedded_rel_text_is_not_a_structural_gap() {
-        let query = query_with_scalar(ScalarAst::RelText {
-            raw: "LogicalTableScan(table=[[t]])".to_owned(),
-            plan: TextRelNode {
-                rel_type: "LogicalTableScan".to_owned(),
-                kind: TextRelNodeKind::TableScan,
-                shape: TextRelShape::TableScan {
-                    table: vec!["t".to_owned()],
-                },
-                attrs: vec![TextRelAttr {
-                    name: "table".to_owned(),
-                    value: "[[t]]".to_owned(),
-                }],
-                inputs: Vec::new(),
-                raw_line: "LogicalTableScan(table=[[t]])".to_owned(),
-            },
-        });
-        let ir = LogosIrFile {
-            schema: Schema { tables: Vec::new() },
-            queries: vec![query],
-        };
-
-        let summary = summarize_converted_support(
-            1,
-            [("case/before.calcite-ir.json".to_owned(), ir)].iter(),
-            Vec::new(),
-        );
-
-        assert!(marker_row(&summary, RelStructuralMarker::ScalarEmbeddedRelText).is_none());
-        assert!(marker_row(&summary, RelStructuralMarker::ScalarEmbeddedRelShapeUnknown).is_none());
-    }
-
-    #[test]
-    fn unknown_embedded_rel_text_shape_is_a_structural_gap() {
-        let query = query_with_scalar(ScalarAst::RelText {
-            raw: "LogicalUnknown(...)".to_owned(),
-            plan: TextRelNode {
-                rel_type: "LogicalUnknown".to_owned(),
-                kind: TextRelNodeKind::Other {
-                    rel_type: "LogicalUnknown".to_owned(),
-                },
-                shape: TextRelShape::Other,
-                attrs: Vec::new(),
-                inputs: Vec::new(),
-                raw_line: "LogicalUnknown(...)".to_owned(),
-            },
-        });
-        let ir = LogosIrFile {
-            schema: Schema { tables: Vec::new() },
-            queries: vec![query],
-        };
-
-        let summary = summarize_converted_support(
-            1,
-            [("case/before.calcite-ir.json".to_owned(), ir)].iter(),
-            Vec::new(),
-        );
-
-        assert_eq!(
-            marker_row(&summary, RelStructuralMarker::ScalarEmbeddedRelShapeUnknown)
-                .unwrap()
-                .occurrences,
-            1
-        );
     }
 
     #[test]
@@ -618,31 +547,6 @@ mod tests {
         assert!(summary.unsupported_without_blocker.is_empty());
         assert!(summary.blocker_without_formal_unsupported.is_empty());
         assert_eq!(summary.structural_gap_without_formal_unsupported.len(), 1);
-    }
-
-    fn query_with_scalar(ast: ScalarAst) -> Query {
-        Query {
-            source_sql: None,
-            rel: RelExpr::Values {
-                tuples: ValuesTuples::Rows {
-                    rows: vec![vec![ScalarExpr {
-                        raw: "subquery".to_owned(),
-                        class: ScalarClass::Call,
-                        parsed: ast,
-                    }]],
-                },
-                output: vec![Column {
-                    name: "v".to_owned(),
-                    ty: SqlType::Integer,
-                    nullable: true,
-                    precision: None,
-                }],
-            },
-            output: Vec::new(),
-            features: vec![Feature::SubqueryPredicate, Feature::FormalSqlUnsupported],
-            calcite_rel_text: None,
-            calcite_rel_plan: None,
-        }
     }
 
     fn query_with_features(features: Vec<Feature>) -> Query {
