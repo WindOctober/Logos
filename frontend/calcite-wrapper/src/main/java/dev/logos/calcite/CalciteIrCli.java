@@ -141,7 +141,7 @@ public final class CalciteIrCli {
         out.beginObject();
         out.name("name").value(column.name);
         out.comma();
-        out.name("type").value(column.type.getName());
+        out.name("type").value(column.outputTypeName());
         out.comma();
         out.name("fullType").value(column.fullTypeString());
         out.comma();
@@ -723,7 +723,11 @@ public final class CalciteIrCli {
     if (type.startsWith("DATE")) {
       return SqlTypeName.DATE;
     }
-    if (type.startsWith("TIMESTAMP") || type.startsWith("DATETIME")) {
+    if (isTimestampWithTimeZone(rawType)) {
+      return SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE;
+    }
+    if (type.startsWith("TIMESTAMP") || type.startsWith("TIMESTAMPTZ")
+        || type.startsWith("TIMESTAMPZ") || type.startsWith("DATETIME")) {
       return SqlTypeName.TIMESTAMP;
     }
     if (type.startsWith("TIME")) {
@@ -788,42 +792,59 @@ public final class CalciteIrCli {
 
   private record TableDef(String name, List<ColumnDef> columns) {}
 
-  private record ColumnDef(String name, SqlTypeName type, int precision, int scale) {
+  private record ColumnDef(
+      String name, SqlTypeName type, int precision, int scale, boolean timestampWithTimeZone) {
     static ColumnDef parse(String name, String rawType) {
-      if (isTimestampWithTimeZone(rawType)) {
-        throw new IllegalArgumentException(
-            "TIMESTAMP WITH TIME ZONE columns are not supported by the Logos Calcite wrapper");
-      }
+      boolean timestampWithTimeZone = isTimestampWithTimeZone(rawType);
       int precision = parseTypePrecision(rawType);
       SqlTypeName type = toSqlTypeName(rawType);
-      if (type == SqlTypeName.TIMESTAMP && precision == RelDataType.PRECISION_NOT_SPECIFIED) {
+      if ((type == SqlTypeName.TIMESTAMP || type == SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
+          && precision == RelDataType.PRECISION_NOT_SPECIFIED) {
         precision = 6;
       }
-      if (type == SqlTypeName.TIMESTAMP && precision > 6) {
+      if ((type == SqlTypeName.TIMESTAMP || type == SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
+          && precision > 6) {
         throw new IllegalArgumentException("TIMESTAMP precision must be between 0 and 6");
       }
       return new ColumnDef(
           name,
           type,
           precision,
-          parseTypeScale(rawType));
+          parseTypeScale(rawType),
+          timestampWithTimeZone);
+    }
+
+    String outputTypeName() {
+      if (timestampWithTimeZone) {
+        return "TIMESTAMP_WITH_TIME_ZONE";
+      }
+      return type.getName();
     }
 
     String fullTypeString() {
+      if (timestampWithTimeZone) {
+        return appendPrecision("TIMESTAMP_WITH_TIME_ZONE");
+      }
+      return appendPrecision(type.getName());
+    }
+
+    private String appendPrecision(String typeName) {
       if (precision >= 0 && scale >= 0) {
-        return type.getName() + "(" + precision + ", " + scale + ")";
+        return typeName + "(" + precision + ", " + scale + ")";
       }
       if (precision >= 0) {
-        return type.getName() + "(" + precision + ")";
+        return typeName + "(" + precision + ")";
       }
-      return type.getName();
+      return typeName;
     }
   }
 
   private static boolean isTimestampWithTimeZone(String rawType) {
     String type = rawType.toUpperCase(Locale.ROOT);
-    return type.startsWith("TIMESTAMP")
-        && (type.contains("WITH TIME ZONE") || type.contains("WITH LOCAL TIME ZONE"));
+    return type.startsWith("TIMESTAMPTZ")
+        || type.startsWith("TIMESTAMPZ")
+        || (type.startsWith("TIMESTAMP")
+            && (type.contains("WITH TIME ZONE") || type.contains("WITH LOCAL TIME ZONE")));
   }
 
   private static int parseTypePrecision(String rawType) {
@@ -881,14 +902,16 @@ public final class CalciteIrCli {
   private static final RelDataTypeSystemImpl LOGOS_TYPE_SYSTEM =
       new RelDataTypeSystemImpl() {
         @Override public int getMaxPrecision(SqlTypeName typeName) {
-          if (typeName == SqlTypeName.TIMESTAMP) {
+          if (typeName == SqlTypeName.TIMESTAMP
+              || typeName == SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE) {
             return 6;
           }
           return super.getMaxPrecision(typeName);
         }
 
         @Override public int getDefaultPrecision(SqlTypeName typeName) {
-          if (typeName == SqlTypeName.TIMESTAMP) {
+          if (typeName == SqlTypeName.TIMESTAMP
+              || typeName == SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE) {
             return 6;
           }
           return super.getDefaultPrecision(typeName);

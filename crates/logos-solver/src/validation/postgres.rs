@@ -1,6 +1,6 @@
 use postgres::{Client, NoTls};
 
-use crate::core::VerificationInput;
+use crate::core::{SqlTimeZone, VerificationInput};
 use crate::error::{Error, Result};
 use crate::validation::bag_semantics::{
     bag_difference_exists_sql, diff_sample_sql, ordered_diff_sample_sql,
@@ -16,6 +16,7 @@ pub struct PostgresValidator {
     url: String,
     statement_timeout_ms: u64,
     diff_sample_limit: usize,
+    sql_time_zone: SqlTimeZone,
 }
 
 impl PostgresValidator {
@@ -23,6 +24,7 @@ impl PostgresValidator {
         url: Option<String>,
         statement_timeout_ms: u64,
         diff_sample_limit: usize,
+        sql_time_zone: SqlTimeZone,
     ) -> Result<Self> {
         let url = url
             .or_else(|| std::env::var("LOGOS_POSTGRES_URL").ok())
@@ -32,6 +34,7 @@ impl PostgresValidator {
             url,
             statement_timeout_ms,
             diff_sample_limit,
+            sql_time_zone,
         })
     }
 
@@ -64,6 +67,7 @@ impl PostgresValidator {
             &mut transaction,
             schema_name,
             self.statement_timeout_ms,
+            &self.sql_time_zone,
             input.schema_sql(),
             witness_sql,
         )?;

@@ -5,7 +5,7 @@ use logos_ir::ShellSqlIrFrontend;
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::VerificationInput;
-use crate::core::lower_verification_input;
+use crate::core::{LoweringConfig, lower_verification_input_with_config};
 use crate::engine::config::Config;
 use crate::engine::now_ms_since_epoch;
 use crate::engine::report::{
@@ -33,7 +33,10 @@ pub(super) fn run_proof_stage(
     artifacts.write_json("input/source-ir.json", ir_input.source_query_ir())?;
     artifacts.write_json("input/target-ir.json", ir_input.target_query_ir())?;
 
-    let lowering_report = lower_verification_input(&ir_input);
+    let lowering_config = LoweringConfig {
+        sql_time_zone: options.sql_time_zone.clone(),
+    };
+    let lowering_report = lower_verification_input_with_config(&ir_input, &lowering_config);
     if let Some(schema) = lowering_report.schema.schema.as_ref() {
         artifacts.write_text("proof-stage/formal-sql/Schema.v", &schema.rocq_module)?;
     }

@@ -509,6 +509,7 @@ fn emit_rocq_attribute(constructor: &str, name: &str) -> String {
         "Attr_float" => "AttrFloat",
         "Attr_date" => "AttrDate",
         _ if timestamp_constructor_precision(constructor).is_some() => "AttrTimestamp",
+        _ if timestamptz_constructor_precision(constructor).is_some() => "AttrTimestamptz",
         other => other,
     };
     emit_rocq_named_helper(helper, name, constructor)
@@ -518,11 +519,16 @@ fn emit_rocq_schema_attribute(constructor: &str, name: &str) -> String {
     if let Some(precision) = timestamp_constructor_precision(constructor) {
         return format!("Attr_timestamp {} {precision}", rocq_string_literal(name));
     }
+    if let Some(precision) = timestamptz_constructor_precision(constructor) {
+        return format!("Attr_timestamptz {} {precision}", rocq_string_literal(name));
+    }
     format!("{constructor} {}", rocq_string_literal(name))
 }
 
 fn emit_rocq_named_helper(helper: &str, name: &str, constructor: &str) -> String {
-    if let Some(precision) = timestamp_constructor_precision(constructor) {
+    if let Some(precision) = timestamp_constructor_precision(constructor)
+        .or_else(|| timestamptz_constructor_precision(constructor))
+    {
         format!("{helper} {} {precision}", rocq_string_literal(name))
     } else {
         format!("{helper} {}", rocq_string_literal(name))
@@ -531,6 +537,10 @@ fn emit_rocq_named_helper(helper: &str, name: &str, constructor: &str) -> String
 
 fn timestamp_constructor_precision(constructor: &str) -> Option<u32> {
     constructor.strip_prefix("Attr_timestamp#")?.parse().ok()
+}
+
+fn timestamptz_constructor_precision(constructor: &str) -> Option<u32> {
+    constructor.strip_prefix("Attr_timestamptz#")?.parse().ok()
 }
 
 fn identity_select_constructor(attribute_constructor: &str) -> Option<&'static str> {
@@ -542,6 +552,9 @@ fn identity_select_constructor(attribute_constructor: &str) -> Option<&'static s
         "Attr_date" => Some("SelectDate"),
         _ if timestamp_constructor_precision(attribute_constructor).is_some() => {
             Some("SelectTimestamp")
+        }
+        _ if timestamptz_constructor_precision(attribute_constructor).is_some() => {
+            Some("SelectTimestamptz")
         }
         _ => None,
     }
@@ -564,6 +577,7 @@ fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
         "Attr_float" => "FloatColumn",
         "Attr_date" => "DateColumn",
         _ if timestamp_constructor_precision(constructor).is_some() => "TimestampColumn",
+        _ if timestamptz_constructor_precision(constructor).is_some() => "TimestamptzColumn",
         _ => return None,
     };
     Some(emit_rocq_named_helper(
@@ -583,6 +597,9 @@ fn dot_constructor(attribute_constructor: &str) -> Option<&'static str> {
         _ if timestamp_constructor_precision(attribute_constructor).is_some() => {
             Some("DotTimestamp")
         }
+        _ if timestamptz_constructor_precision(attribute_constructor).is_some() => {
+            Some("DotTimestamptz")
+        }
         _ => None,
     }
 }
@@ -597,6 +614,7 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             Some(FormalAttributeType::Float) => "NullFloat".to_owned(),
             Some(FormalAttributeType::Date) => "NullDate".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "NullTimestamp".to_owned(),
+            Some(FormalAttributeType::Timestamptz { .. }) => "NullTimestamptz".to_owned(),
         };
     }
     if trimmed.eq_ignore_ascii_case("true") {
@@ -613,6 +631,11 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
     if let Some(FormalAttributeType::Timestamp { precision }) = ty {
         if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
             return format!("CstTimestamp ({micros})");
+        }
+    }
+    if let Some(FormalAttributeType::Timestamptz { precision }) = ty {
+        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
+            return format!("CstTimestamptz ({micros})");
         }
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
@@ -638,6 +661,7 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             Some(FormalAttributeType::Float) => "Value_float None".to_owned(),
             Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "Value_timestamp None".to_owned(),
+            Some(FormalAttributeType::Timestamptz { .. }) => "Value_timestamptz None".to_owned(),
         };
     }
     if trimmed.eq_ignore_ascii_case("true") {
@@ -654,6 +678,11 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
     if let Some(FormalAttributeType::Timestamp { precision }) = ty {
         if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
             return format!("Value_timestamp (Some ({micros})%Z)");
+        }
+    }
+    if let Some(FormalAttributeType::Timestamptz { precision }) = ty {
+        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
+            return format!("Value_timestamptz (Some ({micros})%Z)");
         }
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
@@ -733,6 +762,22 @@ pub(super) fn timestamp_literal_conforms_to_precision(raw: &str, precision: u32)
     parse_timestamp_literal(raw, precision).is_some()
 }
 
+pub(super) fn timestamptz_literal_to_utc_micros(
+    raw: &str,
+    precision: u32,
+    sql_time_zone: &SqlTimeZone,
+) -> Option<i64> {
+    let value = sql_string_literal_content(raw).unwrap_or_else(|| raw.trim().to_owned());
+    let (timestamp_text, literal_offset) = split_timestamp_offset(&value)?;
+    let local_micros = parse_timestamp_literal(timestamp_text, precision)?;
+    let utc_micros = if let Some(literal_offset) = literal_offset {
+        local_micros - literal_offset
+    } else {
+        sql_time_zone.local_timestamp_micros_to_utc_instant(local_micros)?
+    };
+    timestamp_micros_with_precision(utc_micros, precision)
+}
+
 fn parse_timestamp_literal(raw: &str, precision: u32) -> Option<i64> {
     if precision > 6 {
         return None;
@@ -758,6 +803,47 @@ fn parse_timestamp_literal(raw: &str, precision: u32) -> Option<i64> {
             + micros,
         precision,
     )
+}
+
+fn split_timestamp_offset(value: &str) -> Option<(&str, Option<i64>)> {
+    let value = value.trim();
+    if let Some(timestamp) = value.strip_suffix('Z').or_else(|| value.strip_suffix('z')) {
+        return Some((timestamp.trim_end(), Some(0)));
+    }
+    let search_start = value
+        .find(|ch| ch == ' ' || ch == 'T')
+        .map(|index| index + 1)
+        .unwrap_or(value.len());
+    let offset_start = value[search_start..]
+        .rfind(|ch| ch == '+' || ch == '-')
+        .map(|index| search_start + index);
+    match offset_start {
+        Some(index) => {
+            let timestamp = value[..index].trim_end();
+            let offset = parse_timestamp_offset(&value[index..])?;
+            Some((timestamp, Some(offset)))
+        }
+        None => Some((value, None)),
+    }
+}
+
+fn parse_timestamp_offset(value: &str) -> Option<i64> {
+    let value = value.trim();
+    let sign = if value.starts_with('+') {
+        1
+    } else if value.starts_with('-') {
+        -1
+    } else {
+        return None;
+    };
+    let body = &value[1..];
+    let (hour_text, minute_text) = body.split_once(':').unwrap_or((body, "0"));
+    let hours = hour_text.parse::<i64>().ok()?;
+    let minutes = minute_text.parse::<i64>().ok()?;
+    if !(0..=23).contains(&hours) || !(0..=59).contains(&minutes) {
+        return None;
+    }
+    Some(sign * (hours * MICROS_PER_HOUR + minutes * MICROS_PER_MINUTE))
 }
 
 fn timestamp_micros_with_precision(micros: i64, precision: u32) -> Option<i64> {

@@ -85,6 +85,9 @@ impl LoweringContext {
             SqlType::Timestamp => Some(FormalAttributeType::Timestamp {
                 precision: column.precision,
             }),
+            SqlType::TimestampTz => Some(FormalAttributeType::Timestamptz {
+                precision: column.precision,
+            }),
             SqlType::Time => Some(FormalAttributeType::String),
             SqlType::Any | SqlType::Null => {
                 self.error(

@@ -128,6 +128,7 @@ Definition AttrBool (name : string) := Attr_bool name.
 Definition AttrFloat (name : string) := Attr_float name.
 Definition AttrDate (name : string) := Attr_date name.
 Definition AttrTimestamp (name : string) (precision : Z) := Attr_timestamp name precision.
+Definition AttrTimestamptz (name : string) (precision : Z) := Attr_timestamptz name precision.
 
 Inductive ColumnRef : Type :=
   | ZColumn : string -> ColumnRef
@@ -135,7 +136,8 @@ Inductive ColumnRef : Type :=
   | BoolColumn : string -> ColumnRef
   | FloatColumn : string -> ColumnRef
   | DateColumn : string -> ColumnRef
-  | TimestampColumn : string -> Z -> ColumnRef.
+  | TimestampColumn : string -> Z -> ColumnRef
+  | TimestamptzColumn : string -> Z -> ColumnRef.
 
 Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   match column with
@@ -145,6 +147,7 @@ Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   | FloatColumn name => AttrFloat name
   | DateColumn name => AttrDate name
   | TimestampColumn name precision => AttrTimestamp name precision
+  | TimestamptzColumn name precision => AttrTimestamptz name precision
   end.
 
 Definition DotZ (name : string) : AggTerm := AExpr (Dot (AttrZ name)).
@@ -154,6 +157,8 @@ Definition DotFloat (name : string) : AggTerm := AExpr (Dot (AttrFloat name)).
 Definition DotDate (name : string) : AggTerm := AExpr (Dot (AttrDate name)).
 Definition DotTimestamp (name : string) (precision : Z) : AggTerm :=
   AExpr (Dot (AttrTimestamp name precision)).
+Definition DotTimestamptz (name : string) (precision : Z) : AggTerm :=
+  AExpr (Dot (AttrTimestamptz name precision)).
 
 Definition DotColumn (column : ColumnRef) : AggTerm :=
   match column with
@@ -163,6 +168,7 @@ Definition DotColumn (column : ColumnRef) : AggTerm :=
   | FloatColumn name => DotFloat name
   | DateColumn name => DotDate name
   | TimestampColumn name precision => DotTimestamp name precision
+  | TimestamptzColumn name precision => DotTimestamptz name precision
   end.
 
 Definition CstZ (z : Z) : AggTerm := AExpr (Constant (Value_Z (Some z))).
@@ -172,6 +178,8 @@ Definition CstFloat (f : float) : AggTerm := AExpr (Constant (Value_float (Some 
 Definition CstDate (date : Z) : AggTerm := AExpr (Constant (Value_date (Some date))).
 Definition CstTimestamp (timestamp : Z) : AggTerm :=
   AExpr (Constant (Value_timestamp (Some timestamp))).
+Definition CstTimestamptz (timestamp : Z) : AggTerm :=
+  AExpr (Constant (Value_timestamptz (Some timestamp))).
 
 Definition NullZ : AggTerm := AExpr (Constant (Value_Z None)).
 Definition NullString : AggTerm := AExpr (Constant (Value_string None)).
@@ -179,6 +187,7 @@ Definition NullBool : AggTerm := AExpr (Constant (Value_bool None)).
 Definition NullFloat : AggTerm := AExpr (Constant (Value_float None)).
 Definition NullDate : AggTerm := AExpr (Constant (Value_date None)).
 Definition NullTimestamp : AggTerm := AExpr (Constant (Value_timestamp None)).
+Definition NullTimestamptz : AggTerm := AExpr (Constant (Value_timestamptz None)).
 
 Definition SelectZ (name : string) : SelectItemT := SelectAs (DotZ name) (AttrZ name).
 Definition SelectString (name : string) : SelectItemT :=
@@ -190,6 +199,8 @@ Definition SelectDate (name : string) : SelectItemT :=
   SelectAs (DotDate name) (AttrDate name).
 Definition SelectTimestamp (name : string) (precision : Z) : SelectItemT :=
   SelectAs (DotTimestamp name precision) (AttrTimestamp name precision).
+Definition SelectTimestamptz (name : string) (precision : Z) : SelectItemT :=
+  SelectAs (DotTimestamptz name precision) (AttrTimestamptz name precision).
 
 Definition SelectColumn (column : ColumnRef) : SelectItemT :=
   SelectAs (DotColumn column) (ColumnAttribute column).

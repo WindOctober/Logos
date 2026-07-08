@@ -24,6 +24,44 @@ def patch_tpcds_intervals(sql: str, normalizations: list[dict]) -> str:
     return pattern.sub(repl, sql)
 
 
+def patch_timestamp_with_time_zone_for_sqlglot(sql: str, normalizations: list[dict]) -> str:
+    pattern = re.compile(
+        r"(?i)TIMESTAMP\s*(\(\s*[0-6]\s*\))?\s+WITH\s+(?:LOCAL\s+)?TIME\s+ZONE"
+    )
+
+    def repl(match: re.Match) -> str:
+        precision = match.group(1) or ""
+        target = f"TIMESTAMPTZ{precision}"
+        normalizations.append(
+            {
+                "kind": "timestamp_with_time_zone_parse_patch",
+                "source": match.group(0),
+                "target": target,
+            }
+        )
+        return target
+
+    return pattern.sub(repl, sql)
+
+
+def patch_timestamptz_for_calcite(sql: str, normalizations: list[dict]) -> str:
+    pattern = re.compile(r"(?i)\bTIMESTAMPTZ\s*(\(\s*[0-6]\s*\))?")
+
+    def repl(match: re.Match) -> str:
+        precision = match.group(1) or ""
+        target = f"TIMESTAMP{precision} WITH TIME ZONE"
+        normalizations.append(
+            {
+                "kind": "calcite_timestamptz_type",
+                "source": match.group(0),
+                "target": target,
+            }
+        )
+        return target
+
+    return pattern.sub(repl, sql)
+
+
 def patch_calcite_interval_literals(sql: str, normalizations: list[dict]) -> str:
     pattern = re.compile(
         r"(?i)INTERVAL\s+'([0-9]+)\s+"
@@ -113,6 +151,8 @@ def normalize_sql(
 ) -> tuple[str, dict]:
     normalizations: list[dict] = []
     patched = patch_tpcds_intervals(sql, normalizations) if apply_patches else sql
+    if apply_patches:
+        patched = patch_timestamp_with_time_zone_for_sqlglot(patched, normalizations)
 
     report = {
         "readDialect": read,
@@ -148,6 +188,7 @@ def normalize_sql(
         normalized += ";\n"
 
     if apply_patches:
+        normalized = patch_timestamptz_for_calcite(normalized, normalizations)
         normalized = patch_sqlglot_days_alias(normalized, normalizations)
         normalized = patch_calcite_interval_literals(normalized, normalizations)
         normalized = patch_cast_date_integer_arithmetic(normalized, normalizations)

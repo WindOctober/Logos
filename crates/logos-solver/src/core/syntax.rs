@@ -106,6 +106,7 @@ pub enum FormalAttributeType {
     Float,
     Date,
     Timestamp { precision: Option<u32> },
+    Timestamptz { precision: Option<u32> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use postgres::Transaction;
 
+use crate::core::SqlTimeZone;
 use crate::error::Result;
 
 pub(super) fn fresh_schema_name() -> String {
@@ -16,12 +17,17 @@ pub(super) fn setup_witness_schema(
     transaction: &mut Transaction<'_>,
     schema_name: &str,
     statement_timeout_ms: u64,
+    sql_time_zone: &SqlTimeZone,
     schema_sql: &str,
     witness_sql: &str,
 ) -> Result<()> {
+    let set_time_zone = sql_time_zone
+        .postgres_set_time_zone_sql()
+        .expect("SQL time zone is validated before witness checking");
     transaction.batch_execute(&format!(
-        "SET statement_timeout = {}; CREATE SCHEMA {}; SET search_path TO {}, public;",
+        "SET statement_timeout = {}; {}; CREATE SCHEMA {}; SET search_path TO {}, public;",
         statement_timeout_ms,
+        set_time_zone,
         quote_ident(schema_name),
         quote_ident(schema_name)
     ))?;

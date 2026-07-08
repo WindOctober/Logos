@@ -206,6 +206,7 @@ impl LoweringContext {
             ScalarAst::TypeAnnotation { ty, .. }
                 if type_annotation_is_date(ty)
                     || type_annotation_is_timestamp(ty)
+                    || type_annotation_is_timestamp_tz(ty)
                     || type_annotation_is_interval(ty) =>
             {
                 Some(FormalAggregateTerm::Expr {
@@ -284,6 +285,41 @@ impl LoweringContext {
                     ty: Some(FormalAttributeType::Date),
                 })
             }
+            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp_tz(ty) => {
+                let raw = typed_literal_raw(expr)
+                    .or_else(|| cast_literal_raw(expr))
+                    .or_else(|| {
+                        self.error(
+                            path,
+                            "timestamp_tz_literal_not_supported",
+                            "TIMESTAMP WITH TIME ZONE annotations are supported only for literal CAST/typed literals.",
+                        );
+                        None
+                })?;
+                let precision = type_annotation_precision(ty);
+                if is_null_literal(raw) {
+                    return Some(FormalFunctionTerm::Constant {
+                        raw: raw.to_owned(),
+                        ty: Some(FormalAttributeType::Timestamptz { precision }),
+                    });
+                }
+                let Some(micros) = super::emit::timestamptz_literal_to_utc_micros(
+                    raw,
+                    timestamp_precision(precision),
+                    &self.config.sql_time_zone,
+                ) else {
+                    self.error(
+                            path,
+                            "timestamp_tz_literal_not_supported",
+                            "TIMESTAMP WITH TIME ZONE literal could not be encoded as a UTC instant with the configured SQL time zone.",
+                        );
+                    return None;
+                };
+                Some(FormalFunctionTerm::Constant {
+                    raw: micros.to_string(),
+                    ty: Some(FormalAttributeType::Timestamptz { precision }),
+                })
+            }
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp(ty) => {
                 let raw = typed_literal_raw(expr)
                     .or_else(|| cast_literal_raw(expr))
@@ -294,8 +330,14 @@ impl LoweringContext {
                             "TIMESTAMP annotations are supported only for literal CAST/typed literals.",
                         );
                         None
-                    })?;
+                })?;
                 let precision = type_annotation_precision(ty);
+                if is_null_literal(raw) {
+                    return Some(FormalFunctionTerm::Constant {
+                        raw: raw.to_owned(),
+                        ty: Some(FormalAttributeType::Timestamp { precision }),
+                    });
+                }
                 if !super::emit::timestamp_literal_conforms_to_precision(
                     raw,
                     timestamp_precision(precision),
@@ -357,7 +399,9 @@ impl LoweringContext {
                         );
                         return None;
                     }
-                    if let FormalAttributeType::Timestamp { precision } = formal_ty {
+                    if let FormalAttributeType::Timestamp { precision }
+                    | FormalAttributeType::Timestamptz { precision } = formal_ty
+                    {
                         if !super::emit::timestamp_literal_conforms_to_precision(
                             raw,
                             timestamp_precision(precision),
@@ -544,16 +588,20 @@ fn type_annotation_is_timestamp_ast(ast: &ScalarAst) -> bool {
     matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_timestamp(ty))
 }
 
+fn type_annotation_is_temporal_instant_ast(ast: &ScalarAst) -> bool {
+    matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_timestamp(ty) || type_annotation_is_timestamp_tz(ty))
+}
+
 fn type_annotation_is_interval_ast(ast: &ScalarAst) -> bool {
     matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_interval(ty))
 }
 
 fn has_temporal_interval_pair(left: &ScalarAst, right: &ScalarAst) -> bool {
     (type_annotation_is_date_ast(left)
-        || type_annotation_is_timestamp_ast(left)
+        || type_annotation_is_temporal_instant_ast(left)
         || type_annotation_is_interval_ast(left))
         && (type_annotation_is_date_ast(right)
-            || type_annotation_is_timestamp_ast(right)
+            || type_annotation_is_temporal_instant_ast(right)
             || type_annotation_is_interval_ast(right))
         && (type_annotation_is_interval_ast(left) || type_annotation_is_interval_ast(right))
 }
@@ -564,6 +612,10 @@ fn type_annotation_is_date(ty: &str) -> bool {
 
 fn type_annotation_is_timestamp(ty: &str) -> bool {
     type_annotation_head(ty) == Some("TIMESTAMP")
+}
+
+fn type_annotation_is_timestamp_tz(ty: &str) -> bool {
+    type_annotation_head(ty) == Some("TIMESTAMP_WITH_TIME_ZONE")
 }
 
 fn type_annotation_is_interval(ty: &str) -> bool {
@@ -583,6 +635,9 @@ fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
         "BOOLEAN" | "BOOL" => Some(FormalAttributeType::Bool),
         "DATE" => Some(FormalAttributeType::Date),
         "TIMESTAMP" => Some(FormalAttributeType::Timestamp {
+            precision: type_annotation_precision(ty),
+        }),
+        "TIMESTAMP_WITH_TIME_ZONE" => Some(FormalAttributeType::Timestamptz {
             precision: type_annotation_precision(ty),
         }),
         _ => None,
@@ -619,6 +674,10 @@ fn type_annotation_head(ty: &str) -> Option<&'static str> {
         "DATE" => Some("DATE"),
         "TIME" => Some("TIME"),
         "TIMESTAMP" => Some("TIMESTAMP"),
+        "TIMESTAMPTZ"
+        | "TIMESTAMPZ"
+        | "TIMESTAMP_WITH_TIME_ZONE"
+        | "TIMESTAMP_WITH_LOCAL_TIME_ZONE" => Some("TIMESTAMP_WITH_TIME_ZONE"),
         _ => None,
     }
 }
@@ -649,6 +708,10 @@ fn typed_literal_raw(ast: &ScalarAst) -> Option<&str> {
         ScalarAst::Literal { raw } => Some(raw),
         _ => None,
     }
+}
+
+fn is_null_literal(raw: &str) -> bool {
+    raw.trim().eq_ignore_ascii_case("null")
 }
 
 fn cast_literal_raw(ast: &ScalarAst) -> Option<&str> {
@@ -837,6 +900,9 @@ pub(super) fn formal_attribute_constructor(ty: FormalAttributeType) -> String {
         FormalAttributeType::Date => "Attr_date".to_owned(),
         FormalAttributeType::Timestamp { precision } => {
             format!("Attr_timestamp#{}", timestamp_precision(precision))
+        }
+        FormalAttributeType::Timestamptz { precision } => {
+            format!("Attr_timestamptz#{}", timestamp_precision(precision))
         }
     }
 }

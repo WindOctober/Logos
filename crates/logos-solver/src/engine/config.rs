@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::core::SqlTimeZone;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub calcite_ir_command: String,
@@ -14,6 +16,7 @@ pub struct Config {
     pub postgres_url: Option<String>,
     pub statement_timeout_ms: u64,
     pub diff_sample_limit: usize,
+    pub sql_time_zone: SqlTimeZone,
     pub run_proof_agent: bool,
     pub proof_agent_command: String,
     pub proof_docker_image: String,

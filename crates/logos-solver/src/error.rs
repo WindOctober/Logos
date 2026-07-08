@@ -38,6 +38,8 @@ pub enum Error {
     },
     #[error("invalid Logos IR input: {0}")]
     InvalidLogosIrInput(String),
+    #[error("invalid SQL time zone: {0}")]
+    InvalidSqlTimeZone(String),
     #[error("Logos IR error: {0}")]
     LogosIr(#[from] logos_ir::Error),
     #[error("proposal command failed: {0}")]

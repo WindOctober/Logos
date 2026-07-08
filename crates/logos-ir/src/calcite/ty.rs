@@ -27,6 +27,8 @@ pub fn parse_calcite_sql_type(value: &str) -> Result<SqlType> {
         Ok(SqlType::Time)
     } else if type_head_is(&upper, "TIMESTAMP") && !upper.contains("WITH") {
         Ok(SqlType::Timestamp)
+    } else if timestamp_with_time_zone(&upper) {
+        Ok(SqlType::TimestampTz)
     } else {
         Err(Error::UnsupportedSqlType(value.to_owned()))
     }
@@ -36,6 +38,17 @@ fn type_head_is(value: &str, head: &str) -> bool {
     value == head
         || value.starts_with(&format!("{head}("))
         || value.starts_with(&format!("{head} "))
+}
+
+fn timestamp_with_time_zone(value: &str) -> bool {
+    value.starts_with("TIMESTAMPTZ")
+        || value.starts_with("TIMESTAMPZ")
+        || value.starts_with("TIMESTAMP_TZ")
+        || (type_head_is(value, "TIMESTAMP")
+            && value.contains("WITH")
+            && value.contains("TIME ZONE"))
+        || value.starts_with("TIMESTAMP_WITH_TIME_ZONE")
+        || value.starts_with("TIMESTAMP_WITH_LOCAL_TIME_ZONE")
 }
 
 #[cfg(test)]
@@ -58,11 +71,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_timezone_types_until_modeled() {
-        assert!(matches!(
-            parse_calcite_sql_type("TIMESTAMP WITH LOCAL TIME ZONE"),
-            Err(Error::UnsupportedSqlType(value))
-            if value == "TIMESTAMP WITH LOCAL TIME ZONE"
-        ));
+    fn parses_timezone_timestamp_types() {
+        assert_eq!(
+            parse_calcite_sql_type("TIMESTAMP WITH LOCAL TIME ZONE").unwrap(),
+            SqlType::TimestampTz
+        );
+        assert_eq!(
+            parse_calcite_sql_type("TIMESTAMPTZ(6)").unwrap(),
+            SqlType::TimestampTz
+        );
+        assert_eq!(
+            parse_calcite_sql_type("TIMESTAMP_TZ(3)").unwrap(),
+            SqlType::TimestampTz
+        );
     }
 }

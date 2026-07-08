@@ -4,4 +4,4 @@ mod lowering;
 mod syntax;
 
 pub use input::{VerificationInput, VerificationIr};
-pub use lowering::lower_verification_input;
+pub use lowering::{LoweringConfig, SqlTimeZone, lower_verification_input_with_config};

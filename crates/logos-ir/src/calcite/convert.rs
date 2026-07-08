@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::calcite::rel_text_hydrate::{
@@ -59,6 +59,7 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
             })
             .collect::<Result<Vec<_>>>()?,
     };
+    let schema_index = schema_column_index(&schema);
 
     let mut queries = Vec::with_capacity(raw.queries.len());
     for query in raw.queries {
@@ -72,7 +73,7 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
         let source_sql = query.sql;
         let rel_text = query.rel_text;
         let calcite_rel_plan = rel_text.as_deref().and_then(parse_calcite_text_plan);
-        let mut rel = convert_rel(rel, &mut features)?;
+        let mut rel = convert_rel(rel, &mut features, &schema_index)?;
         if let Some(plan) = &calcite_rel_plan {
             hydrate_rel_from_text_plan(&mut rel, plan);
             if !rel_contains_unavailable_values(&rel) {
@@ -99,28 +100,42 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
     Ok(LogosIrFile { schema, queries })
 }
 
-fn convert_rel(raw: CalciteRel, features: &mut BTreeSet<Feature>) -> Result<RelExpr> {
+type SchemaColumnIndex = BTreeMap<String, Vec<Column>>;
+
+fn convert_rel(
+    raw: CalciteRel,
+    features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
+) -> Result<RelExpr> {
     match raw.rel_type.as_str() {
         "LogicalTableScan" => {
             features.insert(Feature::TableScan);
+            let output = if let Some(columns) = schema_index.get(&table_key(&raw.table)) {
+                columns.clone()
+            } else {
+                convert_row_type(raw.row_type)?
+            };
             Ok(RelExpr::TableScan {
                 table: raw.table,
-                output: convert_row_type(raw.row_type)?,
+                output,
             })
         }
         "LogicalProject" => {
             features.insert(Feature::Projection);
-            let input = one_input("LogicalProject", raw.inputs, features)?;
+            let input = one_input("LogicalProject", raw.inputs, features, schema_index)?;
             let exprs = convert_project_exprs(raw.projects, raw.project_rex)?;
+            let mut output = convert_row_type(raw.row_type)?;
+            inherit_project_input_ref_types(&mut output, &exprs, input.output());
+            inherit_project_type_annotation_types(&mut output, &exprs)?;
             Ok(RelExpr::Project {
                 input: Box::new(input),
                 exprs,
-                output: convert_row_type(raw.row_type)?,
+                output,
             })
         }
         "LogicalFilter" => {
             features.insert(Feature::Selection);
-            let input = one_input("LogicalFilter", raw.inputs, features)?;
+            let input = one_input("LogicalFilter", raw.inputs, features, schema_index)?;
             let condition =
                 required_rex_scalar("LogicalFilter", "conditionRex", raw.condition_rex)?;
             Ok(RelExpr::Filter {
@@ -139,8 +154,16 @@ fn convert_rel(raw: CalciteRel, features: &mut BTreeSet<Feature>) -> Result<RelE
                 });
             }
             let mut inputs = raw.inputs.into_iter();
-            let left = convert_rel(inputs.next().expect("checked arity"), features)?;
-            let right = convert_rel(inputs.next().expect("checked arity"), features)?;
+            let left = convert_rel(
+                inputs.next().expect("checked arity"),
+                features,
+                schema_index,
+            )?;
+            let right = convert_rel(
+                inputs.next().expect("checked arity"),
+                features,
+                schema_index,
+            )?;
             let join_type = parse_join_type(required_field(
                 "LogicalJoin",
                 "joinType",
@@ -175,7 +198,7 @@ fn convert_rel(raw: CalciteRel, features: &mut BTreeSet<Feature>) -> Result<RelE
         "LogicalAggregate" => {
             features.insert(Feature::Aggregation);
             features.insert(Feature::FormalSqlUnsupported);
-            let input = one_input("LogicalAggregate", raw.inputs, features)?;
+            let input = one_input("LogicalAggregate", raw.inputs, features, schema_index)?;
             let group_keys = parse_group_set(required_field(
                 "LogicalAggregate",
                 "groupSet",
@@ -237,7 +260,7 @@ fn convert_rel(raw: CalciteRel, features: &mut BTreeSet<Feature>) -> Result<RelE
                 features.insert(Feature::FormalSqlOrderSensitive);
                 features.insert(Feature::FormalSqlUnsupported);
             }
-            let input = one_input("LogicalSort", raw.inputs, features)?;
+            let input = one_input("LogicalSort", raw.inputs, features, schema_index)?;
             let collation: Vec<_> = raw
                 .collation
                 .into_iter()
@@ -291,7 +314,7 @@ fn convert_rel(raw: CalciteRel, features: &mut BTreeSet<Feature>) -> Result<RelE
             let inputs = raw
                 .inputs
                 .into_iter()
-                .map(|input| convert_rel(input, features))
+                .map(|input| convert_rel(input, features, schema_index))
                 .collect::<Result<Vec<_>>>()?;
             Ok(RelExpr::Set {
                 op,
@@ -440,6 +463,27 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
                 ty,
             });
         }
+        if type_annotation_is_timestamp_tz(&ty) {
+            let precision = parse_type_precision(&ty).unwrap_or(6);
+            if let Some(raw) = timestamptz_literal_from_source(rex, precision) {
+                return Ok(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal { raw }),
+                    ty,
+                });
+            }
+            if let Some(raw) = timestamp_literal_text(rex) {
+                if is_null_literal(&raw) || timestamp_literal_has_explicit_offset(&raw) {
+                    return Ok(ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal { raw }),
+                        ty,
+                    });
+                }
+            }
+            return Err(Error::InvalidScalar(format!(
+                "TIMESTAMP WITH TIME ZONE literal requires source SQL or an explicit literal offset because Calcite Rex may not preserve the original time-zone semantics: {}",
+                rex_debug_text(rex)
+            )));
+        }
         if type_annotation_is_timestamp(&ty) {
             let precision = parse_type_precision(&ty).unwrap_or(6);
             if precision > 3 {
@@ -526,15 +570,22 @@ fn rex_interval_annotation(rex: &CalciteRex) -> Option<String> {
 }
 
 fn rex_type_annotation(rex: &CalciteRex) -> Option<String> {
+    if let Some(ty) = rex
+        .source_sql
+        .as_deref()
+        .and_then(parse_cast_type_annotation_source)
+    {
+        return Some(ty);
+    }
     let ty = rex.ty.as_deref()?.trim();
     let normalized = normalize_type_annotation(ty)?;
-    if normalized == "TIMESTAMP" {
+    if normalized == "TIMESTAMP" || normalized == "TIMESTAMP_WITH_TIME_ZONE" {
         if let Some(precision) = rex
             .precision
             .and_then(|precision| u32::try_from(precision).ok())
             .or_else(|| parse_type_precision(ty))
         {
-            return Some(format!("TIMESTAMP({precision})"));
+            return Some(format!("{normalized}({precision})"));
         }
     }
     Some(normalized)
@@ -558,18 +609,45 @@ fn normalize_type_annotation(ty: &str) -> Option<String> {
         "CHAR" => Some("CHAR".to_owned()),
         "BOOLEAN" | "BOOL" => Some("BOOLEAN".to_owned()),
         "TIME" => Some("TIME".to_owned()),
-        "TIMESTAMP" => Some("TIMESTAMP".to_owned()),
+        "TIMESTAMP" => {
+            if upper.contains("WITH") && upper.contains("TIME ZONE") {
+                Some("TIMESTAMP_WITH_TIME_ZONE".to_owned())
+            } else {
+                Some("TIMESTAMP".to_owned())
+            }
+        }
+        "TIMESTAMPTZ"
+        | "TIMESTAMPZ"
+        | "TIMESTAMP_TZ"
+        | "TIMESTAMP_WITH_TIME_ZONE"
+        | "TIMESTAMP_WITH_LOCAL_TIME_ZONE" => Some("TIMESTAMP_WITH_TIME_ZONE".to_owned()),
         _ if upper.starts_with("INTERVAL") => Some(upper.replace('_', " ")),
         _ => None,
     }
 }
 
 fn type_annotation_is_timestamp(ty: &str) -> bool {
-    ty.trim()
-        .to_ascii_uppercase()
+    let upper = ty.trim().to_ascii_uppercase();
+    let head = upper
         .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
-        .next()
-        == Some("TIMESTAMP")
+        .next();
+    matches!(head, Some("TIMESTAMP")) && !(upper.contains("WITH") && upper.contains("TIME ZONE"))
+}
+
+fn type_annotation_is_timestamp_tz(ty: &str) -> bool {
+    let upper = ty.trim().to_ascii_uppercase();
+    let head = upper
+        .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
+        .next();
+    matches!(
+        head,
+        Some("TIMESTAMPTZ")
+            | Some("TIMESTAMPZ")
+            | Some("TIMESTAMP_WITH_TIME_ZONE")
+            | Some("TIMESTAMP_WITH_LOCAL_TIME_ZONE")
+    ) || (matches!(head, Some("TIMESTAMP"))
+        && upper.contains("WITH")
+        && upper.contains("TIME ZONE"))
 }
 
 fn is_character_type(rex: &CalciteRex) -> bool {
@@ -601,24 +679,118 @@ fn timestamp_literal_has_submillisecond_rex_text(rex: &CalciteRex) -> bool {
 }
 
 fn timestamp_literal_from_source_cast(rex: &CalciteRex, precision: u32) -> Option<String> {
-    parse_timestamp_cast_source(rex.source_sql.as_deref()?, precision)
+    parse_timestamp_cast_source(rex.source_sql.as_deref()?, precision, false)
 }
 
-fn parse_timestamp_cast_source(source: &str, expected_precision: u32) -> Option<String> {
+fn timestamptz_literal_from_source(rex: &CalciteRex, precision: u32) -> Option<String> {
+    let source = rex.source_sql.as_deref()?;
+    parse_timestamp_cast_source(source, precision, true)
+        .or_else(|| parse_timestamp_tz_literal_source(source, precision))
+}
+
+fn parse_timestamp_cast_source(
+    source: &str,
+    expected_precision: u32,
+    allow_time_zone: bool,
+) -> Option<String> {
     let mut parser = SourceParser::new(source);
     parser.consume_keyword("CAST")?;
     parser.consume_char('(')?;
-    let value = parser.consume_sql_string_literal()?;
+    let value = parser.consume_cast_literal()?;
     parser.consume_keyword("AS")?;
+    if allow_time_zone && parser.consume_keyword("TIMESTAMPTZ").is_some() {
+        if let Some(precision) = parser.consume_precision()? {
+            if precision != expected_precision {
+                return None;
+            }
+        }
+        parser.consume_char(')')?;
+        parser.finish()?;
+        return Some(value);
+    }
     parser.consume_keyword("TIMESTAMP")?;
     if let Some(precision) = parser.consume_precision()? {
         if precision != expected_precision {
             return None;
         }
     }
+    if parser.consume_optional_keywords(&["WITH", "LOCAL", "TIME", "ZONE"]) && !allow_time_zone {
+        return None;
+    }
+    if parser.consume_optional_keywords(&["WITH", "TIME", "ZONE"]) && !allow_time_zone {
+        return None;
+    }
     parser.consume_char(')')?;
     parser.finish()?;
     Some(value)
+}
+
+fn parse_cast_type_annotation_source(source: &str) -> Option<String> {
+    let mut parser = SourceParser::new(source);
+    parser.consume_keyword("CAST")?;
+    parser.consume_char('(')?;
+    parser.consume_cast_literal()?;
+    parser.consume_keyword("AS")?;
+    let is_timestamptz = if parser.consume_keyword("TIMESTAMPTZ").is_some() {
+        true
+    } else {
+        parser.consume_keyword("TIMESTAMP")?;
+        false
+    };
+    let precision = parser.consume_precision()?;
+    let has_local_time_zone = parser.consume_optional_keywords(&["WITH", "LOCAL", "TIME", "ZONE"]);
+    let has_time_zone = parser.consume_optional_keywords(&["WITH", "TIME", "ZONE"]);
+    parser.consume_char(')')?;
+    parser.finish()?;
+
+    let normalized = if is_timestamptz || has_local_time_zone || has_time_zone {
+        "TIMESTAMP_WITH_TIME_ZONE"
+    } else {
+        "TIMESTAMP"
+    };
+    Some(match precision {
+        Some(precision) => format!("{normalized}({precision})"),
+        None => normalized.to_owned(),
+    })
+}
+
+fn parse_timestamp_tz_literal_source(source: &str, expected_precision: u32) -> Option<String> {
+    let mut parser = SourceParser::new(source);
+    if parser.consume_keyword("TIMESTAMPTZ").is_none() {
+        parser.consume_keyword("TIMESTAMP")?;
+        if let Some(precision) = parser.consume_precision()? {
+            if precision != expected_precision {
+                return None;
+            }
+        }
+        if !parser.consume_optional_keywords(&["WITH", "LOCAL", "TIME", "ZONE"])
+            && !parser.consume_optional_keywords(&["WITH", "TIME", "ZONE"])
+        {
+            return None;
+        }
+    } else if let Some(precision) = parser.consume_precision()? {
+        if precision != expected_precision {
+            return None;
+        }
+    }
+    let value = parser.consume_sql_string_literal()?;
+    parser.finish()?;
+    Some(value)
+}
+
+fn is_null_literal(raw: &str) -> bool {
+    raw.trim().eq_ignore_ascii_case("null")
+}
+
+fn timestamp_literal_has_explicit_offset(raw: &str) -> bool {
+    let value = raw.trim().trim_matches('\'');
+    if value.ends_with('Z') || value.ends_with('z') {
+        return true;
+    }
+    value
+        .find(|ch| ch == ' ' || ch == 'T')
+        .map(|index| &value[index + 1..])
+        .is_some_and(|tail| tail.contains('+') || tail.contains('-'))
 }
 
 fn sql_string_literal(value: &str) -> String {
@@ -681,6 +853,17 @@ impl<'a> SourceParser<'a> {
         Some(())
     }
 
+    fn consume_optional_keywords(&mut self, keywords: &[&str]) -> bool {
+        let saved = self.pos;
+        for keyword in keywords {
+            if self.consume_keyword(keyword).is_none() {
+                self.pos = saved;
+                return false;
+            }
+        }
+        true
+    }
+
     fn consume_char(&mut self, ch: char) -> Option<()> {
         self.skip_ws();
         let rest = self.input.get(self.pos..)?;
@@ -738,6 +921,13 @@ impl<'a> SourceParser<'a> {
         None
     }
 
+    fn consume_cast_literal(&mut self) -> Option<String> {
+        self.consume_sql_string_literal().or_else(|| {
+            self.consume_keyword("NULL")?;
+            Some("null".to_owned())
+        })
+    }
+
     fn finish(&mut self) -> Option<()> {
         self.skip_ws();
         (self.pos == self.input.len()).then_some(())
@@ -761,10 +951,56 @@ fn required_field<T>(node: &'static str, field: &'static str, value: Option<T>) 
     value.ok_or(Error::MissingField { node, field })
 }
 
+fn schema_column_index(schema: &Schema) -> SchemaColumnIndex {
+    schema
+        .tables
+        .iter()
+        .map(|table| (table_key(&[table.name.clone()]), table.columns.clone()))
+        .collect()
+}
+
+fn table_key(table: &[String]) -> String {
+    table
+        .last()
+        .map(|name| name.to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn inherit_project_input_ref_types(output: &mut [Column], exprs: &[ScalarExpr], input: &[Column]) {
+    for (column, expr) in output.iter_mut().zip(exprs) {
+        let ScalarAst::InputRef { index } = &expr.parsed else {
+            continue;
+        };
+        if let Some(source) = input.get(*index) {
+            inherit_column_type(column, source);
+        }
+    }
+}
+
+fn inherit_project_type_annotation_types(
+    output: &mut [Column],
+    exprs: &[ScalarExpr],
+) -> Result<()> {
+    for (column, expr) in output.iter_mut().zip(exprs) {
+        let ScalarAst::TypeAnnotation { ty, .. } = &expr.parsed else {
+            continue;
+        };
+        column.ty = parse_sql_type(ty)?;
+        column.precision = parse_type_precision(ty);
+    }
+    Ok(())
+}
+
+fn inherit_column_type(column: &mut Column, source: &Column) {
+    column.ty = source.ty.clone();
+    column.precision = source.precision;
+}
+
 fn one_input(
     node: &'static str,
     inputs: Vec<CalciteRel>,
     features: &mut BTreeSet<Feature>,
+    schema_index: &SchemaColumnIndex,
 ) -> Result<RelExpr> {
     let actual = inputs.len();
     if actual != 1 {
@@ -774,7 +1010,11 @@ fn one_input(
             actual,
         });
     }
-    convert_rel(inputs.into_iter().next().expect("checked arity"), features)
+    convert_rel(
+        inputs.into_iter().next().expect("checked arity"),
+        features,
+        schema_index,
+    )
 }
 
 fn convert_row_type(row_type: Vec<crate::calcite::CalciteField>) -> Result<Vec<Column>> {
@@ -1487,6 +1727,99 @@ mod tests {
     }
 
     #[test]
+    fn timestamptz_literal_recovers_source_offset() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "id", "type": "INTEGER"}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 08:00:00+08:00' as timestamptz(6)) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP_WITH_TIME_ZONE", "nullable": true, "precision": 6}],
+                  "projects": ["1970-01-01 00:00:00:TIMESTAMP_WITH_LOCAL_TIME_ZONE(6)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:00:TIMESTAMP_WITH_LOCAL_TIME_ZONE(6)",
+                    "type": "TIMESTAMP_WITH_LOCAL_TIME_ZONE",
+                    "nullable": true,
+                    "precision": 6,
+                    "sourceSql": "CAST('1970-01-01 08:00:00+08:00' AS TIMESTAMPTZ(6))",
+                    "literalTypeName": "TIMESTAMP_WITH_LOCAL_TIME_ZONE",
+                    "timestampLiteral": "1970-01-01 00:00:00"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "id", "type": "INTEGER", "nullable": true}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        assert_eq!(
+            exprs[0].parsed,
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1970-01-01 08:00:00+08:00".to_owned()
+                }),
+                ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn timestamptz_literal_without_source_or_offset_is_rejected() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "id", "type": "INTEGER"}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 08:00:00+08:00' as timestamptz(6)) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP_WITH_TIME_ZONE", "nullable": true, "precision": 6}],
+                  "projects": ["1970-01-01 00:00:00:TIMESTAMP_WITH_LOCAL_TIME_ZONE(6)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:00:TIMESTAMP_WITH_LOCAL_TIME_ZONE(6)",
+                    "type": "TIMESTAMP_WITH_LOCAL_TIME_ZONE",
+                    "nullable": true,
+                    "precision": 6,
+                    "literalTypeName": "TIMESTAMP_WITH_LOCAL_TIME_ZONE",
+                    "timestampLiteral": "1970-01-01 00:00:00"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "id", "type": "INTEGER", "nullable": true}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let error = convert_raw_file(raw).unwrap_err().to_string();
+        assert!(
+            error.contains("TIMESTAMP WITH TIME ZONE literal requires source SQL"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn structured_collation_preserves_null_direction() {
         let raw: CalciteFile = serde_json::from_str(
             r#"
@@ -1843,7 +2176,7 @@ mod tests {
     }
 
     #[test]
-    fn time_zone_types_are_rejected() {
+    fn time_zone_types_are_preserved() {
         let raw: CalciteFile = serde_json::from_str(
             r#"
             {
@@ -1864,10 +2197,45 @@ mod tests {
         )
         .unwrap();
 
-        assert!(matches!(
-            convert_raw_file(raw),
-            Err(Error::UnsupportedSqlType(value))
-            if value == "TIMESTAMP WITH LOCAL TIME ZONE"
-        ));
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(ir.schema.tables[0].columns[0].ty, SqlType::TimestampTz);
+        assert_eq!(ir.queries[0].output[0].ty, SqlType::TimestampTz);
+    }
+
+    #[test]
+    fn timezone_schema_type_is_hydrated_through_calcite_timestamp_row_type() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{
+                "name": "R",
+                "columns": [{"name": "t", "type": "TIMESTAMP_WITH_TIME_ZONE", "fullType": "TIMESTAMP_WITH_TIME_ZONE(6)", "precision": 6}]
+              }],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "t", "type": "TIMESTAMP", "nullable": true, "precision": 6}],
+                  "projects": ["$0"],
+                  "projectRex": [{"kind": "INPUT_REF", "text": "$0", "type": "TIMESTAMP", "index": 0, "precision": 6}],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "t", "type": "TIMESTAMP", "nullable": true, "precision": 6}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(ir.queries[0].output[0].ty, SqlType::TimestampTz);
+        if let RelExpr::Project { input, .. } = &ir.queries[0].rel {
+            assert_eq!(input.output()[0].ty, SqlType::TimestampTz);
+        } else {
+            panic!("expected project");
+        }
     }
 }

@@ -10,11 +10,12 @@ mod validation;
 use std::path::PathBuf;
 
 use crate::artifacts::ArtifactWriter;
-use crate::core::VerificationInput;
+use crate::core::{SqlTimeZone, VerificationInput};
 use crate::engine::{
     BackendStatus, Config, DEFAULT_PROOF_AGENT_COMMAND, Evidence, SolverOutcome, SolverReport,
     solve,
 };
+use crate::error::Error;
 use crate::error::Result;
 use clap::{Parser, Subcommand};
 use colored::{ColoredString, Colorize};
@@ -70,6 +71,8 @@ enum Command {
         statement_timeout_ms: u64,
         #[arg(long, default_value_t = 20)]
         diff_sample_limit: usize,
+        #[arg(long, env = "LOGOS_SQL_TIME_ZONE", default_value = "UTC")]
+        sql_time_zone: String,
         #[arg(long)]
         disable_proof_agent: bool,
         #[arg(
@@ -114,6 +117,7 @@ fn main() -> Result<()> {
             log_dir,
             statement_timeout_ms,
             diff_sample_limit,
+            sql_time_zone,
             disable_proof_agent,
             proof_agent_command,
             proof_docker_image,
@@ -126,6 +130,8 @@ fn main() -> Result<()> {
                 calcite_ir_command.unwrap_or_else(|| runtime::calcite_ir_command(&logos_repo_root));
             let proof_rocq_opam_switch =
                 proof_rocq_opam_switch.or_else(|| runtime::rocq_opam_switch(&logos_repo_root));
+            let sql_time_zone =
+                SqlTimeZone::try_parse(&sql_time_zone).map_err(Error::InvalidSqlTimeZone)?;
 
             let input = VerificationInput::read(schema, source, target)?;
             let artifacts = ArtifactWriter::new(log_dir)?;
@@ -145,6 +151,7 @@ fn main() -> Result<()> {
                     postgres_url,
                     statement_timeout_ms,
                     diff_sample_limit,
+                    sql_time_zone,
                     run_proof_agent: !disable_proof_agent,
                     proof_agent_command,
                     proof_docker_image,

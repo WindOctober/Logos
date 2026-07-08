@@ -192,6 +192,7 @@ pub(super) fn run_counterexample_search(
                     options.postgres_url.clone(),
                     options.statement_timeout_ms,
                     options.diff_sample_limit,
+                    options.sql_time_zone.clone(),
                 )?;
                 let validation_started_ms = now_ms_since_epoch();
                 let validation_started = Instant::now();

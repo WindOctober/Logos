@@ -7,6 +7,37 @@ use logos_ir::ir::{
 };
 
 #[test]
+fn sql_time_zone_canonicalizes_fixed_offsets_for_postgres() {
+    let zone = SqlTimeZone::try_parse("+08:00").unwrap();
+    assert_eq!(
+        zone.postgres_set_time_zone_sql().unwrap(),
+        "SET TIME ZONE INTERVAL '+08:00' HOUR TO MINUTE"
+    );
+
+    let zone = SqlTimeZone::try_parse("-05:30").unwrap();
+    assert_eq!(
+        zone.postgres_set_time_zone_sql().unwrap(),
+        "SET TIME ZONE INTERVAL '-05:30' HOUR TO MINUTE"
+    );
+}
+
+#[test]
+fn sql_time_zone_rejects_prefixed_posix_style_offsets() {
+    assert!(SqlTimeZone::try_parse("UTC+08:00").is_err());
+    assert!(SqlTimeZone::try_parse("GMT-05:00").is_err());
+    assert!(SqlTimeZone::try_parse("+8").is_err());
+}
+
+#[test]
+fn sql_time_zone_accepts_iana_names() {
+    let zone = SqlTimeZone::try_parse("Asia/Shanghai").unwrap();
+    assert_eq!(
+        zone.postgres_set_time_zone_sql().unwrap(),
+        "SET TIME ZONE 'Asia/Shanghai'"
+    );
+}
+
+#[test]
 fn lowers_project_filter_table_subset() {
     let table_output = vec![column("a"), column("b")];
     let rel = RelExpr::Project {
@@ -178,6 +209,167 @@ fn lowers_timestamp_literals_and_interval_arithmetic() {
             .rocq_module
             .contains("AFunction \"timestamp_add_seconds\"")
     );
+}
+
+#[test]
+fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
+    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'1970-01-01 08:00:00+08:00'".to_owned(),
+                }),
+                ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
+            })],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query_with_config(
+        &query,
+        &LoweringConfig {
+            sql_time_zone: SqlTimeZone::parse("UTC"),
+        },
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query.as_ref().unwrap(),
+        lowered.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstTimestamptz (0)"));
+}
+
+#[test]
+fn normalizes_timestamp_tz_literals_with_named_time_zone() {
+    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'1970-01-01 00:00:00+00:00'".to_owned(),
+                }),
+                ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
+            })],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query_with_config(
+        &query,
+        &LoweringConfig {
+            sql_time_zone: SqlTimeZone::parse("Asia/Shanghai"),
+        },
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query.as_ref().unwrap(),
+        lowered.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstTimestamptz (0)"));
+}
+
+#[test]
+fn accepts_timestamp_tz_local_literal_in_named_time_zone() {
+    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'1970-01-01 08:00:00'".to_owned(),
+                }),
+                ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
+            })],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query_with_config(
+        &query,
+        &LoweringConfig {
+            sql_time_zone: SqlTimeZone::parse("Asia/Shanghai"),
+        },
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query.as_ref().unwrap(),
+        lowered.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstTimestamptz (0)"));
+}
+
+#[test]
+fn lowers_typed_null_temporal_literals() {
+    let output = vec![
+        timestamp_column("ts", Some(0)),
+        typed_column("tstz", SqlType::TimestampTz),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            exprs: vec![
+                scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: "null".to_owned(),
+                    }),
+                    ty: "TIMESTAMP(0)".to_owned(),
+                }),
+                scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: "null".to_owned(),
+                    }),
+                    ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
+                }),
+            ],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let lowered_query = format!("{:?}", lowered.query.as_ref().unwrap());
+    assert_eq!(lowered_query.matches("raw: \"null\"").count(), 2);
+    assert!(lowered_query.contains("Timestamp"));
+    assert!(lowered_query.contains("Timestamptz"));
 }
 
 #[test]

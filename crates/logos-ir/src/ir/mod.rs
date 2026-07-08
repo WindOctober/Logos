@@ -45,6 +45,7 @@ pub enum SqlType {
     Date,
     Time,
     Timestamp,
+    TimestampTz,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

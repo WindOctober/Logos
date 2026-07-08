@@ -10,6 +10,8 @@ name = "logos-solver"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10"
 clap = { version = "4.5", features = ["derive", "env"] }
 colored = "3.1"
 logos-ir = { path = "../logos-ir" }
