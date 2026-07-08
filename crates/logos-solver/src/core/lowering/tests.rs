@@ -954,6 +954,65 @@ fn lowers_predicate_in_subquery_to_exists() {
 }
 
 #[test]
+fn lowers_exists_subquery_to_exists_formula() {
+    let schema = Schema {
+        tables: vec![
+            Table {
+                name: "EMP".to_owned(),
+                columns: vec![column("DEPTNO")],
+            },
+            Table {
+                name: "DEPT".to_owned(),
+                columns: vec![column("DEPTNO")],
+            },
+        ],
+    };
+    let subquery_rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["DEPT".to_owned()],
+            output: vec![column("DEPTNO")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "=".to_owned(),
+            op: ScalarOp::Eq,
+            args: vec![
+                ScalarAst::InputRef { index: 0 },
+                ScalarAst::Literal {
+                    raw: "3".to_owned(),
+                },
+            ],
+        }),
+        output: vec![column("DEPTNO")],
+    };
+    let rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["EMP".to_owned()],
+            output: vec![column("DEPTNO")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "EXISTS".to_owned(),
+            op: ScalarOp::Exists,
+            args: vec![ScalarAst::RelSubquery {
+                rel: Box::new(subquery_rel),
+            }],
+        }),
+        output: vec![column("DEPTNO")],
+    };
+
+    let lowered = LoweringContext::new(LoweringConfig::default(), Some(&schema))
+        .lower_rel("rel", &rel)
+        .expect("EXISTS subquery should lower");
+    let module = emit_rocq_query_module(&bag_list_query(lowered.clone()), &bag_list_query(lowered));
+
+    assert!(module.rocq_module.contains("ExistsQuery"));
+    assert!(
+        !module
+            .rocq_module
+            .contains("formula_operator_not_supported")
+    );
+}
+
+#[test]
 fn does_not_lower_values_rows() {
     let rel = RelExpr::Values {
         tuples: ValuesTuples::Rows { rows: vec![] },

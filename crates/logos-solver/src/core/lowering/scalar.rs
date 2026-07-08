@@ -67,6 +67,7 @@ impl LoweringContext {
                     None
                 }
                 ScalarOp::In => self.lower_in_formula(path, args, scope),
+                ScalarOp::Exists => self.lower_exists_formula(path, args),
                 ScalarOp::Case => {
                     let lowered = self.lower_aggregate_term(path, ast, scope)?;
                     self.warning(
@@ -94,6 +95,33 @@ impl LoweringContext {
                     path,
                     "formula_ast_not_supported",
                     "Scalar AST cannot be lowered to FormalSQL sql_formula.",
+                );
+                None
+            }
+        }
+    }
+
+    fn lower_exists_formula(&mut self, path: &str, args: &[ScalarAst]) -> Option<FormalFormula> {
+        match args {
+            [ScalarAst::RelSubquery { rel }] => {
+                let query = self.lower_rel(&format!("{path}.subquery"), rel)?;
+                Some(FormalFormula::Exists {
+                    query: Box::new(query),
+                })
+            }
+            [_] => {
+                self.error(
+                    path,
+                    "exists_subquery_not_supported",
+                    "EXISTS predicates require a structured Calcite subquery operand.",
+                );
+                None
+            }
+            _ => {
+                self.error(
+                    path,
+                    "exists_predicate_arity_mismatch",
+                    "EXISTS predicate requires exactly one subquery operand.",
                 );
                 None
             }
