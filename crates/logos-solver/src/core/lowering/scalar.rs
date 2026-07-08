@@ -269,22 +269,8 @@ impl LoweringContext {
                     ty: None,
                 })
             }
-            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_date(ty) => {
-                let raw = typed_literal_raw(expr)
-                    .or_else(|| cast_literal_raw(expr))
-                    .or_else(|| {
-                        self.error(
-                            path,
-                            "date_literal_not_supported",
-                            "DATE annotations are supported only for literal CAST/typed literals.",
-                        );
-                        None
-                    })?;
-                Some(FormalFunctionTerm::Constant {
-                    raw: raw.to_owned(),
-                    ty: Some(FormalAttributeType::Date),
-                })
-            }
+            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_date(ty) => self
+                .lower_temporal_type_annotation(path, expr, ty, scope, FormalAttributeType::Date),
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp_tz(ty) => {
                 let raw = typed_literal_raw(expr)
                     .or_else(|| cast_literal_raw(expr))
@@ -320,40 +306,16 @@ impl LoweringContext {
                     ty: Some(FormalAttributeType::Timestamptz { precision }),
                 })
             }
-            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp(ty) => {
-                let raw = typed_literal_raw(expr)
-                    .or_else(|| cast_literal_raw(expr))
-                    .or_else(|| {
-                        self.error(
-                            path,
-                            "timestamp_literal_not_supported",
-                            "TIMESTAMP annotations are supported only for literal CAST/typed literals.",
-                        );
-                        None
-                })?;
-                let precision = type_annotation_precision(ty);
-                if is_null_literal(raw) {
-                    return Some(FormalFunctionTerm::Constant {
-                        raw: raw.to_owned(),
-                        ty: Some(FormalAttributeType::Timestamp { precision }),
-                    });
-                }
-                if !super::emit::timestamp_literal_conforms_to_precision(
-                    raw,
-                    timestamp_precision(precision),
-                ) {
-                    self.error(
-                        path,
-                        "timestamp_precision_not_supported",
-                        "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
-                    );
-                    return None;
-                }
-                Some(FormalFunctionTerm::Constant {
-                    raw: raw.to_owned(),
-                    ty: Some(FormalAttributeType::Timestamp { precision }),
-                })
-            }
+            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp(ty) => self
+                .lower_temporal_type_annotation(
+                    path,
+                    expr,
+                    ty,
+                    scope,
+                    FormalAttributeType::Timestamp {
+                        precision: type_annotation_precision(ty),
+                    },
+                ),
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_interval(ty) => {
                 let raw = typed_literal_raw(expr).or_else(|| {
                     self.error(
@@ -495,6 +457,126 @@ impl LoweringContext {
                 ty: Some(FormalAttributeType::Z),
             },
         })
+    }
+
+    fn lower_temporal_type_annotation(
+        &mut self,
+        path: &str,
+        expr: &ScalarAst,
+        ty: &str,
+        scope: &Scope,
+        target_ty: FormalAttributeType,
+    ) -> Option<FormalFunctionTerm> {
+        if let Some(raw) = typed_literal_raw(expr).or_else(|| cast_literal_raw(expr)) {
+            return self.lower_temporal_constant(path, raw, target_ty);
+        }
+
+        if let Some(cast_arg) = cast_arg(expr) {
+            let source_ty = self
+                .infer_function_type(&format!("{path}.castArg"), cast_arg, scope)
+                .or_else(|| {
+                    self.error(
+                        path,
+                        "cast_source_type_not_supported",
+                        "FormalSQL lowering cannot infer the source type of this explicit CAST.",
+                    );
+                    None
+                })?;
+            let function = temporal_cast_function(&source_ty, &target_ty).or_else(|| {
+                self.error(
+                    path,
+                    "cast_not_supported",
+                    &format!(
+                        "Explicit CAST from {source_ty:?} to {target_ty:?} is not in the FormalSQL temporal cast whitelist.",
+                    ),
+                );
+                None
+            })?;
+            let arg = self.lower_function_term(&format!("{path}.castArg"), cast_arg, scope)?;
+            return Some(FormalFunctionTerm::Cast {
+                function: function.to_owned(),
+                arg: Box::new(arg),
+                ty: target_ty,
+            });
+        }
+
+        self.error(
+            path,
+            "temporal_annotation_not_supported",
+            &format!("{ty} annotations are supported only for typed literals or explicit CAST expressions."),
+        );
+        None
+    }
+
+    fn lower_temporal_constant(
+        &mut self,
+        path: &str,
+        raw: &str,
+        target_ty: FormalAttributeType,
+    ) -> Option<FormalFunctionTerm> {
+        match target_ty {
+            FormalAttributeType::Date => Some(FormalFunctionTerm::Constant {
+                raw: raw.to_owned(),
+                ty: Some(FormalAttributeType::Date),
+            }),
+            FormalAttributeType::Timestamp { precision } => {
+                if !is_null_literal(raw)
+                    && !super::emit::timestamp_literal_conforms_to_precision(
+                        raw,
+                        timestamp_precision(precision),
+                    )
+                {
+                    self.error(
+                        path,
+                        "timestamp_precision_not_supported",
+                        "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
+                    );
+                    return None;
+                }
+                Some(FormalFunctionTerm::Constant {
+                    raw: raw.to_owned(),
+                    ty: Some(FormalAttributeType::Timestamp { precision }),
+                })
+            }
+            _ => {
+                self.error(
+                    path,
+                    "temporal_constant_type_not_supported",
+                    "This temporal constant target type is not supported by the explicit CAST whitelist.",
+                );
+                None
+            }
+        }
+    }
+
+    fn infer_function_type(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        match ast {
+            ScalarAst::InputRef { index } => Some(scope.attribute(*index)?.formal_ty),
+            ScalarAst::TypeAnnotation { ty, .. } => formal_type_from_annotation(ty),
+            ScalarAst::Literal { .. } => None,
+            ScalarAst::Call {
+                op: ScalarOp::Cast, ..
+            } => None,
+            ScalarAst::Call { op, .. } => {
+                self.error(
+                    path,
+                    "cast_source_expression_not_supported",
+                    &format!(
+                        "Cannot infer the result type of scalar operator {op:?} for CAST lowering."
+                    ),
+                );
+                None
+            }
+            ScalarAst::Flag { .. }
+            | ScalarAst::Window { .. }
+            | ScalarAst::RelText { .. }
+            | ScalarAst::Sarg { .. } => None,
+        }
     }
 }
 
@@ -644,6 +726,24 @@ fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
     }
 }
 
+fn temporal_cast_function(
+    source: &FormalAttributeType,
+    target: &FormalAttributeType,
+) -> Option<&'static str> {
+    if source == target {
+        return Some("cast_identity");
+    }
+    match (source, target) {
+        (FormalAttributeType::Date, FormalAttributeType::Timestamp { .. }) => {
+            Some("cast_date_to_timestamp")
+        }
+        (FormalAttributeType::Timestamp { .. }, FormalAttributeType::Date) => {
+            Some("cast_timestamp_to_date")
+        }
+        _ => None,
+    }
+}
+
 fn type_annotation_precision(ty: &str) -> Option<u32> {
     let start = ty.find('(')? + 1;
     let end = ty[start..].find(')')? + start;
@@ -721,6 +821,17 @@ fn cast_literal_raw(ast: &ScalarAst) -> Option<&str> {
             args,
             ..
         } if args.len() == 1 => typed_literal_raw(&args[0]),
+        _ => None,
+    }
+}
+
+fn cast_arg(ast: &ScalarAst) -> Option<&ScalarAst> {
+    match ast {
+        ScalarAst::Call {
+            op: ScalarOp::Cast,
+            args,
+            ..
+        } if args.len() == 1 => args.first(),
         _ => None,
     }
 }

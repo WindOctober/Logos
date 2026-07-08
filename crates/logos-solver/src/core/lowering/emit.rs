@@ -449,6 +449,11 @@ fn emit_rocq_function_term(term: &FormalFunctionTerm) -> String {
         FormalFunctionTerm::Attribute { name, constructor } => {
             format!("Dot ({})", emit_rocq_attribute(constructor, name))
         }
+        FormalFunctionTerm::Cast { function, arg, .. } => format!(
+            "Function {} ({})",
+            rocq_string_literal(function),
+            emit_rocq_list(&[*arg.clone()], emit_rocq_function_term)
+        ),
         FormalFunctionTerm::Function { symbol, args } => format!(
             "Function {} ({})",
             rocq_string_literal(symbol),

@@ -246,6 +246,7 @@ struct ScopeAttribute {
     name: String,
     constructor: String,
     ty: SqlType,
+    formal_ty: FormalAttributeType,
 }
 
 impl Scope {
@@ -256,6 +257,7 @@ impl Scope {
                 .map(|column| ScopeAttribute {
                     name: column.name.clone(),
                     ty: column.ty.clone(),
+                    formal_ty: query_attribute_type(column),
                     constructor: formal_attribute_constructor(query_attribute_type(column)),
                 })
                 .collect(),

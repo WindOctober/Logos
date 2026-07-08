@@ -193,6 +193,11 @@ pub enum FormalFunctionTerm {
         name: String,
         constructor: String,
     },
+    Cast {
+        function: String,
+        arg: Box<FormalFunctionTerm>,
+        ty: FormalAttributeType,
+    },
     Function {
         symbol: String,
         args: Vec<FormalFunctionTerm>,

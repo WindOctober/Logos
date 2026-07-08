@@ -212,6 +212,90 @@ fn lowers_timestamp_literals_and_interval_arithmetic() {
 }
 
 #[test]
+fn lowers_date_to_timestamp_cast() {
+    let input = vec![typed_column("HIREDATE", SqlType::Date)];
+    let output = vec![timestamp_column("ts", Some(0))];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["emp".to_owned()],
+                output: input.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::InputRef { index: 0 }],
+                }),
+                ty: "TIMESTAMP(0)".to_owned(),
+            })],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query.as_ref().unwrap(),
+        lowered.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AttrTimestamp \"ts\" 0"));
+    assert!(
+        module
+            .rocq_module
+            .contains("Function \"cast_date_to_timestamp\"")
+    );
+}
+
+#[test]
+fn lowers_timestamp_to_date_cast() {
+    let input = vec![timestamp_column("ts", Some(6))];
+    let output = vec![typed_column("d", SqlType::Date)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["events".to_owned()],
+                output: input.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::InputRef { index: 0 }],
+                }),
+                ty: "DATE".to_owned(),
+            })],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query.as_ref().unwrap(),
+        lowered.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AttrDate \"d\""));
+    assert!(
+        module
+            .rocq_module
+            .contains("Function \"cast_timestamp_to_date\"")
+    );
+}
+
+#[test]
 fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
     let output = vec![typed_column("ts", SqlType::TimestampTz)];
     let query = Query {
