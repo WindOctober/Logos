@@ -45,6 +45,10 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
                             name: column.name,
                             ty: parse_sql_type(&column.ty)?,
                             nullable: true,
+                            precision: type_precision(
+                                column.full_type.as_deref().unwrap_or(&column.ty),
+                                column.precision,
+                            ),
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -377,7 +381,7 @@ fn calcite_rex_ast(rex: &CalciteRex) -> Result<ScalarAst> {
         return Ok(ScalarAst::InputRef { index });
     }
     if is_rex_literal(rex) {
-        return Ok(calcite_rex_literal_ast(rex));
+        return calcite_rex_literal_ast(rex);
     }
     if is_rex_call(rex) {
         let operator = rex
@@ -405,7 +409,7 @@ fn calcite_rex_ast(rex: &CalciteRex) -> Result<ScalarAst> {
     Err(Error::InvalidScalar(rex_debug_text(rex)))
 }
 
-fn calcite_rex_literal_ast(rex: &CalciteRex) -> ScalarAst {
+fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
     if let Some(ty) = rex_interval_annotation(rex) {
         let raw = rex
             .interval_literal
@@ -414,12 +418,12 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> ScalarAst {
             .or(rex.literal_value2.as_deref())
             .or(rex.literal_value.as_deref())
             .unwrap_or_else(|| rex.text.as_deref().unwrap_or(""));
-        return ScalarAst::TypeAnnotation {
+        return Ok(ScalarAst::TypeAnnotation {
             expr: Box::new(ScalarAst::Literal {
                 raw: raw.to_owned(),
             }),
             ty,
-        };
+        });
     }
     if let Some(ty) = rex_type_annotation(rex) {
         if ty.eq_ignore_ascii_case("DATE") {
@@ -429,12 +433,39 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> ScalarAst {
                 .or(rex.literal_value2.as_deref())
                 .or(rex.literal_value.as_deref())
                 .unwrap_or_else(|| rex.text.as_deref().unwrap_or(""));
-            return ScalarAst::TypeAnnotation {
+            return Ok(ScalarAst::TypeAnnotation {
                 expr: Box::new(ScalarAst::Literal {
                     raw: raw.to_owned(),
                 }),
                 ty,
-            };
+            });
+        }
+        if type_annotation_is_timestamp(&ty) {
+            let precision = parse_type_precision(&ty).unwrap_or(6);
+            if precision > 3 {
+                // Calcite 1.42 folds CAST(string AS TIMESTAMP(p)) through a millisecond-based
+                // runtime path for p > 3, so the structured Rex literal may contain .123000
+                // even when the original SQL had .123456.  If the wrapper attached the
+                // original source expression, prefer it over every folded Rex representation.
+                if let Some(raw) = timestamp_literal_from_source_cast(rex, precision) {
+                    return Ok(ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal { raw }),
+                        ty,
+                    });
+                }
+                if !timestamp_literal_has_submillisecond_rex_text(rex) {
+                    return Err(Error::InvalidScalar(format!(
+                        "TIMESTAMP({precision}) literal requires exact sub-millisecond value, but Calcite Rex text does not preserve it: {}",
+                        rex_debug_text(rex)
+                    )));
+                }
+            }
+            if let Some(raw) = timestamp_literal_text(rex) {
+                return Ok(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal { raw }),
+                    ty,
+                });
+            }
         }
     }
     if is_character_type(rex) {
@@ -443,25 +474,25 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> ScalarAst {
             .as_deref()
             .or(rex.literal_value2.as_deref())
         {
-            return ScalarAst::Literal {
+            return Ok(ScalarAst::Literal {
                 raw: sql_string_literal(value),
-            };
+            });
         }
     }
     if let Some(ty) = rex_type_annotation(rex) {
         if let Some(raw) = structured_literal_value(rex) {
-            return ScalarAst::TypeAnnotation {
+            return Ok(ScalarAst::TypeAnnotation {
                 expr: Box::new(ScalarAst::Literal { raw }),
                 ty,
-            };
+            });
         }
     }
     if let Some(text) = &rex.text {
         if let Ok(ast) = parse_calcite_scalar_ast(text) {
-            return ast;
+            return Ok(ast);
         }
     }
-    ScalarAst::Literal {
+    Ok(ScalarAst::Literal {
         raw: rex.text.clone().unwrap_or_else(|| {
             rex.literal_value_as_string
                 .clone()
@@ -469,7 +500,7 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> ScalarAst {
                 .or_else(|| rex.literal_value.clone())
                 .unwrap_or_default()
         }),
-    }
+    })
 }
 
 fn rex_interval_annotation(rex: &CalciteRex) -> Option<String> {
@@ -496,11 +527,25 @@ fn rex_interval_annotation(rex: &CalciteRex) -> Option<String> {
 
 fn rex_type_annotation(rex: &CalciteRex) -> Option<String> {
     let ty = rex.ty.as_deref()?.trim();
-    normalize_type_annotation(ty)
+    let normalized = normalize_type_annotation(ty)?;
+    if normalized == "TIMESTAMP" {
+        if let Some(precision) = rex
+            .precision
+            .and_then(|precision| u32::try_from(precision).ok())
+            .or_else(|| parse_type_precision(ty))
+        {
+            return Some(format!("TIMESTAMP({precision})"));
+        }
+    }
+    Some(normalized)
 }
 
 fn normalize_type_annotation(ty: &str) -> Option<String> {
-    match ty.trim().to_ascii_uppercase().as_str() {
+    let upper = ty.trim().to_ascii_uppercase();
+    let head = upper
+        .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
+        .next()?;
+    match head {
         "DATE" => Some("DATE".to_owned()),
         "INTEGER" | "INT" => Some("INTEGER".to_owned()),
         "BIGINT" => Some("BIGINT".to_owned()),
@@ -514,9 +559,17 @@ fn normalize_type_annotation(ty: &str) -> Option<String> {
         "BOOLEAN" | "BOOL" => Some("BOOLEAN".to_owned()),
         "TIME" => Some("TIME".to_owned()),
         "TIMESTAMP" => Some("TIMESTAMP".to_owned()),
-        value if value.starts_with("INTERVAL") => Some(value.replace('_', " ")),
+        _ if upper.starts_with("INTERVAL") => Some(upper.replace('_', " ")),
         _ => None,
     }
+}
+
+fn type_annotation_is_timestamp(ty: &str) -> bool {
+    ty.trim()
+        .to_ascii_uppercase()
+        .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
+        .next()
+        == Some("TIMESTAMP")
 }
 
 fn is_character_type(rex: &CalciteRex) -> bool {
@@ -524,6 +577,48 @@ fn is_character_type(rex: &CalciteRex) -> bool {
         .as_deref()
         .and_then(normalize_type_annotation)
         .is_some_and(|ty| matches!(ty.as_str(), "CHAR" | "VARCHAR"))
+}
+
+fn timestamp_literal_text(rex: &CalciteRex) -> Option<String> {
+    if let Some(value) = &rex.timestamp_literal {
+        return Some(value.clone());
+    }
+    if let Some(value) = &rex.literal_value_as_string {
+        return Some(value.clone());
+    }
+    rex.text.as_deref().and_then(|text| {
+        text.split_once(":TIMESTAMP")
+            .map(|(value, _)| value.to_owned())
+    })
+}
+
+fn timestamp_literal_has_submillisecond_rex_text(rex: &CalciteRex) -> bool {
+    rex.text
+        .as_deref()
+        .and_then(|text| text.split_once(":TIMESTAMP").map(|(value, _)| value))
+        .and_then(|value| value.split_once('.').map(|(_, fraction)| fraction))
+        .is_some_and(|fraction| fraction.len() > 3)
+}
+
+fn timestamp_literal_from_source_cast(rex: &CalciteRex, precision: u32) -> Option<String> {
+    parse_timestamp_cast_source(rex.source_sql.as_deref()?, precision)
+}
+
+fn parse_timestamp_cast_source(source: &str, expected_precision: u32) -> Option<String> {
+    let mut parser = SourceParser::new(source);
+    parser.consume_keyword("CAST")?;
+    parser.consume_char('(')?;
+    let value = parser.consume_sql_string_literal()?;
+    parser.consume_keyword("AS")?;
+    parser.consume_keyword("TIMESTAMP")?;
+    if let Some(precision) = parser.consume_precision()? {
+        if precision != expected_precision {
+            return None;
+        }
+    }
+    parser.consume_char(')')?;
+    parser.finish()?;
+    Some(value)
 }
 
 fn sql_string_literal(value: &str) -> String {
@@ -566,6 +661,102 @@ fn rex_debug_text(rex: &CalciteRex) -> String {
         .unwrap_or_else(|| "<structured RexNode>".to_owned())
 }
 
+struct SourceParser<'a> {
+    input: &'a str,
+    pos: usize,
+}
+
+impl<'a> SourceParser<'a> {
+    fn new(input: &'a str) -> Self {
+        Self { input, pos: 0 }
+    }
+
+    fn consume_keyword(&mut self, keyword: &str) -> Option<()> {
+        self.skip_ws();
+        let rest = self.input.get(self.pos..)?;
+        if rest.len() < keyword.len() || !rest[..keyword.len()].eq_ignore_ascii_case(keyword) {
+            return None;
+        }
+        self.pos += keyword.len();
+        Some(())
+    }
+
+    fn consume_char(&mut self, ch: char) -> Option<()> {
+        self.skip_ws();
+        let rest = self.input.get(self.pos..)?;
+        let mut chars = rest.chars();
+        if chars.next()? != ch {
+            return None;
+        }
+        self.pos += ch.len_utf8();
+        Some(())
+    }
+
+    fn consume_precision(&mut self) -> Option<Option<u32>> {
+        self.skip_ws();
+        if !self.input.get(self.pos..)?.starts_with('(') {
+            return Some(None);
+        }
+        self.pos += 1;
+        self.skip_ws();
+        let start = self.pos;
+        while let Some(ch) = self.input.get(self.pos..)?.chars().next() {
+            if !ch.is_ascii_digit() {
+                break;
+            }
+            self.pos += ch.len_utf8();
+        }
+        if self.pos == start {
+            return None;
+        }
+        let precision = self.input.get(start..self.pos)?.parse().ok()?;
+        self.consume_char(')')?;
+        Some(Some(precision))
+    }
+
+    fn consume_sql_string_literal(&mut self) -> Option<String> {
+        self.skip_ws();
+        if !self.input.get(self.pos..)?.starts_with('\'') {
+            return None;
+        }
+        self.pos += 1;
+        let mut value = String::new();
+        while self.pos < self.input.len() {
+            let ch = self.input.get(self.pos..)?.chars().next()?;
+            self.pos += ch.len_utf8();
+            if ch != '\'' {
+                value.push(ch);
+                continue;
+            }
+            if self.input.get(self.pos..)?.starts_with('\'') {
+                value.push('\'');
+                self.pos += 1;
+                continue;
+            }
+            return Some(value);
+        }
+        None
+    }
+
+    fn finish(&mut self) -> Option<()> {
+        self.skip_ws();
+        (self.pos == self.input.len()).then_some(())
+    }
+
+    fn skip_ws(&mut self) {
+        while let Some(ch) = self
+            .input
+            .get(self.pos..)
+            .and_then(|rest| rest.chars().next())
+        {
+            if !ch.is_whitespace() {
+                break;
+            }
+            self.pos += ch.len_utf8();
+        }
+    }
+}
+
 fn required_field<T>(node: &'static str, field: &'static str, value: Option<T>) -> Result<T> {
     value.ok_or(Error::MissingField { node, field })
 }
@@ -590,10 +781,12 @@ fn convert_row_type(row_type: Vec<crate::calcite::CalciteField>) -> Result<Vec<C
     row_type
         .into_iter()
         .map(|field| {
+            let precision = type_precision(&field.ty, field.precision);
             Ok(Column {
                 name: field.name,
                 ty: parse_sql_type(&field.ty)?,
                 nullable: field.nullable,
+                precision,
             })
         })
         .collect()
@@ -601,6 +794,18 @@ fn convert_row_type(row_type: Vec<crate::calcite::CalciteField>) -> Result<Vec<C
 
 fn parse_sql_type(value: &str) -> Result<SqlType> {
     parse_calcite_sql_type(value)
+}
+
+fn type_precision(ty: &str, structured_precision: Option<i32>) -> Option<u32> {
+    structured_precision
+        .and_then(|precision| u32::try_from(precision).ok())
+        .or_else(|| parse_type_precision(ty))
+}
+
+fn parse_type_precision(ty: &str) -> Option<u32> {
+    let start = ty.find('(')? + 1;
+    let end = ty[start..].find(')')? + start;
+    ty[start..end].trim().parse().ok()
 }
 
 fn parse_join_type(value: &str) -> Result<JoinType> {
@@ -1079,6 +1284,204 @@ mod tests {
                     raw: "null".to_owned()
                 }),
                 ty: "INTEGER".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn structured_rex_timestamp_preserves_precision() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "ts", "type": "TIMESTAMP", "precision": 3}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 00:00:01.001' as timestamp) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP", "nullable": true, "precision": 3}],
+                  "projects": ["1970-01-01 00:00:01.001:TIMESTAMP"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:01.001:TIMESTAMP",
+                    "type": "TIMESTAMP",
+                    "nullable": true,
+                    "precision": 3,
+                    "literalTypeName": "TIMESTAMP",
+                    "literalValueAsString": "1970-01-01 00:00:01.001"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "ts", "type": "TIMESTAMP", "nullable": true, "precision": 3}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(ir.schema.tables[0].columns[0].precision, Some(3));
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        assert_eq!(
+            exprs[0].parsed,
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1970-01-01 00:00:01.001".to_owned()
+                }),
+                ty: "TIMESTAMP(3)".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_submillisecond_timestamp_literal_without_exact_rex_value() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "id", "type": "INTEGER"}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 00:00:01.123456' as timestamp(6)) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP", "nullable": true, "precision": 6}],
+                  "projects": ["1970-01-01 00:00:01.123:TIMESTAMP(6)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:01.123:TIMESTAMP(6)",
+                    "type": "TIMESTAMP",
+                    "nullable": true,
+                    "precision": 6,
+                    "literalTypeName": "TIMESTAMP",
+                    "literalValue2": "1123"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "id", "type": "INTEGER", "nullable": true}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let error = convert_raw_file(raw).expect_err("sub-millisecond timestamp must be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("TIMESTAMP(6) literal requires exact sub-millisecond value"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn recovers_submillisecond_timestamp_cast_from_source_sql() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "id", "type": "INTEGER"}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 00:00:01.123456' as timestamp(6)) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP", "nullable": true, "precision": 6}],
+                  "projects": ["1970-01-01 00:00:01.123000:TIMESTAMP(6)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:01.123000:TIMESTAMP(6)",
+                    "type": "TIMESTAMP",
+                    "nullable": true,
+                    "precision": 6,
+                    "sourceSql": "CAST('1970-01-01 00:00:01.123456' AS TIMESTAMP(6))",
+                    "literalTypeName": "TIMESTAMP",
+                    "literalValue2": "1123",
+                    "timestampLiteral": "1970-01-01 00:00:01.123000"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "id", "type": "INTEGER", "nullable": true}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        assert_eq!(
+            exprs[0].parsed,
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1970-01-01 00:00:01.123456".to_owned()
+                }),
+                ty: "TIMESTAMP(6)".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn structured_rex_timestamp_uses_exact_timestamp_literal() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "R", "columns": [{"name": "id", "type": "INTEGER"}]}],
+              "queries": [{
+                "sql": "select cast('1970-01-01 00:00:01.123456' as timestamp(6)) as ts from R",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "ts", "type": "TIMESTAMP", "nullable": true, "precision": 6}],
+                  "projects": ["1970-01-01 00:00:01.123456:TIMESTAMP(6)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1970-01-01 00:00:01.123456:TIMESTAMP(6)",
+                    "type": "TIMESTAMP",
+                    "nullable": true,
+                    "precision": 6,
+                    "literalTypeName": "TIMESTAMP",
+                    "literalValue2": "1123",
+                    "timestampLiteral": "1970-01-01 00:00:01.123456"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "id", "type": "INTEGER", "nullable": true}],
+                    "table": ["R"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        assert_eq!(
+            exprs[0].parsed,
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1970-01-01 00:00:01.123456".to_owned()
+                }),
+                ty: "TIMESTAMP(6)".to_owned()
             }
         );
     }

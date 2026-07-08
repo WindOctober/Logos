@@ -25,6 +25,7 @@ import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.core.SetOp;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
@@ -35,12 +36,14 @@ import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
+import org.apache.calcite.util.TimestampString;
 
 public final class CalciteIrCli {
   private CalciteIrCli() {}
@@ -67,6 +70,7 @@ public final class CalciteIrCli {
         .withCaseSensitive(false);
     FrameworkConfig config = Frameworks.newConfigBuilder()
         .parserConfig(parserConfig)
+        .typeSystem(LOGOS_TYPE_SYSTEM)
         .defaultSchema(rootSchema)
         .build();
 
@@ -107,7 +111,7 @@ public final class CalciteIrCli {
       RelRoot relRoot = planner.rel(validated);
       out.comma();
       out.name("rel");
-      emitRelNode(out, relRoot.rel);
+      emitRelNode(out, relRoot.rel, parsed);
       out.comma();
       out.name("relText").value(RelOptUtil.toString(relRoot.rel));
     } catch (Exception e) {
@@ -138,6 +142,12 @@ public final class CalciteIrCli {
         out.name("name").value(column.name);
         out.comma();
         out.name("type").value(column.type.getName());
+        out.comma();
+        out.name("fullType").value(column.fullTypeString());
+        out.comma();
+        out.name("precision").value(column.precision);
+        out.comma();
+        out.name("scale").value(column.scale);
         out.endObject();
       }
       out.endArray();
@@ -199,7 +209,7 @@ public final class CalciteIrCli {
     out.endObject();
   }
 
-  private static void emitRelNode(Json out, RelNode rel) {
+  private static void emitRelNode(Json out, RelNode rel, SqlNode sourceSql) {
     out.beginObject();
     out.name("type").value(rel.getRelTypeName());
     out.comma();
@@ -232,11 +242,13 @@ public final class CalciteIrCli {
       out.comma();
       out.name("projectRex");
       out.beginArray();
+      List<SqlNode> sourceProjects = topLevelSelectItems(sourceSql);
       for (int i = 0; i < project.getProjects().size(); i++) {
         if (i > 0) {
           out.comma();
         }
-        emitRexNode(out, project.getProjects().get(i));
+        SqlNode sourceProject = i < sourceProjects.size() ? sourceProjects.get(i) : null;
+        emitRexNode(out, project.getProjects().get(i), sourceProject);
       }
       out.endArray();
     } else if (rel instanceof Filter filter) {
@@ -244,7 +256,7 @@ public final class CalciteIrCli {
       out.name("condition").value(filter.getCondition().toString());
       out.comma();
       out.name("conditionRex");
-      emitRexNode(out, filter.getCondition());
+      emitRexNode(out, filter.getCondition(), topLevelWhere(sourceSql));
     } else if (rel instanceof Join join) {
       out.comma();
       out.name("joinType").value(join.getJoinType().name());
@@ -324,13 +336,17 @@ public final class CalciteIrCli {
       if (i > 0) {
         out.comma();
       }
-      emitRelNode(out, inputs.get(i));
+      emitRelNode(out, inputs.get(i), null);
     }
     out.endArray();
     out.endObject();
   }
 
   private static void emitRexNode(Json out, RexNode rex) {
+    emitRexNode(out, rex, null);
+  }
+
+  private static void emitRexNode(Json out, RexNode rex, SqlNode sourceSql) {
     if (rex == null) {
       out.nullValue();
       return;
@@ -347,6 +363,10 @@ public final class CalciteIrCli {
     out.comma();
     out.name("nullable").value(rex.getType().isNullable());
     emitTypeMetadata(out, rex.getType());
+    if (sourceSql != null) {
+      out.comma();
+      out.name("sourceSql").value(sourceSql.toString());
+    }
 
     if (rex instanceof RexInputRef inputRef) {
       out.comma();
@@ -361,16 +381,55 @@ public final class CalciteIrCli {
       out.comma();
       out.name("operands");
       out.beginArray();
+      List<SqlNode> sourceOperands = sourceOperands(sourceSql);
       for (int i = 0; i < call.getOperands().size(); i++) {
         if (i > 0) {
           out.comma();
         }
-        emitRexNode(out, call.getOperands().get(i));
+        SqlNode sourceOperand = i < sourceOperands.size() ? sourceOperands.get(i) : null;
+        emitRexNode(out, call.getOperands().get(i), sourceOperand);
       }
       out.endArray();
     }
 
     out.endObject();
+  }
+
+  private static List<SqlNode> topLevelSelectItems(SqlNode sourceSql) {
+    if (!(sourceSql instanceof SqlSelect select)) {
+      return List.of();
+    }
+    SqlNodeList selectList = select.getSelectList();
+    if (selectList == null) {
+      return List.of();
+    }
+    List<SqlNode> items = new ArrayList<>();
+    for (SqlNode item : selectList) {
+      items.add(stripAlias(item));
+    }
+    return items;
+  }
+
+  private static SqlNode stripAlias(SqlNode node) {
+    if (node instanceof SqlCall call && call.getKind().name().equals("AS")
+        && !call.getOperandList().isEmpty()) {
+      return call.getOperandList().get(0);
+    }
+    return node;
+  }
+
+  private static SqlNode topLevelWhere(SqlNode sourceSql) {
+    if (sourceSql instanceof SqlSelect select) {
+      return select.getWhere();
+    }
+    return null;
+  }
+
+  private static List<SqlNode> sourceOperands(SqlNode sourceSql) {
+    if (!(sourceSql instanceof SqlCall call)) {
+      return List.of();
+    }
+    return call.getOperandList();
   }
 
   private static void emitRexLiteralFields(Json out, RexLiteral literal) {
@@ -384,6 +443,12 @@ public final class CalciteIrCli {
     if (valueAsString != null) {
       out.comma();
       out.name("literalValueAsString").value(valueAsString);
+    }
+
+    String timestampLiteral = timestampLiteralValue(literal);
+    if (timestampLiteral != null) {
+      out.comma();
+      out.name("timestampLiteral").value(timestampLiteral);
     }
 
     if (literal.getTypeName().getName().startsWith("INTERVAL")) {
@@ -406,6 +471,19 @@ public final class CalciteIrCli {
   private static String literalValueAsString(RexLiteral literal) {
     try {
       return literal.getValueAs(String.class);
+    } catch (RuntimeException | AssertionError e) {
+      return null;
+    }
+  }
+
+  private static String timestampLiteralValue(RexLiteral literal) {
+    SqlTypeName typeName = literal.getTypeName();
+    if (typeName != SqlTypeName.TIMESTAMP && typeName != SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE) {
+      return null;
+    }
+    try {
+      TimestampString value = literal.getValueAs(TimestampString.class);
+      return value == null ? null : value.toString(literal.getType().getPrecision());
     } catch (RuntimeException | AssertionError e) {
       return null;
     }
@@ -545,7 +623,7 @@ public final class CalciteIrCli {
         if (pieces.length < 2) {
           continue;
         }
-        columns.add(new ColumnDef(stripIdentifierQuotes(pieces[0]), toSqlTypeName(pieces[1])));
+        columns.add(ColumnDef.parse(stripIdentifierQuotes(pieces[0]), columnTypeDeclaration(trimmed)));
       }
       tables.add(new TableDef(stripIdentifierQuotes(tableName), columns));
       matcher.region(bodyEnd + 1, schemaSql.length());
@@ -607,6 +685,14 @@ public final class CalciteIrCli {
         || lower.startsWith("spatial ")
         || lower.startsWith("constraint ")
         || lower.startsWith("check ");
+  }
+
+  private static String columnTypeDeclaration(String columnDeclaration) {
+    String[] pieces = columnDeclaration.trim().split("\\s+", 2);
+    if (pieces.length < 2) {
+      return "";
+    }
+    return pieces[1];
   }
 
   private static SqlTypeName toSqlTypeName(String rawType) {
@@ -702,7 +788,70 @@ public final class CalciteIrCli {
 
   private record TableDef(String name, List<ColumnDef> columns) {}
 
-  private record ColumnDef(String name, SqlTypeName type) {}
+  private record ColumnDef(String name, SqlTypeName type, int precision, int scale) {
+    static ColumnDef parse(String name, String rawType) {
+      if (isTimestampWithTimeZone(rawType)) {
+        throw new IllegalArgumentException(
+            "TIMESTAMP WITH TIME ZONE columns are not supported by the Logos Calcite wrapper");
+      }
+      int precision = parseTypePrecision(rawType);
+      SqlTypeName type = toSqlTypeName(rawType);
+      if (type == SqlTypeName.TIMESTAMP && precision == RelDataType.PRECISION_NOT_SPECIFIED) {
+        precision = 6;
+      }
+      if (type == SqlTypeName.TIMESTAMP && precision > 6) {
+        throw new IllegalArgumentException("TIMESTAMP precision must be between 0 and 6");
+      }
+      return new ColumnDef(
+          name,
+          type,
+          precision,
+          parseTypeScale(rawType));
+    }
+
+    String fullTypeString() {
+      if (precision >= 0 && scale >= 0) {
+        return type.getName() + "(" + precision + ", " + scale + ")";
+      }
+      if (precision >= 0) {
+        return type.getName() + "(" + precision + ")";
+      }
+      return type.getName();
+    }
+  }
+
+  private static boolean isTimestampWithTimeZone(String rawType) {
+    String type = rawType.toUpperCase(Locale.ROOT);
+    return type.startsWith("TIMESTAMP")
+        && (type.contains("WITH TIME ZONE") || type.contains("WITH LOCAL TIME ZONE"));
+  }
+
+  private static int parseTypePrecision(String rawType) {
+    List<Integer> args = parseTypeNumericArguments(rawType);
+    return args.isEmpty() ? RelDataType.PRECISION_NOT_SPECIFIED : args.get(0);
+  }
+
+  private static int parseTypeScale(String rawType) {
+    List<Integer> args = parseTypeNumericArguments(rawType);
+    return args.size() < 2 ? RelDataType.SCALE_NOT_SPECIFIED : args.get(1);
+  }
+
+  private static List<Integer> parseTypeNumericArguments(String rawType) {
+    int start = rawType.indexOf('(');
+    int end = rawType.indexOf(')', start + 1);
+    if (start < 0 || end < 0) {
+      return List.of();
+    }
+    List<Integer> values = new ArrayList<>();
+    for (String part : rawType.substring(start + 1, end).split(",")) {
+      try {
+        values.add(Integer.parseInt(part.trim()));
+      } catch (NumberFormatException ignored) {
+        return List.of();
+      }
+    }
+    return values;
+  }
 
   private static final class StaticTable extends AbstractTable {
     private final TableDef table;
@@ -715,11 +864,36 @@ public final class CalciteIrCli {
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       RelDataTypeFactory.Builder builder = typeFactory.builder();
       for (ColumnDef column : table.columns) {
-        builder.add(column.name, typeFactory.createSqlType(column.type)).nullable(true);
+        RelDataType ty;
+        if (column.precision >= 0 && column.scale >= 0) {
+          ty = typeFactory.createSqlType(column.type, column.precision, column.scale);
+        } else if (column.precision >= 0) {
+          ty = typeFactory.createSqlType(column.type, column.precision);
+        } else {
+          ty = typeFactory.createSqlType(column.type);
+        }
+        builder.add(column.name, ty).nullable(true);
       }
       return builder.build();
     }
   }
+
+  private static final RelDataTypeSystemImpl LOGOS_TYPE_SYSTEM =
+      new RelDataTypeSystemImpl() {
+        @Override public int getMaxPrecision(SqlTypeName typeName) {
+          if (typeName == SqlTypeName.TIMESTAMP) {
+            return 6;
+          }
+          return super.getMaxPrecision(typeName);
+        }
+
+        @Override public int getDefaultPrecision(SqlTypeName typeName) {
+          if (typeName == SqlTypeName.TIMESTAMP) {
+            return 6;
+          }
+          return super.getDefaultPrecision(typeName);
+        }
+      };
 
   private static final class Json {
     private final StringBuilder sb = new StringBuilder();

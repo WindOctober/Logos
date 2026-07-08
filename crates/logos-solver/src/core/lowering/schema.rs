@@ -67,27 +67,33 @@ impl LoweringContext {
                 "FormalSQL proof-of-concept schemas type attributes but do not encode SQL NOT NULL constraints.",
             );
         }
-        let ty = self.lower_schema_type(path, &column.ty)?;
+        let ty = self.lower_schema_type(path, column)?;
         Some(FormalAttribute {
             name: column.name.clone(),
             ty,
-            constructor: formal_attribute_constructor(ty).to_owned(),
+            constructor: formal_attribute_constructor(ty),
         })
     }
 
-    fn lower_schema_type(&mut self, path: &str, ty: &SqlType) -> Option<FormalAttributeType> {
-        match ty {
+    fn lower_schema_type(&mut self, path: &str, column: &Column) -> Option<FormalAttributeType> {
+        match &column.ty {
             SqlType::Integer | SqlType::BigInt => Some(FormalAttributeType::Z),
             SqlType::Float | SqlType::Double | SqlType::Decimal => Some(FormalAttributeType::Float),
             SqlType::Varchar => Some(FormalAttributeType::String),
             SqlType::Boolean => Some(FormalAttributeType::Bool),
             SqlType::Date => Some(FormalAttributeType::Date),
-            SqlType::Time | SqlType::Timestamp => Some(FormalAttributeType::String),
+            SqlType::Timestamp => Some(FormalAttributeType::Timestamp {
+                precision: column.precision,
+            }),
+            SqlType::Time => Some(FormalAttributeType::String),
             SqlType::Any | SqlType::Null => {
                 self.error(
                     path,
                     "schema_type_not_supported",
-                    &format!("FormalSQL proof-of-concept schemas cannot soundly encode {ty:?}."),
+                    &format!(
+                        "FormalSQL proof-of-concept schemas cannot soundly encode {:?}.",
+                        column.ty
+                    ),
                 );
                 None
             }
@@ -103,9 +109,11 @@ impl LoweringContext {
             self.warning(
                 path,
                 "temporal_type_encoded_as_string",
-                "FormalSQL proof-of-concept attributes have no Time/Timestamp constructor; this query-visible attribute is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
+                "FormalSQL proof-of-concept attributes have no TIME constructor; this query-visible attribute is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
             );
         }
-        Some(formal_attribute_constructor(self.lower_schema_type(path, &column.ty)?).to_owned())
+        Some(formal_attribute_constructor(
+            self.lower_schema_type(path, column)?,
+        ))
     }
 }

@@ -440,12 +440,12 @@ impl LoweringContext {
     }
 
     fn identity_select_item(&mut self, path: &str, column: &Column) -> Option<FormalSelectItem> {
-        let attr_ty = query_attribute_type(&column.ty);
+        let attr_ty = query_attribute_type(column);
         Some(FormalSelectItem {
             expr: FormalAggregateTerm::Expr {
                 term: FormalFunctionTerm::Attribute {
                     name: column.name.clone(),
-                    constructor: formal_attribute_constructor(attr_ty).to_owned(),
+                    constructor: formal_attribute_constructor(attr_ty),
                 },
             },
             alias: column.name.clone(),
@@ -458,7 +458,7 @@ impl LoweringContext {
             expr: FormalAggregateTerm::Expr {
                 term: FormalFunctionTerm::Constant {
                     raw: "NULL".to_owned(),
-                    ty: Some(query_attribute_type(&column.ty)),
+                    ty: Some(query_attribute_type(column)),
                 },
             },
             alias: column.name.clone(),
@@ -510,7 +510,9 @@ impl LoweringContext {
             .iter()
             .zip(join_output)
             .all(|(input_column, output_column)| {
-                input_column.name == output_column.name && input_column.ty == output_column.ty
+                input_column.name == output_column.name
+                    && input_column.ty == output_column.ty
+                    && input_column.precision == output_column.precision
             })
         {
             return Some(input);
@@ -546,9 +548,8 @@ impl LoweringContext {
                         term: FormalFunctionTerm::Attribute {
                             name: input_column.name.clone(),
                             constructor: formal_attribute_constructor(query_attribute_type(
-                                &input_column.ty,
-                            ))
-                            .to_owned(),
+                                input_column,
+                            )),
                         },
                     },
                     alias: output_column.name.clone(),
@@ -594,7 +595,7 @@ impl LoweringContext {
                     &expr.parsed,
                     scope,
                 )?;
-                let lowered = annotate_literal_term(lowered, query_attribute_type(&column.ty));
+                let lowered = annotate_literal_term(lowered, query_attribute_type(column));
                 Some(FormalSelectItem {
                     expr: lowered,
                     alias: column.name.clone(),

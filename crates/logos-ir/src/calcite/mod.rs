@@ -30,6 +30,12 @@ pub struct CalciteColumn {
     pub name: String,
     #[serde(rename = "type")]
     pub ty: String,
+    #[serde(default)]
+    pub full_type: Option<String>,
+    #[serde(default)]
+    pub precision: Option<i32>,
+    #[serde(default)]
+    pub scale: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -87,6 +93,7 @@ pub struct CalciteRex {
     pub full_type: Option<String>,
     pub precision: Option<i32>,
     pub scale: Option<i32>,
+    pub source_sql: Option<String>,
     pub charset: Option<String>,
     pub type_collation: Option<String>,
     pub index: Option<usize>,
@@ -98,6 +105,7 @@ pub struct CalciteRex {
     pub literal_value: Option<String>,
     pub literal_value2: Option<String>,
     pub literal_value_as_string: Option<String>,
+    pub timestamp_literal: Option<String>,
     pub interval_type_name: Option<String>,
     pub interval_literal: Option<String>,
     pub interval_internal_value: Option<String>,

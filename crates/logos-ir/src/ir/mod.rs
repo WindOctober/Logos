@@ -26,6 +26,8 @@ pub struct Column {
     pub name: String,
     pub ty: SqlType,
     pub nullable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub precision: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

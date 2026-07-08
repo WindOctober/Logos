@@ -61,6 +61,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 typed_column("ENAME", SqlType::Varchar),
                 typed_column("SLACKER", SqlType::Boolean),
                 typed_column("HIREDATE", SqlType::Date),
+                timestamp_column("EVENT_TS", Some(6)),
             ],
         }],
     };
@@ -70,7 +71,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert_eq!(
         lowered.schema.as_ref().unwrap().tables[0].attributes.len(),
-        4
+        5
     );
     assert!(
         lowered
@@ -86,7 +87,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 .as_ref()
                 .unwrap()
                 .rocq_create_schema
-                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: nil")
+                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
         );
     assert!(
         lowered
@@ -106,7 +107,118 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     );
     assert!(
         lowered.diagnostics.is_empty(),
-        "schema-only lowering should not warn for supported DATE columns"
+        "schema-only lowering should not warn for supported DATE/TIMESTAMP columns"
+    );
+}
+
+#[test]
+fn lowers_timestamp_literals_and_interval_arithmetic() {
+    let output = vec![typed_column("ts", SqlType::Timestamp)];
+    let timestamp_literal = ScalarAst::TypeAnnotation {
+        expr: Box::new(ScalarAst::Literal {
+            raw: "'1970-01-01 00:00:01.000001'".to_owned(),
+        }),
+        ty: "TIMESTAMP".to_owned(),
+    };
+    let timestamp_plus_interval = ScalarAst::Call {
+        operator: "+".to_owned(),
+        op: ScalarOp::Plus,
+        args: vec![
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'1970-01-01 00:00:00'".to_owned(),
+                }),
+                ty: "TIMESTAMP".to_owned(),
+            },
+            ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                }),
+                ty: "INTERVAL SECOND".to_owned(),
+            },
+        ],
+    };
+    let make_query = |rhs| Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::Filter {
+                input: Box::new(RelExpr::TableScan {
+                    table: vec!["t".to_owned()],
+                    output: output.clone(),
+                }),
+                predicate: scalar(ScalarAst::Call {
+                    operator: "<".to_owned(),
+                    op: ScalarOp::Lt,
+                    args: vec![ScalarAst::InputRef { index: 0 }, rhs],
+                }),
+                output: output.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            output: output.clone(),
+        },
+        output: output.clone(),
+        features: vec![Feature::TableScan, Feature::Selection, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let source = lower_query(&make_query(timestamp_literal));
+    let target = lower_query(&make_query(timestamp_plus_interval));
+    assert_eq!(source.status, LoweringStatus::Lowered);
+    assert_eq!(target.status, LoweringStatus::Lowered);
+
+    let module = emit_rocq_query_module(
+        source.query.as_ref().unwrap(),
+        target.query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("TimestampColumn \"ts\" 6"));
+    assert!(module.rocq_module.contains("CstTimestamp (1000001)"));
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"timestamp_add_seconds\"")
+    );
+}
+
+#[test]
+fn rejects_timestamp_literals_that_exceed_declared_precision() {
+    let output = vec![timestamp_column("ts", Some(3))];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "<".to_owned(),
+                op: ScalarOp::Lt,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "'1970-01-01 00:00:01.001001'".to_owned(),
+                        }),
+                        ty: "TIMESTAMP(3)".to_owned(),
+                    },
+                ],
+            }),
+            output,
+        },
+        output: vec![timestamp_column("ts", Some(3))],
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "timestamp_precision_not_supported")
     );
 }
 
@@ -451,6 +563,16 @@ fn typed_column(name: &str, ty: SqlType) -> Column {
         name: name.to_owned(),
         ty,
         nullable: true,
+        precision: None,
+    }
+}
+
+fn timestamp_column(name: &str, precision: Option<u32>) -> Column {
+    Column {
+        name: name.to_owned(),
+        ty: SqlType::Timestamp,
+        nullable: true,
+        precision,
     }
 }
 

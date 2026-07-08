@@ -509,6 +509,7 @@ mod tests {
             name: name.to_owned(),
             ty: SqlType::Integer,
             nullable: true,
+            precision: None,
         }
     }
 

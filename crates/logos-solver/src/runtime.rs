@@ -5,6 +5,10 @@ const DEFAULT_CALCITE_IR_ARGS: &str = "--read postgres --write postgres";
 
 pub fn repo_root() -> PathBuf {
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let child_logos = current_dir.join("Logos");
+    if is_repo_root(&child_logos) {
+        return child_logos;
+    }
     current_dir
         .ancestors()
         .find(|path| is_repo_root(path))

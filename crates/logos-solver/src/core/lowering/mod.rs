@@ -11,6 +11,8 @@ use super::syntax::{
 };
 use scalar::formal_attribute_constructor;
 
+const DEFAULT_TIMESTAMP_PRECISION: u32 = 6;
+
 pub fn lower_verification_input(input: &VerificationIr) -> ProofLoweringReport {
     let schema = lower_schema(input.schema_ir());
     let source = lower_query(input.source_query_ir());
@@ -126,8 +128,7 @@ impl Scope {
                 .map(|column| ScopeAttribute {
                     name: column.name.clone(),
                     ty: column.ty.clone(),
-                    constructor: formal_attribute_constructor(query_attribute_type(&column.ty))
-                        .to_owned(),
+                    constructor: formal_attribute_constructor(query_attribute_type(column)),
                 })
                 .collect(),
         }
@@ -138,19 +139,28 @@ impl Scope {
     }
 }
 
-fn query_attribute_type(ty: &SqlType) -> FormalAttributeType {
+fn query_attribute_type(column: &Column) -> FormalAttributeType {
+    sql_type_to_formal_attribute_type(&column.ty, column.precision)
+}
+
+fn sql_type_to_formal_attribute_type(ty: &SqlType, precision: Option<u32>) -> FormalAttributeType {
     match ty {
         SqlType::Integer | SqlType::BigInt => FormalAttributeType::Z,
         SqlType::Float | SqlType::Double | SqlType::Decimal => FormalAttributeType::Float,
-        SqlType::Varchar | SqlType::Time | SqlType::Timestamp => FormalAttributeType::String,
+        SqlType::Varchar | SqlType::Time => FormalAttributeType::String,
         SqlType::Date => FormalAttributeType::Date,
+        SqlType::Timestamp => FormalAttributeType::Timestamp { precision },
         SqlType::Boolean => FormalAttributeType::Bool,
         SqlType::Any | SqlType::Null => FormalAttributeType::String,
     }
 }
 
+fn timestamp_precision(precision: Option<u32>) -> u32 {
+    precision.unwrap_or(DEFAULT_TIMESTAMP_PRECISION)
+}
+
 fn is_unsupported_temporal_type(ty: &SqlType) -> bool {
-    matches!(ty, SqlType::Time | SqlType::Timestamp)
+    matches!(ty, SqlType::Time)
 }
 
 fn disjoint_columns(left: &[Column], right: &[Column]) -> bool {

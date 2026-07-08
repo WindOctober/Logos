@@ -137,6 +137,25 @@ impl LoweringContext {
             ScalarAst::Call { op, args, .. }
                 if matches!(op, ScalarOp::Plus | ScalarOp::Minus)
                     && args.len() == 2
+                    && timestamp_interval_function(op, &args[0], &args[1]).is_some() =>
+            {
+                let TimestampIntervalFunction {
+                    symbol,
+                    timestamp_arg,
+                    interval_arg,
+                } = timestamp_interval_function(op, &args[0], &args[1])?;
+                let timestamp =
+                    self.lower_aggregate_term(&format!("{path}.timestamp"), timestamp_arg, scope)?;
+                let interval =
+                    self.lower_interval_term(&format!("{path}.interval"), interval_arg, op)?;
+                Some(FormalAggregateTerm::Function {
+                    symbol,
+                    args: vec![timestamp, interval],
+                })
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(op, ScalarOp::Plus | ScalarOp::Minus)
+                    && args.len() == 2
                     && date_interval_function(op, &args[0], &args[1]).is_some() =>
             {
                 let DateIntervalFunction {
@@ -151,6 +170,18 @@ impl LoweringContext {
                     symbol,
                     args: vec![date, interval],
                 })
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(op, ScalarOp::Plus | ScalarOp::Minus)
+                    && args.len() == 2
+                    && has_temporal_interval_pair(&args[0], &args[1]) =>
+            {
+                self.error(
+                    path,
+                    "temporal_interval_arithmetic_not_supported",
+                    "This temporal type and INTERVAL unit combination is not supported by the FormalSQL timestamp/date lowering.",
+                );
+                None
             }
             ScalarAst::Call { op, args, .. } if is_aggregate_term_function(op) => {
                 let args = args
@@ -173,17 +204,19 @@ impl LoweringContext {
                 })
             }
             ScalarAst::TypeAnnotation { ty, .. }
-                if type_annotation_is_date(ty) || type_annotation_is_interval(ty) =>
+                if type_annotation_is_date(ty)
+                    || type_annotation_is_timestamp(ty)
+                    || type_annotation_is_interval(ty) =>
             {
                 Some(FormalAggregateTerm::Expr {
                     term: self.lower_function_term(path, ast, scope)?,
                 })
             }
-            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time_or_timestamp(ty) => {
+            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time(ty) => {
                 self.error(
                     path,
                     "temporal_literal_not_supported",
-                    "TIME/TIMESTAMP literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
+                    "TIME literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
                 );
                 None
             }
@@ -214,7 +247,7 @@ impl LoweringContext {
                     self.warning(
                         path,
                         "temporal_type_encoded_as_string",
-                        "FormalSQL proof-of-concept attributes have no Time/Timestamp constructor; this query-visible attribute reference is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
+                        "FormalSQL proof-of-concept attributes have no TIME constructor; this query-visible attribute reference is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
                     );
                 }
                 Some(FormalFunctionTerm::Attribute {
@@ -251,6 +284,34 @@ impl LoweringContext {
                     ty: Some(FormalAttributeType::Date),
                 })
             }
+            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp(ty) => {
+                let raw = typed_literal_raw(expr)
+                    .or_else(|| cast_literal_raw(expr))
+                    .or_else(|| {
+                        self.error(
+                            path,
+                            "timestamp_literal_not_supported",
+                            "TIMESTAMP annotations are supported only for literal CAST/typed literals.",
+                        );
+                        None
+                    })?;
+                let precision = type_annotation_precision(ty);
+                if !super::emit::timestamp_literal_conforms_to_precision(
+                    raw,
+                    timestamp_precision(precision),
+                ) {
+                    self.error(
+                        path,
+                        "timestamp_precision_not_supported",
+                        "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
+                    );
+                    return None;
+                }
+                Some(FormalFunctionTerm::Constant {
+                    raw: raw.to_owned(),
+                    ty: Some(FormalAttributeType::Timestamp { precision }),
+                })
+            }
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_interval(ty) => {
                 let raw = typed_literal_raw(expr).or_else(|| {
                     self.error(
@@ -273,11 +334,11 @@ impl LoweringContext {
                     ty: Some(FormalAttributeType::Z),
                 })
             }
-            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time_or_timestamp(ty) => {
+            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time(ty) => {
                 self.error(
                     path,
                     "temporal_literal_not_supported",
-                    "TIME/TIMESTAMP literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
+                    "TIME literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
                 );
                 None
             }
@@ -295,6 +356,19 @@ impl LoweringContext {
                             "FormalSQL lowering does not yet encode non-integer FLOAT/DECIMAL literals.",
                         );
                         return None;
+                    }
+                    if let FormalAttributeType::Timestamp { precision } = formal_ty {
+                        if !super::emit::timestamp_literal_conforms_to_precision(
+                            raw,
+                            timestamp_precision(precision),
+                        ) {
+                            self.error(
+                                path,
+                                "timestamp_precision_not_supported",
+                                "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
+                            );
+                            return None;
+                        }
                     }
                     return Some(FormalFunctionTerm::Constant {
                         raw: raw.to_owned(),
@@ -348,7 +422,7 @@ impl LoweringContext {
             self.error(
                 path,
                 "interval_literal_not_supported",
-                "DATE arithmetic currently requires an explicitly typed Calcite INTERVAL literal.",
+                "Temporal arithmetic currently requires an explicitly typed Calcite INTERVAL literal.",
             );
             return None;
         };
@@ -384,6 +458,49 @@ struct DateIntervalFunction<'a> {
     symbol: String,
     date_arg: &'a ScalarAst,
     interval_arg: &'a ScalarAst,
+}
+
+struct TimestampIntervalFunction<'a> {
+    symbol: String,
+    timestamp_arg: &'a ScalarAst,
+    interval_arg: &'a ScalarAst,
+}
+
+fn timestamp_interval_function<'a>(
+    op: &ScalarOp,
+    left: &'a ScalarAst,
+    right: &'a ScalarAst,
+) -> Option<TimestampIntervalFunction<'a>> {
+    let (timestamp_arg, interval_arg) =
+        if type_annotation_is_timestamp_ast(left) && type_annotation_is_interval_ast(right) {
+            (left, right)
+        } else if matches!(op, ScalarOp::Plus)
+            && type_annotation_is_interval_ast(left)
+            && type_annotation_is_timestamp_ast(right)
+        {
+            (right, left)
+        } else {
+            return None;
+        };
+    let ScalarAst::TypeAnnotation { ty, .. } = interval_arg else {
+        return None;
+    };
+    let unit = interval_unit(ty)?;
+    let symbol = match unit {
+        "MICROSECOND" => "timestamp_add_microseconds",
+        "SECOND" => "timestamp_add_seconds",
+        "MINUTE" => "timestamp_add_minutes",
+        "HOUR" => "timestamp_add_hours",
+        "DAY" => "timestamp_add_days",
+        "MONTH" => "timestamp_add_months",
+        "YEAR" => "timestamp_add_years",
+        _ => return None,
+    };
+    Some(TimestampIntervalFunction {
+        symbol: symbol.to_owned(),
+        timestamp_arg,
+        interval_arg,
+    })
 }
 
 fn date_interval_function<'a>(
@@ -423,41 +540,100 @@ fn type_annotation_is_date_ast(ast: &ScalarAst) -> bool {
     matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_date(ty))
 }
 
+fn type_annotation_is_timestamp_ast(ast: &ScalarAst) -> bool {
+    matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_timestamp(ty))
+}
+
 fn type_annotation_is_interval_ast(ast: &ScalarAst) -> bool {
     matches!(ast, ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_interval(ty))
 }
 
+fn has_temporal_interval_pair(left: &ScalarAst, right: &ScalarAst) -> bool {
+    (type_annotation_is_date_ast(left)
+        || type_annotation_is_timestamp_ast(left)
+        || type_annotation_is_interval_ast(left))
+        && (type_annotation_is_date_ast(right)
+            || type_annotation_is_timestamp_ast(right)
+            || type_annotation_is_interval_ast(right))
+        && (type_annotation_is_interval_ast(left) || type_annotation_is_interval_ast(right))
+}
+
 fn type_annotation_is_date(ty: &str) -> bool {
-    ty.trim().to_ascii_uppercase().split_whitespace().next() == Some("DATE")
+    type_annotation_head(ty) == Some("DATE")
+}
+
+fn type_annotation_is_timestamp(ty: &str) -> bool {
+    type_annotation_head(ty) == Some("TIMESTAMP")
 }
 
 fn type_annotation_is_interval(ty: &str) -> bool {
     ty.trim().to_ascii_uppercase().starts_with("INTERVAL")
 }
 
-fn type_annotation_is_time_or_timestamp(ty: &str) -> bool {
-    let upper = ty.trim().to_ascii_uppercase();
-    upper.starts_with("TIME") || upper.starts_with("TIMESTAMP")
+fn type_annotation_is_time(ty: &str) -> bool {
+    type_annotation_head(ty) == Some("TIME")
 }
 
 fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
-    let upper = ty.trim().to_ascii_uppercase();
-    let head = upper
-        .split(|c: char| c.is_ascii_whitespace() || c == '(')
-        .next()?;
+    let head = type_annotation_head(ty)?;
     match head {
         "INTEGER" | "INT" | "BIGINT" | "SMALLINT" | "TINYINT" => Some(FormalAttributeType::Z),
         "FLOAT" | "REAL" | "DOUBLE" | "DECIMAL" | "NUMERIC" => Some(FormalAttributeType::Float),
         "VARCHAR" | "CHAR" | "STRING" => Some(FormalAttributeType::String),
         "BOOLEAN" | "BOOL" => Some(FormalAttributeType::Bool),
         "DATE" => Some(FormalAttributeType::Date),
+        "TIMESTAMP" => Some(FormalAttributeType::Timestamp {
+            precision: type_annotation_precision(ty),
+        }),
+        _ => None,
+    }
+}
+
+fn type_annotation_precision(ty: &str) -> Option<u32> {
+    let start = ty.find('(')? + 1;
+    let end = ty[start..].find(')')? + start;
+    ty[start..end].trim().parse().ok()
+}
+
+fn type_annotation_head(ty: &str) -> Option<&'static str> {
+    let upper = ty.trim().to_ascii_uppercase();
+    let head = upper
+        .split(|c: char| c.is_ascii_whitespace() || c == '(')
+        .next()?;
+    match head {
+        "INTEGER" => Some("INTEGER"),
+        "INT" => Some("INT"),
+        "BIGINT" => Some("BIGINT"),
+        "SMALLINT" => Some("SMALLINT"),
+        "TINYINT" => Some("TINYINT"),
+        "FLOAT" => Some("FLOAT"),
+        "REAL" => Some("REAL"),
+        "DOUBLE" => Some("DOUBLE"),
+        "DECIMAL" => Some("DECIMAL"),
+        "NUMERIC" => Some("NUMERIC"),
+        "VARCHAR" => Some("VARCHAR"),
+        "CHAR" => Some("CHAR"),
+        "STRING" => Some("STRING"),
+        "BOOLEAN" => Some("BOOLEAN"),
+        "BOOL" => Some("BOOL"),
+        "DATE" => Some("DATE"),
+        "TIME" => Some("TIME"),
+        "TIMESTAMP" => Some("TIMESTAMP"),
         _ => None,
     }
 }
 
 fn interval_unit(ty: &str) -> Option<&'static str> {
     let upper = ty.trim().to_ascii_uppercase();
-    if upper.contains("DAY") {
+    if upper.contains("MICROSECOND") {
+        Some("MICROSECOND")
+    } else if upper.contains("SECOND") {
+        Some("SECOND")
+    } else if upper.contains("MINUTE") {
+        Some("MINUTE")
+    } else if upper.contains("HOUR") {
+        Some("HOUR")
+    } else if upper.contains("DAY") {
         Some("DAY")
     } else if upper.contains("MONTH") {
         Some("MONTH")
@@ -489,7 +665,7 @@ fn cast_literal_raw(ast: &ScalarAst) -> Option<&str> {
 fn parse_interval_literal(raw: &str, ty: &str) -> Option<i64> {
     let value = raw.trim().parse::<i64>().ok()?;
     match interval_unit(ty)? {
-        "DAY" | "MONTH" | "YEAR" => Some(value),
+        "MICROSECOND" | "SECOND" | "MINUTE" | "HOUR" | "DAY" | "MONTH" | "YEAR" => Some(value),
         _ => None,
     }
 }
@@ -652,12 +828,15 @@ pub(super) fn annotate_literal_term(
     }
 }
 
-pub(super) fn formal_attribute_constructor(ty: FormalAttributeType) -> &'static str {
+pub(super) fn formal_attribute_constructor(ty: FormalAttributeType) -> String {
     match ty {
-        FormalAttributeType::String => "Attr_string",
-        FormalAttributeType::Z => "Attr_Z",
-        FormalAttributeType::Bool => "Attr_bool",
-        FormalAttributeType::Float => "Attr_float",
-        FormalAttributeType::Date => "Attr_date",
+        FormalAttributeType::String => "Attr_string".to_owned(),
+        FormalAttributeType::Z => "Attr_Z".to_owned(),
+        FormalAttributeType::Bool => "Attr_bool".to_owned(),
+        FormalAttributeType::Float => "Attr_float".to_owned(),
+        FormalAttributeType::Date => "Attr_date".to_owned(),
+        FormalAttributeType::Timestamp { precision } => {
+            format!("Attr_timestamp#{}", timestamp_precision(precision))
+        }
     }
 }
