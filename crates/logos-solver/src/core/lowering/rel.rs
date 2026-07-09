@@ -976,18 +976,7 @@ impl LoweringContext {
             return None;
         }
         if call.args.is_empty() && call.function.eq_ignore_ascii_case("COUNT") {
-            self.warning(
-                &call_path,
-                "count_star_argument_encoded",
-                "Calcite COUNT(*) has no scalar argument; this lowering uses a constant argument and relies on the Rocq aggregate interpretation to treat it as COUNT(*).",
-            );
-            return Some(FormalAggregateTerm::Aggregate {
-                function: aggregate_function_name(&call.function),
-                arg: FormalFunctionTerm::Constant {
-                    raw: "1".to_owned(),
-                    ty: Some(FormalAttributeType::Z),
-                },
-            });
+            return Some(FormalAggregateTerm::CountStar);
         }
         if call.args.len() != 1 {
             self.error(

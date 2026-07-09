@@ -70,6 +70,9 @@ Definition AExpr (term : FunTerm) : AggTerm :=
 Definition AAggregate (function : string) (arg : FunTerm) : AggTerm :=
   @A_agg TNull (Aggregate function) arg.
 
+Definition ACountStar : AggTerm :=
+  @A_agg TNull (Aggregate "count_star") (@F_Constant TNull (Value_Z (Some 0))).
+
 Definition AFunction (symbol : string) (args : list AggTerm) : AggTerm :=
   @A_fun TNull (Symbol symbol) args.
 

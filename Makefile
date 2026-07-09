@@ -1,7 +1,7 @@
 .PHONY: submodules check-rocq-env formal-sql smoke logos-formal-sql-lemmas calcite-ir status
 
 OPAM ?= opam
-ROCQ_OPAM_SWITCH ?= $(OPAM_SWITCH)
+ROCQ_OPAM_SWITCH ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH),$(CURDIR)/.opam-rocq)
 OPAM_SWITCH := $(ROCQ_OPAM_SWITCH)
 ROCQLIB ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH)/_opam/lib/coq,)
 COQLIB ?= $(ROCQLIB)

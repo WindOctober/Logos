@@ -2,8 +2,9 @@ use super::*;
 use logos_ir::ir::ScalarOp;
 
 use logos_ir::ir::{
-    Column, CorrelationBinding, Feature, JoinType, Query, RelExpr, ScalarAst, ScalarClass,
-    ScalarExpr, Schema, SetOp, SortDirection, SortNullDirection, SqlType, Table, ValuesTuples,
+    AggregateCall, AggregateModifiers, Column, CorrelationBinding, Feature, JoinType, Query,
+    RelExpr, ScalarAst, ScalarClass, ScalarExpr, Schema, SetOp, SortDirection, SortNullDirection,
+    SqlType, Table, ValuesTuples,
 };
 
 #[test]
@@ -1066,6 +1067,64 @@ fn lowers_nested_fetch_zero_to_empty_bag_query() {
             ..
         })
     ));
+}
+
+#[test]
+fn lowers_count_star_as_explicit_aggregate() {
+    let input_output = vec![column("a")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "COUNT()".to_owned(),
+                function: "COUNT".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: Vec::new(),
+                filter: None,
+            }],
+            output: vec![column("c")],
+        },
+        output: vec![column("c")],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(
+        !lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "count_star_argument_encoded")
+    );
+    let Some(FormalListQuery::Bag { input }) = lowered.list_query.as_ref() else {
+        panic!("aggregate should lower as a bag list query");
+    };
+    let FormalQuery::Group { select, .. } = input.as_ref() else {
+        panic!("expected Group query");
+    };
+    assert!(matches!(select[0].expr, FormalAggregateTerm::CountStar));
+
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("COUNT(*) should have lowered"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("COUNT(*) should have lowered"),
+    );
+    assert!(module.rocq_module.contains("ACountStar"));
 }
 
 #[test]

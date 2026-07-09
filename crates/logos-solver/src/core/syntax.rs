@@ -232,6 +232,7 @@ pub enum FormalAggregateTerm {
         function: String,
         arg: FormalFunctionTerm,
     },
+    CountStar,
     Function {
         symbol: String,
         args: Vec<FormalAggregateTerm>,

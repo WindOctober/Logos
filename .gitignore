@@ -1,4 +1,5 @@
 /.opam/
+/.opam-rocq/
 /_build/
 /target/
 /var/
