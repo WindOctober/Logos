@@ -406,7 +406,42 @@ impl LoweringContext {
                 );
                 None
             }
-            ScalarAst::TypeAnnotation { expr, .. } => self.lower_aggregate_term(path, expr, scope),
+            ScalarAst::TypeAnnotation { expr, ty } => {
+                if let Some(cast_arg) = cast_arg(expr) {
+                    let target_ty = formal_type_from_annotation(ty).or_else(|| {
+                        self.error(
+                            path,
+                            "cast_target_type_not_supported",
+                            "FormalSQL lowering cannot infer the target type of this explicit CAST.",
+                        );
+                        None
+                    })?;
+                    let source_ty = self
+                        .infer_function_type(&format!("{path}.castArg"), cast_arg, scope)
+                        .or_else(|| {
+                            self.error(
+                                path,
+                                "cast_source_type_not_supported",
+                                "FormalSQL lowering cannot infer the source type of this explicit CAST.",
+                            );
+                            None
+                        })?;
+                    if source_ty == target_ty {
+                        self.lower_aggregate_term(&format!("{path}.castArg"), cast_arg, scope)
+                    } else {
+                        self.error(
+                            path,
+                            "cast_not_supported",
+                            &format!(
+                                "Explicit CAST from {source_ty:?} to {target_ty:?} is not in the FormalSQL cast whitelist.",
+                            ),
+                        );
+                        None
+                    }
+                } else {
+                    self.lower_aggregate_term(path, expr, scope)
+                }
+            }
             _ => Some(FormalAggregateTerm::Expr {
                 term: self.lower_function_term(path, ast, scope)?,
             }),
@@ -1184,7 +1219,9 @@ fn predicate_requires_external_interpretation(op: &ScalarOp) -> bool {
 }
 
 fn function_requires_external_interpretation(op: &ScalarOp) -> bool {
-    !matches!(op, ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply)
+    !(matches!(op, ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply)
+        || is_boolean_value_function(op)
+        || matches!(op, ScalarOp::Lower | ScalarOp::Upper))
 }
 
 fn literal_requires_external_encoding(raw: &str) -> bool {

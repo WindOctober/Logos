@@ -85,6 +85,85 @@ fn lowers_project_filter_table_subset() {
 }
 
 #[test]
+fn lowers_builtin_value_expressions_without_external_symbol_warning() {
+    let table_output = vec![
+        column("a"),
+        column("b"),
+        typed_column("name", SqlType::Varchar),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: table_output,
+            }),
+            exprs: vec![
+                scalar(ScalarAst::Call {
+                    operator: "AND".to_owned(),
+                    op: ScalarOp::And,
+                    args: vec![
+                        ScalarAst::Call {
+                            operator: "<".to_owned(),
+                            op: ScalarOp::Lt,
+                            args: vec![
+                                ScalarAst::InputRef { index: 0 },
+                                ScalarAst::InputRef { index: 1 },
+                            ],
+                        },
+                        ScalarAst::Call {
+                            operator: "IS NULL".to_owned(),
+                            op: ScalarOp::IsNull,
+                            args: vec![ScalarAst::InputRef { index: 0 }],
+                        },
+                    ],
+                }),
+                scalar(ScalarAst::Call {
+                    operator: "UPPER".to_owned(),
+                    op: ScalarOp::Upper,
+                    args: vec![ScalarAst::InputRef { index: 2 }],
+                }),
+            ],
+            correlations: Vec::new(),
+            output: vec![
+                typed_column("ok", SqlType::Boolean),
+                typed_column("upper_name", SqlType::Varchar),
+            ],
+        },
+        output: vec![
+            typed_column("ok", SqlType::Boolean),
+            typed_column("upper_name", SqlType::Varchar),
+        ],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("boolean value expression should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("boolean value expression should lower"),
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(
+        !lowered.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "aggregate_term_symbol_interpretation_required"
+        })
+    );
+    assert!(module.rocq_module.contains("AFunction \"and\""));
+    assert!(module.rocq_module.contains("AFunction \"<\""));
+    assert!(module.rocq_module.contains("AFunction \"is_null\""));
+    assert!(module.rocq_module.contains("AFunction \"upper\""));
+}
+
+#[test]
 fn lowers_schema_to_formal_sql_create_table_shape() {
     let schema = Schema {
         tables: vec![Table {
