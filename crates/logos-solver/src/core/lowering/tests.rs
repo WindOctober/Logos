@@ -164,6 +164,92 @@ fn lowers_builtin_value_expressions_without_external_symbol_warning() {
 }
 
 #[test]
+fn lowers_case_expression_as_structured_branches() {
+    let table_output = vec![column("a")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: table_output,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "CASE".to_owned(),
+                op: ScalarOp::Case,
+                args: vec![
+                    ScalarAst::Call {
+                        operator: "AND".to_owned(),
+                        op: ScalarOp::And,
+                        args: vec![
+                            ScalarAst::Call {
+                                operator: "IS NULL".to_owned(),
+                                op: ScalarOp::IsNull,
+                                args: vec![ScalarAst::InputRef { index: 0 }],
+                            },
+                            ScalarAst::Call {
+                                operator: "IS NOT NULL".to_owned(),
+                                op: ScalarOp::IsNotNull,
+                                args: vec![ScalarAst::InputRef { index: 0 }],
+                            },
+                            ScalarAst::Literal {
+                                raw: "true".to_owned(),
+                            },
+                        ],
+                    },
+                    ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    },
+                    ScalarAst::Literal {
+                        raw: "0".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![column("case_value")],
+        },
+        output: vec![column("case_value")],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("CASE expression should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("CASE expression should lower"),
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(
+        !lowered.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "aggregate_term_symbol_interpretation_required"
+        })
+    );
+    let project = match lowered.query.as_ref().expect("query should lower") {
+        FormalQuery::Projection { select, .. } => &select[0].expr,
+        other => panic!("expected projection query, got {other:?}"),
+    };
+    let FormalAggregateTerm::Case { branches, .. } = project else {
+        panic!("expected CASE aggregate term, got {project:?}");
+    };
+    assert!(matches!(
+        &branches[0].when,
+        FormalAggregateTerm::Function { symbol, args }
+            if symbol == "and"
+                && args.len() == 2
+                && matches!(&args[0], FormalAggregateTerm::Function { symbol, args } if symbol == "and" && args.len() == 2)
+    ));
+    assert!(module.rocq_module.contains("AFunction \"case\""));
+    assert!(module.rocq_module.contains("AFunction \"is_null\""));
+}
+
+#[test]
 fn lowers_schema_to_formal_sql_create_table_shape() {
     let schema = Schema {
         tables: vec![Table {

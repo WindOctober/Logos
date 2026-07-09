@@ -70,11 +70,6 @@ impl LoweringContext {
                 ScalarOp::Exists => self.lower_exists_formula(path, args),
                 ScalarOp::Case => {
                     let lowered = self.lower_aggregate_term(path, ast, scope)?;
-                    self.warning(
-                        path,
-                        "boolean_expression_interpretation_required",
-                        "Lowered SQL boolean expression requires a matching FormalSQL Tuple.symbol/predicate interpretation in Rocq.",
-                    );
                     Some(FormalFormula::Predicate {
                         predicate: "is_true".to_owned(),
                         args: vec![lowered],
@@ -368,6 +363,14 @@ impl LoweringContext {
                 );
                 None
             }
+            ScalarAst::Call {
+                op: ScalarOp::Case,
+                args,
+                ..
+            } => self.lower_case_aggregate_term(path, args, scope),
+            ScalarAst::Call { op, args, .. } if matches!(op, ScalarOp::And | ScalarOp::Or) => {
+                self.lower_variadic_boolean_aggregate_term(path, op, args, scope)
+            }
             ScalarAst::Call { op, args, .. } if is_aggregate_term_function(op) => {
                 let args = args
                     .iter()
@@ -446,6 +449,119 @@ impl LoweringContext {
                 term: self.lower_function_term(path, ast, scope)?,
             }),
         }
+    }
+
+    fn lower_case_aggregate_term(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAggregateTerm> {
+        if args.len() < 3 || args.len() % 2 == 0 {
+            self.error(
+                path,
+                "case_arity_not_supported",
+                "FormalSQL CASE lowering expects Calcite searched-CASE operands as WHEN/THEN pairs followed by an ELSE expression.",
+            );
+            return None;
+        }
+
+        let mut branches = Vec::with_capacity(args.len() / 2);
+        for (branch_index, pair) in args[..args.len() - 1].chunks_exact(2).enumerate() {
+            if !self.case_when_is_boolean(
+                &format!("{path}.branches[{branch_index}].when"),
+                &pair[0],
+                scope,
+            ) {
+                return None;
+            }
+            branches.push(FormalCaseBranch {
+                when: self.lower_aggregate_term(
+                    &format!("{path}.branches[{branch_index}].when"),
+                    &pair[0],
+                    scope,
+                )?,
+                then_expr: self.lower_aggregate_term(
+                    &format!("{path}.branches[{branch_index}].then"),
+                    &pair[1],
+                    scope,
+                )?,
+            });
+        }
+
+        Some(FormalAggregateTerm::Case {
+            branches,
+            else_expr: Box::new(self.lower_aggregate_term(
+                &format!("{path}.else"),
+                args.last().expect("CASE arity checked"),
+                scope,
+            )?),
+        })
+    }
+
+    fn case_when_is_boolean(&mut self, path: &str, ast: &ScalarAst, scope: &Scope) -> bool {
+        let ok = match ast {
+            ScalarAst::Literal { raw } => {
+                raw.eq_ignore_ascii_case("true") || raw.eq_ignore_ascii_case("false")
+            }
+            ScalarAst::InputRef { index } => scope
+                .attribute(*index)
+                .is_some_and(|attr| attr.formal_ty == FormalAttributeType::Bool),
+            ScalarAst::CorrelatedRef {
+                correlation,
+                field,
+                index,
+                ..
+            } => self
+                .correlated_attribute(path, correlation, *index, field)
+                .is_some_and(|attr| attr.formal_ty == FormalAttributeType::Bool),
+            ScalarAst::TypeAnnotation { ty, .. } => {
+                formal_type_from_annotation(ty) == Some(FormalAttributeType::Bool)
+            }
+            ScalarAst::Call { op, .. } => is_boolean_value_function(op),
+            _ => false,
+        };
+        if !ok {
+            self.error(
+                path,
+                "case_when_condition_not_boolean",
+                "FormalSQL CASE lowering requires each WHEN operand to be a boolean-valued SQL expression.",
+            );
+        }
+        ok
+    }
+
+    fn lower_variadic_boolean_aggregate_term(
+        &mut self,
+        path: &str,
+        op: &ScalarOp,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAggregateTerm> {
+        if args.is_empty() {
+            self.error(
+                path,
+                "boolean_value_operator_arity_not_supported",
+                "FormalSQL boolean value lowering expects AND/OR to have at least one argument.",
+            );
+            return None;
+        }
+        let mut lowered = args
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| {
+                self.lower_aggregate_term(&format!("{path}.args[{index}]"), arg, scope)
+            })
+            .collect::<Option<Vec<_>>>()?
+            .into_iter();
+        let mut acc = lowered.next().expect("non-empty AND/OR checked");
+        for right in lowered {
+            acc = FormalAggregateTerm::Function {
+                symbol: function_symbol(op),
+                args: vec![acc, right],
+            };
+        }
+        Some(acc)
     }
 
     pub(super) fn lower_function_term(
@@ -1118,7 +1234,7 @@ fn is_function_term_function(op: &ScalarOp) -> bool {
 }
 
 fn is_aggregate_term_function(op: &ScalarOp) -> bool {
-    is_function_term_function(op) || is_boolean_value_function(op) || matches!(op, ScalarOp::Case)
+    is_function_term_function(op) || is_boolean_value_function(op)
 }
 
 fn function_symbol(op: &ScalarOp) -> String {
@@ -1145,7 +1261,6 @@ fn function_symbol(op: &ScalarOp) -> String {
         ScalarOp::Divide => "divide".to_owned(),
         ScalarOp::StringConcat => "string_concat".to_owned(),
         ScalarOp::Cast => "cast".to_owned(),
-        ScalarOp::Case => "case".to_owned(),
         ScalarOp::Lower => "lower".to_owned(),
         ScalarOp::Upper => "upper".to_owned(),
         ScalarOp::Substring => "substring".to_owned(),

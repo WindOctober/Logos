@@ -236,6 +236,18 @@ pub enum FormalAggregateTerm {
         symbol: String,
         args: Vec<FormalAggregateTerm>,
     },
+    Case {
+        branches: Vec<FormalCaseBranch>,
+        #[serde(rename = "elseExpr")]
+        else_expr: Box<FormalAggregateTerm>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormalCaseBranch {
+    pub when: FormalAggregateTerm,
+    pub then_expr: FormalAggregateTerm,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

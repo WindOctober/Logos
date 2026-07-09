@@ -182,7 +182,28 @@ pub fn collect_scalar_exprs<'a>(
 }
 
 pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) {
-    if lower_core_scalar(&expr.parsed).is_err() {
+    let core_scalar_supported = lower_core_scalar(&expr.parsed).is_ok();
+    let core_lowerable_case = core_scalar_supported
+        && contains_any_scalar_op(&expr.parsed, &[ScalarOp::Case])
+        && !contains_any_scalar_op(
+            &expr.parsed,
+            &[
+                ScalarOp::StringConcat,
+                ScalarOp::Lower,
+                ScalarOp::Upper,
+                ScalarOp::Substring,
+                ScalarOp::Like,
+                ScalarOp::Exp,
+                ScalarOp::Power,
+                ScalarOp::Divide,
+                ScalarOp::Extract,
+                ScalarOp::In,
+                ScalarOp::Exists,
+                ScalarOp::ScalarQuery,
+                ScalarOp::Search,
+            ],
+        );
+    if !core_scalar_supported {
         features.insert(Feature::OpaqueScalar);
         features.insert(Feature::FormalSqlUnsupported);
     }
@@ -190,7 +211,6 @@ pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) 
         &expr.parsed,
         &[
             ScalarOp::Cast,
-            ScalarOp::Case,
             ScalarOp::StringConcat,
             ScalarOp::Lower,
             ScalarOp::Upper,
@@ -236,6 +256,7 @@ pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) 
             features.insert(Feature::OpaqueScalar);
             features.insert(Feature::FormalSqlUnsupported);
         }
+        ScalarClass::Call if core_lowerable_case => {}
         ScalarClass::Call | ScalarClass::Opaque => {
             features.insert(Feature::OpaqueScalar);
             features.insert(Feature::FormalSqlUnsupported);
@@ -836,14 +857,14 @@ mod tests {
     }
 
     #[test]
-    fn tags_case_as_formal_sql_unsupported_even_when_core_lowerable() {
+    fn does_not_tag_core_lowerable_case_as_formal_sql_unsupported() {
         let expr = calcite_scalar("CASE(IS NOT NULL($0), $0, 0)");
 
         let mut features = BTreeSet::new();
         collect_scalar_expr(&expr, &mut features);
 
-        assert!(features.contains(&Feature::OpaqueScalar));
-        assert!(features.contains(&Feature::FormalSqlUnsupported));
+        assert!(!features.contains(&Feature::OpaqueScalar));
+        assert!(!features.contains(&Feature::FormalSqlUnsupported));
     }
 
     #[test]

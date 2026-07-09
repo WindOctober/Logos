@@ -6,11 +6,11 @@ use crate::core::VerificationIr;
 
 use super::coverage::feature_coverage;
 use super::syntax::{
-    DiagnosticSeverity, FormalAggregateTerm, FormalAttribute, FormalAttributeType, FormalFormula,
-    FormalFunctionTerm, FormalListQuery, FormalNullDirection, FormalProofModule, FormalQuery,
-    FormalQueryModule, FormalSchema, FormalSelectItem, FormalSetOp, FormalSortDirection,
-    FormalSortKey, FormalTable, LoweredQuery, LoweredSchema, LoweringDiagnostic, LoweringStatus,
-    ProofLoweringReport,
+    DiagnosticSeverity, FormalAggregateTerm, FormalAttribute, FormalAttributeType,
+    FormalCaseBranch, FormalFormula, FormalFunctionTerm, FormalListQuery, FormalNullDirection,
+    FormalProofModule, FormalQuery, FormalQueryModule, FormalSchema, FormalSelectItem, FormalSetOp,
+    FormalSortDirection, FormalSortKey, FormalTable, LoweredQuery, LoweredSchema,
+    LoweringDiagnostic, LoweringStatus, ProofLoweringReport,
 };
 use scalar::formal_attribute_constructor;
 

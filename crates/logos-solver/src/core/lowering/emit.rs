@@ -606,7 +606,30 @@ fn emit_rocq_aggregate_term(term: &FormalAggregateTerm) -> String {
             rocq_string_literal(symbol),
             emit_rocq_list(args, emit_rocq_aggregate_term)
         ),
+        FormalAggregateTerm::Case {
+            branches,
+            else_expr,
+        } => format!(
+            "AFunction \"case\" ({})",
+            emit_rocq_list(
+                &case_function_args(branches, else_expr),
+                emit_rocq_aggregate_term
+            )
+        ),
     }
+}
+
+fn case_function_args(
+    branches: &[FormalCaseBranch],
+    else_expr: &FormalAggregateTerm,
+) -> Vec<FormalAggregateTerm> {
+    let mut args = Vec::with_capacity(branches.len() * 2 + 1);
+    for branch in branches {
+        args.push(branch.when.clone());
+        args.push(branch.then_expr.clone());
+    }
+    args.push(else_expr.clone());
+    args
 }
 
 fn emit_rocq_function_term(term: &FormalFunctionTerm) -> String {
