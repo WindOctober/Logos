@@ -875,6 +875,19 @@ impl LoweringContext {
                     term: FormalFunctionTerm::Constant { raw, ty: None },
                 } = &lowered
                 {
+                    if matches!(
+                        output_ty,
+                        FormalAttributeType::Float | FormalAttributeType::Double
+                    ) && !raw.eq_ignore_ascii_case("null")
+                        && super::emit::float_literal_bits_for_type(raw, Some(&output_ty)).is_none()
+                    {
+                        self.error(
+                            &format!("{path}.exprs[{index}]"),
+                            "float_literal_not_supported",
+                            "FormalSQL lowering supports FLOAT/DOUBLE literals only for finite SQL numeric literals that fit the target floating-point type.",
+                        );
+                        return None;
+                    }
                     if matches!(output_ty, FormalAttributeType::Decimal { .. })
                         && !raw.eq_ignore_ascii_case("null")
                         && super::emit::decimal_literal_for_type(raw, Some(&output_ty)).is_none()
@@ -893,6 +906,14 @@ impl LoweringContext {
                     scope,
                 )
                 {
+                    if floating_output_type_mismatch(&expr_ty, &output_ty) {
+                        self.error(
+                            &format!("{path}.exprs[{index}]"),
+                            "floating_output_type_not_supported",
+                            "Projected FLOAT/DOUBLE expression type differs from the output column type; implicit floating casts are not modeled yet.",
+                        );
+                        return None;
+                    }
                     if decimal_typmod_mismatch(&expr_ty, &output_ty) {
                         self.error(
                             &format!("{path}.exprs[{index}]"),
@@ -974,6 +995,27 @@ impl LoweringContext {
                 );
                 None
             })?;
+            let output_ty = self.lower_attribute_type(
+                &format!("{path}.output[{index}]"),
+                &output[index],
+                AttributeTypeContext::QueryOutput,
+            )?;
+            if floating_output_type_mismatch(&attr.formal_ty, &output_ty) {
+                self.error(
+                    &format!("{path}.groupKeys[{index}]"),
+                    "floating_output_type_not_supported",
+                    "Aggregate group key FLOAT/DOUBLE type differs from the output column type; implicit floating casts are not modeled yet.",
+                );
+                return None;
+            }
+            if decimal_typmod_mismatch(&attr.formal_ty, &output_ty) {
+                self.error(
+                    &format!("{path}.groupKeys[{index}]"),
+                    "decimal_output_typmod_not_supported",
+                    "Aggregate group key DECIMAL typmod differs from the output column typmod; explicit rounding/cast semantics are not modeled yet.",
+                );
+                return None;
+            }
             select.push(FormalSelectItem {
                 expr: FormalAggregateTerm::Expr {
                     term: FormalFunctionTerm::Attribute {
@@ -982,11 +1024,7 @@ impl LoweringContext {
                     },
                 },
                 alias: output[index].name.clone(),
-                alias_ty: self.lower_attribute_type(
-                    &format!("{path}.output[{index}]"),
-                    &output[index],
-                    AttributeTypeContext::QueryOutput,
-                )?,
+                alias_ty: output_ty,
             });
         }
         for (index, call) in agg_calls.iter().enumerate() {
@@ -1039,6 +1077,14 @@ impl LoweringContext {
             return None;
         }
         if call.args.is_empty() && call.function.eq_ignore_ascii_case("COUNT") {
+            if output_ty != &FormalAttributeType::Z {
+                self.error(
+                    &call_path,
+                    "aggregate_output_type_not_supported",
+                    "COUNT(*) returns an integer count in the current FormalSQL model.",
+                );
+                return None;
+            }
             return Some(FormalAggregateTerm::CountStar);
         }
         if call.args.len() != 1 {
@@ -1057,7 +1103,40 @@ impl LoweringContext {
             );
         }
         let arg_path = format!("{call_path}.arg");
-        let arg_ty = self.infer_function_type(&arg_path, &call.args[0].parsed, scope);
+        let arg_ty = self
+            .direct_function_type(&arg_path, &call.args[0].parsed, scope)
+            .or_else(|| self.infer_function_type(&arg_path, &call.args[0].parsed, scope));
+        if call.function.eq_ignore_ascii_case("COUNT") {
+            if output_ty != &FormalAttributeType::Z {
+                self.error(
+                    &call_path,
+                    "aggregate_output_type_not_supported",
+                    "COUNT(expr) returns an integer count in the current FormalSQL model.",
+                );
+                return None;
+            }
+        } else if aggregate_result_follows_argument_type(&call.function) {
+            if let Some(arg_ty) = arg_ty.as_ref() {
+                if floating_output_type_mismatch(arg_ty, output_ty) {
+                    self.error(
+                        &call_path,
+                        "floating_aggregate_output_type_not_supported",
+                        "FLOAT/DOUBLE aggregate output type must match the modeled aggregate argument/result type; implicit floating aggregate casts are not modeled yet.",
+                    );
+                    return None;
+                }
+            } else if matches!(
+                output_ty,
+                FormalAttributeType::Float | FormalAttributeType::Double
+            ) {
+                self.error(
+                    &call_path,
+                    "floating_aggregate_argument_type_not_supported",
+                    "FLOAT/DOUBLE aggregate lowering requires an argument with a known modeled floating type.",
+                );
+                return None;
+            }
+        }
         if call.function.eq_ignore_ascii_case("AVG") || call.function.eq_ignore_ascii_case("SUM") {
             if matches!(arg_ty, Some(FormalAttributeType::Decimal { .. })) {
                 self.error(
@@ -1109,6 +1188,26 @@ fn decimal_typmod_mismatch(expr_ty: &FormalAttributeType, output_ty: &FormalAttr
         ) => expr_precision != output_precision || expr_scale != output_scale,
         _ => false,
     }
+}
+
+fn floating_output_type_mismatch(
+    expr_ty: &FormalAttributeType,
+    output_ty: &FormalAttributeType,
+) -> bool {
+    (matches!(
+        expr_ty,
+        FormalAttributeType::Float | FormalAttributeType::Double
+    ) || matches!(
+        output_ty,
+        FormalAttributeType::Float | FormalAttributeType::Double
+    )) && expr_ty != output_ty
+}
+
+fn aggregate_result_follows_argument_type(function: &str) -> bool {
+    matches!(
+        function.to_ascii_lowercase().as_str(),
+        "sum" | "max" | "min" | "avg"
+    )
 }
 
 fn aggregate_term_contains_bare_decimal_division(term: &FormalAggregateTerm) -> bool {

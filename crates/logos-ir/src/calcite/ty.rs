@@ -11,9 +11,11 @@ pub fn parse_calcite_sql_type(value: &str) -> Result<SqlType> {
         Ok(SqlType::Integer)
     } else if upper.starts_with("BIGINT") {
         Ok(SqlType::BigInt)
-    } else if upper.starts_with("FLOAT") || upper.starts_with("REAL") {
+    } else if type_head_is(&upper, "REAL") || type_head_is(&upper, "FLOAT4") {
         Ok(SqlType::Float)
-    } else if upper.starts_with("DOUBLE") {
+    } else if type_head_is(&upper, "FLOAT") {
+        parse_postgres_float_type(&upper).ok_or_else(|| Error::UnsupportedSqlType(value.to_owned()))
+    } else if type_head_is(&upper, "DOUBLE") || type_head_is(&upper, "FLOAT8") {
         Ok(SqlType::Double)
     } else if upper.starts_with("DECIMAL") || upper.starts_with("NUMERIC") {
         Ok(SqlType::decimal(
@@ -41,6 +43,15 @@ fn type_head_is(value: &str, head: &str) -> bool {
     value == head
         || value.starts_with(&format!("{head}("))
         || value.starts_with(&format!("{head} "))
+}
+
+fn parse_postgres_float_type(ty: &str) -> Option<SqlType> {
+    match parse_type_precision(ty) {
+        None => Some(SqlType::Double),
+        Some(1..=24) => Some(SqlType::Float),
+        Some(25..=53) => Some(SqlType::Double),
+        Some(_) => None,
+    }
 }
 
 fn timestamp_with_time_zone(value: &str) -> bool {
@@ -98,6 +109,20 @@ mod tests {
             parse_calcite_sql_type("DECIMAL(2, -3)").unwrap(),
             SqlType::decimal(Some(2), None)
         );
+        assert_eq!(parse_calcite_sql_type("REAL").unwrap(), SqlType::Float);
+        assert_eq!(parse_calcite_sql_type("FLOAT4").unwrap(), SqlType::Float);
+        assert_eq!(parse_calcite_sql_type("FLOAT(24)").unwrap(), SqlType::Float);
+        assert_eq!(parse_calcite_sql_type("FLOAT").unwrap(), SqlType::Double);
+        assert_eq!(
+            parse_calcite_sql_type("FLOAT(25)").unwrap(),
+            SqlType::Double
+        );
+        assert_eq!(parse_calcite_sql_type("FLOAT8").unwrap(), SqlType::Double);
+        assert_eq!(
+            parse_calcite_sql_type("DOUBLE PRECISION").unwrap(),
+            SqlType::Double
+        );
+        assert!(parse_calcite_sql_type("FLOAT(54)").is_err());
         assert_eq!(
             parse_calcite_sql_type("TIMESTAMP(0)").unwrap(),
             SqlType::timestamp(Some(0))

@@ -942,11 +942,24 @@ public final class CalciteIrCli {
     if (type.startsWith("DECIMAL") || type.startsWith("NUMERIC")) {
       return SqlTypeName.DECIMAL;
     }
-    if (type.startsWith("DOUBLE")) {
+    if (type.startsWith("DOUBLE") || type.startsWith("FLOAT8")) {
       return SqlTypeName.DOUBLE;
     }
-    if (type.startsWith("FLOAT") || type.startsWith("REAL")) {
+    if (type.startsWith("REAL") || type.startsWith("FLOAT4")) {
       return SqlTypeName.FLOAT;
+    }
+    if (type.startsWith("FLOAT")) {
+      int precision = parseTypePrecision(rawType);
+      if (precision == RelDataType.PRECISION_NOT_SPECIFIED) {
+        return SqlTypeName.DOUBLE;
+      }
+      if (precision >= 1 && precision <= 24) {
+        return SqlTypeName.FLOAT;
+      }
+      if (precision <= 53) {
+        return SqlTypeName.DOUBLE;
+      }
+      throw new IllegalArgumentException("FLOAT precision must be between 1 and 53");
     }
     if (type.startsWith("BOOL")) {
       return SqlTypeName.BOOLEAN;
@@ -1029,6 +1042,9 @@ public final class CalciteIrCli {
       boolean timestampWithTimeZone = isTimestampWithTimeZone(rawType);
       int precision = parseTypePrecision(rawType);
       SqlTypeName type = toSqlTypeName(rawType);
+      if (type == SqlTypeName.FLOAT || type == SqlTypeName.DOUBLE) {
+        precision = RelDataType.PRECISION_NOT_SPECIFIED;
+      }
       if ((type == SqlTypeName.TIMESTAMP || type == SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
           && precision == RelDataType.PRECISION_NOT_SPECIFIED) {
         precision = 6;

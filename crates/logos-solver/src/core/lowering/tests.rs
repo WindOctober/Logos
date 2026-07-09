@@ -165,6 +165,764 @@ fn lowers_builtin_value_expressions_without_external_symbol_warning() {
 }
 
 #[test]
+fn distinguishes_float_and_double_schema_attributes() {
+    let schema = Schema {
+        tables: vec![Table {
+            name: "measurements".to_owned(),
+            columns: vec![
+                typed_column("f", SqlType::Float),
+                typed_column("d", SqlType::Double),
+            ],
+        }],
+    };
+
+    let lowered = lower_schema(&schema);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let schema = lowered.schema.as_ref().expect("schema should lower");
+    assert!(schema.rocq_create_schema.contains("Attr_float \"f\""));
+    assert!(schema.rocq_create_schema.contains("Attr_double \"d\""));
+}
+
+#[test]
+fn lowers_double_arithmetic_with_double_symbol() {
+    let input = vec![
+        typed_column("left_value", SqlType::Double),
+        typed_column("right_value", SqlType::Double),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("sum_value", SqlType::Double)],
+        },
+        output: vec![typed_column("sum_value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AFunction \"plus_double\""));
+    assert!(!module.rocq_module.contains("AFunction \"plus.\""));
+}
+
+#[test]
+fn rejects_double_arithmetic_projected_as_float() {
+    let input = vec![
+        typed_column("left_value", SqlType::Double),
+        typed_column("right_value", SqlType::Double),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("sum_value", SqlType::Float)],
+        },
+        output: vec![typed_column("sum_value", SqlType::Float)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "floating_output_type_not_supported")
+    );
+}
+
+#[test]
+fn rejects_floating_expression_annotation_that_changes_type() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![typed_column("value", SqlType::Float)],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::InputRef { index: 0 }),
+                ty: "DOUBLE".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "floating_cast_not_supported")
+    );
+}
+
+#[test]
+fn lowers_double_integer_literal_with_ieee_bits() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "7".to_owned(),
+                }),
+                ty: "DOUBLE".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (4619567317775286272)")
+    );
+}
+
+#[test]
+fn lowers_non_integer_double_literal_with_ieee_bits() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "7.5".to_owned(),
+                }),
+                ty: "DOUBLE".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (4620130267728707584)")
+    );
+}
+
+#[test]
+fn lowers_non_integer_float_literal_with_ieee_bits() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "7.5".to_owned(),
+                }),
+                ty: "REAL".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Float)],
+        },
+        output: vec![typed_column("value", SqlType::Float)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstFloatBits (1089470464)"));
+}
+
+#[test]
+fn lowers_bare_float_annotation_as_postgres_double() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "7.5".to_owned(),
+                }),
+                ty: "FLOAT".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (4620130267728707584)")
+    );
+}
+
+#[test]
+fn rejects_non_finite_float_literals() {
+    for raw in ["NaN", "Infinity", "inf", "1e9999"] {
+        let query = Query {
+            source_sql: None,
+            rel: RelExpr::Project {
+                input: Box::new(RelExpr::TableScan {
+                    table: vec!["measurements".to_owned()],
+                    output: vec![column("id")],
+                }),
+                exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: raw.to_owned(),
+                    }),
+                    ty: "DOUBLE".to_owned(),
+                })],
+                correlations: Vec::new(),
+                output: vec![typed_column("value", SqlType::Double)],
+            },
+            output: vec![typed_column("value", SqlType::Double)],
+            features: vec![Feature::TableScan, Feature::Projection],
+            calcite_rel_text: None,
+            calcite_rel_plan: None,
+        };
+
+        let lowered = lower_query(&query);
+
+        assert_eq!(lowered.status, LoweringStatus::Blocked, "{raw}");
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "float_literal_not_supported"),
+            "{raw}"
+        );
+    }
+}
+
+#[test]
+fn lowers_negative_zero_float_literal() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "-0.0".to_owned(),
+                }),
+                ty: "DOUBLE".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (9223372036854775808)")
+    );
+}
+
+#[test]
+fn lowers_bare_non_integer_double_literal_output_annotation() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::Literal {
+                raw: "7.5".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("value", SqlType::Double)],
+        },
+        output: vec![typed_column("value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (4620130267728707584)")
+    );
+}
+
+#[test]
+fn lowers_non_integer_double_literal_in_formula_context() {
+    let output = vec![typed_column("value", SqlType::Double)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "=".to_owned(),
+                op: ScalarOp::Eq,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "7.5".to_owned(),
+                        }),
+                        ty: "DOUBLE".to_owned(),
+                    },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("CstDoubleBits (4620130267728707584)")
+    );
+}
+
+#[test]
+fn lowers_float_and_double_order_predicates_with_matching_symbols() {
+    let float_output = vec![
+        typed_column("left_value", SqlType::Float),
+        typed_column("right_value", SqlType::Float),
+    ];
+    let float_query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: float_output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: ">".to_owned(),
+                op: ScalarOp::Gt,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: float_output.clone(),
+        },
+        output: float_output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+    let double_output = vec![
+        typed_column("left_value", SqlType::Double),
+        typed_column("right_value", SqlType::Double),
+    ];
+    let double_query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: double_output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "<".to_owned(),
+                op: ScalarOp::Lt,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: double_output.clone(),
+        },
+        output: double_output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered_float = lower_query(&float_query);
+    let lowered_double = lower_query(&double_query);
+
+    assert_eq!(lowered_float.status, LoweringStatus::Lowered);
+    assert_eq!(lowered_double.status, LoweringStatus::Lowered);
+    let FormalQuery::Selection {
+        predicate:
+            FormalFormula::Predicate {
+                predicate: float_predicate,
+                ..
+            },
+        ..
+    } = lowered_float.query.as_ref().unwrap()
+    else {
+        panic!("expected float selection predicate");
+    };
+    let FormalQuery::Selection {
+        predicate:
+            FormalFormula::Predicate {
+                predicate: double_predicate,
+                ..
+            },
+        ..
+    } = lowered_double.query.as_ref().unwrap()
+    else {
+        panic!("expected double selection predicate");
+    };
+    assert_eq!(float_predicate, ">.");
+    assert_eq!(double_predicate, "<_double");
+}
+
+#[test]
+fn rejects_mixed_float_double_equality_predicate() {
+    let output = vec![
+        typed_column("left_value", SqlType::Float),
+        typed_column("right_value", SqlType::Double),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "=".to_owned(),
+                op: ScalarOp::Eq,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "floating_comparison_predicate_not_supported")
+    );
+}
+
+#[test]
+fn rejects_floating_order_predicate_in_value_context() {
+    let input = vec![
+        typed_column("left_value", SqlType::Double),
+        typed_column("right_value", SqlType::Double),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "<".to_owned(),
+                op: ScalarOp::Lt,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("is_less", SqlType::Boolean)],
+        },
+        output: vec![typed_column("is_less", SqlType::Boolean)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "floating_order_value_not_supported")
+    );
+}
+
+#[test]
+fn lowers_double_aggregate_with_double_symbol() {
+    let input = vec![typed_column("value", SqlType::Double)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "SUM($0)".to_owned(),
+                function: "SUM".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("sum_value", SqlType::Double)],
+        },
+        output: vec![typed_column("sum_value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AAggregate \"sum_double\""));
+}
+
+#[test]
+fn rejects_double_aggregate_projected_as_float() {
+    let input = vec![typed_column("value", SqlType::Double)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "SUM($0)".to_owned(),
+                function: "SUM".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("sum_value", SqlType::Float)],
+        },
+        output: vec![typed_column("sum_value", SqlType::Float)],
+        features: vec![Feature::TableScan, Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "floating_aggregate_output_type_not_supported"
+        })
+    );
+}
+
+#[test]
+fn rejects_unknown_arg_type_aggregate_projected_as_double() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "SUM(7)".to_owned(),
+                function: "SUM".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::Literal {
+                    raw: "7".to_owned(),
+                })],
+                filter: None,
+            }],
+            output: vec![typed_column("sum_value", SqlType::Double)],
+        },
+        output: vec![typed_column("sum_value", SqlType::Double)],
+        features: vec![Feature::TableScan, Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "floating_aggregate_argument_type_not_supported"
+        })
+    );
+}
+
+#[test]
+fn count_over_double_still_returns_integer_count() {
+    let input = vec![typed_column("value", SqlType::Double)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "COUNT($0)".to_owned(),
+                function: "COUNT".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("count_value", SqlType::BigInt)],
+        },
+        output: vec![typed_column("count_value", SqlType::BigInt)],
+        features: vec![Feature::TableScan, Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+}
+
+#[test]
 fn lowers_case_expression_as_structured_branches() {
     let table_output = vec![column("a")];
     let query = Query {

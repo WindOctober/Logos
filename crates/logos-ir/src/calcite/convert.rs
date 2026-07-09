@@ -935,6 +935,15 @@ fn rex_type_annotation(rex: &CalciteRex) -> Option<String> {
     }
     let ty = rex.ty.as_deref()?.trim();
     let normalized = normalize_type_annotation(ty)?;
+    if normalized == "FLOAT" {
+        if let Some(precision) = rex
+            .precision
+            .and_then(|precision| u32::try_from(precision).ok())
+            .or_else(|| parse_type_precision(ty))
+        {
+            return Some(format!("FLOAT({precision})"));
+        }
+    }
     if normalized == "TIMESTAMP" || normalized == "TIMESTAMP_WITH_TIME_ZONE" {
         if let Some(precision) = rex
             .precision
@@ -977,7 +986,12 @@ fn normalize_type_annotation(ty: &str) -> Option<String> {
         "SMALLINT" => Some("SMALLINT".to_owned()),
         "TINYINT" => Some("TINYINT".to_owned()),
         "DECIMAL" | "NUMERIC" => Some("DECIMAL".to_owned()),
-        "FLOAT" | "REAL" => Some("FLOAT".to_owned()),
+        "REAL" | "FLOAT4" => Some("REAL".to_owned()),
+        "FLOAT8" => Some("DOUBLE".to_owned()),
+        "FLOAT" => Some(match parse_type_precision(&upper) {
+            Some(precision) => format!("FLOAT({precision})"),
+            None => "FLOAT".to_owned(),
+        }),
         "DOUBLE" => Some("DOUBLE".to_owned()),
         "VARCHAR" => Some("VARCHAR".to_owned()),
         "CHAR" => Some("CHAR".to_owned()),
@@ -1133,6 +1147,34 @@ fn parse_cast_target_type_annotation(parser: &mut SourceParser<'_>) -> Option<St
             Some((precision, None)) => format!("{normalized}({precision})"),
             None => normalized.to_owned(),
         });
+    }
+    if parser
+        .peek_keyword("REAL")
+        .or_else(|| parser.peek_keyword("FLOAT4"))
+        .or_else(|| parser.peek_keyword("FLOAT8"))
+        .or_else(|| parser.peek_keyword("FLOAT"))
+        .or_else(|| parser.peek_keyword("DOUBLE"))
+        .is_some()
+    {
+        let normalized = if parser.consume_keyword("REAL").is_some() {
+            "REAL".to_owned()
+        } else if parser.consume_keyword("FLOAT4").is_some() {
+            "REAL".to_owned()
+        } else if parser.consume_keyword("FLOAT8").is_some() {
+            "DOUBLE".to_owned()
+        } else if parser.consume_keyword("DOUBLE").is_some() {
+            parser.consume_optional_keywords(&["PRECISION"]);
+            "DOUBLE".to_owned()
+        } else {
+            parser.consume_keyword("FLOAT")?;
+            match parser.consume_precision()? {
+                Some(precision) => format!("FLOAT({precision})"),
+                None => "FLOAT".to_owned(),
+            }
+        };
+        parser.consume_char(')')?;
+        parser.finish()?;
+        return Some(normalized);
     }
     let is_timestamptz = if parser.consume_keyword("TIMESTAMPTZ").is_some() {
         true
@@ -1594,6 +1636,15 @@ fn parse_sql_type_with_typmod(
     structured_precision: Option<i32>,
     structured_scale: Option<i32>,
 ) -> Result<SqlType> {
+    if type_annotation_head(value).is_some_and(|head| head.eq_ignore_ascii_case("FLOAT")) {
+        let precision = type_precision(value, structured_precision);
+        return match precision {
+            None => Ok(SqlType::Double),
+            Some(1..=24) => Ok(SqlType::Float),
+            Some(25..=53) => Ok(SqlType::Double),
+            Some(_) => Err(Error::UnsupportedSqlType(value.to_owned())),
+        };
+    }
     Ok(parse_sql_type(value)?.with_typmod(
         type_precision(value, structured_precision),
         type_scale(value, structured_precision, structured_scale),

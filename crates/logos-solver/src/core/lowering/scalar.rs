@@ -39,6 +39,12 @@ impl LoweringContext {
                 | ScalarOp::IsFalse
                 | ScalarOp::IsNotFalse
                 | ScalarOp::IsNotDistinctFrom => {
+                    let predicate = self.predicate_name_for_args(
+                        &format!("{path}.predicateType"),
+                        op,
+                        args,
+                        scope,
+                    )?;
                     let lowered_args = args
                         .iter()
                         .enumerate()
@@ -54,7 +60,7 @@ impl LoweringContext {
                         );
                     }
                     Some(FormalFormula::Predicate {
-                        predicate: predicate_name(op).to_owned(),
+                        predicate,
                         args: lowered_args,
                     })
                 }
@@ -120,6 +126,40 @@ impl LoweringContext {
                 );
                 None
             }
+        }
+    }
+
+    fn predicate_name_for_args(
+        &mut self,
+        path: &str,
+        op: &ScalarOp,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<String> {
+        if args.len() != 2 {
+            return Some(predicate_name(op).to_owned());
+        }
+        let left = self.direct_function_type(&format!("{path}.leftType"), &args[0], scope);
+        let right = self.direct_function_type(&format!("{path}.rightType"), &args[1], scope);
+        if is_floating_comparison_mismatch(left, right) {
+            self.error(
+                path,
+                "floating_comparison_predicate_not_supported",
+                "FLOAT/DOUBLE predicates are lowered only when both operands have the same modeled floating type.",
+            );
+            return None;
+        }
+        if !is_order_predicate(op) {
+            return Some(predicate_name(op).to_owned());
+        }
+        match (left, right) {
+            (Some(FormalAttributeType::Float), Some(FormalAttributeType::Float)) => {
+                Some(format!("{}.", predicate_name(op)))
+            }
+            (Some(FormalAttributeType::Double), Some(FormalAttributeType::Double)) => {
+                Some(format!("{}_double", predicate_name(op)))
+            }
+            _ => Some(predicate_name(op).to_owned()),
         }
     }
 
@@ -254,6 +294,21 @@ impl LoweringContext {
     ) -> Option<FormalFormula> {
         let mut terms = left_args.iter().zip(right_output).enumerate().map(
             |(index, (left_arg, right_column))| {
+                let left_ty =
+                    self.direct_function_type(&format!("{path}.left[{index}].type"), left_arg, outer_scope);
+                let right_ty = self.lower_attribute_type(
+                    &format!("{path}.right[{index}]"),
+                    right_column,
+                    AttributeTypeContext::QueryInput,
+                )?;
+                if is_floating_comparison_mismatch(left_ty, Some(right_ty)) {
+                    self.error(
+                        &format!("{path}.equality[{index}]"),
+                        "floating_comparison_predicate_not_supported",
+                        "FLOAT/DOUBLE IN-subquery equality is lowered only when both operands have the same modeled floating type.",
+                    );
+                    return None;
+                }
                 let left = self.lower_aggregate_term(
                     &format!("{path}.left[{index}]"),
                     left_arg,
@@ -262,11 +317,7 @@ impl LoweringContext {
                 let right = FormalAggregateTerm::Expr {
                     term: FormalFunctionTerm::Attribute {
                         name: right_column.name.clone(),
-                        ty: self.lower_attribute_type(
-                            &format!("{path}.right[{index}]"),
-                            right_column,
-                            AttributeTypeContext::QueryInput,
-                        )?,
+                        ty: right_ty,
                     },
                 };
                 Some(FormalFormula::Predicate {
@@ -375,6 +426,60 @@ impl LoweringContext {
                 ..
             } => self.lower_case_aggregate_term(path, args, scope),
             ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && args.len() == 2
+                    && self
+                        .homogeneous_float_binary_type(&format!("{path}.floatArgs"), args, scope)
+                        .is_some() =>
+            {
+                let ty =
+                    self.homogeneous_float_binary_type(&format!("{path}.floatArgs"), args, scope)?;
+                Some(FormalAggregateTerm::Function {
+                    symbol: floating_function_symbol(op, ty)?.to_owned(),
+                    args: args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            self.lower_aggregate_term(&format!("{path}.args[{index}]"), arg, scope)
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                })
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && self.has_float_argument(&format!("{path}.floatArgs"), args, scope) =>
+            {
+                self.error(
+                    path,
+                    "floating_mixed_arithmetic_not_supported",
+                    "FLOAT/DOUBLE arithmetic is lowered only when all operands have the same modeled floating type.",
+                );
+                None
+            }
+            ScalarAst::Call {
+                op: ScalarOp::Minus,
+                args,
+                ..
+            } if args.len() == 1
+                && self
+                    .direct_function_type(&format!("{path}.argType"), &args[0], scope)
+                    .is_some_and(is_float_type) =>
+            {
+                let ty = self.direct_function_type(&format!("{path}.argType"), &args[0], scope)?;
+                Some(FormalAggregateTerm::Function {
+                    symbol: floating_unary_minus_symbol(ty)?.to_owned(),
+                    args: vec![self.lower_aggregate_term(
+                        &format!("{path}.arg"),
+                        &args[0],
+                        scope,
+                    )?],
+                })
+            }
+            ScalarAst::Call { op, args, .. }
                 if matches!(op, ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply)
                     && args.len() == 2
                     && self.decimal_binary_args(&format!("{path}.decimalArgs"), args, scope) =>
@@ -448,6 +553,32 @@ impl LoweringContext {
                 self.lower_variadic_boolean_aggregate_term(path, op, args, scope)
             }
             ScalarAst::Call { op, args, .. }
+                if is_comparison_predicate(op)
+                    && self.floating_comparison_args_mismatch(
+                        &format!("{path}.floatArgs"),
+                        args,
+                        scope,
+                    ) =>
+            {
+                self.error(
+                    path,
+                    "floating_comparison_value_not_supported",
+                    "FLOAT/DOUBLE comparisons in value context are lowered only when both operands have the same modeled floating type.",
+                );
+                None
+            }
+            ScalarAst::Call { op, args, .. }
+                if is_order_predicate(op)
+                    && self.has_float_argument(&format!("{path}.floatArgs"), args, scope) =>
+            {
+                self.error(
+                    path,
+                    "floating_order_value_not_supported",
+                    "FLOAT/DOUBLE order comparisons are supported only in predicate context; boolean-valued projection expressions need a FormalSQL symbol interpretation first.",
+                );
+                None
+            }
+            ScalarAst::Call { op, args, .. }
                 if is_function_term_function(op)
                     && self.has_decimal_argument(&format!("{path}.decimalArgs"), args, scope) =>
             {
@@ -508,6 +639,19 @@ impl LoweringContext {
                 if let (Some(raw), Some(formal_ty)) =
                     (typed_literal_raw(expr), formal_type_from_annotation(ty))
                 {
+                    if matches!(
+                        formal_ty,
+                        FormalAttributeType::Float | FormalAttributeType::Double
+                    ) && !raw.eq_ignore_ascii_case("null")
+                        && super::emit::float_literal_bits_for_type(raw, Some(&formal_ty)).is_none()
+                    {
+                        self.error(
+                            path,
+                            "float_literal_not_supported",
+                            "FormalSQL lowering supports FLOAT/DOUBLE literals only for finite SQL numeric literals that fit the target floating-point type.",
+                        );
+                        return None;
+                    }
                     if matches!(formal_ty, FormalAttributeType::Decimal { .. })
                         && !raw.eq_ignore_ascii_case("null")
                         && super::emit::decimal_literal_for_type(raw, Some(&formal_ty)).is_none()
@@ -525,6 +669,11 @@ impl LoweringContext {
                             ty: Some(formal_ty),
                         },
                     });
+                }
+                if let Some(formal_ty) = formal_type_from_annotation(ty)
+                    && is_float_type(formal_ty)
+                {
+                    self.validate_floating_expression_annotation(path, expr, formal_ty, scope)?;
                 }
                 if let Some(target_ty) = explicit_decimal_annotation_type(ty) {
                     if let Some(args) = decimal_division_cast_args(expr)
@@ -612,6 +761,79 @@ impl LoweringContext {
                 Some(FormalAttributeType::Decimal { .. })
             )
         })
+    }
+
+    fn homogeneous_float_binary_type(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        if args.len() != 2 {
+            return None;
+        }
+        let left = self.direct_function_type(&format!("{path}.leftType"), &args[0], scope);
+        let right = self.direct_function_type(&format!("{path}.rightType"), &args[1], scope);
+        match (left, right) {
+            (Some(FormalAttributeType::Float), Some(FormalAttributeType::Float)) => {
+                Some(FormalAttributeType::Float)
+            }
+            (Some(FormalAttributeType::Double), Some(FormalAttributeType::Double)) => {
+                Some(FormalAttributeType::Double)
+            }
+            _ => None,
+        }
+    }
+
+    fn has_float_argument(&mut self, path: &str, args: &[ScalarAst], scope: &Scope) -> bool {
+        args.iter().enumerate().any(|(index, arg)| {
+            self.direct_function_type(&format!("{path}[{index}]"), arg, scope)
+                .is_some_and(is_float_type)
+        })
+    }
+
+    fn floating_comparison_args_mismatch(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> bool {
+        if args.len() != 2 {
+            return false;
+        }
+        let left = self.direct_function_type(&format!("{path}.leftType"), &args[0], scope);
+        let right = self.direct_function_type(&format!("{path}.rightType"), &args[1], scope);
+        is_floating_comparison_mismatch(left, right)
+    }
+
+    fn validate_floating_expression_annotation(
+        &mut self,
+        path: &str,
+        expr: &ScalarAst,
+        target_ty: FormalAttributeType,
+        scope: &Scope,
+    ) -> Option<()> {
+        match self.direct_function_type(&format!("{path}.floatAnnotationSource"), expr, scope) {
+            Some(source_ty) if source_ty == target_ty => Some(()),
+            Some(source_ty) => {
+                self.error(
+                    path,
+                    "floating_cast_not_supported",
+                    &format!(
+                        "FLOAT/DOUBLE expression annotation from {source_ty:?} to {target_ty:?} is not modeled as a FormalSQL cast.",
+                    ),
+                );
+                None
+            }
+            None => {
+                self.error(
+                    path,
+                    "floating_expression_type_not_supported",
+                    "FLOAT/DOUBLE expression annotation is supported only when the inner expression type can be inferred exactly.",
+                );
+                None
+            }
+        }
     }
 
     fn lower_decimal_division_aggregate_term(
@@ -743,6 +965,11 @@ impl LoweringContext {
                 decimal_binary_result_type(op, &left_ty, &right_ty)
             }
             ScalarAst::Call {
+                op: ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide,
+                args,
+                ..
+            } if args.len() == 2 => self.homogeneous_float_binary_type(path, args, scope),
+            ScalarAst::Call {
                 op: ScalarOp::Divide,
                 args,
                 ..
@@ -752,6 +979,17 @@ impl LoweringContext {
                 args,
                 ..
             } if args.len() == 1 && self.decimal_unary_arg(path, &args[0], scope) => {
+                self.direct_function_type(&format!("{path}.argType"), &args[0], scope)
+            }
+            ScalarAst::Call {
+                op: ScalarOp::Minus,
+                args,
+                ..
+            } if args.len() == 1
+                && self
+                    .direct_function_type(&format!("{path}.argType"), &args[0], scope)
+                    .is_some_and(is_float_type) =>
+            {
                 self.direct_function_type(&format!("{path}.argType"), &args[0], scope)
             }
             _ => None,
@@ -1006,14 +1244,16 @@ impl LoweringContext {
                 if let (Some(raw), Some(formal_ty)) =
                     (typed_literal_raw(expr), formal_type_from_annotation(ty))
                 {
-                    if formal_ty == FormalAttributeType::Float
-                        && !raw.eq_ignore_ascii_case("null")
-                        && raw.trim().parse::<i64>().is_err()
+                    if matches!(
+                        formal_ty,
+                        FormalAttributeType::Float | FormalAttributeType::Double
+                    ) && !raw.eq_ignore_ascii_case("null")
+                        && super::emit::float_literal_bits_for_type(raw, Some(&formal_ty)).is_none()
                     {
                         self.error(
                             path,
                             "float_literal_not_supported",
-                            "FormalSQL lowering does not yet encode non-integer FLOAT/DECIMAL literals.",
+                            "FormalSQL lowering supports FLOAT/DOUBLE literals only for finite SQL numeric literals that fit the target floating-point type.",
                         );
                         return None;
                     }
@@ -1047,6 +1287,11 @@ impl LoweringContext {
                         raw: raw.to_owned(),
                         ty: Some(formal_ty),
                     });
+                }
+                if let Some(formal_ty) = formal_type_from_annotation(ty)
+                    && is_float_type(formal_ty)
+                {
+                    self.validate_floating_expression_annotation(path, expr, formal_ty, scope)?;
                 }
                 if let Some(FormalAttributeType::Decimal { .. }) = formal_type_from_annotation(ty) {
                     if let Some(args) = decimal_division_cast_args(expr)
@@ -1122,6 +1367,75 @@ impl LoweringContext {
                         })
                         .collect::<Option<Vec<_>>>()?,
                 })
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && args.len() == 2
+                    && self
+                        .homogeneous_float_binary_type(&format!("{path}.floatArgs"), args, scope)
+                        .is_some() =>
+            {
+                let ty =
+                    self.homogeneous_float_binary_type(&format!("{path}.floatArgs"), args, scope)?;
+                Some(FormalFunctionTerm::Function {
+                    symbol: floating_function_symbol(op, ty)?.to_owned(),
+                    args: args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            self.lower_function_term(&format!("{path}.args[{index}]"), arg, scope)
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                })
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && self.has_float_argument(&format!("{path}.floatArgs"), args, scope) =>
+            {
+                self.error(
+                    path,
+                    "floating_mixed_arithmetic_not_supported",
+                    "FLOAT/DOUBLE arithmetic is lowered only when all operands have the same modeled floating type.",
+                );
+                None
+            }
+            ScalarAst::Call {
+                op: ScalarOp::Minus,
+                args,
+                ..
+            } if args.len() == 1
+                && self
+                    .direct_function_type(&format!("{path}.argType"), &args[0], scope)
+                    .is_some_and(is_float_type) =>
+            {
+                let ty = self.direct_function_type(&format!("{path}.argType"), &args[0], scope)?;
+                Some(FormalFunctionTerm::Function {
+                    symbol: floating_unary_minus_symbol(ty)?.to_owned(),
+                    args: vec![self.lower_function_term(
+                        &format!("{path}.arg"),
+                        &args[0],
+                        scope,
+                    )?],
+                })
+            }
+            ScalarAst::Call { op, args, .. }
+                if is_comparison_predicate(op)
+                    && self.floating_comparison_args_mismatch(
+                        &format!("{path}.floatArgs"),
+                        args,
+                        scope,
+                    ) =>
+            {
+                self.error(
+                    path,
+                    "floating_comparison_value_not_supported",
+                    "FLOAT/DOUBLE comparisons in value context are lowered only when both operands have the same modeled floating type.",
+                );
+                None
             }
             ScalarAst::Call { op, args, .. }
                 if matches!(op, ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply)
@@ -1537,7 +1851,9 @@ fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
     let head = type_annotation_head(ty)?;
     match head {
         "INTEGER" | "INT" | "BIGINT" | "SMALLINT" | "TINYINT" => Some(FormalAttributeType::Z),
-        "FLOAT" | "REAL" | "DOUBLE" => Some(FormalAttributeType::Float),
+        "REAL" | "FLOAT4" => Some(FormalAttributeType::Float),
+        "FLOAT" => float_type_from_precision(type_annotation_precision(ty)),
+        "DOUBLE" | "FLOAT8" => Some(FormalAttributeType::Double),
         "DECIMAL" | "NUMERIC" => {
             let (precision, scale) = decimal_annotation_typmod(ty)?;
             Some(FormalAttributeType::Decimal { precision, scale })
@@ -1552,6 +1868,15 @@ fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
             precision: type_annotation_precision(ty),
         }),
         _ => None,
+    }
+}
+
+fn float_type_from_precision(precision: Option<u32>) -> Option<FormalAttributeType> {
+    match precision {
+        None => Some(FormalAttributeType::Double),
+        Some(1..=24) => Some(FormalAttributeType::Float),
+        Some(25..=53) => Some(FormalAttributeType::Double),
+        Some(_) => None,
     }
 }
 
@@ -1786,7 +2111,9 @@ fn type_annotation_head(ty: &str) -> Option<&'static str> {
         "TINYINT" => Some("TINYINT"),
         "FLOAT" => Some("FLOAT"),
         "REAL" => Some("REAL"),
+        "FLOAT4" => Some("FLOAT4"),
         "DOUBLE" => Some("DOUBLE"),
+        "FLOAT8" => Some("FLOAT8"),
         "DECIMAL" => Some("DECIMAL"),
         "NUMERIC" => Some("NUMERIC"),
         "VARCHAR" => Some("VARCHAR"),
@@ -1967,6 +2294,64 @@ fn predicate_name(op: &ScalarOp) -> &'static str {
     }
 }
 
+fn is_order_predicate(op: &ScalarOp) -> bool {
+    matches!(
+        op,
+        ScalarOp::Lt | ScalarOp::Lte | ScalarOp::Gt | ScalarOp::Gte
+    )
+}
+
+fn is_comparison_predicate(op: &ScalarOp) -> bool {
+    matches!(
+        op,
+        ScalarOp::Eq
+            | ScalarOp::NotEq
+            | ScalarOp::Lt
+            | ScalarOp::Lte
+            | ScalarOp::Gt
+            | ScalarOp::Gte
+            | ScalarOp::IsNotDistinctFrom
+    )
+}
+
+fn is_float_type(ty: FormalAttributeType) -> bool {
+    matches!(ty, FormalAttributeType::Float | FormalAttributeType::Double)
+}
+
+fn is_floating_comparison_mismatch(
+    left: Option<FormalAttributeType>,
+    right: Option<FormalAttributeType>,
+) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) if is_float_type(left) || is_float_type(right) => left != right,
+        (Some(left), None) => is_float_type(left),
+        (None, Some(right)) => is_float_type(right),
+        _ => false,
+    }
+}
+
+fn floating_function_symbol(op: &ScalarOp, ty: FormalAttributeType) -> Option<&'static str> {
+    match (op, ty) {
+        (ScalarOp::Plus, FormalAttributeType::Float) => Some("plus."),
+        (ScalarOp::Minus, FormalAttributeType::Float) => Some("minus."),
+        (ScalarOp::Multiply, FormalAttributeType::Float) => Some("mult."),
+        (ScalarOp::Divide, FormalAttributeType::Float) => Some("divide."),
+        (ScalarOp::Plus, FormalAttributeType::Double) => Some("plus_double"),
+        (ScalarOp::Minus, FormalAttributeType::Double) => Some("minus_double"),
+        (ScalarOp::Multiply, FormalAttributeType::Double) => Some("mult_double"),
+        (ScalarOp::Divide, FormalAttributeType::Double) => Some("divide_double"),
+        _ => None,
+    }
+}
+
+fn floating_unary_minus_symbol(ty: FormalAttributeType) -> Option<&'static str> {
+    match ty {
+        FormalAttributeType::Float => Some("opp."),
+        FormalAttributeType::Double => Some("opp_double"),
+        _ => None,
+    }
+}
+
 fn predicate_requires_external_interpretation(op: &ScalarOp) -> bool {
     !matches!(
         op,
@@ -2007,6 +2392,12 @@ pub(super) fn aggregate_function_name_for_type(
 ) -> Option<String> {
     let name = function.to_ascii_lowercase();
     match (name.as_str(), arg_ty) {
+        ("sum" | "max" | "min" | "avg", Some(FormalAttributeType::Float)) => {
+            Some(format!("{name}."))
+        }
+        ("sum" | "max" | "min" | "avg", Some(FormalAttributeType::Double)) => {
+            Some(format!("{name}_double"))
+        }
         ("max" | "min", Some(FormalAttributeType::Decimal { .. })) => {
             Some(format!("{name}_decimal"))
         }

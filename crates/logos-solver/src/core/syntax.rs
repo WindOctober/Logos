@@ -105,6 +105,7 @@ pub enum FormalAttributeType {
     Z,
     Bool,
     Float,
+    Double,
     Decimal {
         precision: Option<u32>,
         scale: Option<u32>,

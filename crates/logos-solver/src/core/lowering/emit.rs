@@ -702,6 +702,7 @@ fn emit_rocq_attribute(ty: FormalAttributeType, name: &str) -> String {
         FormalAttributeType::String => "AttrString",
         FormalAttributeType::Bool => "AttrBool",
         FormalAttributeType::Float => "AttrFloat",
+        FormalAttributeType::Double => "AttrDouble",
         FormalAttributeType::Decimal { .. } => "AttrDecimal",
         FormalAttributeType::Date => "AttrDate",
         FormalAttributeType::Timestamp { .. } => "AttrTimestamp",
@@ -716,6 +717,7 @@ fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
         FormalAttributeType::String => format!("Attr_string {}", rocq_string_literal(name)),
         FormalAttributeType::Bool => format!("Attr_bool {}", rocq_string_literal(name)),
         FormalAttributeType::Float => format!("Attr_float {}", rocq_string_literal(name)),
+        FormalAttributeType::Double => format!("Attr_double {}", rocq_string_literal(name)),
         FormalAttributeType::Decimal { precision, scale } => {
             let (precision, scale) = checked_decimal_typmod(precision, scale);
             format!(
@@ -768,6 +770,7 @@ fn identity_select_constructor(attribute_ty: FormalAttributeType) -> Option<&'st
         FormalAttributeType::String => Some("SelectString"),
         FormalAttributeType::Bool => Some("SelectBool"),
         FormalAttributeType::Float => Some("SelectFloat"),
+        FormalAttributeType::Double => Some("SelectDouble"),
         FormalAttributeType::Decimal { .. } => Some("SelectDecimal"),
         FormalAttributeType::Date => Some("SelectDate"),
         FormalAttributeType::Timestamp { .. } => Some("SelectTimestamp"),
@@ -804,6 +807,7 @@ fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
         FormalAttributeType::String => "StringColumn",
         FormalAttributeType::Bool => "BoolColumn",
         FormalAttributeType::Float => "FloatColumn",
+        FormalAttributeType::Double => "DoubleColumn",
         FormalAttributeType::Decimal { .. } => "DecimalColumn",
         FormalAttributeType::Date => "DateColumn",
         FormalAttributeType::Timestamp { .. } => "TimestampColumn",
@@ -818,6 +822,7 @@ fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
         FormalAttributeType::String => Some("DotString"),
         FormalAttributeType::Bool => Some("DotBool"),
         FormalAttributeType::Float => Some("DotFloat"),
+        FormalAttributeType::Double => Some("DotDouble"),
         FormalAttributeType::Decimal { .. } => Some("DotDecimal"),
         FormalAttributeType::Date => Some("DotDate"),
         FormalAttributeType::Timestamp { .. } => Some("DotTimestamp"),
@@ -833,6 +838,7 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             Some(FormalAttributeType::String) | None => "NullString".to_owned(),
             Some(FormalAttributeType::Bool) => "NullBool".to_owned(),
             Some(FormalAttributeType::Float) => "NullFloat".to_owned(),
+            Some(FormalAttributeType::Double) => "NullDouble".to_owned(),
             Some(FormalAttributeType::Decimal { .. }) => "NullDecimal".to_owned(),
             Some(FormalAttributeType::Date) => "NullDate".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "NullTimestamp".to_owned(),
@@ -844,6 +850,13 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
     }
     if trimmed.eq_ignore_ascii_case("false") {
         return "CstBool false".to_owned();
+    }
+    if let Some(bits) = float_literal_bits_for_type(trimmed, ty.as_ref()) {
+        return match ty {
+            Some(FormalAttributeType::Float) => format!("CstFloatBits ({bits})"),
+            Some(FormalAttributeType::Double) => format!("CstDoubleBits ({bits})"),
+            _ => unreachable!("float_literal_bits_for_type only accepts FLOAT/DOUBLE"),
+        };
     }
     if matches!(ty, Some(FormalAttributeType::Date)) {
         if let Some(days) = parse_date_literal(trimmed) {
@@ -887,6 +900,7 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             Some(FormalAttributeType::String) | None => "Value_string None".to_owned(),
             Some(FormalAttributeType::Bool) => "Value_bool None".to_owned(),
             Some(FormalAttributeType::Float) => "Value_float None".to_owned(),
+            Some(FormalAttributeType::Double) => "Value_double None".to_owned(),
             Some(FormalAttributeType::Decimal { .. }) => "Value_decimal None".to_owned(),
             Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "Value_timestamp None".to_owned(),
@@ -898,6 +912,17 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
     }
     if trimmed.eq_ignore_ascii_case("false") {
         return "Value_bool (Some false)".to_owned();
+    }
+    if let Some(bits) = float_literal_bits_for_type(trimmed, ty.as_ref()) {
+        return match ty {
+            Some(FormalAttributeType::Float) => {
+                format!("Value_float (Some (Float32OfBits ({bits})))")
+            }
+            Some(FormalAttributeType::Double) => {
+                format!("Value_double (Some (Float64OfBits ({bits})))")
+            }
+            _ => unreachable!("float_literal_bits_for_type only accepts FLOAT/DOUBLE"),
+        };
     }
     if matches!(ty, Some(FormalAttributeType::Date)) {
         if let Some(days) = parse_date_literal(trimmed) {
@@ -957,6 +982,75 @@ pub(super) fn parse_decimal_literal(raw: &str) -> Option<(String, u32)> {
         digits.insert(0, '-');
     }
     Some((digits, fractional.len().try_into().ok()?))
+}
+
+pub(super) fn float_literal_bits_for_type(
+    raw: &str,
+    ty: Option<&FormalAttributeType>,
+) -> Option<u64> {
+    let value = finite_sql_float_literal_text(raw)?;
+    match ty {
+        Some(FormalAttributeType::Float) => {
+            let parsed = value.parse::<f32>().ok()?;
+            parsed.is_finite().then_some(parsed.to_bits() as u64)
+        }
+        Some(FormalAttributeType::Double) => {
+            let parsed = value.parse::<f64>().ok()?;
+            parsed.is_finite().then_some(parsed.to_bits())
+        }
+        _ => None,
+    }
+}
+
+fn finite_sql_float_literal_text(raw: &str) -> Option<String> {
+    let value = sql_string_literal_content(raw).unwrap_or_else(|| raw.trim().to_owned());
+    let value = value.trim();
+    if !is_sql_finite_float_literal(value) {
+        return None;
+    }
+    Some(value.to_owned())
+}
+
+fn is_sql_finite_float_literal(value: &str) -> bool {
+    let mut chars = value.chars().peekable();
+    if matches!(chars.peek(), Some('+') | Some('-')) {
+        chars.next();
+    }
+
+    let mut saw_digit = false;
+    while chars.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+        saw_digit = true;
+        chars.next();
+    }
+
+    if matches!(chars.peek(), Some('.')) {
+        chars.next();
+        while chars.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+            saw_digit = true;
+            chars.next();
+        }
+    }
+
+    if !saw_digit {
+        return false;
+    }
+
+    if matches!(chars.peek(), Some('e') | Some('E')) {
+        chars.next();
+        if matches!(chars.peek(), Some('+') | Some('-')) {
+            chars.next();
+        }
+        let mut saw_exponent_digit = false;
+        while chars.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+            saw_exponent_digit = true;
+            chars.next();
+        }
+        if !saw_exponent_digit {
+            return false;
+        }
+    }
+
+    chars.next().is_none()
 }
 
 pub(super) fn decimal_literal_for_type(

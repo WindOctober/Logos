@@ -503,7 +503,8 @@ impl Scope {
 fn sql_type_to_formal_attribute_type(ty: &SqlType) -> FormalAttributeType {
     match ty {
         SqlType::Integer | SqlType::BigInt => FormalAttributeType::Z,
-        SqlType::Float | SqlType::Double => FormalAttributeType::Float,
+        SqlType::Float => FormalAttributeType::Float,
+        SqlType::Double => FormalAttributeType::Double,
         SqlType::Decimal { precision, scale } => FormalAttributeType::Decimal {
             precision: *precision,
             scale: *scale,
