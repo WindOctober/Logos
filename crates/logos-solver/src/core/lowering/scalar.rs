@@ -441,6 +441,18 @@ impl LoweringContext {
                     constructor: attr.constructor,
                 })
             }
+            ScalarAst::CorrelatedRef {
+                correlation,
+                field,
+                index,
+                ..
+            } => {
+                let attr = self.correlated_attribute(path, correlation, *index, field)?;
+                Some(FormalFunctionTerm::Attribute {
+                    name: attr.name,
+                    constructor: attr.constructor,
+                })
+            }
             ScalarAst::Literal { raw } => {
                 if literal_requires_external_encoding(raw) {
                     self.warning(
@@ -755,6 +767,15 @@ impl LoweringContext {
     ) -> Option<FormalAttributeType> {
         match ast {
             ScalarAst::InputRef { index } => Some(scope.attribute(*index)?.formal_ty),
+            ScalarAst::CorrelatedRef {
+                correlation,
+                field,
+                index,
+                ..
+            } => Some(
+                self.correlated_attribute(path, correlation, *index, field)?
+                    .formal_ty,
+            ),
             ScalarAst::TypeAnnotation { ty, .. } => formal_type_from_annotation(ty),
             ScalarAst::Literal { .. } => None,
             ScalarAst::Call {

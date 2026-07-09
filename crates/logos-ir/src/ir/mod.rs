@@ -70,11 +70,15 @@ pub enum RelExpr {
     Project {
         input: Box<RelExpr>,
         exprs: Vec<ScalarExpr>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        correlations: Vec<CorrelationBinding>,
         output: Vec<Column>,
     },
     Filter {
         input: Box<RelExpr>,
         predicate: ScalarExpr,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        correlations: Vec<CorrelationBinding>,
         output: Vec<Column>,
     },
     Join {
@@ -82,6 +86,8 @@ pub enum RelExpr {
         right: Box<RelExpr>,
         join_type: JoinType,
         condition: ScalarExpr,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        correlations: Vec<CorrelationBinding>,
         output: Vec<Column>,
     },
     Aggregate {
@@ -123,6 +129,13 @@ impl RelExpr {
             | RelExpr::Values { output, .. } => output,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrelationBinding {
+    pub correlation: String,
+    pub output: Vec<Column>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -249,6 +262,15 @@ pub enum ScalarClass {
 pub enum ScalarAst {
     InputRef {
         index: usize,
+    },
+    CorrelatedRef {
+        correlation: String,
+        field: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        index: Option<usize>,
+        ty: SqlType,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        precision: Option<u32>,
     },
     Literal {
         raw: String,

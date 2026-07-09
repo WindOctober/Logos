@@ -1,6 +1,6 @@
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use chrono_tz::Tz;
-use logos_ir::ir::{Column, Query, ScalarAst, Schema, SqlType};
+use logos_ir::ir::{Column, CorrelationBinding, Query, ScalarAst, Schema, SqlType};
 
 use crate::core::VerificationIr;
 
@@ -228,6 +228,14 @@ fn datetime_utc_from_micros(micros: i64) -> Option<DateTime<Utc>> {
 struct LoweringContext {
     diagnostics: Vec<LoweringDiagnostic>,
     config: LoweringConfig,
+    correlations: Vec<CorrelationScope>,
+}
+
+#[derive(Debug, Clone)]
+struct CorrelationScope {
+    correlation: String,
+    scope: Scope,
+    field_names: Vec<String>,
 }
 
 mod emit;
@@ -247,6 +255,7 @@ impl LoweringContext {
         Self {
             diagnostics: Vec::new(),
             config,
+            correlations: Vec::new(),
         }
     }
 
@@ -271,6 +280,89 @@ impl LoweringContext {
             code: code.to_owned(),
             message: message.to_owned(),
         });
+    }
+
+    fn with_correlations<T>(
+        &mut self,
+        bindings: &[CorrelationBinding],
+        f: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        let scopes = bindings
+            .iter()
+            .map(|binding| CorrelationScope {
+                correlation: binding.correlation.clone(),
+                scope: Scope::from_columns(&binding.output),
+                field_names: binding
+                    .output
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        self.with_correlation_scopes(&scopes, f)
+    }
+
+    fn with_correlation_scopes<T>(
+        &mut self,
+        scopes: &[CorrelationScope],
+        f: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        let base_len = self.correlations.len();
+        self.correlations.extend(scopes.iter().cloned());
+        let result = f(self);
+        self.correlations.truncate(base_len);
+        result
+    }
+
+    fn correlated_attribute(
+        &mut self,
+        path: &str,
+        correlation: &str,
+        index: Option<usize>,
+        field: &str,
+    ) -> Option<ScopeAttribute> {
+        let Some(index) = index else {
+            self.error(
+                path,
+                "correlated_ref_index_missing",
+                "Calcite correlated field access did not expose a field index.",
+            );
+            return None;
+        };
+        let Some(binding) = self
+            .correlations
+            .iter()
+            .rev()
+            .find(|binding| binding.correlation == correlation)
+        else {
+            self.error(
+                path,
+                "correlation_binding_missing",
+                "Correlated field access references a correlation variable that is not bound by the current relational context.",
+            );
+            return None;
+        };
+        let Some(attribute) = binding.scope.attribute(index) else {
+            self.error(
+                path,
+                "correlated_ref_index_out_of_range",
+                "Correlated field access index is outside the bound correlation row type.",
+            );
+            return None;
+        };
+        let debug_field = binding
+            .field_names
+            .get(index)
+            .map(String::as_str)
+            .unwrap_or(attribute.name.as_str());
+        if debug_field != field {
+            self.warning(
+                path,
+                "correlated_ref_field_name_mismatch",
+                "Correlated field access was resolved by Calcite field index; the debug field name did not match the bound row type.",
+            );
+        }
+        Some(attribute)
     }
 }
 
@@ -397,6 +489,18 @@ fn has_unique_column_names(columns: &[Column]) -> bool {
             .skip(index + 1)
             .all(|other| other.name != column.name)
     })
+}
+
+fn sanitize_correlation_name(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect::<String>();
+    if sanitized.is_empty() {
+        "cor".to_owned()
+    } else {
+        sanitized
+    }
 }
 
 fn sql_string_literal_content(raw: &str) -> Option<String> {

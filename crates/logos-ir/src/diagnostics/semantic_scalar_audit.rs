@@ -393,6 +393,7 @@ fn root_ast_op(ast: &ScalarAst) -> Option<ScalarOp> {
         ScalarAst::Call { op, .. } => Some(op.clone()),
         ScalarAst::TypeAnnotation { expr, .. } => root_ast_op(expr),
         ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
@@ -425,6 +426,7 @@ fn first_failing_ast_op(ast: &ScalarAst) -> Option<ScalarOp> {
             }
         }
         ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
@@ -470,6 +472,7 @@ mod tests {
                         output: Vec::new(),
                     }),
                     predicate: calcite_scalar("AND(=($0, 1), IS NOT NULL($1))"),
+                    correlations: Vec::new(),
                     output: Vec::new(),
                 },
                 output: Vec::new(),
@@ -515,6 +518,7 @@ mod tests {
                         output: Vec::new(),
                     }),
                     predicate: calcite_scalar("=($0, 1)"),
+                    correlations: Vec::new(),
                     output: Vec::new(),
                 },
                 output: Vec::new(),

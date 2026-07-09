@@ -13,6 +13,10 @@ pub enum CoreValueExpr {
     InputRef {
         index: usize,
     },
+    CorrelatedRef {
+        correlation: String,
+        field: String,
+    },
     Literal {
         raw: String,
     },

@@ -213,7 +213,9 @@ pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) 
         features.insert(Feature::OpaqueScalar);
         features.insert(Feature::FormalSqlUnsupported);
     }
-    if expr.raw.contains("$cor") {
+    if contains_correlated_ref(&expr.parsed) {
+        features.insert(Feature::CorrelatedPredicate);
+    } else if expr.raw.contains("$cor") {
         features.insert(Feature::CorrelatedPredicate);
         features.insert(Feature::OpaqueScalar);
         features.insert(Feature::FormalSqlUnsupported);
@@ -225,6 +227,9 @@ pub fn collect_scalar_expr(expr: &ScalarExpr, features: &mut BTreeSet<Feature>) 
             features.insert(Feature::SubqueryPredicate);
             features.insert(Feature::OpaqueScalar);
             features.insert(Feature::FormalSqlUnsupported);
+        }
+        ScalarClass::CorrelatedRef if contains_correlated_ref(&expr.parsed) => {
+            features.insert(Feature::CorrelatedPredicate);
         }
         ScalarClass::CorrelatedRef => {
             features.insert(Feature::CorrelatedPredicate);
@@ -748,6 +753,7 @@ fn first_top_level_open_paren(value: &str) -> Option<usize> {
 fn contains_scalar_op(ast: &ScalarAst, target: &ScalarOp) -> bool {
     match ast {
         ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
@@ -757,6 +763,27 @@ fn contains_scalar_op(ast: &ScalarAst, target: &ScalarOp) -> bool {
             op == target || args.iter().any(|arg| contains_scalar_op(arg, target))
         }
         ScalarAst::TypeAnnotation { expr, .. } => contains_scalar_op(expr, target),
+    }
+}
+
+fn contains_correlated_ref(ast: &ScalarAst) -> bool {
+    match ast {
+        ScalarAst::CorrelatedRef { .. } => true,
+        ScalarAst::Call { args, .. } => args.iter().any(contains_correlated_ref),
+        ScalarAst::TypeAnnotation { expr, .. } => contains_correlated_ref(expr),
+        ScalarAst::Window { parsed, .. } => {
+            parsed.args.iter().any(contains_correlated_ref)
+                || parsed.partition_by.iter().any(contains_correlated_ref)
+                || parsed
+                    .order_by
+                    .iter()
+                    .any(|key| contains_correlated_ref(&key.expr))
+        }
+        ScalarAst::InputRef { .. }
+        | ScalarAst::Literal { .. }
+        | ScalarAst::Flag { .. }
+        | ScalarAst::RelSubquery { .. }
+        | ScalarAst::Sarg { .. } => false,
     }
 }
 

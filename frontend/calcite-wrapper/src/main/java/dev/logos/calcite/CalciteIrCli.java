@@ -19,6 +19,8 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.core.Aggregate;
+import org.apache.calcite.rel.core.Correlate;
+import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.Project;
@@ -30,6 +32,8 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
 import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexCorrelVariable;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexFieldCollation;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
@@ -224,6 +228,7 @@ public final class CalciteIrCli {
     out.comma();
     out.name("rowType");
     emitRowType(out, rel.getRowType());
+    emitCorrelationMetadata(out, rel);
 
     if (rel instanceof TableScan scan) {
       out.comma();
@@ -370,6 +375,37 @@ public final class CalciteIrCli {
     out.endObject();
   }
 
+  private static void emitCorrelationMetadata(Json out, RelNode rel) {
+    if (!rel.getVariablesSet().isEmpty()) {
+      out.comma();
+      out.name("variablesSet");
+      out.beginArray();
+      int index = 0;
+      for (CorrelationId id : rel.getVariablesSet()) {
+        if (index++ > 0) {
+          out.comma();
+        }
+        out.value(id.getName());
+      }
+      out.endArray();
+    }
+    if (rel instanceof Correlate correlate) {
+      out.comma();
+      out.name("correlationId").value(correlate.getCorrelationId().getName());
+      out.comma();
+      out.name("requiredColumns");
+      out.beginArray();
+      int index = 0;
+      for (int column : correlate.getRequiredColumns()) {
+        if (index++ > 0) {
+          out.comma();
+        }
+        out.value(column);
+      }
+      out.endArray();
+    }
+  }
+
   private static void emitRexNode(Json out, RexNode rex) {
     emitRexNode(out, rex, null);
   }
@@ -399,6 +435,19 @@ public final class CalciteIrCli {
     if (rex instanceof RexInputRef inputRef) {
       out.comma();
       out.name("index").value(inputRef.getIndex());
+    } else if (rex instanceof RexFieldAccess fieldAccess) {
+      out.comma();
+      out.name("fieldName").value(fieldAccess.getField().getName());
+      out.comma();
+      out.name("fieldIndex").value(fieldAccess.getField().getIndex());
+      out.comma();
+      out.name("referenceExpr");
+      emitRexNode(out, fieldAccess.getReferenceExpr());
+    } else if (rex instanceof RexCorrelVariable correl) {
+      out.comma();
+      out.name("correlationId").value(correl.id.getId());
+      out.comma();
+      out.name("correlationName").value(correl.id.getName());
     } else if (rex instanceof RexLiteral literal) {
       emitRexLiteralFields(out, literal);
     } else if (rex instanceof RexSubQuery subQuery) {

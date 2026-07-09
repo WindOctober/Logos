@@ -68,30 +68,63 @@ impl LoweringContext {
             RelExpr::Project {
                 input,
                 exprs,
+                correlations,
                 output,
             } => {
                 let input_query = self.lower_rel(&format!("{path}.input"), input)?;
-                let input_scope = Scope::from_columns(input.output());
-                let select = self.lower_project_select(path, exprs, output, &input_scope)?;
+                let (input_query, input_output, correlations) = self.prepare_correlated_input(
+                    &format!("{path}.correlations"),
+                    input_query,
+                    input.output(),
+                    correlations,
+                )?;
+                let input_scope = Scope::from_columns(&input_output);
+                let select = self.with_correlation_scopes(&correlations, |context| {
+                    context.lower_project_select(path, exprs, output, &input_scope)
+                })?;
                 Some(FormalQuery::Projection {
                     select,
                     input: Box::new(input_query),
                 })
             }
             RelExpr::Filter {
-                input, predicate, ..
+                input,
+                predicate,
+                correlations,
+                ..
             } => {
                 let input_query = self.lower_rel(&format!("{path}.input"), input)?;
-                let input_scope = Scope::from_columns(input.output());
-                let predicate = self.lower_formula(
-                    &format!("{path}.predicate"),
-                    &predicate.parsed,
-                    &input_scope,
-                )?;
-                Some(FormalQuery::Selection {
+                let (predicate_input, predicate_output, correlations) = self
+                    .prepare_correlated_input(
+                        &format!("{path}.correlations"),
+                        input_query,
+                        input.output(),
+                        correlations,
+                    )?;
+                let input_scope = Scope::from_columns(&predicate_output);
+                let predicate = self.with_correlation_scopes(&correlations, |context| {
+                    context.lower_formula(
+                        &format!("{path}.predicate"),
+                        &predicate.parsed,
+                        &input_scope,
+                    )
+                })?;
+                let selection = FormalQuery::Selection {
                     predicate,
-                    input: Box::new(input_query),
-                })
+                    input: Box::new(predicate_input),
+                };
+                if correlations.is_empty() {
+                    Some(selection)
+                } else {
+                    Some(FormalQuery::Projection {
+                        select: self.lower_join_rename_select(
+                            &format!("{path}.output"),
+                            &predicate_output,
+                            input.output(),
+                        )?,
+                        input: Box::new(selection),
+                    })
+                }
             }
             RelExpr::Aggregate {
                 input,
@@ -157,8 +190,11 @@ impl LoweringContext {
                 right,
                 join_type,
                 condition,
+                correlations,
                 output,
-            } => self.lower_join(path, left, right, *join_type, &condition.parsed, output),
+            } => self.with_correlations(correlations, |context| {
+                context.lower_join(path, left, right, *join_type, &condition.parsed, output)
+            }),
             RelExpr::Values { tuples, .. } => {
                 match tuples {
                     ValuesTuples::Rows { rows } if rows.is_empty() => {
@@ -657,6 +693,80 @@ impl LoweringContext {
             select,
             input: Box::new(input),
         })
+    }
+
+    fn prepare_correlated_input(
+        &mut self,
+        path: &str,
+        input: FormalQuery,
+        input_output: &[Column],
+        correlations: &[logos_ir::ir::CorrelationBinding],
+    ) -> Option<(FormalQuery, Vec<Column>, Vec<CorrelationScope>)> {
+        if correlations.is_empty() {
+            return Some((input, input_output.to_vec(), Vec::new()));
+        }
+        if correlations
+            .iter()
+            .any(|binding| binding.output.len() != input_output.len())
+        {
+            self.error(
+                path,
+                "correlation_binding_arity_mismatch",
+                "Calcite correlation row type does not match the relational input it is expected to bind.",
+            );
+            return None;
+        }
+        let renamed = input_output
+            .iter()
+            .enumerate()
+            .map(|(index, column)| Column {
+                name: format!(
+                    "__logos_cor_{}_{}",
+                    sanitize_correlation_name(&correlations[0].correlation),
+                    index
+                ),
+                ty: column.ty.clone(),
+                nullable: column.nullable,
+                precision: column.precision,
+            })
+            .collect::<Vec<_>>();
+        if !has_unique_column_names(&renamed)
+            || renamed.iter().any(|fresh| {
+                input_output.iter().any(|column| column.name == fresh.name)
+                    || self.correlations.iter().any(|scope| {
+                        scope
+                            .scope
+                            .attributes
+                            .iter()
+                            .any(|attribute| attribute.name == fresh.name)
+                    })
+            })
+        {
+            self.error(
+                path,
+                "correlation_fresh_name_collision",
+                "Generated correlation-safe attribute name collides with an existing attribute.",
+            );
+            return None;
+        }
+        let select = self.lower_join_rename_select(path, input_output, &renamed)?;
+        let renamed_input = FormalQuery::Projection {
+            select,
+            input: Box::new(input),
+        };
+        let renamed_correlations = correlations
+            .iter()
+            .map(|binding| CorrelationScope {
+                correlation: binding.correlation.clone(),
+                scope: Scope::from_columns(&renamed),
+                field_names: binding
+                    .output
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect(),
+            })
+            .collect();
+        Some((renamed_input, renamed, renamed_correlations))
     }
 
     fn lower_join_rename_select(

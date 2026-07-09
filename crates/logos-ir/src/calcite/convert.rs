@@ -17,9 +17,10 @@ use crate::calcite::{
 };
 use crate::error::{Error, Result};
 use crate::ir::{
-    AggregateCall, AggregateModifiers, Column, Feature, JoinType, LogosIrFile, Query, RelExpr,
-    SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, Schema, SetOp, SortDirection,
-    SortKey, SortNullDirection, SqlType, Table, ValuesTuples, WindowAst, WindowOrderKey,
+    AggregateCall, AggregateModifiers, Column, CorrelationBinding, Feature, JoinType, LogosIrFile,
+    Query, RelExpr, SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, Schema,
+    SetOp, SortDirection, SortKey, SortNullDirection, SqlType, Table, ValuesTuples, WindowAst,
+    WindowOrderKey,
 };
 
 pub fn convert_file(path: impl AsRef<Path>) -> Result<LogosIrFile> {
@@ -126,6 +127,7 @@ fn convert_rel(
         }
         "LogicalProject" => {
             features.insert(Feature::Projection);
+            let correlations = convert_correlation_bindings(&raw.variables_set, &raw.row_type)?;
             let input = one_input("LogicalProject", raw.inputs, features, schema_index)?;
             let exprs =
                 convert_project_exprs(raw.projects, raw.project_rex, features, schema_index)?;
@@ -135,11 +137,13 @@ fn convert_rel(
             Ok(RelExpr::Project {
                 input: Box::new(input),
                 exprs,
+                correlations,
                 output,
             })
         }
         "LogicalFilter" => {
             features.insert(Feature::Selection);
+            let correlations = convert_correlation_bindings(&raw.variables_set, &raw.row_type)?;
             let input = one_input("LogicalFilter", raw.inputs, features, schema_index)?;
             let condition = required_rex_scalar(
                 "LogicalFilter",
@@ -151,10 +155,12 @@ fn convert_rel(
             Ok(RelExpr::Filter {
                 input: Box::new(input),
                 predicate: condition,
+                correlations,
                 output: convert_row_type(raw.row_type)?,
             })
         }
         "LogicalJoin" => {
+            let correlations = convert_correlation_bindings(&raw.variables_set, &raw.row_type)?;
             let actual = raw.inputs.len();
             if actual != 2 {
                 return Err(Error::Arity {
@@ -208,6 +214,7 @@ fn convert_rel(
                 right: Box::new(right),
                 join_type,
                 condition,
+                correlations,
                 output: convert_row_type(raw.row_type)?,
             })
         }
@@ -475,6 +482,9 @@ fn calcite_rex_ast(
         let op = classify_scalar_op(&operator);
         return Ok(ScalarAst::Call { operator, op, args });
     }
+    if is_rex_field_access(rex) {
+        return calcite_rex_field_access_ast(rex);
+    }
     if let Some(index) = rex.index {
         return Ok(ScalarAst::InputRef { index });
     }
@@ -508,6 +518,58 @@ fn calcite_rex_ast(
         return Ok(call);
     }
     Err(Error::InvalidScalar(rex_debug_text(rex)))
+}
+
+fn calcite_rex_field_access_ast(rex: &CalciteRex) -> Result<ScalarAst> {
+    let reference = rex
+        .reference_expr
+        .as_ref()
+        .ok_or_else(|| Error::MissingField {
+            node: "RexFieldAccess",
+            field: "referenceExpr",
+        })?;
+    if !is_rex_correl_variable(reference) {
+        return Err(Error::InvalidScalar(format!(
+            "unsupported RexFieldAccess reference: {}",
+            rex_debug_text(rex)
+        )));
+    }
+    let correlation = reference
+        .correlation_name
+        .clone()
+        .or_else(|| reference.text.clone())
+        .ok_or_else(|| Error::MissingField {
+            node: "RexCorrelVariable",
+            field: "correlationName",
+        })?;
+    let field = rex.field_name.clone().ok_or_else(|| Error::MissingField {
+        node: "RexFieldAccess",
+        field: "fieldName",
+    })?;
+    let ty = rex
+        .ty
+        .as_deref()
+        .map(parse_sql_type)
+        .transpose()?
+        .ok_or_else(|| Error::MissingField {
+            node: "RexFieldAccess",
+            field: "type",
+        })?;
+    let precision = rex
+        .ty
+        .as_deref()
+        .and_then(|ty| type_precision(ty, rex.precision))
+        .or_else(|| {
+            rex.precision
+                .and_then(|precision| u32::try_from(precision).ok())
+        });
+    Ok(ScalarAst::CorrelatedRef {
+        correlation,
+        field,
+        index: rex.field_index,
+        ty,
+        precision,
+    })
 }
 
 fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
@@ -1114,6 +1176,14 @@ fn is_rex_subquery(rex: &CalciteRex) -> bool {
     matches!(rex.class.as_deref(), Some("RexSubQuery"))
 }
 
+fn is_rex_field_access(rex: &CalciteRex) -> bool {
+    matches!(rex.class.as_deref(), Some("RexFieldAccess"))
+}
+
+fn is_rex_correl_variable(rex: &CalciteRex) -> bool {
+    matches!(rex.class.as_deref(), Some("RexCorrelVariable")) || rex.correlation_name.is_some()
+}
+
 fn is_cast_kind(rex: &CalciteRex) -> bool {
     rex.kind
         .as_deref()
@@ -1325,6 +1395,23 @@ fn convert_row_type(row_type: Vec<crate::calcite::CalciteField>) -> Result<Vec<C
             })
         })
         .collect()
+}
+
+fn convert_correlation_bindings(
+    variables_set: &[String],
+    row_type: &[crate::calcite::CalciteField],
+) -> Result<Vec<CorrelationBinding>> {
+    if variables_set.is_empty() {
+        return Ok(Vec::new());
+    }
+    let output = convert_row_type(row_type.to_vec())?;
+    Ok(variables_set
+        .iter()
+        .map(|correlation| CorrelationBinding {
+            correlation: correlation.clone(),
+            output: output.clone(),
+        })
+        .collect())
 }
 
 fn parse_sql_type(value: &str) -> Result<SqlType> {
@@ -2602,6 +2689,116 @@ mod tests {
         };
         assert_eq!(op, &ScalarOp::In);
         assert!(matches!(args.last(), Some(ScalarAst::RelSubquery { .. })));
+    }
+
+    #[test]
+    fn structured_rex_field_access_preserves_correlated_ref() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [
+                {"name": "EMP", "columns": [{"name": "DEPTNO", "type": "INTEGER"}]},
+                {"name": "DEPT", "columns": [{"name": "DEPTNO", "type": "INTEGER"}]}
+              ],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalFilter",
+                  "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                  "condition": "EXISTS({ LogicalFilter(condition=[=($0, $cor0.DEPTNO)]) })",
+                  "conditionRex": {
+                    "kind": "EXISTS",
+                    "class": "RexSubQuery",
+                    "text": "EXISTS({ LogicalFilter(condition=[=($0, $cor0.DEPTNO)]) })",
+                    "type": "BOOLEAN",
+                    "nullable": true,
+                    "operator": "EXISTS",
+                    "opKind": "EXISTS",
+                    "operands": [],
+                    "subqueryRel": {
+                      "type": "LogicalFilter",
+                      "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                      "condition": "=($0, $cor0.DEPTNO)",
+                      "conditionRex": {
+                        "kind": "EQUALS",
+                        "class": "RexCall",
+                        "text": "=($0, $cor0.DEPTNO)",
+                        "type": "BOOLEAN",
+                        "nullable": true,
+                        "operator": "=",
+                        "opKind": "EQUALS",
+                        "operands": [
+                          {"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "INTEGER", "index": 0},
+                          {
+                            "kind": "FIELD_ACCESS",
+                            "class": "RexFieldAccess",
+                            "text": "$cor0.DEPTNO",
+                            "type": "INTEGER",
+                            "precision": 10,
+                            "nullable": true,
+                            "fieldName": "DEPTNO",
+                            "fieldIndex": 0,
+                            "referenceExpr": {
+                              "kind": "CORREL_VARIABLE",
+                              "class": "RexCorrelVariable",
+                              "text": "$cor0",
+                              "type": "RecordType(INTEGER DEPTNO)",
+                              "correlationId": 0,
+                              "correlationName": "$cor0"
+                            }
+                          }
+                        ]
+                      },
+                      "inputs": [{
+                        "type": "LogicalTableScan",
+                        "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                        "table": ["DEPT"],
+                        "inputs": []
+                      }]
+                    }
+                  },
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "DEPTNO", "type": "INTEGER", "nullable": true}],
+                    "table": ["EMP"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Filter { predicate, .. } = &ir.queries[0].rel else {
+            panic!("expected outer filter");
+        };
+        let ScalarAst::Call { args, .. } = &predicate.parsed else {
+            panic!("expected EXISTS call");
+        };
+        let Some(ScalarAst::RelSubquery { rel }) = args.last() else {
+            panic!("expected structured subquery");
+        };
+        let RelExpr::Filter {
+            predicate: inner_predicate,
+            ..
+        } = rel.as_ref()
+        else {
+            panic!("expected inner filter");
+        };
+        let ScalarAst::Call { args, .. } = &inner_predicate.parsed else {
+            panic!("expected inner predicate call");
+        };
+        assert!(matches!(
+            &args[1],
+            ScalarAst::CorrelatedRef {
+                correlation,
+                field,
+                index: Some(0),
+                ty: SqlType::Integer,
+                precision: Some(10),
+            } if correlation == "$cor0" && field == "DEPTNO"
+        ));
     }
 
     #[test]

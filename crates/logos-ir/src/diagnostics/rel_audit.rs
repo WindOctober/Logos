@@ -362,7 +362,10 @@ fn collect_scalar_ast_markers(ast: &ScalarAst, out: &mut Vec<RelStructuralMarker
             }
         }
         ScalarAst::TypeAnnotation { expr, .. } => collect_scalar_ast_markers(expr, out),
-        ScalarAst::InputRef { .. } | ScalarAst::Literal { .. } | ScalarAst::Flag { .. } => {}
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Literal { .. }
+        | ScalarAst::Flag { .. } => {}
     }
 }
 
@@ -406,6 +409,7 @@ mod tests {
                     output: vec![column("v")],
                 }),
                 exprs: vec![calcite_scalar("ROW_NUMBER() OVER ()")],
+                correlations: Vec::new(),
                 output: vec![column("v")],
             },
             output: vec![column("v")],

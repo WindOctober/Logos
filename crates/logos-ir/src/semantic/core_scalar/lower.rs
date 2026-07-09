@@ -22,6 +22,7 @@ impl CoreScalarLowerer {
     fn lower_scalar(&self, ast: &ScalarAst) -> Result<CoreScalarExpr, CoreScalarUnsupported> {
         match ast {
             ScalarAst::InputRef { .. }
+            | ScalarAst::CorrelatedRef { .. }
             | ScalarAst::Literal { .. }
             | ScalarAst::Window { .. }
             | ScalarAst::TypeAnnotation { .. } => Ok(CoreScalarExpr::Value {
@@ -80,6 +81,7 @@ impl CoreScalarLowerer {
                 })
             }
             ScalarAst::InputRef { .. }
+            | ScalarAst::CorrelatedRef { .. }
             | ScalarAst::Literal { .. }
             | ScalarAst::Flag { .. }
             | ScalarAst::Window { .. }
@@ -94,6 +96,12 @@ impl CoreScalarLowerer {
     fn lower_value(&self, ast: &ScalarAst) -> Result<CoreValueExpr, CoreScalarUnsupported> {
         match ast {
             ScalarAst::InputRef { index } => Ok(CoreValueExpr::InputRef { index: *index }),
+            ScalarAst::CorrelatedRef {
+                correlation, field, ..
+            } => Ok(CoreValueExpr::CorrelatedRef {
+                correlation: correlation.clone(),
+                field: field.clone(),
+            }),
             ScalarAst::Literal { raw } => Ok(CoreValueExpr::Literal { raw: raw.clone() }),
             ScalarAst::Window { raw, .. } => Ok(CoreValueExpr::WindowFunction { raw: raw.clone() }),
             ScalarAst::TypeAnnotation { expr, ty } => self.lower_value_type_annotation(expr, ty),
@@ -289,6 +297,7 @@ impl CoreScalarLowerer {
             ScalarAst::Call { op, args, .. } => self.lower_predicate_call(op, args),
             ScalarAst::TypeAnnotation { .. }
             | ScalarAst::InputRef { .. }
+            | ScalarAst::CorrelatedRef { .. }
             | ScalarAst::Literal { .. }
             | ScalarAst::Window { .. } => Ok(CorePredicateExpr::BooleanValue {
                 expr: Box::new(self.lower_value(ast)?),

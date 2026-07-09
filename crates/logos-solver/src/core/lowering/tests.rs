@@ -2,8 +2,8 @@ use super::*;
 use logos_ir::ir::ScalarOp;
 
 use logos_ir::ir::{
-    Column, Feature, JoinType, Query, RelExpr, ScalarAst, ScalarClass, ScalarExpr, Schema, SetOp,
-    SortDirection, SortNullDirection, SqlType, Table, ValuesTuples,
+    Column, CorrelationBinding, Feature, JoinType, Query, RelExpr, ScalarAst, ScalarClass,
+    ScalarExpr, Schema, SetOp, SortDirection, SortNullDirection, SqlType, Table, ValuesTuples,
 };
 
 #[test]
@@ -56,9 +56,11 @@ fn lowers_project_filter_table_subset() {
                     },
                 ],
             }),
+            correlations: Vec::new(),
             output: table_output.clone(),
         }),
         exprs: vec![scalar(ScalarAst::InputRef { index: 1 })],
+        correlations: Vec::new(),
         output: vec![column("b")],
     };
     let query = Query {
@@ -182,9 +184,11 @@ fn lowers_timestamp_literals_and_interval_arithmetic() {
                     op: ScalarOp::Lt,
                     args: vec![ScalarAst::InputRef { index: 0 }, rhs],
                 }),
+                correlations: Vec::new(),
                 output: output.clone(),
             }),
             exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output: output.clone(),
@@ -230,6 +234,7 @@ fn lowers_date_to_timestamp_cast() {
                 }),
                 ty: "TIMESTAMP(0)".to_owned(),
             })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -272,6 +277,7 @@ fn lowers_timestamp_to_date_cast() {
                 }),
                 ty: "DATE".to_owned(),
             })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -311,6 +317,7 @@ fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
                 }),
                 ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
             })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -350,6 +357,7 @@ fn normalizes_timestamp_tz_literals_with_named_time_zone() {
                 }),
                 ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
             })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -389,6 +397,7 @@ fn accepts_timestamp_tz_local_literal_in_named_time_zone() {
                 }),
                 ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
             })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -439,6 +448,7 @@ fn lowers_typed_null_temporal_literals() {
                     ty: "TIMESTAMP_WITH_TIME_ZONE(6)".to_owned(),
                 }),
             ],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
@@ -479,6 +489,7 @@ fn rejects_timestamp_literals_that_exceed_declared_precision() {
                     },
                 ],
             }),
+            correlations: Vec::new(),
             output,
         },
         output: vec![timestamp_column("ts", Some(3))],
@@ -638,6 +649,7 @@ fn lowers_left_join_with_exists_desugaring() {
                 ScalarAst::InputRef { index: 2 },
             ],
         }),
+        correlations: Vec::new(),
         output: join_output.clone(),
     };
     let query = Query {
@@ -921,9 +933,11 @@ fn lowers_predicate_in_subquery_to_exists() {
                     },
                 ],
             }),
+            correlations: Vec::new(),
             output: vec![column("DEPTNO"), column("LOC")],
         }),
         exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+        correlations: Vec::new(),
         output: vec![column("DEPTNO")],
     };
     let rel = RelExpr::Filter {
@@ -941,6 +955,7 @@ fn lowers_predicate_in_subquery_to_exists() {
                 },
             ],
         }),
+        correlations: Vec::new(),
         output: vec![column("DEPTNO")],
     };
 
@@ -982,6 +997,7 @@ fn lowers_exists_subquery_to_exists_formula() {
                 },
             ],
         }),
+        correlations: Vec::new(),
         output: vec![column("DEPTNO")],
     };
     let rel = RelExpr::Filter {
@@ -996,6 +1012,7 @@ fn lowers_exists_subquery_to_exists_formula() {
                 rel: Box::new(subquery_rel),
             }],
         }),
+        correlations: Vec::new(),
         output: vec![column("DEPTNO")],
     };
 
@@ -1009,6 +1026,175 @@ fn lowers_exists_subquery_to_exists_formula() {
         !module
             .rocq_module
             .contains("formula_operator_not_supported")
+    );
+}
+
+#[test]
+fn lowers_correlated_exists_by_binding_index_not_field_name() {
+    let schema = Schema {
+        tables: vec![
+            Table {
+                name: "DEPT".to_owned(),
+                columns: vec![column("DEPTNO")],
+            },
+            Table {
+                name: "EMP".to_owned(),
+                columns: vec![column("DEPTNO")],
+            },
+        ],
+    };
+    let subquery_rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["EMP".to_owned()],
+            output: vec![column("DEPTNO")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "=".to_owned(),
+            op: ScalarOp::Eq,
+            args: vec![
+                ScalarAst::CorrelatedRef {
+                    correlation: "$cor0".to_owned(),
+                    field: "DEPTNO".to_owned(),
+                    index: Some(0),
+                    ty: SqlType::Integer,
+                    precision: None,
+                },
+                ScalarAst::InputRef { index: 0 },
+            ],
+        }),
+        correlations: Vec::new(),
+        output: vec![column("DEPTNO")],
+    };
+    let rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["DEPT".to_owned()],
+            output: vec![column("DEPTNO")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "EXISTS".to_owned(),
+            op: ScalarOp::Exists,
+            args: vec![ScalarAst::RelSubquery {
+                rel: Box::new(subquery_rel),
+            }],
+        }),
+        correlations: vec![CorrelationBinding {
+            correlation: "$cor0".to_owned(),
+            output: vec![column("DEPTNO")],
+        }],
+        output: vec![column("DEPTNO")],
+    };
+
+    let lowered = LoweringContext::new(LoweringConfig::default(), Some(&schema))
+        .lower_rel("rel", &rel)
+        .expect("correlated EXISTS should lower");
+    let module = emit_rocq_query_module(&bag_list_query(lowered.clone()), &bag_list_query(lowered));
+
+    assert!(module.rocq_module.contains("__logos_cor_cor0_0"));
+    assert!(
+        module
+            .rocq_module
+            .contains("Pred \"=\" ([DotZ \"__logos_cor_cor0_0\"; DotZ \"DEPTNO\"])")
+    );
+    assert!(
+        !module
+            .rocq_module
+            .contains("Pred \"=\" ([DotZ \"DEPTNO\"; DotZ \"DEPTNO\"])")
+    );
+}
+
+#[test]
+fn lowers_correlated_join_output_after_calcite_renaming() {
+    let schema = Schema {
+        tables: vec![
+            Table {
+                name: "a".to_owned(),
+                columns: vec![column("id"), column("x")],
+            },
+            Table {
+                name: "b".to_owned(),
+                columns: vec![column("id"), column("y")],
+            },
+            Table {
+                name: "c".to_owned(),
+                columns: vec![column("id")],
+            },
+        ],
+    };
+    let join_output = vec![column("id"), column("x"), column("id0"), column("y")];
+    let join_rel = RelExpr::Join {
+        left: Box::new(RelExpr::TableScan {
+            table: vec!["a".to_owned()],
+            output: vec![column("id"), column("x")],
+        }),
+        right: Box::new(RelExpr::TableScan {
+            table: vec!["b".to_owned()],
+            output: vec![column("id"), column("y")],
+        }),
+        join_type: JoinType::Inner,
+        condition: scalar(ScalarAst::Call {
+            operator: "=".to_owned(),
+            op: ScalarOp::Eq,
+            args: vec![
+                ScalarAst::InputRef { index: 0 },
+                ScalarAst::InputRef { index: 2 },
+            ],
+        }),
+        correlations: Vec::new(),
+        output: join_output.clone(),
+    };
+    let subquery_rel = RelExpr::Filter {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["c".to_owned()],
+            output: vec![column("id")],
+        }),
+        predicate: scalar(ScalarAst::Call {
+            operator: "=".to_owned(),
+            op: ScalarOp::Eq,
+            args: vec![
+                ScalarAst::InputRef { index: 0 },
+                ScalarAst::CorrelatedRef {
+                    correlation: "$cor0".to_owned(),
+                    field: "id0".to_owned(),
+                    index: Some(2),
+                    ty: SqlType::Integer,
+                    precision: None,
+                },
+            ],
+        }),
+        correlations: Vec::new(),
+        output: vec![column("id")],
+    };
+    let rel = RelExpr::Filter {
+        input: Box::new(join_rel),
+        predicate: scalar(ScalarAst::Call {
+            operator: "EXISTS".to_owned(),
+            op: ScalarOp::Exists,
+            args: vec![ScalarAst::RelSubquery {
+                rel: Box::new(subquery_rel),
+            }],
+        }),
+        correlations: vec![CorrelationBinding {
+            correlation: "$cor0".to_owned(),
+            output: join_output,
+        }],
+        output: vec![column("id"), column("x"), column("id0"), column("y")],
+    };
+
+    let lowered = LoweringContext::new(LoweringConfig::default(), Some(&schema))
+        .lower_rel("rel", &rel)
+        .expect("correlated join output should lower");
+    let module = emit_rocq_query_module(&bag_list_query(lowered.clone()), &bag_list_query(lowered));
+
+    assert!(module.rocq_module.contains("__logos_cor_cor0_2"));
+    assert!(
+        module
+            .rocq_module
+            .contains("Pred \"=\" ([DotZ \"id\"; DotZ \"__logos_cor_cor0_2\"])")
+    );
+    assert!(
+        !module
+            .rocq_module
+            .contains("ExistsQuery (Sigma (Pred \"=\" ([DotZ \"id\"; DotZ \"id0\"])")
     );
 }
 
@@ -1044,6 +1230,7 @@ fn rejects_duplicate_projection_aliases() {
             scalar(ScalarAst::InputRef { index: 0 }),
             scalar(ScalarAst::InputRef { index: 1 }),
         ],
+        correlations: Vec::new(),
         output: vec![column("x"), column("x")],
     };
     let query = Query {
@@ -1168,6 +1355,7 @@ fn existence_join_query(join_type: JoinType) -> Query {
                 ScalarAst::InputRef { index: 2 },
             ],
         }),
+        correlations: Vec::new(),
         output: left_output.clone(),
     };
     Query {

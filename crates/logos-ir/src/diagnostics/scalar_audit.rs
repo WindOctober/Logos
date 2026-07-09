@@ -120,6 +120,7 @@ fn summarize_converted_scalar_ops<'a>(
 fn collect_ast_ops(ast: &ScalarAst, visit: &mut impl FnMut(&ScalarOp)) {
     match ast {
         ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. }
         | ScalarAst::Window { .. }
@@ -155,6 +156,7 @@ mod tests {
                         output: Vec::new(),
                     }),
                     predicate: calcite_scalar("AND(=($0, 1), IS NOT NULL($1))"),
+                    correlations: Vec::new(),
                     output: Vec::new(),
                 },
                 output: Vec::new(),

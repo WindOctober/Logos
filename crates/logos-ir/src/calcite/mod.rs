@@ -55,6 +55,11 @@ pub struct CalciteRel {
     #[serde(default)]
     pub row_type: Vec<CalciteField>,
     #[serde(default)]
+    pub variables_set: Vec<String>,
+    pub correlation_id: Option<String>,
+    #[serde(default)]
+    pub required_columns: Vec<usize>,
+    #[serde(default)]
     pub inputs: Vec<CalciteRel>,
 
     #[serde(default)]
@@ -100,6 +105,11 @@ pub struct CalciteRex {
     pub charset: Option<String>,
     pub type_collation: Option<String>,
     pub index: Option<usize>,
+    pub field_name: Option<String>,
+    pub field_index: Option<usize>,
+    pub reference_expr: Option<Box<CalciteRex>>,
+    pub correlation_id: Option<i32>,
+    pub correlation_name: Option<String>,
     pub operator: Option<String>,
     pub op_kind: Option<String>,
     #[serde(default)]
