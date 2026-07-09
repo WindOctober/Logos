@@ -260,6 +260,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 typed_column("ENAME", SqlType::Varchar),
                 typed_column("SLACKER", SqlType::Boolean),
                 typed_column("HIREDATE", SqlType::Date),
+                decimal_column("BONUS", 10, 2),
                 timestamp_column("EVENT_TS", Some(6)),
             ],
         }],
@@ -270,7 +271,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert_eq!(
         lowered.schema.as_ref().unwrap().tables[0].attributes.len(),
-        5
+        6
     );
     assert!(
         lowered
@@ -286,7 +287,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 .as_ref()
                 .unwrap()
                 .rocq_create_schema
-                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
+                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_decimal \"BONUS\" 10 2 :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
         );
     assert!(
         lowered
@@ -311,8 +312,970 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
 }
 
 #[test]
+fn rejects_time_schema_attribute_instead_of_encoding_as_string() {
+    let schema = Schema {
+        tables: vec![Table {
+            name: "t".to_owned(),
+            columns: vec![typed_column("clock_time", SqlType::Time)],
+        }],
+    };
+
+    let lowered = lower_schema(&schema);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "schema_time_type_not_supported")
+    );
+    assert!(lowered.schema.is_none());
+}
+
+#[test]
+fn rejects_time_query_attribute_instead_of_encoding_as_string() {
+    let output = vec![typed_column("clock_time", SqlType::Time)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::TableScan {
+            table: vec!["t".to_owned()],
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "query_time_type_not_supported")
+    );
+    assert!(lowered.query.is_none());
+}
+
+#[test]
+fn rejects_decimal_schema_with_zero_precision() {
+    let schema = Schema {
+        tables: vec![Table {
+            name: "t".to_owned(),
+            columns: vec![decimal_column("amount", 0, 0)],
+        }],
+    };
+
+    let lowered = lower_schema(&schema);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_typmod_not_supported")
+    );
+}
+
+#[test]
+fn lowers_decimal_literal_and_arithmetic() {
+    let input = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "1.25".to_owned(),
+                        }),
+                        ty: "DECIMAL(10, 2)".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_plus", 11, 2)],
+        },
+        output: vec![decimal_column("amount_plus", 11, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+    );
+    assert!(module.rocq_module.contains("AFunction \"plus_decimal\""));
+    assert!(module.rocq_module.contains("CstDecimal (10) (2) (125)"));
+    assert!(
+        module
+            .rocq_module
+            .contains("AttrDecimal \"amount_plus\" 11 2")
+    );
+}
+
+#[test]
+fn rejects_decimal_arithmetic_output_typmod_mismatch() {
+    let input = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "1.25".to_owned(),
+                        }),
+                        ty: "DECIMAL(10, 2)".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_plus", 10, 2)],
+        },
+        output: vec![decimal_column("amount_plus", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_output_typmod_not_supported")
+    );
+}
+
+#[test]
+fn rescales_decimal_literals_to_target_scale() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.2".to_owned(),
+                }),
+                ty: "DECIMAL(10, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+    );
+    assert!(module.rocq_module.contains("CstDecimal (10) (2) (120)"));
+}
+
+#[test]
+fn rounds_decimal_literals_to_target_scale() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.235".to_owned(),
+                }),
+                ty: "DECIMAL(10, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstDecimal (10) (2) (124)"));
+}
+
+#[test]
+fn rejects_decimal_literal_precision_overflow_after_rounding() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "999.95".to_owned(),
+                }),
+                ty: "DECIMAL(4, 1)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 4, 1)],
+        },
+        output: vec![decimal_column("amount", 4, 1)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_literal_not_supported")
+    );
+}
+
+#[test]
+fn decimal_annotation_without_scale_defaults_to_zero() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.2".to_owned(),
+                }),
+                ty: "DECIMAL(10)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 0)],
+        },
+        output: vec![decimal_column("amount", 10, 0)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstDecimal (10) (0) (1)"));
+}
+
+#[test]
+fn rejects_malformed_decimal_annotation() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.2".to_owned(),
+                }),
+                ty: "DECIMAL(10, -2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_typmod_not_supported")
+    );
+}
+
+#[test]
+fn rejects_bare_decimal_annotation() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.2".to_owned(),
+                }),
+                ty: "DECIMAL".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_typmod_not_supported")
+    );
+}
+
+#[test]
+fn rejects_untyped_decimal_literal_overflow_for_output_typmod() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::Literal {
+                raw: "999.95".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 4, 1)],
+        },
+        output: vec![decimal_column("amount", 4, 1)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_literal_not_supported")
+    );
+}
+
+#[test]
+fn rejects_unmodeled_decimal_functions() {
+    let input = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "POWER".to_owned(),
+                op: ScalarOp::Power,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::Literal {
+                        raw: "2".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_squared", 20, 4)],
+        },
+        output: vec![decimal_column("amount_squared", 20, 4)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_function_not_supported")
+    );
+}
+
+#[test]
+fn lowers_nested_decimal_arithmetic() {
+    let input = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "*".to_owned(),
+                op: ScalarOp::Multiply,
+                args: vec![
+                    ScalarAst::Call {
+                        operator: "+".to_owned(),
+                        op: ScalarOp::Plus,
+                        args: vec![
+                            ScalarAst::InputRef { index: 0 },
+                            ScalarAst::TypeAnnotation {
+                                expr: Box::new(ScalarAst::Literal {
+                                    raw: "1.25".to_owned(),
+                                }),
+                                ty: "DECIMAL(10, 2)".to_owned(),
+                            },
+                        ],
+                    },
+                    ScalarAst::InputRef { index: 0 },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_scaled", 21, 4)],
+        },
+        output: vec![decimal_column("amount_scaled", 21, 4)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("decimal query should lower"),
+    );
+    assert!(module.rocq_module.contains("AFunction \"plus_decimal\""));
+    assert!(module.rocq_module.contains("AFunction \"mult_decimal\""));
+}
+
+#[test]
+fn rejects_bare_decimal_division_projected_to_fixed_typmod() {
+    let input = vec![decimal_column("left_amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "/".to_owned(),
+                op: ScalarOp::Divide,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "2.00".to_owned(),
+                        }),
+                        ty: "DECIMAL(10, 2)".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("ratio", 19, 6)],
+        },
+        output: vec![decimal_column("ratio", 19, 6)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_division_output_typmod_not_supported")
+    );
+}
+
+#[test]
+fn decimal_division_uses_result_annotation_scale() {
+    let input = vec![decimal_column("left_amount", 4, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::TypeAnnotation {
+                            expr: Box::new(ScalarAst::Literal {
+                                raw: "2.00".to_owned(),
+                            }),
+                            ty: "DECIMAL(4, 2)".to_owned(),
+                        },
+                    ],
+                }),
+                ty: "DECIMAL(10, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("ratio", 10, 2)],
+        },
+        output: vec![decimal_column("ratio", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"divide_decimal_typmod\"")
+    );
+    assert!(module.rocq_module.contains("CstZ (10)"));
+    assert!(module.rocq_module.contains("CstZ (2)"));
+}
+
+#[test]
+fn rejects_decimal_division_without_static_nonzero_divisor() {
+    let input = vec![
+        decimal_column("left_amount", 10, 2),
+        decimal_column("right_amount", 10, 2),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::InputRef { index: 1 },
+                    ],
+                }),
+                ty: "DECIMAL(19, 6)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("ratio", 19, 6)],
+        },
+        output: vec![decimal_column("ratio", 19, 6)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_divisor_not_statically_nonzero")
+    );
+}
+
+#[test]
+fn rejects_decimal_division_when_divisor_cast_rounds_to_zero() {
+    let input = vec![decimal_column("left_amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::TypeAnnotation {
+                            expr: Box::new(ScalarAst::Literal {
+                                raw: "0.004".to_owned(),
+                            }),
+                            ty: "DECIMAL(10, 2)".to_owned(),
+                        },
+                    ],
+                }),
+                ty: "DECIMAL(19, 6)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("ratio", 19, 6)],
+        },
+        output: vec![decimal_column("ratio", 19, 6)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_divisor_not_statically_nonzero")
+    );
+}
+
+#[test]
+fn rejects_mixed_decimal_arithmetic() {
+    let input = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_plus", 10, 2)],
+        },
+        output: vec![decimal_column("amount_plus", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_mixed_arithmetic_not_supported")
+    );
+}
+
+#[test]
+fn rejects_decimal_avg_aggregate() {
+    let input_output = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "AVG($0)".to_owned(),
+                function: "AVG".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![decimal_column("avg_amount", 10, 2)],
+        },
+        output: vec![decimal_column("avg_amount", 10, 2)],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(lowered.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
+    }));
+}
+
+#[test]
+fn rejects_decimal_avg_with_fixed_output_scale() {
+    let input_output = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "AVG($0)".to_owned(),
+                function: "AVG".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![decimal_column("avg_amount", 10, 3)],
+        },
+        output: vec![decimal_column("avg_amount", 10, 3)],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(lowered.diagnostics.iter().any(
+        |diagnostic| diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
+    ));
+}
+
+#[test]
+fn rejects_decimal_sum_aggregate() {
+    let input_output = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "SUM($0)".to_owned(),
+                function: "SUM".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![decimal_column("sum_amount", 10, 2)],
+        },
+        output: vec![decimal_column("sum_amount", 10, 2)],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(lowered.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
+    }));
+}
+
+#[test]
+fn rejects_decimal_min_output_typmod_mismatch() {
+    let input_output = vec![decimal_column("amount", 10, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "MIN($0)".to_owned(),
+                function: "MIN".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![decimal_column("min_amount", 10, 3)],
+        },
+        output: vec![decimal_column("min_amount", 10, 3)],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_output_typmod_not_supported")
+    );
+}
+
+#[test]
+fn rejects_unconstrained_decimal_input_scope() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![decimal_column_unconstrained("amount")],
+            }),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "unconstrained_numeric_not_supported")
+    );
+}
+
+#[test]
+fn rejects_unconstrained_decimal_table_scan_output() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::TableScan {
+            table: vec!["t".to_owned()],
+            output: vec![decimal_column_unconstrained("amount")],
+        },
+        output: vec![decimal_column_unconstrained("amount")],
+        features: vec![Feature::TableScan],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "unconstrained_numeric_not_supported")
+    );
+}
+
+#[test]
+fn rejects_invalid_decimal_input_scope_typmod() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![decimal_column("amount", 0, 0)],
+            }),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 10, 2)],
+        },
+        output: vec![decimal_column("amount", 10, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_typmod_not_supported")
+    );
+}
+
+#[test]
 fn lowers_timestamp_literals_and_interval_arithmetic() {
-    let output = vec![typed_column("ts", SqlType::Timestamp)];
+    let output = vec![typed_column("ts", SqlType::timestamp(None))];
     let timestamp_literal = ScalarAst::TypeAnnotation {
         expr: Box::new(ScalarAst::Literal {
             raw: "'1970-01-01 00:00:01.000001'".to_owned(),
@@ -469,7 +1432,7 @@ fn lowers_timestamp_to_date_cast() {
 
 #[test]
 fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
-    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let output = vec![typed_column("ts", SqlType::timestamptz(None))];
     let query = Query {
         source_sql: None,
         rel: RelExpr::Project {
@@ -509,7 +1472,7 @@ fn normalizes_timestamp_tz_literals_with_configured_time_zone() {
 
 #[test]
 fn normalizes_timestamp_tz_literals_with_named_time_zone() {
-    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let output = vec![typed_column("ts", SqlType::timestamptz(None))];
     let query = Query {
         source_sql: None,
         rel: RelExpr::Project {
@@ -549,7 +1512,7 @@ fn normalizes_timestamp_tz_literals_with_named_time_zone() {
 
 #[test]
 fn accepts_timestamp_tz_local_literal_in_named_time_zone() {
-    let output = vec![typed_column("ts", SqlType::TimestampTz)];
+    let output = vec![typed_column("ts", SqlType::timestamptz(None))];
     let query = Query {
         source_sql: None,
         rel: RelExpr::Project {
@@ -591,7 +1554,7 @@ fn accepts_timestamp_tz_local_literal_in_named_time_zone() {
 fn lowers_typed_null_temporal_literals() {
     let output = vec![
         timestamp_column("ts", Some(0)),
-        typed_column("tstz", SqlType::TimestampTz),
+        typed_column("tstz", SqlType::timestamptz(None)),
     ];
     let query = Query {
         source_sql: None,
@@ -685,11 +1648,11 @@ fn emits_source_and_target_query_rocq_module() {
             expr: FormalAggregateTerm::Expr {
                 term: FormalFunctionTerm::Attribute {
                     name: "EMPNO".to_owned(),
-                    constructor: "Attr_Z".to_owned(),
+                    ty: FormalAttributeType::Z,
                 },
             },
             alias: "EMPNO".to_owned(),
-            alias_constructor: "Attr_Z".to_owned(),
+            alias_ty: FormalAttributeType::Z,
         }],
         input: Box::new(source.clone()),
     };
@@ -713,6 +1676,34 @@ fn emits_source_and_target_query_rocq_module() {
     );
     assert!(module.rocq_module.contains("Table \"EMP\""));
     assert!(module.rocq_module.contains("Pi (select_list_0)"));
+}
+
+#[test]
+fn timestamp_default_precision_identity_select_matches_explicit_six() {
+    let query = FormalQuery::Projection {
+        select: vec![FormalSelectItem {
+            expr: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Attribute {
+                    name: "ts".to_owned(),
+                    ty: FormalAttributeType::Timestamp { precision: None },
+                },
+            },
+            alias: "ts".to_owned(),
+            alias_ty: FormalAttributeType::Timestamp { precision: Some(6) },
+        }],
+        input: Box::new(FormalQuery::Table {
+            relation: "events".to_owned(),
+        }),
+    };
+
+    let module = emit_rocq_query_module(&bag_list_query(query.clone()), &bag_list_query(query));
+
+    assert!(module.rocq_module.contains("TimestampColumn \"ts\" 6"));
+    assert!(
+        !module
+            .rocq_module
+            .contains("SelectAs (DotTimestamp \"ts\" 6)")
+    );
 }
 
 #[test]
@@ -1015,7 +2006,7 @@ fn lowers_sort_offset_fetch_to_list_observation() {
     };
     assert_eq!(keys.len(), 1);
     assert_eq!(keys[0].attribute_name, "b");
-    assert_eq!(keys[0].attribute_constructor, "Attr_Z");
+    assert_eq!(keys[0].attribute_ty, FormalAttributeType::Z);
     assert_eq!(keys[0].direction, FormalSortDirection::Desc);
     assert_eq!(keys[0].null_direction, FormalNullDirection::First);
     assert!(matches!(*input, FormalListQuery::Bag { .. }));
@@ -1281,7 +2272,6 @@ fn lowers_correlated_exists_by_binding_index_not_field_name() {
                     field: "DEPTNO".to_owned(),
                     index: Some(0),
                     ty: SqlType::Integer,
-                    precision: None,
                 },
                 ScalarAst::InputRef { index: 0 },
             ],
@@ -1381,7 +2371,6 @@ fn lowers_correlated_join_output_after_calcite_renaming() {
                     field: "id0".to_owned(),
                     index: Some(2),
                     ty: SqlType::Integer,
-                    precision: None,
                 },
             ],
         }),
@@ -1518,16 +2507,30 @@ fn typed_column(name: &str, ty: SqlType) -> Column {
         name: name.to_owned(),
         ty,
         nullable: true,
-        precision: None,
+    }
+}
+
+fn decimal_column(name: &str, precision: u32, scale: u32) -> Column {
+    Column {
+        name: name.to_owned(),
+        ty: SqlType::decimal(Some(precision), Some(scale)),
+        nullable: true,
+    }
+}
+
+fn decimal_column_unconstrained(name: &str) -> Column {
+    Column {
+        name: name.to_owned(),
+        ty: SqlType::decimal(None, None),
+        nullable: true,
     }
 }
 
 fn timestamp_column(name: &str, precision: Option<u32>) -> Column {
     Column {
         name: name.to_owned(),
-        ty: SqlType::Timestamp,
+        ty: SqlType::timestamp(precision),
         nullable: true,
-        precision,
     }
 }
 
@@ -1550,11 +2553,11 @@ fn z_select_item(name: &str) -> FormalSelectItem {
         expr: FormalAggregateTerm::Expr {
             term: FormalFunctionTerm::Attribute {
                 name: name.to_owned(),
-                constructor: "Attr_Z".to_owned(),
+                ty: FormalAttributeType::Z,
             },
         },
         alias: name.to_owned(),
-        alias_constructor: "Attr_Z".to_owned(),
+        alias_ty: FormalAttributeType::Z,
     }
 }
 

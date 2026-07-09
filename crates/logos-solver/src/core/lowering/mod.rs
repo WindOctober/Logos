@@ -12,7 +12,6 @@ use super::syntax::{
     FormalSortDirection, FormalSortKey, FormalTable, LoweredQuery, LoweredSchema,
     LoweringDiagnostic, LoweringStatus, ProofLoweringReport,
 };
-use scalar::formal_attribute_constructor;
 
 const DEFAULT_TIMESTAMP_PRECISION: u32 = 6;
 const MICROS_PER_SECOND: i64 = 1_000_000;
@@ -289,16 +288,20 @@ impl LoweringContext {
     ) -> Option<T> {
         let scopes = bindings
             .iter()
-            .map(|binding| CorrelationScope {
-                correlation: binding.correlation.clone(),
-                scope: Scope::from_columns(&binding.output),
-                field_names: binding
-                    .output
-                    .iter()
-                    .map(|column| column.name.clone())
-                    .collect(),
+            .enumerate()
+            .map(|(index, binding)| {
+                Some(CorrelationScope {
+                    correlation: binding.correlation.clone(),
+                    scope: self
+                        .lower_scope(&format!("correlations[{index}].output"), &binding.output)?,
+                    field_names: binding
+                        .output
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect(),
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Option<Vec<_>>>()?;
         self.with_correlation_scopes(&scopes, f)
     }
 
@@ -312,6 +315,71 @@ impl LoweringContext {
         let result = f(self);
         self.correlations.truncate(base_len);
         result
+    }
+
+    fn lower_scope(&mut self, path: &str, columns: &[Column]) -> Option<Scope> {
+        let attributes = columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                let ty = self.lower_attribute_type(
+                    &format!("{path}[{index}]"),
+                    column,
+                    AttributeTypeContext::QueryInput,
+                )?;
+                Some(ScopeAttribute {
+                    name: column.name.clone(),
+                    formal_ty: ty,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(Scope { attributes })
+    }
+
+    pub(super) fn lower_attribute_type(
+        &mut self,
+        path: &str,
+        column: &Column,
+        context: AttributeTypeContext,
+    ) -> Option<FormalAttributeType> {
+        match &column.ty {
+            SqlType::Decimal { precision, scale } => {
+                if precision.is_none() || scale.is_none() {
+                    self.error(
+                        path,
+                        "unconstrained_numeric_not_supported",
+                        "PostgreSQL unconstrained NUMERIC/DECIMAL is not encoded as fixed DECIMAL(p,s) in FormalSQL.",
+                    );
+                    return None;
+                }
+                if !decimal_typmod_is_supported(*precision, *scale) {
+                    self.error(
+                        path,
+                        "decimal_typmod_not_supported",
+                        "FormalSQL Decimal currently supports PostgreSQL DECIMAL(p,s) for 1 <= p <= 1000 and 0 <= s <= 1000; negative scales are not modeled yet.",
+                    );
+                    return None;
+                }
+            }
+            SqlType::Time => {
+                self.error(
+                    path,
+                    context.unsupported_time_code(),
+                    &context.unsupported_time_message(),
+                );
+                return None;
+            }
+            SqlType::Any | SqlType::Null => {
+                self.error(
+                    path,
+                    context.unsupported_type_code(),
+                    &context.unsupported_type_message(&column.ty),
+                );
+                return None;
+            }
+            _ => {}
+        }
+        Some(sql_type_to_formal_attribute_type(&column.ty))
     }
 
     fn correlated_attribute(
@@ -366,6 +434,55 @@ impl LoweringContext {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AttributeTypeContext {
+    Schema,
+    QueryInput,
+    QueryOutput,
+}
+
+impl AttributeTypeContext {
+    fn unsupported_type_code(self) -> &'static str {
+        match self {
+            AttributeTypeContext::Schema => "schema_type_not_supported",
+            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
+                "query_type_not_supported"
+            }
+        }
+    }
+
+    fn unsupported_type_message(self, ty: &SqlType) -> String {
+        match self {
+            AttributeTypeContext::Schema => {
+                format!("FormalSQL proof-of-concept schemas cannot soundly encode {ty:?}.")
+            }
+            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
+                format!("FormalSQL proof-of-concept queries cannot soundly encode {ty:?}.")
+            }
+        }
+    }
+
+    fn unsupported_time_code(self) -> &'static str {
+        match self {
+            AttributeTypeContext::Schema => "schema_time_type_not_supported",
+            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
+                "query_time_type_not_supported"
+            }
+        }
+    }
+
+    fn unsupported_time_message(self) -> String {
+        match self {
+            AttributeTypeContext::Schema => {
+                "FormalSQL proof-of-concept schemas cannot soundly encode TIME attributes; treating TIME as string would not preserve SQL temporal semantics.".to_owned()
+            }
+            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
+                "FormalSQL proof-of-concept queries cannot soundly encode TIME attributes; treating TIME as string would not preserve SQL temporal semantics.".to_owned()
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Scope {
     attributes: Vec<ScopeAttribute>,
@@ -374,54 +491,40 @@ struct Scope {
 #[derive(Debug, Clone)]
 struct ScopeAttribute {
     name: String,
-    constructor: String,
-    ty: SqlType,
     formal_ty: FormalAttributeType,
 }
 
 impl Scope {
-    fn from_columns(columns: &[Column]) -> Self {
-        Self {
-            attributes: columns
-                .iter()
-                .map(|column| ScopeAttribute {
-                    name: column.name.clone(),
-                    ty: column.ty.clone(),
-                    formal_ty: query_attribute_type(column),
-                    constructor: formal_attribute_constructor(query_attribute_type(column)),
-                })
-                .collect(),
-        }
-    }
-
     fn attribute(&self, index: usize) -> Option<ScopeAttribute> {
         self.attributes.get(index).cloned()
     }
 }
 
-fn query_attribute_type(column: &Column) -> FormalAttributeType {
-    sql_type_to_formal_attribute_type(&column.ty, column.precision)
-}
-
-fn sql_type_to_formal_attribute_type(ty: &SqlType, precision: Option<u32>) -> FormalAttributeType {
+fn sql_type_to_formal_attribute_type(ty: &SqlType) -> FormalAttributeType {
     match ty {
         SqlType::Integer | SqlType::BigInt => FormalAttributeType::Z,
-        SqlType::Float | SqlType::Double | SqlType::Decimal => FormalAttributeType::Float,
-        SqlType::Varchar | SqlType::Time => FormalAttributeType::String,
+        SqlType::Float | SqlType::Double => FormalAttributeType::Float,
+        SqlType::Decimal { precision, scale } => FormalAttributeType::Decimal {
+            precision: *precision,
+            scale: *scale,
+        },
+        SqlType::Varchar => FormalAttributeType::String,
         SqlType::Date => FormalAttributeType::Date,
-        SqlType::Timestamp => FormalAttributeType::Timestamp { precision },
-        SqlType::TimestampTz => FormalAttributeType::Timestamptz { precision },
+        SqlType::Timestamp { precision } => FormalAttributeType::Timestamp {
+            precision: *precision,
+        },
+        SqlType::TimestampTz { precision } => FormalAttributeType::Timestamptz {
+            precision: *precision,
+        },
         SqlType::Boolean => FormalAttributeType::Bool,
-        SqlType::Any | SqlType::Null => FormalAttributeType::String,
+        SqlType::Any | SqlType::Null | SqlType::Time => {
+            unreachable!("unsupported SQL type reached FormalAttributeType conversion")
+        }
     }
 }
 
 fn timestamp_precision(precision: Option<u32>) -> u32 {
     precision.unwrap_or(DEFAULT_TIMESTAMP_PRECISION)
-}
-
-fn is_unsupported_temporal_type(ty: &SqlType) -> bool {
-    matches!(ty, SqlType::Time)
 }
 
 fn parse_fixed_time_zone_offset(value: &str) -> Option<i64> {
@@ -515,4 +618,8 @@ fn is_integer_literal(raw: &str) -> bool {
 
 fn is_true_literal(ast: &ScalarAst) -> bool {
     matches!(ast, ScalarAst::Literal { raw } if raw.eq_ignore_ascii_case("true"))
+}
+
+fn decimal_typmod_is_supported(precision: Option<u32>, scale: Option<u32>) -> bool {
+    matches!((precision, scale), (Some(1..=1000), Some(0..=1000)))
 }

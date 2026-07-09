@@ -371,7 +371,6 @@ mod tests {
                     name: "v".to_owned(),
                     ty: SqlType::Integer,
                     nullable: true,
-                    precision: None,
                 }],
             },
             output: Vec::new(),
@@ -411,7 +410,6 @@ mod tests {
             name: "v".to_owned(),
             ty: SqlType::Integer,
             nullable: true,
-            precision: None,
         };
         let query = Query {
             source_sql: None,
@@ -510,7 +508,6 @@ mod tests {
             name: "v".to_owned(),
             ty: SqlType::Integer,
             nullable: true,
-            precision: None,
         };
         let query = Query {
             source_sql: None,
@@ -558,7 +555,6 @@ mod tests {
                     name: "v".to_owned(),
                     ty: SqlType::Integer,
                     nullable: true,
-                    precision: None,
                 }],
             },
             output: Vec::new(),

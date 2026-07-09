@@ -96,7 +96,6 @@ pub struct FormalTable {
 pub struct FormalAttribute {
     pub name: String,
     pub ty: FormalAttributeType,
-    pub constructor: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -106,9 +105,17 @@ pub enum FormalAttributeType {
     Z,
     Bool,
     Float,
+    Decimal {
+        precision: Option<u32>,
+        scale: Option<u32>,
+    },
     Date,
-    Timestamp { precision: Option<u32> },
-    Timestamptz { precision: Option<u32> },
+    Timestamp {
+        precision: Option<u32>,
+    },
+    Timestamptz {
+        precision: Option<u32>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -186,7 +193,7 @@ impl FormalListQuery {
 #[serde(rename_all = "camelCase")]
 pub struct FormalSortKey {
     pub attribute_name: String,
-    pub attribute_constructor: String,
+    pub attribute_ty: FormalAttributeType,
     pub direction: FormalSortDirection,
     pub null_direction: FormalNullDirection,
 }
@@ -219,7 +226,7 @@ pub enum FormalSetOp {
 pub struct FormalSelectItem {
     pub expr: FormalAggregateTerm,
     pub alias: String,
-    pub alias_constructor: String,
+    pub alias_ty: FormalAttributeType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -260,7 +267,7 @@ pub enum FormalFunctionTerm {
     },
     Attribute {
         name: String,
-        constructor: String,
+        ty: FormalAttributeType,
     },
     Cast {
         function: String,

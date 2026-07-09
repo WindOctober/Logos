@@ -48,12 +48,12 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
                     .map(|column| {
                         Ok(Column {
                             name: column.name,
-                            ty: parse_sql_type(&column.ty)?,
-                            nullable: true,
-                            precision: type_precision(
+                            ty: parse_sql_type_with_typmod(
                                 column.full_type.as_deref().unwrap_or(&column.ty),
                                 column.precision,
-                            ),
+                                column.scale,
+                            )?,
+                            nullable: true,
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -549,26 +549,17 @@ fn calcite_rex_field_access_ast(rex: &CalciteRex) -> Result<ScalarAst> {
     let ty = rex
         .ty
         .as_deref()
-        .map(parse_sql_type)
+        .map(|ty| parse_sql_type_with_typmod(ty, rex.precision, rex.scale))
         .transpose()?
         .ok_or_else(|| Error::MissingField {
             node: "RexFieldAccess",
             field: "type",
         })?;
-    let precision = rex
-        .ty
-        .as_deref()
-        .and_then(|ty| type_precision(ty, rex.precision))
-        .or_else(|| {
-            rex.precision
-                .and_then(|precision| u32::try_from(precision).ok())
-        });
     Ok(ScalarAst::CorrelatedRef {
         correlation,
         field,
         index: rex.field_index,
         ty,
-        precision,
     })
 }
 
@@ -656,6 +647,14 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
                     ty,
                 });
             }
+        }
+        if type_annotation_head(&ty).is_some_and(|head| matches!(head, "DECIMAL" | "NUMERIC"))
+            && let Some((raw, source_ty)) = decimal_literal_from_source_cast(rex)
+        {
+            return Ok(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal { raw }),
+                ty: source_ty,
+            });
         }
     }
     if is_character_type(rex) {
@@ -945,14 +944,32 @@ fn rex_type_annotation(rex: &CalciteRex) -> Option<String> {
             return Some(format!("{normalized}({precision})"));
         }
     }
+    if normalized == "DECIMAL" {
+        let precision = rex
+            .precision
+            .and_then(|precision| u32::try_from(precision).ok())
+            .or_else(|| parse_type_precision(ty));
+        let scale = rex
+            .scale
+            .and_then(|scale| u32::try_from(scale).ok())
+            .or_else(|| parse_type_scale(ty));
+        let negative_scale = rex.scale.is_some_and(|scale| scale < 0)
+            || parse_type_scale_i32(ty).is_some_and(|scale| scale < 0);
+        if let Some(precision) = precision {
+            if let Some(scale) = scale {
+                return Some(format!("DECIMAL({precision},{scale})"));
+            }
+            if !negative_scale {
+                return Some(format!("DECIMAL({precision},0)"));
+            }
+        }
+    }
     Some(normalized)
 }
 
 fn normalize_type_annotation(ty: &str) -> Option<String> {
     let upper = ty.trim().to_ascii_uppercase();
-    let head = upper
-        .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
-        .next()?;
+    let head = type_annotation_head(&upper)?;
     match head {
         "DATE" => Some("DATE".to_owned()),
         "INTEGER" | "INT" => Some("INTEGER".to_owned()),
@@ -981,6 +998,12 @@ fn normalize_type_annotation(ty: &str) -> Option<String> {
         _ if upper.starts_with("INTERVAL") => Some(upper.replace('_', " ")),
         _ => None,
     }
+}
+
+fn type_annotation_head(ty: &str) -> Option<&str> {
+    ty.trim()
+        .split(|ch: char| ch.is_ascii_whitespace() || ch == '(')
+        .next()
 }
 
 fn type_annotation_is_timestamp(ty: &str) -> bool {
@@ -1086,8 +1109,31 @@ fn parse_cast_type_annotation_source(source: &str) -> Option<String> {
     let mut parser = SourceParser::new(source);
     parser.consume_keyword("CAST")?;
     parser.consume_char('(')?;
-    parser.consume_cast_literal()?;
-    parser.consume_keyword("AS")?;
+    parser.consume_until_top_level_as()?;
+    parse_cast_target_type_annotation(&mut parser)
+}
+
+fn parse_cast_target_type_annotation(parser: &mut SourceParser<'_>) -> Option<String> {
+    if parser
+        .peek_keyword("DECIMAL")
+        .or_else(|| parser.peek_keyword("NUMERIC"))
+        .is_some()
+    {
+        let normalized = if parser.consume_keyword("DECIMAL").is_some() {
+            "DECIMAL"
+        } else {
+            parser.consume_keyword("NUMERIC")?;
+            "NUMERIC"
+        };
+        let precision_scale = parser.consume_precision_scale()?;
+        parser.consume_char(')')?;
+        parser.finish()?;
+        return Some(match precision_scale {
+            Some((precision, Some(scale))) => format!("{normalized}({precision},{scale})"),
+            Some((precision, None)) => format!("{normalized}({precision})"),
+            None => normalized.to_owned(),
+        });
+    }
     let is_timestamptz = if parser.consume_keyword("TIMESTAMPTZ").is_some() {
         true
     } else {
@@ -1109,6 +1155,29 @@ fn parse_cast_type_annotation_source(source: &str) -> Option<String> {
         Some(precision) => format!("{normalized}({precision})"),
         None => normalized.to_owned(),
     })
+}
+
+fn decimal_literal_from_source_cast(rex: &CalciteRex) -> Option<(String, String)> {
+    let mut parser = SourceParser::new(rex.source_sql.as_deref()?);
+    parser.consume_keyword("CAST")?;
+    parser.consume_char('(')?;
+    let value = parser.consume_decimal_cast_literal()?;
+    parser.consume_keyword("AS")?;
+    let normalized = if parser.consume_keyword("DECIMAL").is_some() {
+        "DECIMAL"
+    } else {
+        parser.consume_keyword("NUMERIC")?;
+        "NUMERIC"
+    };
+    let precision_scale = parser.consume_precision_scale()?;
+    parser.consume_char(')')?;
+    parser.finish()?;
+    let ty = match precision_scale {
+        Some((precision, Some(scale))) => format!("{normalized}({precision},{scale})"),
+        Some((precision, None)) => format!("{normalized}({precision})"),
+        None => normalized.to_owned(),
+    };
+    Some((value, ty))
 }
 
 fn parse_timestamp_tz_literal_source(source: &str, expected_precision: u32) -> Option<String> {
@@ -1229,6 +1298,13 @@ impl<'a> SourceParser<'a> {
         true
     }
 
+    fn peek_keyword(&mut self, keyword: &str) -> Option<()> {
+        let saved = self.pos;
+        let result = self.consume_keyword(keyword);
+        self.pos = saved;
+        result
+    }
+
     fn consume_char(&mut self, ch: char) -> Option<()> {
         self.skip_ws();
         let rest = self.input.get(self.pos..)?;
@@ -1262,6 +1338,36 @@ impl<'a> SourceParser<'a> {
         Some(Some(precision))
     }
 
+    fn consume_precision_scale(&mut self) -> Option<Option<(u32, Option<u32>)>> {
+        self.skip_ws();
+        if !self.input.get(self.pos..)?.starts_with('(') {
+            return Some(None);
+        }
+        self.pos += 1;
+        let precision = self.consume_unsigned_integer()?;
+        self.skip_ws();
+        let scale = if self.input.get(self.pos..)?.starts_with(',') {
+            self.pos += 1;
+            Some(self.consume_unsigned_integer()?)
+        } else {
+            None
+        };
+        self.consume_char(')')?;
+        Some(Some((precision, scale)))
+    }
+
+    fn consume_unsigned_integer(&mut self) -> Option<u32> {
+        self.skip_ws();
+        let start = self.pos;
+        while let Some(ch) = self.input.get(self.pos..)?.chars().next() {
+            if !ch.is_ascii_digit() {
+                break;
+            }
+            self.pos += ch.len_utf8();
+        }
+        (self.pos > start).then(|| self.input.get(start..self.pos)?.parse().ok())?
+    }
+
     fn consume_sql_string_literal(&mut self) -> Option<String> {
         self.skip_ws();
         if !self.input.get(self.pos..)?.starts_with('\'') {
@@ -1286,11 +1392,80 @@ impl<'a> SourceParser<'a> {
         None
     }
 
+    fn consume_decimal_cast_literal(&mut self) -> Option<String> {
+        self.consume_sql_string_literal()
+            .or_else(|| self.consume_numeric_literal())
+            .or_else(|| {
+                self.consume_keyword("NULL")?;
+                Some("null".to_owned())
+            })
+    }
+
+    fn consume_numeric_literal(&mut self) -> Option<String> {
+        self.skip_ws();
+        let start = self.pos;
+        if self
+            .input
+            .get(self.pos..)?
+            .chars()
+            .next()
+            .is_some_and(|ch| ch == '+' || ch == '-')
+        {
+            self.pos += 1;
+        }
+        let mut saw_digit = false;
+        while let Some(ch) = self.input.get(self.pos..)?.chars().next() {
+            if !ch.is_ascii_digit() {
+                break;
+            }
+            saw_digit = true;
+            self.pos += ch.len_utf8();
+        }
+        if self.input.get(self.pos..)?.starts_with('.') {
+            self.pos += 1;
+            while let Some(ch) = self.input.get(self.pos..)?.chars().next() {
+                if !ch.is_ascii_digit() {
+                    break;
+                }
+                saw_digit = true;
+                self.pos += ch.len_utf8();
+            }
+        }
+        saw_digit.then(|| self.input.get(start..self.pos).map(str::to_owned))?
+    }
+
     fn consume_cast_literal(&mut self) -> Option<String> {
         self.consume_sql_string_literal().or_else(|| {
             self.consume_keyword("NULL")?;
             Some("null".to_owned())
         })
+    }
+
+    fn consume_until_top_level_as(&mut self) -> Option<()> {
+        let mut depth = 0usize;
+        loop {
+            self.skip_ws();
+            if depth == 0 && self.peek_keyword("AS").is_some() {
+                return self.consume_keyword("AS");
+            }
+            let ch = self.input.get(self.pos..)?.chars().next()?;
+            match ch {
+                '\'' => {
+                    self.consume_sql_string_literal()?;
+                }
+                '(' => {
+                    depth = depth.checked_add(1)?;
+                    self.pos += ch.len_utf8();
+                }
+                ')' => {
+                    depth = depth.checked_sub(1)?;
+                    self.pos += ch.len_utf8();
+                }
+                _ => {
+                    self.pos += ch.len_utf8();
+                }
+            }
+        }
     }
 
     fn finish(&mut self) -> Option<()> {
@@ -1351,14 +1526,12 @@ fn inherit_project_type_annotation_types(
             continue;
         };
         column.ty = parse_sql_type(ty)?;
-        column.precision = parse_type_precision(ty);
     }
     Ok(())
 }
 
 fn inherit_column_type(column: &mut Column, source: &Column) {
     column.ty = source.ty.clone();
-    column.precision = source.precision;
 }
 
 fn one_input(
@@ -1386,12 +1559,10 @@ fn convert_row_type(row_type: Vec<crate::calcite::CalciteField>) -> Result<Vec<C
     row_type
         .into_iter()
         .map(|field| {
-            let precision = type_precision(&field.ty, field.precision);
             Ok(Column {
                 name: field.name,
-                ty: parse_sql_type(&field.ty)?,
+                ty: parse_sql_type_with_typmod(&field.ty, field.precision, field.scale)?,
                 nullable: field.nullable,
-                precision,
             })
         })
         .collect()
@@ -1418,6 +1589,17 @@ fn parse_sql_type(value: &str) -> Result<SqlType> {
     parse_calcite_sql_type(value)
 }
 
+fn parse_sql_type_with_typmod(
+    value: &str,
+    structured_precision: Option<i32>,
+    structured_scale: Option<i32>,
+) -> Result<SqlType> {
+    Ok(parse_sql_type(value)?.with_typmod(
+        type_precision(value, structured_precision),
+        type_scale(value, structured_precision, structured_scale),
+    ))
+}
+
 fn type_precision(ty: &str, structured_precision: Option<i32>) -> Option<u32> {
     structured_precision
         .and_then(|precision| u32::try_from(precision).ok())
@@ -1427,7 +1609,42 @@ fn type_precision(ty: &str, structured_precision: Option<i32>) -> Option<u32> {
 fn parse_type_precision(ty: &str) -> Option<u32> {
     let start = ty.find('(')? + 1;
     let end = ty[start..].find(')')? + start;
-    ty[start..end].trim().parse().ok()
+    ty[start..end].split(',').next()?.trim().parse().ok()
+}
+
+fn type_scale(
+    ty: &str,
+    structured_precision: Option<i32>,
+    structured_scale: Option<i32>,
+) -> Option<u32> {
+    if structured_scale.is_some_and(|scale| scale < 0)
+        || parse_type_scale_i32(ty).is_some_and(|scale| scale < 0)
+    {
+        return None;
+    }
+    structured_scale
+        .and_then(|scale| u32::try_from(scale).ok())
+        .or_else(|| parse_type_scale(ty))
+        .or_else(|| {
+            let decimal = type_annotation_head(ty).is_some_and(|head| {
+                matches!(head.to_ascii_uppercase().as_str(), "DECIMAL" | "NUMERIC")
+            });
+            let has_precision =
+                structured_precision.is_some() || parse_type_precision(ty).is_some();
+            (decimal && has_precision).then_some(0)
+        })
+}
+
+fn parse_type_scale(ty: &str) -> Option<u32> {
+    u32::try_from(parse_type_scale_i32(ty)?).ok()
+}
+
+fn parse_type_scale_i32(ty: &str) -> Option<i32> {
+    let start = ty.find('(')? + 1;
+    let end = ty[start..].find(')')? + start;
+    let mut parts = ty[start..end].split(',');
+    parts.next()?;
+    parts.next()?.trim().parse().ok()
 }
 
 fn parse_join_type(value: &str) -> Result<JoinType> {
@@ -1956,7 +2173,10 @@ mod tests {
         .unwrap();
 
         let ir = convert_raw_file(raw).unwrap();
-        assert_eq!(ir.schema.tables[0].columns[0].precision, Some(3));
+        assert_eq!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::timestamp(Some(3))
+        );
         let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
             panic!("expected project");
         };
@@ -2581,7 +2801,12 @@ mod tests {
                   "type": "LogicalTableScan",
                   "rowType": [{"name": "t", "type": "TIMESTAMP WITH LOCAL TIME ZONE", "nullable": true}],
                   "table": ["R"],
-                  "inputs": []
+                  "inputs": [{
+                    "type": "LogicalValues",
+                    "rowType": [],
+                    "tuples": [],
+                    "inputs": []
+                  }]
                 }
               }]
             }
@@ -2590,8 +2815,14 @@ mod tests {
         .unwrap();
 
         let ir = convert_raw_file(raw).unwrap();
-        assert_eq!(ir.schema.tables[0].columns[0].ty, SqlType::TimestampTz);
-        assert_eq!(ir.queries[0].output[0].ty, SqlType::TimestampTz);
+        assert!(matches!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::TimestampTz { .. }
+        ));
+        assert!(matches!(
+            ir.queries[0].output[0].ty,
+            SqlType::TimestampTz { .. }
+        ));
     }
 
     #[test]
@@ -2623,9 +2854,9 @@ mod tests {
         .unwrap();
 
         let ir = convert_raw_file(raw).unwrap();
-        assert_eq!(ir.queries[0].output[0].ty, SqlType::TimestampTz);
+        assert_eq!(ir.queries[0].output[0].ty, SqlType::timestamptz(Some(6)));
         if let RelExpr::Project { input, .. } = &ir.queries[0].rel {
-            assert_eq!(input.output()[0].ty, SqlType::TimestampTz);
+            assert_eq!(input.output()[0].ty, SqlType::timestamptz(Some(6)));
         } else {
             panic!("expected project");
         }
@@ -2796,7 +3027,6 @@ mod tests {
                 field,
                 index: Some(0),
                 ty: SqlType::Integer,
-                precision: Some(10),
             } if correlation == "$cor0" && field == "DEPTNO"
         ));
     }
@@ -2829,5 +3059,271 @@ mod tests {
             panic!("expected values");
         };
         assert!(matches!(tuples, ValuesTuples::Rows { rows } if rows.len() == 1));
+    }
+
+    #[test]
+    fn decimal_precision_and_scale_survive_project_conversion() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "T", "columns": [{"name": "amount", "type": "DECIMAL", "precision": 10, "scale": 2}]}],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "amount_out", "type": "DECIMAL", "nullable": true, "precision": 10, "scale": 2}],
+                  "projects": ["CAST($0):DECIMAL(10, 2)"],
+                  "projectRex": [{
+                    "kind": "CAST",
+                    "class": "RexCall",
+                    "text": "CAST($0):DECIMAL(10, 2)",
+                    "type": "DECIMAL",
+                    "precision": 10,
+                    "scale": 2,
+                    "operator": "CAST",
+                    "opKind": "CAST",
+                    "operands": [{"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "DECIMAL", "index": 0, "precision": 10, "scale": 2}]
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "amount", "type": "DECIMAL", "nullable": true, "precision": 10, "scale": 2}],
+                    "table": ["T"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::decimal(Some(10), Some(2))
+        );
+        assert_eq!(
+            ir.queries[0].output[0].ty,
+            SqlType::decimal(Some(10), Some(2))
+        );
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        let ScalarAst::TypeAnnotation { ty, .. } = &exprs[0].parsed else {
+            panic!("expected decimal type annotation");
+        };
+        assert_eq!(ty, "DECIMAL(10,2)");
+    }
+
+    #[test]
+    fn decimal_rex_call_result_keeps_operator_ast() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "T", "columns": [
+                {"name": "a", "type": "DECIMAL", "precision": 10, "scale": 2},
+                {"name": "b", "type": "DECIMAL", "precision": 10, "scale": 2}
+              ]}],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "sum_ab", "type": "DECIMAL", "nullable": true, "precision": 11, "scale": 2}],
+                  "projects": ["+($0, $1)"],
+                  "projectRex": [{
+                    "kind": "PLUS",
+                    "class": "RexCall",
+                    "text": "+($0, $1)",
+                    "type": "DECIMAL",
+                    "precision": 11,
+                    "scale": 2,
+                    "operator": "+",
+                    "opKind": "PLUS",
+                    "operands": [
+                      {"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "DECIMAL", "index": 0, "precision": 10, "scale": 2},
+                      {"kind": "INPUT_REF", "class": "RexInputRef", "text": "$1", "type": "DECIMAL", "index": 1, "precision": 10, "scale": 2}
+                    ]
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [
+                      {"name": "a", "type": "DECIMAL", "nullable": true, "precision": 10, "scale": 2},
+                      {"name": "b", "type": "DECIMAL", "nullable": true, "precision": 10, "scale": 2}
+                    ],
+                    "table": ["T"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        assert!(matches!(
+            &exprs[0].parsed,
+            ScalarAst::Call {
+                op: ScalarOp::Plus,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn decimal_without_explicit_scale_defaults_to_zero() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "T", "columns": [{"name": "amount", "type": "DECIMAL", "precision": 10}]}],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "amount_out", "type": "DECIMAL", "nullable": true, "precision": 10}],
+                  "projects": ["CAST($0):DECIMAL(10)"],
+                  "projectRex": [{
+                    "kind": "CAST",
+                    "class": "RexCall",
+                    "text": "CAST($0):DECIMAL(10)",
+                    "type": "DECIMAL",
+                    "precision": 10,
+                    "operator": "CAST",
+                    "opKind": "CAST",
+                    "operands": [{"kind": "INPUT_REF", "class": "RexInputRef", "text": "$0", "type": "DECIMAL", "index": 0, "precision": 10}]
+                  }],
+                  "inputs": [{
+                    "type": "LogicalTableScan",
+                    "rowType": [{"name": "amount", "type": "DECIMAL", "nullable": true, "precision": 10}],
+                    "table": ["T"],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::decimal(Some(10), Some(0))
+        );
+        assert_eq!(
+            ir.queries[0].output[0].ty,
+            SqlType::decimal(Some(10), Some(0))
+        );
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        let ScalarAst::TypeAnnotation { ty, .. } = &exprs[0].parsed else {
+            panic!("expected decimal type annotation");
+        };
+        assert_eq!(ty, "DECIMAL(10,0)");
+    }
+
+    #[test]
+    fn unconstrained_decimal_preserves_missing_scale() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "T", "columns": [{"name": "amount", "type": "DECIMAL"}]}],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalTableScan",
+                  "rowType": [{"name": "amount", "type": "DECIMAL", "nullable": true}],
+                  "table": ["T"],
+                  "inputs": []
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::decimal(None, None)
+        );
+        assert_eq!(ir.queries[0].output[0].ty, SqlType::decimal(None, None));
+    }
+
+    #[test]
+    fn negative_decimal_scale_is_not_defaulted_to_zero() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [{"name": "T", "columns": [{"name": "amount", "type": "DECIMAL", "precision": 2, "scale": -3}]}],
+              "queries": [{
+                "rel": {
+                  "type": "LogicalTableScan",
+                  "rowType": [{"name": "amount", "type": "DECIMAL", "nullable": true, "precision": 2, "scale": -3}],
+                  "table": ["T"],
+                  "inputs": []
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        assert_eq!(
+            ir.schema.tables[0].columns[0].ty,
+            SqlType::decimal(Some(2), None)
+        );
+        assert_eq!(ir.queries[0].output[0].ty, SqlType::decimal(Some(2), None));
+    }
+
+    #[test]
+    fn decimal_cast_literal_uses_source_sql_before_calcite_rounding() {
+        let raw: CalciteFile = serde_json::from_str(
+            r#"
+            {
+              "schema": [],
+              "queries": [{
+                "sourceSql": "SELECT CAST('1.235' AS DECIMAL(4, 2))",
+                "rel": {
+                  "type": "LogicalProject",
+                  "rowType": [{"name": "amount", "type": "DECIMAL", "nullable": false, "precision": 4, "scale": 2}],
+                  "projects": ["1.23:DECIMAL(4, 2)"],
+                  "projectRex": [{
+                    "kind": "LITERAL",
+                    "class": "RexLiteral",
+                    "text": "1.23:DECIMAL(4, 2)",
+                    "type": "DECIMAL",
+                    "precision": 4,
+                    "scale": 2,
+                    "literalTypeName": "DECIMAL",
+                    "literalValue": "1.23",
+                    "sourceSql": "CAST('1.235' AS DECIMAL(4, 2))"
+                  }],
+                  "inputs": [{
+                    "type": "LogicalValues",
+                    "rowType": [],
+                    "tuples": [],
+                    "inputs": []
+                  }]
+                }
+              }]
+            }
+            "#,
+        )
+        .unwrap();
+
+        let ir = convert_raw_file(raw).unwrap();
+        let RelExpr::Project { exprs, .. } = &ir.queries[0].rel else {
+            panic!("expected project");
+        };
+        let ScalarAst::TypeAnnotation { expr, ty } = &exprs[0].parsed else {
+            panic!("expected decimal type annotation");
+        };
+        assert_eq!(ty, "DECIMAL(4,2)");
+        assert!(matches!(
+            expr.as_ref(),
+            ScalarAst::Literal { raw } if raw == "1.235"
+        ));
     }
 }

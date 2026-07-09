@@ -1,5 +1,4 @@
 use super::emit::{emit_rocq_create_schema, emit_rocq_schema_module};
-use super::scalar::formal_attribute_constructor;
 use super::*;
 use logos_ir::ir::Table;
 
@@ -67,56 +66,10 @@ impl LoweringContext {
                 "FormalSQL proof-of-concept schemas type attributes but do not encode SQL NOT NULL constraints.",
             );
         }
-        let ty = self.lower_schema_type(path, column)?;
+        let ty = self.lower_attribute_type(path, column, AttributeTypeContext::Schema)?;
         Some(FormalAttribute {
             name: column.name.clone(),
             ty,
-            constructor: formal_attribute_constructor(ty),
         })
-    }
-
-    fn lower_schema_type(&mut self, path: &str, column: &Column) -> Option<FormalAttributeType> {
-        match &column.ty {
-            SqlType::Integer | SqlType::BigInt => Some(FormalAttributeType::Z),
-            SqlType::Float | SqlType::Double | SqlType::Decimal => Some(FormalAttributeType::Float),
-            SqlType::Varchar => Some(FormalAttributeType::String),
-            SqlType::Boolean => Some(FormalAttributeType::Bool),
-            SqlType::Date => Some(FormalAttributeType::Date),
-            SqlType::Timestamp => Some(FormalAttributeType::Timestamp {
-                precision: column.precision,
-            }),
-            SqlType::TimestampTz => Some(FormalAttributeType::Timestamptz {
-                precision: column.precision,
-            }),
-            SqlType::Time => Some(FormalAttributeType::String),
-            SqlType::Any | SqlType::Null => {
-                self.error(
-                    path,
-                    "schema_type_not_supported",
-                    &format!(
-                        "FormalSQL proof-of-concept schemas cannot soundly encode {:?}.",
-                        column.ty
-                    ),
-                );
-                None
-            }
-        }
-    }
-
-    pub(super) fn lower_query_attribute_constructor(
-        &mut self,
-        path: &str,
-        column: &Column,
-    ) -> Option<String> {
-        if is_unsupported_temporal_type(&column.ty) {
-            self.warning(
-                path,
-                "temporal_type_encoded_as_string",
-                "FormalSQL proof-of-concept attributes have no TIME constructor; this query-visible attribute is encoded as Attr_string and requires a Rocq-side semantic encoding before proofs are trusted.",
-            );
-        }
-        Some(formal_attribute_constructor(
-            self.lower_schema_type(path, column)?,
-        ))
     }
 }

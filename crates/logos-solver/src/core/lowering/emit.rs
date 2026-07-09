@@ -535,7 +535,7 @@ fn emit_rocq_sort_key(key: &FormalSortKey) -> String {
     format!(
         "{} ({})",
         emit_rocq_sort_key_constructor(key.direction, key.null_direction),
-        emit_rocq_attribute(&key.attribute_constructor, &key.attribute_name)
+        emit_rocq_attribute(key.attribute_ty, &key.attribute_name)
     )
 }
 
@@ -567,28 +567,28 @@ fn emit_rocq_select_list(select: &[FormalSelectItem]) -> String {
 
 fn emit_rocq_select_item(item: &FormalSelectItem) -> String {
     if let FormalAggregateTerm::Expr {
-        term: FormalFunctionTerm::Attribute { name, constructor },
+        term: FormalFunctionTerm::Attribute { name, ty },
     } = &item.expr
     {
-        if name == &item.alias && constructor == &item.alias_constructor {
-            if let Some(select_constructor) = identity_select_constructor(constructor) {
-                return emit_rocq_named_helper(select_constructor, name, constructor);
+        if name == &item.alias && attribute_types_emit_equivalent(*ty, item.alias_ty) {
+            if let Some(select_constructor) = identity_select_constructor(*ty) {
+                return emit_rocq_named_helper(select_constructor, name, *ty);
             }
         }
     }
     format!(
         "SelectAs ({}) ({})",
         emit_rocq_aggregate_term(&item.expr),
-        emit_rocq_attribute(&item.alias_constructor, &item.alias)
+        emit_rocq_attribute(item.alias_ty, &item.alias)
     )
 }
 
 fn emit_rocq_aggregate_term(term: &FormalAggregateTerm) -> String {
     match term {
         FormalAggregateTerm::Expr { term } => match term {
-            FormalFunctionTerm::Attribute { name, constructor } => {
-                if let Some(dot_constructor) = dot_constructor(constructor) {
-                    emit_rocq_named_helper(dot_constructor, name, constructor)
+            FormalFunctionTerm::Attribute { name, ty } => {
+                if let Some(dot_constructor) = dot_constructor(*ty) {
+                    emit_rocq_named_helper(dot_constructor, name, *ty)
                 } else {
                     format!("AExpr ({})", emit_rocq_function_term(term))
                 }
@@ -636,8 +636,8 @@ fn case_function_args(
 fn emit_rocq_function_term(term: &FormalFunctionTerm) -> String {
     match term {
         FormalFunctionTerm::Constant { raw, ty } => emit_rocq_constant_function(raw, *ty),
-        FormalFunctionTerm::Attribute { name, constructor } => {
-            format!("Dot ({})", emit_rocq_attribute(constructor, name))
+        FormalFunctionTerm::Attribute { name, ty } => {
+            format!("Dot ({})", emit_rocq_attribute(*ty, name))
         }
         FormalFunctionTerm::Cast { function, arg, .. } => format!(
             "Function {} ({})",
@@ -696,106 +696,132 @@ fn emit_rocq_call(function: &str, args: &[String]) -> String {
     lines.join("\n")
 }
 
-fn emit_rocq_attribute(constructor: &str, name: &str) -> String {
-    let helper = match constructor {
-        "Attr_Z" => "AttrZ",
-        "Attr_string" => "AttrString",
-        "Attr_bool" => "AttrBool",
-        "Attr_float" => "AttrFloat",
-        "Attr_date" => "AttrDate",
-        _ if timestamp_constructor_precision(constructor).is_some() => "AttrTimestamp",
-        _ if timestamptz_constructor_precision(constructor).is_some() => "AttrTimestamptz",
-        other => other,
+fn emit_rocq_attribute(ty: FormalAttributeType, name: &str) -> String {
+    let helper = match ty {
+        FormalAttributeType::Z => "AttrZ",
+        FormalAttributeType::String => "AttrString",
+        FormalAttributeType::Bool => "AttrBool",
+        FormalAttributeType::Float => "AttrFloat",
+        FormalAttributeType::Decimal { .. } => "AttrDecimal",
+        FormalAttributeType::Date => "AttrDate",
+        FormalAttributeType::Timestamp { .. } => "AttrTimestamp",
+        FormalAttributeType::Timestamptz { .. } => "AttrTimestamptz",
     };
-    emit_rocq_named_helper(helper, name, constructor)
+    emit_rocq_named_helper(helper, name, ty)
 }
 
-fn emit_rocq_schema_attribute(constructor: &str, name: &str) -> String {
-    if let Some(precision) = timestamp_constructor_precision(constructor) {
-        return format!("Attr_timestamp {} {precision}", rocq_string_literal(name));
-    }
-    if let Some(precision) = timestamptz_constructor_precision(constructor) {
-        return format!("Attr_timestamptz {} {precision}", rocq_string_literal(name));
-    }
-    format!("{constructor} {}", rocq_string_literal(name))
-}
-
-fn emit_rocq_named_helper(helper: &str, name: &str, constructor: &str) -> String {
-    if let Some(precision) = timestamp_constructor_precision(constructor)
-        .or_else(|| timestamptz_constructor_precision(constructor))
-    {
-        format!("{helper} {} {precision}", rocq_string_literal(name))
-    } else {
-        format!("{helper} {}", rocq_string_literal(name))
-    }
-}
-
-fn timestamp_constructor_precision(constructor: &str) -> Option<u32> {
-    constructor.strip_prefix("Attr_timestamp#")?.parse().ok()
-}
-
-fn timestamptz_constructor_precision(constructor: &str) -> Option<u32> {
-    constructor.strip_prefix("Attr_timestamptz#")?.parse().ok()
-}
-
-fn identity_select_constructor(attribute_constructor: &str) -> Option<&'static str> {
-    match attribute_constructor {
-        "Attr_Z" => Some("SelectZ"),
-        "Attr_string" => Some("SelectString"),
-        "Attr_bool" => Some("SelectBool"),
-        "Attr_float" => Some("SelectFloat"),
-        "Attr_date" => Some("SelectDate"),
-        _ if timestamp_constructor_precision(attribute_constructor).is_some() => {
-            Some("SelectTimestamp")
+fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
+    match ty {
+        FormalAttributeType::Z => format!("Attr_Z {}", rocq_string_literal(name)),
+        FormalAttributeType::String => format!("Attr_string {}", rocq_string_literal(name)),
+        FormalAttributeType::Bool => format!("Attr_bool {}", rocq_string_literal(name)),
+        FormalAttributeType::Float => format!("Attr_float {}", rocq_string_literal(name)),
+        FormalAttributeType::Decimal { precision, scale } => {
+            let (precision, scale) = checked_decimal_typmod(precision, scale);
+            format!(
+                "Attr_decimal {} {precision} {scale}",
+                rocq_string_literal(name)
+            )
         }
-        _ if timestamptz_constructor_precision(attribute_constructor).is_some() => {
-            Some("SelectTimestamptz")
+        FormalAttributeType::Date => format!("Attr_date {}", rocq_string_literal(name)),
+        FormalAttributeType::Timestamp { precision } => format!(
+            "Attr_timestamp {} {}",
+            rocq_string_literal(name),
+            timestamp_precision(precision)
+        ),
+        FormalAttributeType::Timestamptz { precision } => format!(
+            "Attr_timestamptz {} {}",
+            rocq_string_literal(name),
+            timestamp_precision(precision)
+        ),
+    }
+}
+
+fn emit_rocq_named_helper(helper: &str, name: &str, ty: FormalAttributeType) -> String {
+    match ty {
+        FormalAttributeType::Decimal { precision, scale } => {
+            let (precision, scale) = checked_decimal_typmod(precision, scale);
+            format!("{helper} {} {precision} {scale}", rocq_string_literal(name))
         }
-        _ => None,
+        FormalAttributeType::Timestamp { precision }
+        | FormalAttributeType::Timestamptz { precision } => {
+            format!(
+                "{helper} {} {}",
+                rocq_string_literal(name),
+                timestamp_precision(precision)
+            )
+        }
+        _ => format!("{helper} {}", rocq_string_literal(name)),
+    }
+}
+
+fn checked_decimal_typmod(precision: Option<u32>, scale: Option<u32>) -> (u32, u32) {
+    match (precision, scale) {
+        (Some(precision), Some(scale)) => (precision, scale),
+        _ => panic!("unchecked DECIMAL typmod reached Rocq emitter"),
+    }
+}
+
+fn identity_select_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
+    match attribute_ty {
+        FormalAttributeType::Z => Some("SelectZ"),
+        FormalAttributeType::String => Some("SelectString"),
+        FormalAttributeType::Bool => Some("SelectBool"),
+        FormalAttributeType::Float => Some("SelectFloat"),
+        FormalAttributeType::Decimal { .. } => Some("SelectDecimal"),
+        FormalAttributeType::Date => Some("SelectDate"),
+        FormalAttributeType::Timestamp { .. } => Some("SelectTimestamp"),
+        FormalAttributeType::Timestamptz { .. } => Some("SelectTimestamptz"),
+    }
+}
+
+fn attribute_types_emit_equivalent(left: FormalAttributeType, right: FormalAttributeType) -> bool {
+    match (left, right) {
+        (
+            FormalAttributeType::Timestamp { precision: left },
+            FormalAttributeType::Timestamp { precision: right },
+        ) => timestamp_precision(left) == timestamp_precision(right),
+        (
+            FormalAttributeType::Timestamptz { precision: left },
+            FormalAttributeType::Timestamptz { precision: right },
+        ) => timestamp_precision(left) == timestamp_precision(right),
+        _ => left == right,
     }
 }
 
 fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
     let FormalAggregateTerm::Expr {
-        term: FormalFunctionTerm::Attribute { name, constructor },
+        term: FormalFunctionTerm::Attribute { name, ty },
     } = &item.expr
     else {
         return None;
     };
-    if name != &item.alias || constructor != &item.alias_constructor {
+    if name != &item.alias || !attribute_types_emit_equivalent(*ty, item.alias_ty) {
         return None;
     }
-    let column_constructor = match constructor.as_str() {
-        "Attr_Z" => "ZColumn",
-        "Attr_string" => "StringColumn",
-        "Attr_bool" => "BoolColumn",
-        "Attr_float" => "FloatColumn",
-        "Attr_date" => "DateColumn",
-        _ if timestamp_constructor_precision(constructor).is_some() => "TimestampColumn",
-        _ if timestamptz_constructor_precision(constructor).is_some() => "TimestamptzColumn",
-        _ => return None,
+    let column_constructor = match ty {
+        FormalAttributeType::Z => "ZColumn",
+        FormalAttributeType::String => "StringColumn",
+        FormalAttributeType::Bool => "BoolColumn",
+        FormalAttributeType::Float => "FloatColumn",
+        FormalAttributeType::Decimal { .. } => "DecimalColumn",
+        FormalAttributeType::Date => "DateColumn",
+        FormalAttributeType::Timestamp { .. } => "TimestampColumn",
+        FormalAttributeType::Timestamptz { .. } => "TimestamptzColumn",
     };
-    Some(emit_rocq_named_helper(
-        column_constructor,
-        name,
-        constructor,
-    ))
+    Some(emit_rocq_named_helper(column_constructor, name, *ty))
 }
 
-fn dot_constructor(attribute_constructor: &str) -> Option<&'static str> {
-    match attribute_constructor {
-        "Attr_Z" => Some("DotZ"),
-        "Attr_string" => Some("DotString"),
-        "Attr_bool" => Some("DotBool"),
-        "Attr_float" => Some("DotFloat"),
-        "Attr_date" => Some("DotDate"),
-        _ if timestamp_constructor_precision(attribute_constructor).is_some() => {
-            Some("DotTimestamp")
-        }
-        _ if timestamptz_constructor_precision(attribute_constructor).is_some() => {
-            Some("DotTimestamptz")
-        }
-        _ => None,
+fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
+    match attribute_ty {
+        FormalAttributeType::Z => Some("DotZ"),
+        FormalAttributeType::String => Some("DotString"),
+        FormalAttributeType::Bool => Some("DotBool"),
+        FormalAttributeType::Float => Some("DotFloat"),
+        FormalAttributeType::Decimal { .. } => Some("DotDecimal"),
+        FormalAttributeType::Date => Some("DotDate"),
+        FormalAttributeType::Timestamp { .. } => Some("DotTimestamp"),
+        FormalAttributeType::Timestamptz { .. } => Some("DotTimestamptz"),
     }
 }
 
@@ -807,6 +833,7 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             Some(FormalAttributeType::String) | None => "NullString".to_owned(),
             Some(FormalAttributeType::Bool) => "NullBool".to_owned(),
             Some(FormalAttributeType::Float) => "NullFloat".to_owned(),
+            Some(FormalAttributeType::Decimal { .. }) => "NullDecimal".to_owned(),
             Some(FormalAttributeType::Date) => "NullDate".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "NullTimestamp".to_owned(),
             Some(FormalAttributeType::Timestamptz { .. }) => "NullTimestamptz".to_owned(),
@@ -833,6 +860,12 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             return format!("CstTimestamptz ({micros})");
         }
     }
+    if matches!(ty, Some(FormalAttributeType::Decimal { .. })) {
+        if let Some((coeff, precision, scale)) = decimal_literal_for_type(trimmed, ty.as_ref()) {
+            return format!("CstDecimal ({precision}) ({scale}) ({coeff})");
+        }
+        panic!("unsupported DECIMAL aggregate literal reached Rocq emitter: {trimmed}");
+    }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("CstString {}", rocq_string_literal(&unquoted));
     }
@@ -854,6 +887,7 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             Some(FormalAttributeType::String) | None => "Value_string None".to_owned(),
             Some(FormalAttributeType::Bool) => "Value_bool None".to_owned(),
             Some(FormalAttributeType::Float) => "Value_float None".to_owned(),
+            Some(FormalAttributeType::Decimal { .. }) => "Value_decimal None".to_owned(),
             Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "Value_timestamp None".to_owned(),
             Some(FormalAttributeType::Timestamptz { .. }) => "Value_timestamptz None".to_owned(),
@@ -880,6 +914,12 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             return format!("Value_timestamptz (Some ({micros})%Z)");
         }
     }
+    if matches!(ty, Some(FormalAttributeType::Decimal { .. })) {
+        if let Some((coeff, precision, scale)) = decimal_literal_for_type(trimmed, ty.as_ref()) {
+            return format!("Value_decimal (decimal_checked ({precision}) ({scale}) ({coeff}))");
+        }
+        panic!("unsupported DECIMAL value literal reached Rocq emitter: {trimmed}");
+    }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("Value_string (Some {})", rocq_string_literal(&unquoted));
     }
@@ -887,6 +927,94 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
         return format!("Value_Z (Some ({trimmed})%Z)");
     }
     format!("Value_string (Some {})", rocq_string_literal(trimmed))
+}
+
+pub(super) fn parse_decimal_literal(raw: &str) -> Option<(String, u32)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.contains(['e', 'E']) {
+        return None;
+    }
+    let (negative, body) = match trimmed.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
+    };
+    let (whole, fractional) = body.split_once('.').unwrap_or((body, ""));
+    if whole.is_empty() && fractional.is_empty() {
+        return None;
+    }
+    if !whole.chars().all(|c| c.is_ascii_digit()) || !fractional.chars().all(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    let mut digits = format!("{whole}{fractional}");
+    if digits.is_empty() {
+        return None;
+    }
+    while digits.len() > 1 && digits.starts_with('0') {
+        digits.remove(0);
+    }
+    if negative && digits != "0" {
+        digits.insert(0, '-');
+    }
+    Some((digits, fractional.len().try_into().ok()?))
+}
+
+pub(super) fn decimal_literal_for_type(
+    raw: &str,
+    ty: Option<&FormalAttributeType>,
+) -> Option<(String, u32, u32)> {
+    let (coeff, literal_scale) = parse_decimal_literal(raw)?;
+    let Some(FormalAttributeType::Decimal {
+        precision: Some(precision),
+        scale: Some(target_scale),
+        ..
+    }) = ty
+    else {
+        return None;
+    };
+    let coerced = if literal_scale > *target_scale {
+        round_decimal_coeff_to_scale(&coeff, literal_scale, *target_scale)?
+    } else {
+        let padding = target_scale - literal_scale;
+        if padding == 0 {
+            coeff
+        } else {
+            format!("{coeff}{}", "0".repeat(padding as usize))
+        }
+    };
+    if !decimal_literal_fits_precision(&coerced, *target_scale, Some(*precision)) {
+        return None;
+    }
+    Some((coerced, *precision, *target_scale))
+}
+
+fn decimal_literal_fits_precision(coeff: &str, scale: u32, precision: Option<u32>) -> bool {
+    let Some(precision) = precision else {
+        return false;
+    };
+    if precision == 0 || precision > 1000 || scale > 1000 {
+        return false;
+    }
+    let digits = coeff.trim_start_matches('-').trim_start_matches('0');
+    digits.len() <= precision as usize
+}
+
+fn round_decimal_coeff_to_scale(
+    coeff: &str,
+    literal_scale: u32,
+    target_scale: u32,
+) -> Option<String> {
+    let drop_digits = literal_scale.checked_sub(target_scale)?;
+    let divisor = 10_i128.checked_pow(drop_digits)?;
+    let value = coeff.parse::<i128>().ok()?;
+    let quotient = value / divisor;
+    let remainder = value % divisor;
+    let rounded = if remainder.abs().checked_mul(2)? >= divisor {
+        quotient + if value.is_negative() { -1 } else { 1 }
+    } else {
+        quotient
+    };
+    Some(rounded.to_string())
 }
 
 fn emit_rocq_list<T>(items: &[T], emit: fn(&T) -> String) -> String {
@@ -921,7 +1049,7 @@ fn emit_rocq_attribute_list(attributes: &[FormalAttribute]) -> String {
     }
     let mut rendered = attributes
         .iter()
-        .map(|attribute| emit_rocq_schema_attribute(&attribute.constructor, &attribute.name))
+        .map(|attribute| emit_rocq_schema_attribute(attribute.ty, &attribute.name))
         .collect::<Vec<_>>();
     rendered.push("nil".to_owned());
     rendered.join(" :: ")

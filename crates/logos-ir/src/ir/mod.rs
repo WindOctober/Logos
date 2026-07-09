@@ -1,3 +1,5 @@
+use serde::de::{self, Deserializer};
+use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,18 +22,15 @@ pub struct Table {
     pub columns: Vec<Column>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Column {
     pub name: String,
     pub ty: SqlType,
     pub nullable: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub precision: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SqlType {
     Any,
     Null,
@@ -39,13 +38,192 @@ pub enum SqlType {
     BigInt,
     Float,
     Double,
-    Decimal,
+    Decimal {
+        precision: Option<u32>,
+        scale: Option<u32>,
+    },
     Varchar,
     Boolean,
     Date,
     Time,
-    Timestamp,
-    TimestampTz,
+    Timestamp {
+        precision: Option<u32>,
+    },
+    TimestampTz {
+        precision: Option<u32>,
+    },
+}
+
+impl Column {
+    fn with_legacy_typmod(mut self, precision: Option<u32>, scale: Option<u32>) -> Self {
+        if precision.is_some() || scale.is_some() {
+            self.ty = self.ty.with_typmod(precision, scale);
+        }
+        self
+    }
+}
+
+impl<'de> Deserialize<'de> for Column {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ColumnWire {
+            name: String,
+            ty: SqlType,
+            nullable: bool,
+            #[serde(default)]
+            precision: Option<u32>,
+            #[serde(default)]
+            scale: Option<u32>,
+        }
+
+        let wire = ColumnWire::deserialize(deserializer)?;
+        Ok(Column {
+            name: wire.name,
+            ty: wire.ty,
+            nullable: wire.nullable,
+        }
+        .with_legacy_typmod(wire.precision, wire.scale))
+    }
+}
+
+impl SqlType {
+    pub fn decimal(precision: Option<u32>, scale: Option<u32>) -> Self {
+        Self::Decimal { precision, scale }
+    }
+
+    pub fn timestamp(precision: Option<u32>) -> Self {
+        Self::Timestamp { precision }
+    }
+
+    pub fn timestamptz(precision: Option<u32>) -> Self {
+        Self::TimestampTz { precision }
+    }
+
+    pub fn with_typmod(self, precision: Option<u32>, scale: Option<u32>) -> Self {
+        match self {
+            Self::Decimal { .. } => Self::Decimal { precision, scale },
+            Self::Timestamp { .. } => Self::Timestamp { precision },
+            Self::TimestampTz { .. } => Self::TimestampTz { precision },
+            other => other,
+        }
+    }
+
+    pub fn precision(&self) -> Option<u32> {
+        match self {
+            Self::Decimal { precision, .. }
+            | Self::Timestamp { precision }
+            | Self::TimestampTz { precision } => *precision,
+            _ => None,
+        }
+    }
+
+    pub fn scale(&self) -> Option<u32> {
+        match self {
+            Self::Decimal { scale, .. } => *scale,
+            _ => None,
+        }
+    }
+
+    fn kind_name(&self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::Null => "null",
+            Self::Integer => "integer",
+            Self::BigInt => "bigInt",
+            Self::Float => "float",
+            Self::Double => "double",
+            Self::Decimal { .. } => "decimal",
+            Self::Varchar => "varchar",
+            Self::Boolean => "boolean",
+            Self::Date => "date",
+            Self::Time => "time",
+            Self::Timestamp { .. } => "timestamp",
+            Self::TimestampTz { .. } => "timestampTz",
+        }
+    }
+
+    fn from_kind(kind: &str, precision: Option<u32>, scale: Option<u32>) -> Option<Self> {
+        match kind {
+            "any" => Some(Self::Any),
+            "null" => Some(Self::Null),
+            "integer" => Some(Self::Integer),
+            "bigInt" => Some(Self::BigInt),
+            "float" => Some(Self::Float),
+            "double" => Some(Self::Double),
+            "decimal" => Some(Self::Decimal { precision, scale }),
+            "varchar" => Some(Self::Varchar),
+            "boolean" => Some(Self::Boolean),
+            "date" => Some(Self::Date),
+            "time" => Some(Self::Time),
+            "timestamp" => Some(Self::Timestamp { precision }),
+            "timestampTz" => Some(Self::TimestampTz { precision }),
+            _ => None,
+        }
+    }
+
+    fn has_typmod(&self) -> bool {
+        match self {
+            Self::Decimal { precision, scale } => precision.is_some() || scale.is_some(),
+            Self::Timestamp { precision } | Self::TimestampTz { precision } => precision.is_some(),
+            _ => false,
+        }
+    }
+}
+
+impl Serialize for SqlType {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if !self.has_typmod() {
+            return serializer.serialize_str(self.kind_name());
+        }
+
+        let mut state = serializer.serialize_struct("SqlType", 3)?;
+        state.serialize_field("kind", self.kind_name())?;
+        if let Some(precision) = self.precision() {
+            state.serialize_field("precision", &precision)?;
+        }
+        if let Some(scale) = self.scale() {
+            state.serialize_field("scale", &scale)?;
+        }
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SqlType {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum SqlTypeWire {
+            Name(String),
+            Typmod {
+                kind: String,
+                #[serde(default)]
+                precision: Option<u32>,
+                #[serde(default)]
+                scale: Option<u32>,
+            },
+        }
+
+        match SqlTypeWire::deserialize(deserializer)? {
+            SqlTypeWire::Name(kind) => SqlType::from_kind(&kind, None, None)
+                .ok_or_else(|| de::Error::custom(format!("unsupported SQL type `{kind}`"))),
+            SqlTypeWire::Typmod {
+                kind,
+                precision,
+                scale,
+            } => SqlType::from_kind(&kind, precision, scale)
+                .ok_or_else(|| de::Error::custom(format!("unsupported SQL type `{kind}`"))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,8 +447,6 @@ pub enum ScalarAst {
         #[serde(skip_serializing_if = "Option::is_none")]
         index: Option<usize>,
         ty: SqlType,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        precision: Option<u32>,
     },
     Literal {
         raw: String,
@@ -552,4 +728,75 @@ pub enum Feature {
     NullSqlType,
     FormalSqlOrderSensitive,
     FormalSqlUnsupported,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn deserializes_legacy_column_typmod_into_sql_type() {
+        let column: Column = serde_json::from_value(json!({
+            "name": "amount",
+            "ty": "decimal",
+            "nullable": true,
+            "precision": 10,
+            "scale": 2
+        }))
+        .unwrap();
+
+        assert_eq!(column.ty, SqlType::decimal(Some(10), Some(2)));
+    }
+
+    #[test]
+    fn serializes_typmod_as_sql_type_not_column_fields() {
+        let value = serde_json::to_value(Column {
+            name: "amount".to_owned(),
+            ty: SqlType::decimal(Some(10), Some(2)),
+            nullable: true,
+        })
+        .unwrap();
+
+        assert_eq!(
+            value,
+            json!({
+                "name": "amount",
+                "ty": {
+                    "kind": "decimal",
+                    "precision": 10,
+                    "scale": 2
+                },
+                "nullable": true
+            })
+        );
+    }
+
+    #[test]
+    fn deserializes_serialized_column_typmod_without_losing_sql_type_typmod() {
+        let column = Column {
+            name: "amount".to_owned(),
+            ty: SqlType::decimal(Some(10), Some(2)),
+            nullable: true,
+        };
+        let value = serde_json::to_value(&column).unwrap();
+
+        let round_tripped: Column = serde_json::from_value(value).unwrap();
+
+        assert_eq!(round_tripped, column);
+    }
+
+    #[test]
+    fn deserializes_serialized_timestamp_typmod_without_losing_precision() {
+        let column = Column {
+            name: "ts".to_owned(),
+            ty: SqlType::timestamp(Some(3)),
+            nullable: true,
+        };
+        let value = serde_json::to_value(&column).unwrap();
+
+        let round_tripped: Column = serde_json::from_value(value).unwrap();
+
+        assert_eq!(round_tripped, column);
+    }
 }

@@ -1,6 +1,5 @@
 use super::scalar::{
-    aggregate_function_is_supported, aggregate_function_name, annotate_literal_term,
-    formal_attribute_constructor,
+    aggregate_function_is_supported, aggregate_function_name_for_type, annotate_literal_term,
 };
 use super::*;
 use logos_ir::ir::{
@@ -62,9 +61,12 @@ impl LoweringContext {
 
     pub(super) fn lower_rel(&mut self, path: &str, rel: &RelExpr) -> Option<FormalQuery> {
         match rel {
-            RelExpr::TableScan { table, .. } => Some(FormalQuery::Table {
-                relation: table.join("."),
-            }),
+            RelExpr::TableScan { table, output } => {
+                self.lower_scope(&format!("{path}.output"), output)?;
+                Some(FormalQuery::Table {
+                    relation: table.join("."),
+                })
+            }
             RelExpr::Project {
                 input,
                 exprs,
@@ -78,7 +80,7 @@ impl LoweringContext {
                     input.output(),
                     correlations,
                 )?;
-                let input_scope = Scope::from_columns(&input_output);
+                let input_scope = self.lower_scope(&format!("{path}.inputScope"), &input_output)?;
                 let select = self.with_correlation_scopes(&correlations, |context| {
                     context.lower_project_select(path, exprs, output, &input_scope)
                 })?;
@@ -101,7 +103,8 @@ impl LoweringContext {
                         input.output(),
                         correlations,
                     )?;
-                let input_scope = Scope::from_columns(&predicate_output);
+                let input_scope =
+                    self.lower_scope(&format!("{path}.predicateScope"), &predicate_output)?;
                 let predicate = self.with_correlation_scopes(&correlations, |context| {
                     context.lower_formula(
                         &format!("{path}.predicate"),
@@ -150,7 +153,8 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                let input_scope = Scope::from_columns(input.output());
+                let input_scope =
+                    self.lower_scope(&format!("{path}.inputScope"), input.output())?;
                 let group_by = self.lower_group_keys(path, group_keys, &input_scope)?;
                 let select =
                     self.lower_aggregate_select(path, group_keys, agg_calls, output, &input_scope)?;
@@ -269,7 +273,11 @@ impl LoweringContext {
             };
             keys.push(FormalSortKey {
                 attribute_name: column.name.clone(),
-                attribute_constructor: formal_attribute_constructor(query_attribute_type(column)),
+                attribute_ty: self.lower_attribute_type(
+                    &format!("{path}.collation[{index}].field"),
+                    column,
+                    AttributeTypeContext::QueryInput,
+                )?,
                 direction,
                 null_direction,
             });
@@ -372,7 +380,7 @@ impl LoweringContext {
         }
         let (left_output, right_output) = output.split_at(left_len);
         if !is_true_literal(condition) {
-            let scope = Scope::from_columns(output);
+            let scope = self.lower_scope(&format!("{path}.conditionScope"), output)?;
             let predicate = self.lower_formula(&format!("{path}.condition"), condition, &scope)?;
             let cross_join = self.lower_cross_join(path, left, left_output, right, right_output)?;
             return Some(FormalQuery::Selection {
@@ -412,7 +420,7 @@ impl LoweringContext {
         }
         let left = self.lower_join_input(&format!("{path}.left"), left, left_output)?;
         let right = self.lower_join_input(&format!("{path}.right"), right, right_output)?;
-        let scope = Scope::from_columns(output);
+        let scope = self.lower_scope(&format!("{path}.conditionScope"), output)?;
         let predicate = self.lower_formula(&format!("{path}.condition"), condition, &scope)?;
         let inner = self.theta_join(left.clone(), right.clone(), predicate.clone());
         match join_type {
@@ -508,7 +516,8 @@ impl LoweringContext {
         let right = self.lower_rel(&format!("{path}.right"), right)?;
         let mut predicate_scope_columns = output.to_vec();
         predicate_scope_columns.extend_from_slice(&right_output);
-        let scope = Scope::from_columns(&predicate_scope_columns);
+        let scope =
+            self.lower_scope(&format!("{path}.conditionScope"), &predicate_scope_columns)?;
         let predicate = self.lower_formula(&format!("{path}.condition"), condition, &scope)?;
         match join_type {
             JoinType::Semi => Some(self.semi_join_desugared(left, right, predicate)),
@@ -611,29 +620,30 @@ impl LoweringContext {
     }
 
     fn identity_select_item(&mut self, path: &str, column: &Column) -> Option<FormalSelectItem> {
-        let attr_ty = query_attribute_type(column);
+        let attr_ty = self.lower_attribute_type(path, column, AttributeTypeContext::QueryOutput)?;
         Some(FormalSelectItem {
             expr: FormalAggregateTerm::Expr {
                 term: FormalFunctionTerm::Attribute {
                     name: column.name.clone(),
-                    constructor: formal_attribute_constructor(attr_ty),
+                    ty: attr_ty,
                 },
             },
             alias: column.name.clone(),
-            alias_constructor: self.lower_query_attribute_constructor(path, column)?,
+            alias_ty: attr_ty,
         })
     }
 
     fn null_select_item(&mut self, path: &str, column: &Column) -> Option<FormalSelectItem> {
+        let attr_ty = self.lower_attribute_type(path, column, AttributeTypeContext::QueryOutput)?;
         Some(FormalSelectItem {
             expr: FormalAggregateTerm::Expr {
                 term: FormalFunctionTerm::Constant {
                     raw: "NULL".to_owned(),
-                    ty: Some(query_attribute_type(column)),
+                    ty: Some(attr_ty),
                 },
             },
             alias: column.name.clone(),
-            alias_constructor: self.lower_query_attribute_constructor(path, column)?,
+            alias_ty: attr_ty,
         })
     }
 
@@ -676,14 +686,14 @@ impl LoweringContext {
             );
             return None;
         }
+        self.lower_scope(&format!("{path}.inputOutput"), input_output)?;
+        self.lower_scope(&format!("{path}.joinOutput"), join_output)?;
         let input = self.lower_rel(path, rel)?;
         if input_output
             .iter()
             .zip(join_output)
             .all(|(input_column, output_column)| {
-                input_column.name == output_column.name
-                    && input_column.ty == output_column.ty
-                    && input_column.precision == output_column.precision
+                input_column.name == output_column.name && input_column.ty == output_column.ty
             })
         {
             return Some(input);
@@ -727,7 +737,6 @@ impl LoweringContext {
                 ),
                 ty: column.ty.clone(),
                 nullable: column.nullable,
-                precision: column.precision,
             })
             .collect::<Vec<_>>();
         if !has_unique_column_names(&renamed)
@@ -756,16 +765,20 @@ impl LoweringContext {
         };
         let renamed_correlations = correlations
             .iter()
-            .map(|binding| CorrelationScope {
-                correlation: binding.correlation.clone(),
-                scope: Scope::from_columns(&renamed),
-                field_names: binding
-                    .output
-                    .iter()
-                    .map(|column| column.name.clone())
-                    .collect(),
+            .enumerate()
+            .map(|(index, binding)| {
+                Some(CorrelationScope {
+                    correlation: binding.correlation.clone(),
+                    scope: self
+                        .lower_scope(&format!("{path}.correlations[{index}].renamed"), &renamed)?,
+                    field_names: binding
+                        .output
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect(),
+                })
             })
-            .collect();
+            .collect::<Option<Vec<_>>>()?;
         Some((renamed_input, renamed, renamed_correlations))
     }
 
@@ -792,15 +805,18 @@ impl LoweringContext {
                     expr: FormalAggregateTerm::Expr {
                         term: FormalFunctionTerm::Attribute {
                             name: input_column.name.clone(),
-                            constructor: formal_attribute_constructor(query_attribute_type(
+                            ty: self.lower_attribute_type(
+                                &format!("{path}.input[{index}]"),
                                 input_column,
-                            )),
+                                AttributeTypeContext::QueryInput,
+                            )?,
                         },
                     },
                     alias: output_column.name.clone(),
-                    alias_constructor: self.lower_query_attribute_constructor(
+                    alias_ty: self.lower_attribute_type(
                         &format!("{path}.output[{index}]"),
                         output_column,
+                        AttributeTypeContext::QueryOutput,
                     )?,
                 })
             })
@@ -840,14 +856,57 @@ impl LoweringContext {
                     &expr.parsed,
                     scope,
                 )?;
-                let lowered = annotate_literal_term(lowered, query_attribute_type(column));
+                let output_ty = self.lower_attribute_type(
+                    &format!("{path}.output[{index}]"),
+                    column,
+                    AttributeTypeContext::QueryOutput,
+                )?;
+                if matches!(output_ty, FormalAttributeType::Decimal { .. })
+                    && aggregate_term_contains_bare_decimal_division(&lowered)
+                {
+                    self.error(
+                        &format!("{path}.exprs[{index}]"),
+                        "decimal_division_output_typmod_not_supported",
+                        "Bare PostgreSQL NUMERIC division returns an unconstrained numeric value; projecting it into a fixed DECIMAL(p,s) output requires an explicit CAST.",
+                    );
+                    return None;
+                }
+                if let FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant { raw, ty: None },
+                } = &lowered
+                {
+                    if matches!(output_ty, FormalAttributeType::Decimal { .. })
+                        && !raw.eq_ignore_ascii_case("null")
+                        && super::emit::decimal_literal_for_type(raw, Some(&output_ty)).is_none()
+                    {
+                        self.error(
+                            &format!("{path}.exprs[{index}]"),
+                            "decimal_literal_not_supported",
+                            "FormalSQL DECIMAL lowering supports fixed-scale decimal literals only when coercion to the output DECIMAL(p,s) succeeds without precision overflow.",
+                        );
+                        return None;
+                    }
+                }
+                if let Some(expr_ty) = self.direct_function_type(
+                    &format!("{path}.exprs[{index}].type"),
+                    &expr.parsed,
+                    scope,
+                )
+                {
+                    if decimal_typmod_mismatch(&expr_ty, &output_ty) {
+                        self.error(
+                            &format!("{path}.exprs[{index}]"),
+                            "decimal_output_typmod_not_supported",
+                            "Projected DECIMAL expression typmod differs from the output column typmod; explicit rounding/cast semantics are not modeled yet.",
+                        );
+                        return None;
+                    }
+                }
+                let lowered = annotate_literal_term(lowered, output_ty);
                 Some(FormalSelectItem {
                     expr: lowered,
                     alias: column.name.clone(),
-                    alias_constructor: self.lower_query_attribute_constructor(
-                        &format!("{path}.output[{index}]"),
-                        column,
-                    )?,
+                    alias_ty: output_ty,
                 })
             })
             .collect()
@@ -874,7 +933,7 @@ impl LoweringContext {
                 Some(FormalAggregateTerm::Expr {
                     term: FormalFunctionTerm::Attribute {
                         name: attr.name,
-                        constructor: attr.constructor,
+                        ty: attr.formal_ty,
                     },
                 })
             })
@@ -919,25 +978,28 @@ impl LoweringContext {
                 expr: FormalAggregateTerm::Expr {
                     term: FormalFunctionTerm::Attribute {
                         name: attr.name,
-                        constructor: attr.constructor,
+                        ty: attr.formal_ty,
                     },
                 },
                 alias: output[index].name.clone(),
-                alias_constructor: self.lower_query_attribute_constructor(
+                alias_ty: self.lower_attribute_type(
                     &format!("{path}.output[{index}]"),
                     &output[index],
+                    AttributeTypeContext::QueryOutput,
                 )?,
             });
         }
         for (index, call) in agg_calls.iter().enumerate() {
             let output_index = group_keys.len() + index;
+            let output_ty = self.lower_attribute_type(
+                &format!("{path}.output[{output_index}]"),
+                &output[output_index],
+                AttributeTypeContext::QueryOutput,
+            )?;
             select.push(FormalSelectItem {
-                expr: self.lower_aggregate_call(path, index, call, scope)?,
+                expr: self.lower_aggregate_call(path, index, call, scope, &output_ty)?,
                 alias: output[output_index].name.clone(),
-                alias_constructor: self.lower_query_attribute_constructor(
-                    &format!("{path}.output[{output_index}]"),
-                    &output[output_index],
-                )?,
+                alias_ty: output_ty,
             });
         }
         Some(select)
@@ -949,6 +1011,7 @@ impl LoweringContext {
         index: usize,
         call: &AggregateCall,
         scope: &Scope,
+        output_ty: &FormalAttributeType,
     ) -> Option<FormalAggregateTerm> {
         let call_path = format!("{path}.aggCalls[{index}]");
         if call.distinct {
@@ -993,14 +1056,96 @@ impl LoweringContext {
                 "Lowered SQL aggregate requires a matching FormalSQL Tuple.aggregate interpretation in Rocq.",
             );
         }
+        let arg_path = format!("{call_path}.arg");
+        let arg_ty = self.infer_function_type(&arg_path, &call.args[0].parsed, scope);
+        if call.function.eq_ignore_ascii_case("AVG") || call.function.eq_ignore_ascii_case("SUM") {
+            if matches!(arg_ty, Some(FormalAttributeType::Decimal { .. })) {
+                self.error(
+                    &call_path,
+                    "decimal_aggregate_unconstrained_numeric_not_supported",
+                    "PostgreSQL SUM/AVG(NUMERIC) returns unconstrained NUMERIC; FormalSQL currently models only fixed-scale DECIMAL aggregate results.",
+                );
+                return None;
+            }
+        }
+        if matches!(call.function.to_ascii_lowercase().as_str(), "max" | "min")
+            && matches!(arg_ty, Some(FormalAttributeType::Decimal { .. }))
+            && arg_ty.as_ref() != Some(output_ty)
+        {
+            self.error(
+                &call_path,
+                "decimal_output_typmod_not_supported",
+                "Decimal MIN/MAX returns a value with the input DECIMAL typmod; output typmod coercion is not modeled yet.",
+            );
+            return None;
+        }
+        let function =
+            aggregate_function_name_for_type(&call.function, arg_ty.as_ref()).or_else(|| {
+                self.error(
+                    &call_path,
+                    "decimal_aggregate_not_supported",
+                    "This DECIMAL aggregate is outside the currently modeled FormalSQL Decimal subset.",
+                );
+                None
+            })?;
         Some(FormalAggregateTerm::Aggregate {
-            function: aggregate_function_name(&call.function),
-            arg: self.lower_function_term(
-                &format!("{call_path}.arg"),
-                &call.args[0].parsed,
-                scope,
-            )?,
+            function,
+            arg: self.lower_function_term(&arg_path, &call.args[0].parsed, scope)?,
         })
+    }
+}
+
+fn decimal_typmod_mismatch(expr_ty: &FormalAttributeType, output_ty: &FormalAttributeType) -> bool {
+    match (expr_ty, output_ty) {
+        (
+            FormalAttributeType::Decimal {
+                precision: Some(expr_precision),
+                scale: Some(expr_scale),
+            },
+            FormalAttributeType::Decimal {
+                precision: Some(output_precision),
+                scale: Some(output_scale),
+            },
+        ) => expr_precision != output_precision || expr_scale != output_scale,
+        _ => false,
+    }
+}
+
+fn aggregate_term_contains_bare_decimal_division(term: &FormalAggregateTerm) -> bool {
+    match term {
+        FormalAggregateTerm::Expr { term } => function_term_contains_bare_decimal_division(term),
+        FormalAggregateTerm::Aggregate { arg, .. } => {
+            function_term_contains_bare_decimal_division(arg)
+        }
+        FormalAggregateTerm::CountStar => false,
+        FormalAggregateTerm::Function { symbol, args } => {
+            symbol == "divide_decimal"
+                || args
+                    .iter()
+                    .any(aggregate_term_contains_bare_decimal_division)
+        }
+        FormalAggregateTerm::Case {
+            branches,
+            else_expr,
+        } => {
+            branches.iter().any(|branch| {
+                aggregate_term_contains_bare_decimal_division(&branch.when)
+                    || aggregate_term_contains_bare_decimal_division(&branch.then_expr)
+            }) || aggregate_term_contains_bare_decimal_division(else_expr)
+        }
+    }
+}
+
+fn function_term_contains_bare_decimal_division(term: &FormalFunctionTerm) -> bool {
+    match term {
+        FormalFunctionTerm::Function { symbol, args } => {
+            symbol == "divide_decimal"
+                || args
+                    .iter()
+                    .any(function_term_contains_bare_decimal_division)
+        }
+        FormalFunctionTerm::Cast { arg, .. } => function_term_contains_bare_decimal_division(arg),
+        FormalFunctionTerm::Constant { .. } | FormalFunctionTerm::Attribute { .. } => false,
     }
 }
 

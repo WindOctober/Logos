@@ -15,8 +15,11 @@ pub fn parse_calcite_sql_type(value: &str) -> Result<SqlType> {
         Ok(SqlType::Float)
     } else if upper.starts_with("DOUBLE") {
         Ok(SqlType::Double)
-    } else if upper.starts_with("DECIMAL") {
-        Ok(SqlType::Decimal)
+    } else if upper.starts_with("DECIMAL") || upper.starts_with("NUMERIC") {
+        Ok(SqlType::decimal(
+            parse_type_precision(&upper),
+            decimal_scale(&upper),
+        ))
     } else if upper.starts_with("VARCHAR") || upper.starts_with("CHAR") {
         Ok(SqlType::Varchar)
     } else if upper.starts_with("BOOLEAN") {
@@ -26,9 +29,9 @@ pub fn parse_calcite_sql_type(value: &str) -> Result<SqlType> {
     } else if type_head_is(&upper, "TIME") && !upper.contains("WITH") {
         Ok(SqlType::Time)
     } else if type_head_is(&upper, "TIMESTAMP") && !upper.contains("WITH") {
-        Ok(SqlType::Timestamp)
+        Ok(SqlType::timestamp(parse_type_precision(&upper)))
     } else if timestamp_with_time_zone(&upper) {
-        Ok(SqlType::TimestampTz)
+        Ok(SqlType::timestamptz(parse_type_precision(&upper)))
     } else {
         Err(Error::UnsupportedSqlType(value.to_owned()))
     }
@@ -51,6 +54,31 @@ fn timestamp_with_time_zone(value: &str) -> bool {
         || value.starts_with("TIMESTAMP_WITH_LOCAL_TIME_ZONE")
 }
 
+fn parse_type_precision(ty: &str) -> Option<u32> {
+    let start = ty.find('(')? + 1;
+    let end = ty[start..].find(')')? + start;
+    ty[start..end].split(',').next()?.trim().parse().ok()
+}
+
+fn parse_type_scale(ty: &str) -> Option<u32> {
+    u32::try_from(parse_type_scale_i32(ty)?).ok()
+}
+
+fn parse_type_scale_i32(ty: &str) -> Option<i32> {
+    let start = ty.find('(')? + 1;
+    let end = ty[start..].find(')')? + start;
+    let mut parts = ty[start..end].split(',');
+    parts.next()?;
+    parts.next()?.trim().parse().ok()
+}
+
+fn decimal_scale(ty: &str) -> Option<u32> {
+    if parse_type_scale_i32(ty).is_some_and(|scale| scale < 0) {
+        return None;
+    }
+    parse_type_scale(ty).or_else(|| parse_type_precision(ty).map(|_| 0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,8 +91,16 @@ mod tests {
             SqlType::Varchar
         );
         assert_eq!(
+            parse_calcite_sql_type("NUMERIC(10, 2)").unwrap(),
+            SqlType::decimal(Some(10), Some(2))
+        );
+        assert_eq!(
+            parse_calcite_sql_type("DECIMAL(2, -3)").unwrap(),
+            SqlType::decimal(Some(2), None)
+        );
+        assert_eq!(
             parse_calcite_sql_type("TIMESTAMP(0)").unwrap(),
-            SqlType::Timestamp
+            SqlType::timestamp(Some(0))
         );
         assert_eq!(parse_calcite_sql_type("ANY").unwrap(), SqlType::Any);
         assert_eq!(parse_calcite_sql_type("NULL").unwrap(), SqlType::Null);
@@ -74,15 +110,15 @@ mod tests {
     fn parses_timezone_timestamp_types() {
         assert_eq!(
             parse_calcite_sql_type("TIMESTAMP WITH LOCAL TIME ZONE").unwrap(),
-            SqlType::TimestampTz
+            SqlType::timestamptz(None)
         );
         assert_eq!(
             parse_calcite_sql_type("TIMESTAMPTZ(6)").unwrap(),
-            SqlType::TimestampTz
+            SqlType::timestamptz(Some(6))
         );
         assert_eq!(
             parse_calcite_sql_type("TIMESTAMP_TZ(3)").unwrap(),
-            SqlType::TimestampTz
+            SqlType::timestamptz(Some(3))
         );
     }
 }
