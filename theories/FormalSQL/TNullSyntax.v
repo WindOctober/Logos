@@ -1,4 +1,4 @@
-From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra SqlOrder SqlListAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env.
+From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra SqlOrder SqlListAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env ValueDecimal.
 From Stdlib Require Import List String ZArith Floats.
 
 Import ListNotations.
@@ -143,6 +143,8 @@ Definition AttrZ (name : string) := Attr_Z name.
 Definition AttrString (name : string) := Attr_string name.
 Definition AttrBool (name : string) := Attr_bool name.
 Definition AttrFloat (name : string) := Attr_float name.
+Definition AttrDecimal (name : string) (precision scale : Z) :=
+  Attr_decimal name precision scale.
 Definition AttrDate (name : string) := Attr_date name.
 Definition AttrTimestamp (name : string) (precision : Z) := Attr_timestamp name precision.
 Definition AttrTimestamptz (name : string) (precision : Z) := Attr_timestamptz name precision.
@@ -175,6 +177,7 @@ Inductive ColumnRef : Type :=
   | StringColumn : string -> ColumnRef
   | BoolColumn : string -> ColumnRef
   | FloatColumn : string -> ColumnRef
+  | DecimalColumn : string -> Z -> Z -> ColumnRef
   | DateColumn : string -> ColumnRef
   | TimestampColumn : string -> Z -> ColumnRef
   | TimestamptzColumn : string -> Z -> ColumnRef.
@@ -185,6 +188,7 @@ Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   | StringColumn name => AttrString name
   | BoolColumn name => AttrBool name
   | FloatColumn name => AttrFloat name
+  | DecimalColumn name precision scale => AttrDecimal name precision scale
   | DateColumn name => AttrDate name
   | TimestampColumn name precision => AttrTimestamp name precision
   | TimestamptzColumn name precision => AttrTimestamptz name precision
@@ -194,6 +198,8 @@ Definition DotZ (name : string) : AggTerm := AExpr (Dot (AttrZ name)).
 Definition DotString (name : string) : AggTerm := AExpr (Dot (AttrString name)).
 Definition DotBool (name : string) : AggTerm := AExpr (Dot (AttrBool name)).
 Definition DotFloat (name : string) : AggTerm := AExpr (Dot (AttrFloat name)).
+Definition DotDecimal (name : string) (precision scale : Z) : AggTerm :=
+  AExpr (Dot (AttrDecimal name precision scale)).
 Definition DotDate (name : string) : AggTerm := AExpr (Dot (AttrDate name)).
 Definition DotTimestamp (name : string) (precision : Z) : AggTerm :=
   AExpr (Dot (AttrTimestamp name precision)).
@@ -206,6 +212,7 @@ Definition DotColumn (column : ColumnRef) : AggTerm :=
   | StringColumn name => DotString name
   | BoolColumn name => DotBool name
   | FloatColumn name => DotFloat name
+  | DecimalColumn name precision scale => DotDecimal name precision scale
   | DateColumn name => DotDate name
   | TimestampColumn name precision => DotTimestamp name precision
   | TimestamptzColumn name precision => DotTimestamptz name precision
@@ -215,6 +222,8 @@ Definition CstZ (z : Z) : AggTerm := AExpr (Constant (Value_Z (Some z))).
 Definition CstString (s : string) : AggTerm := AExpr (Constant (Value_string (Some s))).
 Definition CstBool (b : bool) : AggTerm := AExpr (Constant (Value_bool (Some b))).
 Definition CstFloat (f : float) : AggTerm := AExpr (Constant (Value_float (Some f))).
+Definition CstDecimal (precision scale coeff : Z) : AggTerm :=
+  AExpr (Constant (Value_decimal (decimal_checked precision scale coeff))).
 Definition CstDate (date : Z) : AggTerm := AExpr (Constant (Value_date (Some date))).
 Definition CstTimestamp (timestamp : Z) : AggTerm :=
   AExpr (Constant (Value_timestamp (Some timestamp))).
@@ -225,6 +234,7 @@ Definition NullZ : AggTerm := AExpr (Constant (Value_Z None)).
 Definition NullString : AggTerm := AExpr (Constant (Value_string None)).
 Definition NullBool : AggTerm := AExpr (Constant (Value_bool None)).
 Definition NullFloat : AggTerm := AExpr (Constant (Value_float None)).
+Definition NullDecimal : AggTerm := AExpr (Constant (Value_decimal None)).
 Definition NullDate : AggTerm := AExpr (Constant (Value_date None)).
 Definition NullTimestamp : AggTerm := AExpr (Constant (Value_timestamp None)).
 Definition NullTimestamptz : AggTerm := AExpr (Constant (Value_timestamptz None)).
@@ -235,6 +245,8 @@ Definition SelectString (name : string) : SelectItemT :=
 Definition SelectBool (name : string) : SelectItemT := SelectAs (DotBool name) (AttrBool name).
 Definition SelectFloat (name : string) : SelectItemT :=
   SelectAs (DotFloat name) (AttrFloat name).
+Definition SelectDecimal (name : string) (precision scale : Z) : SelectItemT :=
+  SelectAs (DotDecimal name precision scale) (AttrDecimal name precision scale).
 Definition SelectDate (name : string) : SelectItemT :=
   SelectAs (DotDate name) (AttrDate name).
 Definition SelectTimestamp (name : string) (precision : Z) : SelectItemT :=

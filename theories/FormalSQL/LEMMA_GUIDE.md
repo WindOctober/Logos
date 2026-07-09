@@ -4,6 +4,92 @@ This guide lists Logos-local lemmas available to proof agents.  These files are
 read-only proof context; generated proof attempts should edit only the generated
 problem workspace.
 
+## Decimal Semantics
+
+FormalSQL represents a decimal as `Decimal precision scale coeff`, denoting
+`coeff / 10^scale` under SQL typmod `DECIMAL(precision, scale)`.  Values should
+enter this domain through `decimal_checked`, which enforces the typmod range
+constraint.  SQL comparison predicates use numeric rescaling, while bag values
+use the structural FormalSQL ordered-set instance over `(precision, scale,
+coeff)`.
+
+```coq
+Definition decimal_fits_typmod_bool (precision scale coeff : Z) : bool := ...
+
+Definition decimal_checked (precision scale coeff : Z) : option decimal := ...
+```
+
+### `decimal_compare_refl` [`theories/FormalSQL/DecimalFacts.v`]
+
+scaled-integer decimal comparison is reflexive.
+
+```coq
+Lemma decimal_compare_refl :
+  forall d,
+    decimal_compare d d = Eq.
+```
+
+### `decimal_eqb_compare_eq` [`theories/FormalSQL/DecimalFacts.v`]
+
+the boolean decimal equality helper is true exactly when numeric decimal
+comparison returns `Eq`.
+
+```coq
+Lemma decimal_eqb_compare_eq :
+  forall d1 d2,
+    decimal_eqb d1 d2 = true <-> decimal_compare d1 d2 = Eq.
+```
+
+### `decimal_mul_coeff` / `decimal_mul_scale` [`theories/FormalSQL/DecimalFacts.v`]
+
+exact decimal multiplication multiplies coefficients and adds scales.  Because
+the result must still fit a typmod, multiplication returns `option decimal`.
+
+```coq
+Lemma decimal_mul_coeff :
+  forall d1 d2 result,
+    decimal_mul d1 d2 = Some result ->
+    decimal_coeff result =
+    decimal_coeff d1 * decimal_coeff d2.
+
+Lemma decimal_mul_scale :
+  forall d1 d2 result,
+    decimal_mul d1 d2 = Some result ->
+    decimal_scale result =
+    decimal_scale d1 + decimal_scale d2.
+```
+
+### `decimal_div` / `decimal_div_with_typmod` [`theories/FormalSQL/DecimalFacts.v`]
+
+`decimal_div` models PostgreSQL's bare `NUMERIC / NUMERIC` result scale rule.
+PostgreSQL does not define a SQL-standard fixed result typmod for division;
+instead, `numeric.c:select_div_scale` chooses a display scale from the actual
+runtime values' base-10000 weights and display scales.  The FormalSQL model
+mirrors PostgreSQL's default constants: `DEC_DIGITS = 4`,
+`NUMERIC_MIN_SIG_DIGITS = 16`, `NUMERIC_MIN_DISPLAY_SCALE = 0`, and
+`NUMERIC_MAX_DISPLAY_SCALE = 1000`.
+
+`decimal_div_with_typmod` models an explicit PostgreSQL
+`CAST(... AS DECIMAL(p,s))`: the division coefficient is rounded to the target
+scale and then checked against the target precision.  Rust emits
+`divide_decimal` for bare division and `divide_decimal_typmod` for explicit
+casts.  Until the SQL runtime-error layer is modeled, lowering still accepts
+division only when the divisor is a statically nonzero DECIMAL literal.
+
+```coq
+Definition decimal_pg_div_scale (d1 d2 : decimal) : Z := ...
+
+Definition decimal_div (d1 d2 : decimal) : option decimal := ...
+
+Definition decimal_div_with_typmod
+  (d1 d2 : decimal) (result_precision result_scale : Z) : option decimal := ...
+
+Lemma decimal_div_scale :
+  forall d1 d2 result,
+    decimal_div d1 d2 = Some result ->
+    decimal_scale result = decimal_pg_div_scale d1 d2.
+```
+
 ## Bag/List Bridge
 
 ### `list_equiv_l_bag_iff_bag_query_equiv` [`vendor/FormalSQL/src/data/sql/SqlListFacts.v`]
