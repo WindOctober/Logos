@@ -257,6 +257,10 @@ pub enum FormalAggregateTerm {
         function: String,
         arg: FormalFunctionTerm,
     },
+    DistinctAggregate {
+        function: String,
+        arg: FormalFunctionTerm,
+    },
     CountStar,
     Function {
         symbol: String,

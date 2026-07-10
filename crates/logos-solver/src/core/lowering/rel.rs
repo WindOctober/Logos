@@ -1453,14 +1453,6 @@ impl LoweringContext {
         output_ty: &FormalAttributeType,
     ) -> Option<FormalAggregateTerm> {
         let call_path = format!("{path}.aggCalls[{index}]");
-        if call.distinct {
-            self.error(
-                &call_path,
-                "distinct_aggregate_not_supported",
-                "FormalSQL A_agg has no DISTINCT aggregate flag.",
-            );
-            return None;
-        }
         if call.filter.is_some() {
             self.error(
                 &call_path,
@@ -1478,6 +1470,14 @@ impl LoweringContext {
             return None;
         }
         if call.args.is_empty() && call.function.eq_ignore_ascii_case("COUNT") {
+            if call.distinct {
+                self.error(
+                    &call_path,
+                    "count_star_distinct_not_supported",
+                    "COUNT(DISTINCT *) is not a modeled aggregate form.",
+                );
+                return None;
+            }
             if output_ty != &FormalAttributeType::Z {
                 self.error(
                     &call_path,
@@ -1496,7 +1496,23 @@ impl LoweringContext {
             );
             return None;
         }
+        if !call.distinct && aggregate_name_uses_reserved_logos_namespace(&call.function) {
+            self.error(
+                &call_path,
+                "reserved_aggregate_symbol_not_supported",
+                "Aggregate names in the __logos_distinct_aggregate_ namespace are reserved for internal DISTINCT aggregate lowering.",
+            );
+            return None;
+        }
         if !aggregate_function_is_supported(&call.function) {
+            if call.distinct {
+                self.error(
+                    &call_path,
+                    "distinct_aggregate_function_not_supported",
+                    "DISTINCT aggregate lowering is currently limited to COUNT, SUM, MAX, MIN, and AVG because only these aggregate interpretations are modeled in FormalSQL.",
+                );
+                return None;
+            }
             self.warning(
                 &call_path,
                 "aggregate_interpretation_required",
@@ -1568,10 +1584,12 @@ impl LoweringContext {
                 );
                 None
             })?;
-        Some(FormalAggregateTerm::Aggregate {
-            function,
-            arg: self.lower_function_term(&arg_path, &call.args[0].parsed, scope)?,
-        })
+        let arg = self.lower_function_term(&arg_path, &call.args[0].parsed, scope)?;
+        if call.distinct {
+            Some(FormalAggregateTerm::DistinctAggregate { function, arg })
+        } else {
+            Some(FormalAggregateTerm::Aggregate { function, arg })
+        }
     }
 }
 
@@ -1645,10 +1663,17 @@ fn aggregate_result_follows_argument_type(function: &str) -> bool {
     )
 }
 
+fn aggregate_name_uses_reserved_logos_namespace(function: &str) -> bool {
+    function
+        .to_ascii_lowercase()
+        .starts_with("__logos_distinct_aggregate_")
+}
+
 fn aggregate_term_contains_bare_decimal_division(term: &FormalAggregateTerm) -> bool {
     match term {
         FormalAggregateTerm::Expr { term } => function_term_contains_bare_decimal_division(term),
-        FormalAggregateTerm::Aggregate { arg, .. } => {
+        FormalAggregateTerm::Aggregate { arg, .. }
+        | FormalAggregateTerm::DistinctAggregate { arg, .. } => {
             function_term_contains_bare_decimal_division(arg)
         }
         FormalAggregateTerm::CountStar => false,

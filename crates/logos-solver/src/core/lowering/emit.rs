@@ -633,6 +633,11 @@ fn emit_rocq_aggregate_term(term: &FormalAggregateTerm) -> String {
             rocq_string_literal(function),
             emit_rocq_function_term(arg)
         ),
+        FormalAggregateTerm::DistinctAggregate { function, arg } => format!(
+            "ADistinctAggregate {} ({})",
+            rocq_string_literal(function),
+            emit_rocq_function_term(arg)
+        ),
         FormalAggregateTerm::CountStar => "ACountStar".to_owned(),
         FormalAggregateTerm::Function { symbol, args } => format!(
             "AFunction {} ({})",

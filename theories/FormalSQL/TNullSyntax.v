@@ -80,6 +80,9 @@ Definition AExpr (term : FunTerm) : AggTerm :=
 Definition AAggregate (function : string) (arg : FunTerm) : AggTerm :=
   @A_agg TNull (Aggregate function) arg.
 
+Definition ADistinctAggregate (function : string) (arg : FunTerm) : AggTerm :=
+  @A_agg TNull (Aggregate (String.append "__logos_distinct_aggregate_" function)) arg.
+
 Definition ACountStar : AggTerm :=
   @A_agg TNull (Aggregate "count_star") (@F_Constant TNull (Value_Z (Some 0))).
 

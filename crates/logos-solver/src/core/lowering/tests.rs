@@ -3304,6 +3304,137 @@ fn lowers_count_star_as_explicit_aggregate() {
 }
 
 #[test]
+fn lowers_distinct_aggregate_as_explicit_aggregate() {
+    let input_output = vec![column("a")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "COUNT(DISTINCT $0)".to_owned(),
+                function: "COUNT".to_owned(),
+                distinct: true,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![column("c")],
+        },
+        output: vec![column("c")],
+        features: vec![Feature::Aggregation, Feature::DistinctAggregate],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalListQuery::Bag { input }) = lowered.list_query.as_ref() else {
+        panic!("aggregate should lower as a bag list query");
+    };
+    let FormalQuery::Group { select, .. } = input.as_ref() else {
+        panic!("expected Group query");
+    };
+    assert!(matches!(
+        select[0].expr,
+        FormalAggregateTerm::DistinctAggregate { .. }
+    ));
+
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("distinct aggregate should have lowered"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("distinct aggregate should have lowered"),
+    );
+    assert!(module.rocq_module.contains("ADistinctAggregate \"count\""));
+}
+
+#[test]
+fn rejects_non_distinct_aggregate_in_reserved_distinct_namespace() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("a")],
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "__logos_distinct_aggregate_sum($0)".to_owned(),
+                function: "__logos_distinct_aggregate_sum".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![column("c")],
+        },
+        output: vec![column("c")],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "reserved_aggregate_symbol_not_supported")
+    );
+}
+
+#[test]
+fn rejects_distinct_aggregate_without_formal_sql_interpretation() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![typed_column("a", SqlType::Boolean)],
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "BOOL_AND(DISTINCT $0)".to_owned(),
+                function: "BOOL_AND".to_owned(),
+                distinct: true,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("c", SqlType::Boolean)],
+        },
+        output: vec![typed_column("c", SqlType::Boolean)],
+        features: vec![Feature::Aggregation, Feature::DistinctAggregate],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "distinct_aggregate_function_not_supported" })
+    );
+}
+
+#[test]
 fn lowers_predicate_in_subquery_to_exists() {
     let schema = Schema {
         tables: vec![
