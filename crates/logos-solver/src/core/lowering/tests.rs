@@ -1576,6 +1576,92 @@ fn lowers_nested_decimal_arithmetic() {
 }
 
 #[test]
+fn lowers_decimal_typmod_cast() {
+    let input = vec![decimal_column("amount", 7, 2)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::InputRef { index: 0 }],
+                }),
+                ty: "DECIMAL(12, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_cast", 12, 2)],
+        },
+        output: vec![decimal_column("amount_cast", 12, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"cast_decimal_typmod\"")
+    );
+    assert!(module.rocq_module.contains("CstZ (12)"));
+    assert!(module.rocq_module.contains("CstZ (2)"));
+}
+
+#[test]
+fn lowers_integer_to_decimal_typmod_cast() {
+    let input = vec![column("amount_int")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::InputRef { index: 0 }],
+                }),
+                ty: "DECIMAL(12, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_decimal", 12, 2)],
+        },
+        output: vec![decimal_column("amount_decimal", 12, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"cast_z_to_decimal_typmod\"")
+    );
+    assert!(module.rocq_module.contains("CstZ (12)"));
+    assert!(module.rocq_module.contains("CstZ (2)"));
+}
+
+#[test]
 fn rejects_bare_decimal_division_projected_to_fixed_typmod() {
     let input = vec![decimal_column("left_amount", 10, 2)];
     let query = Query {

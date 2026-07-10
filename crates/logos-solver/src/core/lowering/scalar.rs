@@ -709,6 +709,16 @@ impl LoweringContext {
                         })?;
                     if source_ty == target_ty {
                         self.lower_aggregate_term(&format!("{path}.castArg"), cast_arg, scope)
+                    } else if let Some(function) =
+                        decimal_typmod_cast_function(&source_ty, &target_ty)
+                    {
+                        self.lower_decimal_cast_aggregate_term(
+                            &format!("{path}.castArg"),
+                            cast_arg,
+                            function,
+                            target_ty,
+                            scope,
+                        )
                     } else {
                         self.error(
                             path,
@@ -909,6 +919,46 @@ impl LoweringContext {
         Some(FormalFunctionTerm::Function {
             symbol: symbol.to_owned(),
             args: lowered_args,
+        })
+    }
+
+    fn lower_decimal_cast_aggregate_term(
+        &mut self,
+        path: &str,
+        arg: &ScalarAst,
+        function: &str,
+        target_ty: FormalAttributeType,
+        scope: &Scope,
+    ) -> Option<FormalAggregateTerm> {
+        let result_precision = decimal_type_precision(&target_ty)?;
+        let result_scale = decimal_type_scale(&target_ty)?;
+        Some(FormalAggregateTerm::Function {
+            symbol: function.to_owned(),
+            args: vec![
+                self.lower_aggregate_term(path, arg, scope)?,
+                z_constant_aggregate(result_precision),
+                z_constant_aggregate(result_scale),
+            ],
+        })
+    }
+
+    fn lower_decimal_cast_function_term(
+        &mut self,
+        path: &str,
+        arg: &ScalarAst,
+        function: &str,
+        target_ty: FormalAttributeType,
+        scope: &Scope,
+    ) -> Option<FormalFunctionTerm> {
+        let result_precision = decimal_type_precision(&target_ty)?;
+        let result_scale = decimal_type_scale(&target_ty)?;
+        Some(FormalFunctionTerm::Function {
+            symbol: function.to_owned(),
+            args: vec![
+                self.lower_function_term(path, arg, scope)?,
+                z_constant_function(result_precision),
+                z_constant_function(result_scale),
+            ],
         })
     }
 
@@ -1328,6 +1378,16 @@ impl LoweringContext {
                             return self.lower_function_term(
                                 &format!("{path}.castArg"),
                                 cast_arg,
+                                scope,
+                            );
+                        }
+                        if let Some(function) = decimal_typmod_cast_function(&source_ty, &target_ty)
+                        {
+                            return self.lower_decimal_cast_function_term(
+                                &format!("{path}.castArg"),
+                                cast_arg,
+                                function,
+                                target_ty,
                                 scope,
                             );
                         }
@@ -1921,6 +1981,29 @@ fn explicit_decimal_annotation_type(ty: &str) -> Option<FormalAttributeType> {
             precision: Some(_),
             scale: Some(_),
         } => Some(formal_ty),
+        _ => None,
+    }
+}
+
+fn decimal_typmod_cast_function(
+    source: &FormalAttributeType,
+    target: &FormalAttributeType,
+) -> Option<&'static str> {
+    match (source, target) {
+        (
+            FormalAttributeType::Decimal { .. },
+            FormalAttributeType::Decimal {
+                precision: Some(_),
+                scale: Some(_),
+            },
+        ) => Some("cast_decimal_typmod"),
+        (
+            FormalAttributeType::Z,
+            FormalAttributeType::Decimal {
+                precision: Some(_),
+                scale: Some(_),
+            },
+        ) => Some("cast_z_to_decimal_typmod"),
         _ => None,
     }
 }
