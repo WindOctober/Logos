@@ -4,8 +4,20 @@ use super::scalar::{
 use super::*;
 use logos_ir::ir::{
     AggregateCall, JoinType, RelExpr, ScalarAst, ScalarExpr, SetOp, SortDirection,
-    SortNullDirection, ValuesTuples,
+    SortNullDirection, SqlType, ValuesTuples,
 };
+
+#[derive(Debug, Clone)]
+struct FormalValuesColumn {
+    name: String,
+    ty: FormalAttributeType,
+}
+
+#[derive(Debug, Clone)]
+struct ValuesCell {
+    raw: String,
+    ty: Option<FormalAttributeType>,
+}
 
 impl LoweringContext {
     pub(super) fn lower_list_rel(&mut self, path: &str, rel: &RelExpr) -> Option<FormalListQuery> {
@@ -26,10 +38,7 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                let input_query = self.lower_rel(&format!("{path}.input"), input)?;
-                let mut list_query = FormalListQuery::Bag {
-                    input: Box::new(input_query),
-                };
+                let mut list_query = self.lower_list_rel(&format!("{path}.input"), input)?;
                 if !collation.is_empty() {
                     let keys = self.lower_sort_keys(path, collation, input_output)?;
                     list_query = FormalListQuery::OrderBy {
@@ -53,9 +62,7 @@ impl LoweringContext {
                 }
                 Some(list_query)
             }
-            _ => self.lower_rel(path, rel).map(|query| FormalListQuery::Bag {
-                input: Box::new(query),
-            }),
+            _ => self.lower_rel(path, rel).map(query_to_list_query),
         }
     }
 
@@ -74,6 +81,9 @@ impl LoweringContext {
                 output,
             } => {
                 let input_query = self.lower_rel(&format!("{path}.input"), input)?;
+                if matches!(input_query, FormalQuery::Empty { .. }) {
+                    return self.empty_query_from_output(&format!("{path}.output"), output);
+                }
                 let (input_query, input_output, correlations) = self.prepare_correlated_input(
                     &format!("{path}.correlations"),
                     input_query,
@@ -93,9 +103,12 @@ impl LoweringContext {
                 input,
                 predicate,
                 correlations,
-                ..
+                output,
             } => {
                 let input_query = self.lower_rel(&format!("{path}.input"), input)?;
+                if matches!(input_query, FormalQuery::Empty { .. }) {
+                    return self.empty_query_from_output(&format!("{path}.output"), output);
+                }
                 let (predicate_input, predicate_output, correlations) = self
                     .prepare_correlated_input(
                         &format!("{path}.correlations"),
@@ -199,29 +212,311 @@ impl LoweringContext {
             } => self.with_correlations(correlations, |context| {
                 context.lower_join(path, left, right, *join_type, &condition.parsed, output)
             }),
-            RelExpr::Values { tuples, .. } => {
-                match tuples {
-                    ValuesTuples::Rows { rows } if rows.is_empty() => {
-                        self.error(
-                            path,
-                            "empty_values_not_encoded",
-                            "FormalSQL has Q_Empty_Tuple, but Logos Values with an explicit schema needs a separate encoding before it is safe to lower.",
-                        );
-                    }
-                    ValuesTuples::Rows { .. } => self.error(
-                        path,
-                        "values_rows_not_supported",
-                        "FormalSQL's core query algebra does not provide a VALUES rows constructor.",
-                    ),
-                    ValuesTuples::UnavailableFromCalcite => self.error(
+            RelExpr::Values { tuples, output } => match tuples {
+                ValuesTuples::Rows { rows } => self.lower_values_query(path, rows, output),
+                ValuesTuples::UnavailableFromCalcite => {
+                    self.error(
                         path,
                         "values_tuples_unavailable",
                         "Calcite did not expose VALUES tuples, so the query cannot be lowered soundly.",
-                    ),
+                    );
+                    None
                 }
+            },
+        }
+    }
+
+    fn lower_values_query(
+        &mut self,
+        path: &str,
+        rows: &[Vec<ScalarExpr>],
+        output: &[Column],
+    ) -> Option<FormalQuery> {
+        self.ensure_values_output_schema(path, output)?;
+        let cells = self.lower_values_cells(path, rows, output)?;
+        let columns = self.lower_values_columns(path, output, &cells)?;
+        let rows = self.type_values_rows(path, &cells, &columns)?;
+        if cells.is_empty() {
+            return Some(FormalQuery::Empty {
+                columns: columns
+                    .iter()
+                    .map(|column| FormalAttribute {
+                        name: column.name.clone(),
+                        ty: column.ty,
+                    })
+                    .collect(),
+            });
+        }
+
+        let mut queries = rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                self.values_singleton_query(&format!("{path}.rows[{index}]"), row, &columns)
+            })
+            .collect::<Option<Vec<_>>>()?
+            .into_iter();
+        let first = queries.next()?;
+        Some(queries.fold(first, |left, right| FormalQuery::Set {
+            op: FormalSetOp::Union,
+            left: Box::new(left),
+            right: Box::new(right),
+        }))
+    }
+
+    fn empty_query_from_output(&mut self, path: &str, output: &[Column]) -> Option<FormalQuery> {
+        if !has_unique_column_names(output) {
+            self.error(
+                path,
+                "duplicate_empty_alias",
+                "FormalSQL empty relation output requires distinct aliases.",
+            );
+            return None;
+        }
+        let columns = output
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                Some(FormalAttribute {
+                    name: column.name.clone(),
+                    ty: self.empty_output_attribute_type(&format!("{path}[{index}]"), column)?,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(FormalQuery::Empty { columns })
+    }
+
+    fn empty_output_attribute_type(
+        &mut self,
+        path: &str,
+        column: &Column,
+    ) -> Option<FormalAttributeType> {
+        match column.ty {
+            SqlType::Null => Some(self.unresolved_null_fallback_type(path)),
+            _ => self.lower_attribute_type(path, column, AttributeTypeContext::QueryOutput),
+        }
+    }
+
+    fn values_singleton_query(
+        &mut self,
+        path: &str,
+        row: &[FormalValueLiteral],
+        columns: &[FormalValuesColumn],
+    ) -> Option<FormalQuery> {
+        if row.len() != columns.len() {
+            self.error(
+                path,
+                "values_row_arity_mismatch",
+                "VALUES row arity does not match the output schema.",
+            );
+            return None;
+        }
+        let select = row
+            .iter()
+            .zip(columns.iter())
+            .map(|(literal, column)| {
+                Some(FormalSelectItem {
+                    expr: FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Constant {
+                            raw: literal.raw.clone(),
+                            ty: Some(literal.ty),
+                        },
+                    },
+                    alias: column.name.clone(),
+                    alias_ty: column.ty,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(FormalQuery::Projection {
+            select,
+            input: Box::new(FormalQuery::EmptyTuple),
+        })
+    }
+
+    fn lower_values_cells(
+        &mut self,
+        path: &str,
+        rows: &[Vec<ScalarExpr>],
+        output: &[Column],
+    ) -> Option<Vec<Vec<ValuesCell>>> {
+        rows.iter()
+            .enumerate()
+            .map(|(row_index, row)| {
+                if row.len() != output.len() {
+                    self.error(
+                        &format!("{path}.rows[{row_index}]"),
+                        "values_row_arity_mismatch",
+                        "VALUES row arity does not match the output schema.",
+                    );
+                    return None;
+                }
+                row.iter()
+                    .enumerate()
+                    .map(|(column_index, expr)| {
+                        self.lower_values_cell(
+                            &format!("{path}.rows[{row_index}][{column_index}]"),
+                            expr,
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn lower_values_cell(&mut self, path: &str, expr: &ScalarExpr) -> Option<ValuesCell> {
+        let scope = Scope {
+            attributes: Vec::new(),
+        };
+        let ast = &expr.parsed;
+        let term = self.lower_function_term(path, ast, &scope)?;
+        match term {
+            FormalFunctionTerm::Constant {
+                raw,
+                ty: constant_ty,
+            } => Some(ValuesCell {
+                raw,
+                ty: constant_ty,
+            }),
+            _ => {
+                self.error(
+                    path,
+                    "values_expression_not_supported",
+                    "VALUES lowering currently supports literal cells only.",
+                );
                 None
             }
         }
+    }
+
+    fn lower_values_columns(
+        &mut self,
+        path: &str,
+        output: &[Column],
+        rows: &[Vec<ValuesCell>],
+    ) -> Option<Vec<FormalValuesColumn>> {
+        output
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                let column_path = format!("{path}.output[{index}]");
+                let ty = match self.values_output_type(&column_path, column)? {
+                    Some(ty) => ty,
+                    None => self.infer_values_column_type(&column_path, index, rows)?,
+                };
+                Some(FormalValuesColumn {
+                    name: column.name.clone(),
+                    ty,
+                })
+            })
+            .collect()
+    }
+
+    fn values_output_type(
+        &mut self,
+        path: &str,
+        column: &Column,
+    ) -> Option<Option<FormalAttributeType>> {
+        match &column.ty {
+            SqlType::Any | SqlType::Null => Some(None),
+            _ => self
+                .lower_attribute_type(path, column, AttributeTypeContext::QueryInput)
+                .map(Some),
+        }
+    }
+
+    fn infer_values_column_type(
+        &mut self,
+        path: &str,
+        column_index: usize,
+        rows: &[Vec<ValuesCell>],
+    ) -> Option<FormalAttributeType> {
+        let mut inferred = None;
+        for row in rows {
+            let Some(cell) = row.get(column_index) else {
+                self.error(
+                    path,
+                    "values_row_arity_mismatch",
+                    "VALUES row arity does not match the output schema.",
+                );
+                return None;
+            };
+            let Some(cell_ty) = cell.ty else {
+                continue;
+            };
+            match inferred {
+                Some(existing) if !attribute_types_compatible_for_values(existing, cell_ty) => {
+                    self.error(
+                        path,
+                        "values_column_type_conflict",
+                        "VALUES column has no concrete output type and contains literals with incompatible inferred types.",
+                    );
+                    return None;
+                }
+                Some(_) => {}
+                None => inferred = Some(cell_ty),
+            }
+        }
+        inferred.or_else(|| {
+            self.warning(
+                path,
+                "values_null_type_defaulted_to_integer",
+                "VALUES NULL column has no concrete output type and no non-NULL typed literal from which FormalSQL can infer one. Logos defaults it to INTEGER as a fallback; this is sound only when the unresolved NULL is semantically unobservable, e.g. inside an empty relation.",
+            );
+            Some(FormalAttributeType::Z)
+        })
+    }
+
+    fn type_values_rows(
+        &mut self,
+        path: &str,
+        rows: &[Vec<ValuesCell>],
+        columns: &[FormalValuesColumn],
+    ) -> Option<Vec<Vec<FormalValueLiteral>>> {
+        rows.iter()
+            .enumerate()
+            .map(|(row_index, row)| {
+                if row.len() != columns.len() {
+                    self.error(
+                        &format!("{path}.rows[{row_index}]"),
+                        "values_row_arity_mismatch",
+                        "VALUES row arity does not match the output schema.",
+                    );
+                    return None;
+                }
+                row.iter()
+                    .zip(columns.iter())
+                    .enumerate()
+                    .map(|(column_index, (cell, column))| {
+                        if let Some(cell_ty) = cell.ty
+                            && !attribute_types_compatible_for_values(cell_ty, column.ty)
+                        {
+                            self.error(
+                                &format!("{path}.rows[{row_index}][{column_index}]"),
+                                "values_literal_type_mismatch",
+                                "VALUES literal type does not match the output column type.",
+                            );
+                            return None;
+                        }
+                        Some(FormalValueLiteral {
+                            raw: cell.raw.clone(),
+                            ty: column.ty,
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn ensure_values_output_schema(&mut self, path: &str, output: &[Column]) -> Option<()> {
+        if !has_unique_column_names(output) {
+            self.error(
+                path,
+                "duplicate_values_alias",
+                "FormalSQL tuple labels are finite sets; VALUES output column names must be unique.",
+            );
+            return None;
+        }
+        Some(())
     }
 
     fn lower_sort_keys(
@@ -588,7 +883,7 @@ impl LoweringContext {
 
     fn union_all(&self, left: FormalQuery, right: FormalQuery) -> FormalQuery {
         FormalQuery::Set {
-            op: FormalSetOp::UnionMax,
+            op: FormalSetOp::Union,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -1201,6 +1496,40 @@ fn floating_output_type_mismatch(
         output_ty,
         FormalAttributeType::Float | FormalAttributeType::Double
     )) && expr_ty != output_ty
+}
+
+fn attribute_types_compatible_for_values(
+    literal_ty: FormalAttributeType,
+    output_ty: FormalAttributeType,
+) -> bool {
+    match (literal_ty, output_ty) {
+        (
+            FormalAttributeType::Timestamp {
+                precision: literal_precision,
+            },
+            FormalAttributeType::Timestamp {
+                precision: output_precision,
+            },
+        )
+        | (
+            FormalAttributeType::Timestamptz {
+                precision: literal_precision,
+            },
+            FormalAttributeType::Timestamptz {
+                precision: output_precision,
+            },
+        ) => timestamp_precision(literal_precision) == timestamp_precision(output_precision),
+        _ => literal_ty == output_ty,
+    }
+}
+
+pub(super) fn query_to_list_query(query: FormalQuery) -> FormalListQuery {
+    match query {
+        FormalQuery::Empty { columns } => FormalListQuery::Empty { columns },
+        query => FormalListQuery::Bag {
+            input: Box::new(query),
+        },
+    }
 }
 
 fn aggregate_result_follows_argument_type(function: &str) -> bool {

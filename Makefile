@@ -26,6 +26,7 @@ smoke: formal-sql
 
 logos-formal-sql-lemmas: formal-sql
 	$(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos theories/FormalSQL/TNullSyntax.v
+	$(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos theories/FormalSQL/DecimalFacts.v
 	$(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos theories/FormalSQL/RewriteSpec.v
 	$(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos theories/FormalSQL/OccFacts.v
 	$(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos theories/FormalSQL/PiFacts.v

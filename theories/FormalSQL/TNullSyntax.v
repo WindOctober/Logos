@@ -20,6 +20,12 @@ Definition SortKeyT := sort_key TNull.
 Definition Table (name : string) : Query :=
   @Q_Table TNull relname (Rel name).
 
+Definition EmptyTuple : Query :=
+  @Q_Empty_Tuple TNull relname.
+
+Definition EmptyBagRelation (attrs : list (attribute TNull)) : Query :=
+  @Q_Empty_Relation TNull relname (Fset.mk_set (A TNull) attrs).
+
 Definition SetQuery (op : set_op) (left right : Query) : Query :=
   @Q_Set TNull relname op left right.
 
@@ -49,6 +55,9 @@ Definition Gamma
 
 Definition Bag (input : Query) : ListQuery :=
   @L_Bag TNull relname input.
+
+Definition EmptyRelation (attrs : list (attribute TNull)) : ListQuery :=
+  @L_EmptyRelation TNull relname (Fset.mk_set (A TNull) attrs).
 
 Definition OrderBy (keys : list SortKeyT) (input : ListQuery) : ListQuery :=
   @L_OrderBy TNull relname keys input.

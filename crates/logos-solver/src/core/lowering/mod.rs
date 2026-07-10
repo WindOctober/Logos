@@ -9,8 +9,8 @@ use super::syntax::{
     DiagnosticSeverity, FormalAggregateTerm, FormalAttribute, FormalAttributeType,
     FormalCaseBranch, FormalFormula, FormalFunctionTerm, FormalListQuery, FormalNullDirection,
     FormalProofModule, FormalQuery, FormalQueryModule, FormalSchema, FormalSelectItem, FormalSetOp,
-    FormalSortDirection, FormalSortKey, FormalTable, LoweredQuery, LoweredSchema,
-    LoweringDiagnostic, LoweringStatus, ProofLoweringReport,
+    FormalSortDirection, FormalSortKey, FormalTable, FormalValueLiteral, LoweredQuery,
+    LoweredSchema, LoweringDiagnostic, LoweringStatus, ProofLoweringReport,
 };
 
 const DEFAULT_TIMESTAMP_PRECISION: u32 = 6;
@@ -101,9 +101,7 @@ fn lower_query_with_optional_schema_config(
         (None, context.lower_list_rel("rel", &query.rel))
     } else {
         let lowered = context.lower_rel("rel", &query.rel);
-        let list_lowered = lowered.clone().map(|query| FormalListQuery::Bag {
-            input: Box::new(query),
-        });
+        let list_lowered = lowered.clone().map(rel::query_to_list_query);
         (lowered, list_lowered)
     };
     let status = if context.has_errors() {
@@ -369,6 +367,14 @@ impl LoweringContext {
                 );
                 return None;
             }
+            SqlType::Null
+                if matches!(
+                    context,
+                    AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput
+                ) =>
+            {
+                return Some(self.unresolved_null_fallback_type(path));
+            }
             SqlType::Any | SqlType::Null => {
                 self.error(
                     path,
@@ -380,6 +386,15 @@ impl LoweringContext {
             _ => {}
         }
         Some(sql_type_to_formal_attribute_type(&column.ty))
+    }
+
+    pub(super) fn unresolved_null_fallback_type(&mut self, path: &str) -> FormalAttributeType {
+        self.warning(
+            path,
+            "unresolved_null_defaulted_to_integer",
+            "Unresolved NULL output type is defaulted to INTEGER as a fallback. This is sound only when the NULL-producing relation is semantically empty or otherwise unobservable; ordinary observable NULLs should be resolved to a concrete SQL type before lowering.",
+        );
+        FormalAttributeType::Z
     }
 
     fn correlated_attribute(

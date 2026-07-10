@@ -2583,7 +2583,7 @@ fn lowers_left_join_with_exists_desugaring() {
     );
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    assert!(module.rocq_module.contains("SetQuery SetUnionMax"));
+    assert!(module.rocq_module.contains("SetQuery SetUnion"));
     assert!(module.rocq_module.contains("ExistsQuery"));
     assert!(module.rocq_module.contains("NullZ"));
     assert!(!module.rocq_module.contains("LeftJoin"));
@@ -2816,6 +2816,27 @@ fn lowers_nested_fetch_zero_to_empty_bag_query() {
             ..
         })
     ));
+}
+
+#[test]
+fn emits_native_empty_bag_relation() {
+    let empty = FormalQuery::Empty {
+        columns: vec![FormalAttribute {
+            name: "a".to_owned(),
+            ty: FormalAttributeType::Z,
+        }],
+    };
+    let module = emit_rocq_query_module(
+        &FormalListQuery::Bag {
+            input: Box::new(empty.clone()),
+        },
+        &FormalListQuery::Bag {
+            input: Box::new(empty),
+        },
+    );
+
+    assert!(module.rocq_module.contains("EmptyBagRelation"));
+    assert!(!module.rocq_module.contains("SetQuery SetDiff"));
 }
 
 #[test]
@@ -3170,7 +3191,7 @@ fn lowers_correlated_join_output_after_calcite_renaming() {
 }
 
 #[test]
-fn does_not_lower_values_rows() {
+fn lowers_empty_values_rows_to_typed_empty_bag() {
     let rel = RelExpr::Values {
         tuples: ValuesTuples::Rows { rows: vec![] },
         output: vec![column("a")],
@@ -3185,8 +3206,401 @@ fn does_not_lower_values_rows() {
     };
 
     let lowered = lower_query(&query);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("empty VALUES should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("empty VALUES should lower"),
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(matches!(lowered.query, Some(FormalQuery::Empty { .. })));
+    assert!(module.rocq_module.contains("EmptyRelation"));
+    assert!(!module.rocq_module.contains("SetQuery SetDiff"));
+}
+
+#[test]
+fn lowers_values_rows_with_additive_bag_union() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![
+                vec![scalar(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                })],
+                vec![scalar(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                })],
+            ],
+        },
+        output: vec![column("A")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("A")],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("VALUES rows should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("VALUES rows should lower"),
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(module.rocq_module.contains("SetQuery SetUnion"));
+    assert!(!module.rocq_module.contains("SetQuery SetUnionMax"));
+}
+
+#[test]
+fn lowers_values_null_using_inferred_column_type() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![
+                vec![scalar(ScalarAst::Literal {
+                    raw: "NULL".to_owned(),
+                })],
+                vec![scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    }),
+                    ty: "INTEGER".to_owned(),
+                })],
+            ],
+        },
+        output: vec![typed_column("A", SqlType::Null)],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![typed_column("A", SqlType::Null)],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalQuery::Set { op, left, right }) = lowered.query else {
+        panic!("two VALUES rows should lower to a bag union");
+    };
+    assert_eq!(op, FormalSetOp::Union);
+    let (Some(null_ty), Some(one_ty)) = (
+        singleton_constant_type(&left, "NULL"),
+        singleton_constant_type(&right, "1"),
+    ) else {
+        panic!("VALUES rows should lower to typed singleton constants");
+    };
+    assert_eq!(null_ty, FormalAttributeType::Z);
+    assert_eq!(one_ty, FormalAttributeType::Z);
+}
+
+#[test]
+fn lowers_values_null_using_concrete_output_type() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![vec![scalar(ScalarAst::Literal {
+                raw: "NULL".to_owned(),
+            })]],
+        },
+        output: vec![column("A")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("A")],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(ty) = lowered
+        .query
+        .as_ref()
+        .and_then(|query| singleton_constant_type(query, "NULL"))
+    else {
+        panic!("concrete VALUES output type should type bare NULL");
+    };
+    assert_eq!(ty, FormalAttributeType::Z);
+}
+
+#[test]
+fn defaults_untyped_all_null_values_column_to_integer() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![vec![scalar(ScalarAst::Literal {
+                raw: "NULL".to_owned(),
+            })]],
+        },
+        output: vec![typed_column("A", SqlType::Null)],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![typed_column("A", SqlType::Null)],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(ty) = lowered
+        .query
+        .as_ref()
+        .and_then(|query| singleton_constant_type(query, "NULL"))
+    else {
+        panic!("fallback VALUES output type should type bare NULL");
+    };
+    assert_eq!(ty, FormalAttributeType::Z);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "values_null_type_defaulted_to_integer")
+    );
+}
+
+#[test]
+fn lowers_untyped_null_values_filter_without_static_empty_rewrite() {
+    let output = vec![
+        typed_column("A", SqlType::Null),
+        typed_column("B", SqlType::Null),
+    ];
+    let values = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![vec![
+                scalar(ScalarAst::Literal {
+                    raw: "NULL".to_owned(),
+                }),
+                scalar(ScalarAst::Literal {
+                    raw: "NULL".to_owned(),
+                }),
+            ]],
+        },
+        output: output.clone(),
+    };
+    let rel = RelExpr::Filter {
+        input: Box::new(values),
+        predicate: scalar(ScalarAst::Call {
+            operator: "=".to_owned(),
+            op: ScalarOp::Eq,
+            args: vec![
+                ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                },
+                ScalarAst::Literal {
+                    raw: "0".to_owned(),
+                },
+            ],
+        }),
+        correlations: Vec::new(),
+        output: output.clone(),
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output,
+        features: vec![Feature::Values, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+    let module = emit_rocq_query_module(
+        lowered
+            .list_query
+            .as_ref()
+            .expect("filtered VALUES should lower"),
+        lowered
+            .list_query
+            .as_ref()
+            .expect("filtered VALUES should lower"),
+    );
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(matches!(lowered.query, Some(FormalQuery::Selection { .. })));
+    assert!(module.rocq_module.contains("Sigma"));
+    assert!(module.rocq_module.contains("NullZ"));
+    assert!(module.rocq_module.contains("AttrZ \"A\""));
+    assert!(!module.rocq_module.contains("EmptyRelation"));
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "values_null_type_defaulted_to_integer")
+    );
+}
+
+#[test]
+fn rejects_conflicting_inferred_values_column_types() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![
+                vec![scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    }),
+                    ty: "INTEGER".to_owned(),
+                })],
+                vec![scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: "'x'".to_owned(),
+                    }),
+                    ty: "VARCHAR".to_owned(),
+                })],
+            ],
+        },
+        output: vec![typed_column("A", SqlType::Any)],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![typed_column("A", SqlType::Any)],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "values_column_type_conflict")
+    );
+}
+
+#[test]
+fn rejects_values_cell_type_mismatch_against_concrete_output() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'x'".to_owned(),
+                }),
+                ty: "VARCHAR".to_owned(),
+            })]],
+        },
+        output: vec![column("A")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("A")],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "values_literal_type_mismatch")
+    );
+}
+
+#[test]
+fn rejects_values_duplicate_output_aliases() {
+    let rel = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![vec![
+                scalar(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                }),
+                scalar(ScalarAst::Literal {
+                    raw: "2".to_owned(),
+                }),
+            ]],
+        },
+        output: vec![column("A"), column("A")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("A"), column("A")],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "duplicate_values_alias")
+    );
+}
+
+#[test]
+fn lowers_values_fetch_through_bag_observation() {
+    let values = RelExpr::Values {
+        tuples: ValuesTuples::Rows {
+            rows: vec![
+                vec![scalar(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                })],
+                vec![scalar(ScalarAst::Literal {
+                    raw: "2".to_owned(),
+                })],
+            ],
+        },
+        output: vec![column("a")],
+    };
+    let rel = RelExpr::Sort {
+        input: Box::new(values),
+        collation: Vec::new(),
+        fetch: Some(scalar(ScalarAst::Literal {
+            raw: "1".to_owned(),
+        })),
+        offset: None,
+        output: vec![column("a")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("a")],
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalListQuery::Fetch { input, .. }) = lowered.list_query else {
+        panic!("VALUES with FETCH should lower to a list fetch observation");
+    };
+    let FormalListQuery::Bag { input } = *input else {
+        panic!("FETCH input should observe VALUES through bag semantics");
+    };
+    assert!(matches!(*input, FormalQuery::Set { .. }));
 }
 
 #[test]
@@ -3266,6 +3680,29 @@ fn typed_column(name: &str, ty: SqlType) -> Column {
         ty,
         nullable: true,
     }
+}
+
+fn singleton_constant_type(query: &FormalQuery, raw: &str) -> Option<FormalAttributeType> {
+    let FormalQuery::Projection { select, input } = query else {
+        return None;
+    };
+    if !matches!(**input, FormalQuery::EmptyTuple) {
+        return None;
+    }
+    let [item] = select.as_slice() else {
+        return None;
+    };
+    let FormalAggregateTerm::Expr {
+        term:
+            FormalFunctionTerm::Constant {
+                raw: constant_raw,
+                ty: Some(ty),
+            },
+    } = &item.expr
+    else {
+        return None;
+    };
+    constant_raw.eq_ignore_ascii_case(raw).then_some(*ty)
 }
 
 fn decimal_column(name: &str, precision: u32, scale: u32) -> Column {

@@ -240,6 +240,7 @@ impl RocqQueryDefinitions {
 
     fn collect_list_query(&mut self, query: &FormalListQuery) {
         match query {
+            FormalListQuery::Empty { .. } => {}
             FormalListQuery::Bag { input } => {
                 self.collect_select_lists(input);
                 self.collect_predicates(input);
@@ -267,7 +268,7 @@ impl RocqQueryDefinitions {
                 self.collect_select_lists(right);
             }
             FormalQuery::Selection { input, .. } => self.collect_select_lists(input),
-            FormalQuery::Table { .. } => {}
+            FormalQuery::Empty { .. } | FormalQuery::EmptyTuple | FormalQuery::Table { .. } => {}
         }
     }
 
@@ -290,7 +291,7 @@ impl RocqQueryDefinitions {
                 self.collect_predicates(right);
             }
             FormalQuery::Projection { input, .. } => self.collect_predicates(input),
-            FormalQuery::Table { .. } => {}
+            FormalQuery::Empty { .. } | FormalQuery::EmptyTuple | FormalQuery::Table { .. } => {}
         }
     }
 
@@ -333,6 +334,9 @@ impl RocqQueryDefinitions {
 
     fn emit_list_query(&self, query: &FormalListQuery) -> String {
         match query {
+            FormalListQuery::Empty { columns } => {
+                format!("EmptyRelation {}", emit_rocq_query_attribute_list(columns))
+            }
             FormalListQuery::Bag { input } => format!("Bag ({})", self.emit_query(input, true)),
             FormalListQuery::OrderBy { keys, input } => format!(
                 "OrderBy ({}) ({})",
@@ -360,6 +364,13 @@ impl RocqQueryDefinitions {
         }
 
         match query {
+            FormalQuery::Empty { columns } => {
+                format!(
+                    "EmptyBagRelation {}",
+                    emit_rocq_query_attribute_list(columns)
+                )
+            }
+            FormalQuery::EmptyTuple => "EmptyTuple".to_owned(),
             FormalQuery::Table { relation } => {
                 format!("Table {}", rocq_string_literal(relation))
             }
@@ -448,7 +459,7 @@ fn collect_query_counts(
         FormalQuery::Projection { input, .. }
         | FormalQuery::Selection { input, .. }
         | FormalQuery::Group { input, .. } => collect_query_counts(input, counts, order),
-        FormalQuery::Table { .. } => {}
+        FormalQuery::Empty { .. } | FormalQuery::EmptyTuple | FormalQuery::Table { .. } => {}
     }
 }
 
@@ -458,6 +469,7 @@ fn collect_list_query_counts(
     order: &mut Vec<FormalQuery>,
 ) {
     match query {
+        FormalListQuery::Empty { .. } => {}
         FormalListQuery::Bag { input } => collect_query_counts(input, counts, order),
         FormalListQuery::OrderBy { input, .. }
         | FormalListQuery::Offset { input, .. }
@@ -473,7 +485,10 @@ fn select_shared_queries(
         .into_iter()
         .filter(|query| {
             query_counts.get(query).copied().unwrap_or_default() > 1
-                && !matches!(query, FormalQuery::Table { .. })
+                && !matches!(
+                    query,
+                    FormalQuery::Empty { .. } | FormalQuery::EmptyTuple | FormalQuery::Table { .. }
+                )
         })
         .collect::<Vec<_>>();
 
@@ -518,7 +533,9 @@ fn query_children(query: &FormalQuery) -> Vec<&FormalQuery> {
         FormalQuery::Projection { input, .. }
         | FormalQuery::Selection { input, .. }
         | FormalQuery::Group { input, .. } => vec![input],
-        FormalQuery::Table { .. } => Vec::new(),
+        FormalQuery::Empty { .. } | FormalQuery::EmptyTuple | FormalQuery::Table { .. } => {
+            Vec::new()
+        }
     }
 }
 
@@ -548,6 +565,20 @@ fn emit_rocq_sort_key_constructor(
         (FormalSortDirection::Asc, FormalNullDirection::Last) => "SortAscNullsLast",
         (FormalSortDirection::Desc, FormalNullDirection::First) => "SortDescNullsFirst",
         (FormalSortDirection::Desc, FormalNullDirection::Last) => "SortDescNullsLast",
+    }
+}
+
+fn column_ref_constructor(attribute_ty: FormalAttributeType) -> &'static str {
+    match attribute_ty {
+        FormalAttributeType::Z => "ZColumn",
+        FormalAttributeType::String => "StringColumn",
+        FormalAttributeType::Bool => "BoolColumn",
+        FormalAttributeType::Float => "FloatColumn",
+        FormalAttributeType::Double => "DoubleColumn",
+        FormalAttributeType::Decimal { .. } => "DecimalColumn",
+        FormalAttributeType::Date => "DateColumn",
+        FormalAttributeType::Timestamp { .. } => "TimestampColumn",
+        FormalAttributeType::Timestamptz { .. } => "TimestamptzColumn",
     }
 }
 
@@ -711,6 +742,14 @@ fn emit_rocq_attribute(ty: FormalAttributeType, name: &str) -> String {
     emit_rocq_named_helper(helper, name, ty)
 }
 
+fn emit_rocq_query_attribute_list(attributes: &[FormalAttribute]) -> String {
+    let rendered = attributes
+        .iter()
+        .map(|attribute| emit_rocq_attribute(attribute.ty, &attribute.name))
+        .collect::<Vec<_>>();
+    emit_rocq_list_expr(&rendered)
+}
+
 fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
     match ty {
         FormalAttributeType::Z => format!("Attr_Z {}", rocq_string_literal(name)),
@@ -802,18 +841,11 @@ fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
     if name != &item.alias || !attribute_types_emit_equivalent(*ty, item.alias_ty) {
         return None;
     }
-    let column_constructor = match ty {
-        FormalAttributeType::Z => "ZColumn",
-        FormalAttributeType::String => "StringColumn",
-        FormalAttributeType::Bool => "BoolColumn",
-        FormalAttributeType::Float => "FloatColumn",
-        FormalAttributeType::Double => "DoubleColumn",
-        FormalAttributeType::Decimal { .. } => "DecimalColumn",
-        FormalAttributeType::Date => "DateColumn",
-        FormalAttributeType::Timestamp { .. } => "TimestampColumn",
-        FormalAttributeType::Timestamptz { .. } => "TimestamptzColumn",
-    };
-    Some(emit_rocq_named_helper(column_constructor, name, *ty))
+    Some(emit_rocq_named_helper(
+        column_ref_constructor(*ty),
+        name,
+        *ty,
+    ))
 }
 
 fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {

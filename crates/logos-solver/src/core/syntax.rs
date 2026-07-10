@@ -98,6 +98,13 @@ pub struct FormalAttribute {
     pub ty: FormalAttributeType,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormalValueLiteral {
+    pub raw: String,
+    pub ty: FormalAttributeType,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormalAttributeType {
@@ -122,6 +129,11 @@ pub enum FormalAttributeType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum FormalQuery {
+    /// Empty bag with an explicit output shape.  Used for syntactically empty
+    /// relations whose NULL-only output columns have no concrete SQL type.
+    Empty { columns: Vec<FormalAttribute> },
+    /// FormalSQL SqlAlgebra.Q_Empty_Tuple.
+    EmptyTuple,
     /// FormalSQL SqlAlgebra.Q_Table.
     Table { relation: String },
     /// FormalSQL SqlAlgebra.Q_Set.
@@ -162,6 +174,9 @@ pub enum FormalQuery {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum FormalListQuery {
+    Empty {
+        columns: Vec<FormalAttribute>,
+    },
     Bag {
         input: Box<FormalQuery>,
     },
@@ -183,6 +198,7 @@ impl FormalListQuery {
     pub fn as_bag_query(&self) -> Option<&FormalQuery> {
         match self {
             FormalListQuery::Bag { input } => Some(input),
+            FormalListQuery::Empty { .. } => None,
             FormalListQuery::OrderBy { .. }
             | FormalListQuery::Offset { .. }
             | FormalListQuery::Fetch { .. } => None,
