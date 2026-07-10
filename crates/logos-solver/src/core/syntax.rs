@@ -118,6 +118,7 @@ pub enum FormalAttributeType {
         scale: Option<u32>,
     },
     Date,
+    Time,
     Timestamp {
         precision: Option<u32>,
     },

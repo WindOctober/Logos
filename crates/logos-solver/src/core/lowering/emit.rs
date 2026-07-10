@@ -577,6 +577,7 @@ fn column_ref_constructor(attribute_ty: FormalAttributeType) -> &'static str {
         FormalAttributeType::Double => "DoubleColumn",
         FormalAttributeType::Decimal { .. } => "DecimalColumn",
         FormalAttributeType::Date => "DateColumn",
+        FormalAttributeType::Time => "TimeColumn",
         FormalAttributeType::Timestamp { .. } => "TimestampColumn",
         FormalAttributeType::Timestamptz { .. } => "TimestamptzColumn",
     }
@@ -736,6 +737,7 @@ fn emit_rocq_attribute(ty: FormalAttributeType, name: &str) -> String {
         FormalAttributeType::Double => "AttrDouble",
         FormalAttributeType::Decimal { .. } => "AttrDecimal",
         FormalAttributeType::Date => "AttrDate",
+        FormalAttributeType::Time => "AttrTime",
         FormalAttributeType::Timestamp { .. } => "AttrTimestamp",
         FormalAttributeType::Timestamptz { .. } => "AttrTimestamptz",
     };
@@ -765,6 +767,7 @@ fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
             )
         }
         FormalAttributeType::Date => format!("Attr_date {}", rocq_string_literal(name)),
+        FormalAttributeType::Time => format!("Attr_time {}", rocq_string_literal(name)),
         FormalAttributeType::Timestamp { precision } => format!(
             "Attr_timestamp {} {}",
             rocq_string_literal(name),
@@ -812,6 +815,7 @@ fn identity_select_constructor(attribute_ty: FormalAttributeType) -> Option<&'st
         FormalAttributeType::Double => Some("SelectDouble"),
         FormalAttributeType::Decimal { .. } => Some("SelectDecimal"),
         FormalAttributeType::Date => Some("SelectDate"),
+        FormalAttributeType::Time => Some("SelectTime"),
         FormalAttributeType::Timestamp { .. } => Some("SelectTimestamp"),
         FormalAttributeType::Timestamptz { .. } => Some("SelectTimestamptz"),
     }
@@ -857,6 +861,7 @@ fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
         FormalAttributeType::Double => Some("DotDouble"),
         FormalAttributeType::Decimal { .. } => Some("DotDecimal"),
         FormalAttributeType::Date => Some("DotDate"),
+        FormalAttributeType::Time => Some("DotTime"),
         FormalAttributeType::Timestamp { .. } => Some("DotTimestamp"),
         FormalAttributeType::Timestamptz { .. } => Some("DotTimestamptz"),
     }
@@ -873,6 +878,7 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             Some(FormalAttributeType::Double) => "NullDouble".to_owned(),
             Some(FormalAttributeType::Decimal { .. }) => "NullDecimal".to_owned(),
             Some(FormalAttributeType::Date) => "NullDate".to_owned(),
+            Some(FormalAttributeType::Time) => "NullTime".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "NullTimestamp".to_owned(),
             Some(FormalAttributeType::Timestamptz { .. }) => "NullTimestamptz".to_owned(),
         };
@@ -893,6 +899,11 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
     if matches!(ty, Some(FormalAttributeType::Date)) {
         if let Some(days) = parse_date_literal(trimmed) {
             return format!("CstDate ({days})");
+        }
+    }
+    if matches!(ty, Some(FormalAttributeType::Time)) {
+        if let Some(micros) = parse_time_literal(trimmed) {
+            return format!("CstTime ({micros})");
         }
     }
     if let Some(FormalAttributeType::Timestamp { precision }) = ty {
@@ -935,6 +946,7 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             Some(FormalAttributeType::Double) => "Value_double None".to_owned(),
             Some(FormalAttributeType::Decimal { .. }) => "Value_decimal None".to_owned(),
             Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
+            Some(FormalAttributeType::Time) => "Value_time None".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "Value_timestamp None".to_owned(),
             Some(FormalAttributeType::Timestamptz { .. }) => "Value_timestamptz None".to_owned(),
         };
@@ -959,6 +971,11 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
     if matches!(ty, Some(FormalAttributeType::Date)) {
         if let Some(days) = parse_date_literal(trimmed) {
             return format!("Value_date (Some ({days})%Z)");
+        }
+    }
+    if matches!(ty, Some(FormalAttributeType::Time)) {
+        if let Some(micros) = parse_time_literal(trimmed) {
+            return format!("Value_time (Some ({micros})%Z)");
         }
     }
     if let Some(FormalAttributeType::Timestamp { precision }) = ty {
@@ -1207,6 +1224,26 @@ fn parse_date_literal(raw: &str) -> Option<i64> {
     Some(days_from_civil(year, month, day))
 }
 
+pub(super) fn date_literal_conforms_to_day(raw: &str) -> bool {
+    parse_date_literal(raw).is_some()
+}
+
+fn parse_time_literal(raw: &str) -> Option<i64> {
+    let value = sql_string_literal_content(raw).unwrap_or_else(|| raw.trim().to_owned());
+    if let Ok(micros) = value.parse::<i64>() {
+        return valid_day_time_micros(micros).then_some(micros);
+    }
+    let (hour, minute, second, micros) = parse_hms(&value)?;
+    if !valid_sql_time(hour, minute, second, micros) {
+        return None;
+    }
+    Some(hour * MICROS_PER_HOUR + minute * MICROS_PER_MINUTE + second * MICROS_PER_SECOND + micros)
+}
+
+pub(super) fn time_literal_conforms_to_day(raw: &str) -> bool {
+    parse_time_literal(raw).is_some()
+}
+
 pub(super) fn timestamp_literal_conforms_to_precision(raw: &str, precision: u32) -> bool {
     parse_timestamp_literal(raw, precision).is_some()
 }
@@ -1341,6 +1378,15 @@ fn valid_time(hour: i64, minute: i64, second: i64, micros: i64) -> bool {
         && (0..=59).contains(&minute)
         && (0..=59).contains(&second)
         && (0..=999_999).contains(&micros)
+}
+
+fn valid_sql_time(hour: i64, minute: i64, second: i64, micros: i64) -> bool {
+    valid_time(hour, minute, second, micros)
+        || (hour == 24 && minute == 0 && second == 0 && micros == 0)
+}
+
+fn valid_day_time_micros(micros: i64) -> bool {
+    (0..=MICROS_PER_DAY).contains(&micros)
 }
 
 const MICROS_PER_SECOND: i64 = 1_000_000;

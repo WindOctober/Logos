@@ -359,14 +359,6 @@ impl LoweringContext {
                     return None;
                 }
             }
-            SqlType::Time => {
-                self.error(
-                    path,
-                    context.unsupported_time_code(),
-                    &context.unsupported_time_message(),
-                );
-                return None;
-            }
             SqlType::Null
                 if matches!(
                     context,
@@ -476,26 +468,6 @@ impl AttributeTypeContext {
             }
         }
     }
-
-    fn unsupported_time_code(self) -> &'static str {
-        match self {
-            AttributeTypeContext::Schema => "schema_time_type_not_supported",
-            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
-                "query_time_type_not_supported"
-            }
-        }
-    }
-
-    fn unsupported_time_message(self) -> String {
-        match self {
-            AttributeTypeContext::Schema => {
-                "FormalSQL proof-of-concept schemas cannot soundly encode TIME attributes; treating TIME as string would not preserve SQL temporal semantics.".to_owned()
-            }
-            AttributeTypeContext::QueryInput | AttributeTypeContext::QueryOutput => {
-                "FormalSQL proof-of-concept queries cannot soundly encode TIME attributes; treating TIME as string would not preserve SQL temporal semantics.".to_owned()
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -526,6 +498,7 @@ fn sql_type_to_formal_attribute_type(ty: &SqlType) -> FormalAttributeType {
         },
         SqlType::Varchar => FormalAttributeType::String,
         SqlType::Date => FormalAttributeType::Date,
+        SqlType::Time => FormalAttributeType::Time,
         SqlType::Timestamp { precision } => FormalAttributeType::Timestamp {
             precision: *precision,
         },
@@ -533,7 +506,7 @@ fn sql_type_to_formal_attribute_type(ty: &SqlType) -> FormalAttributeType {
             precision: *precision,
         },
         SqlType::Boolean => FormalAttributeType::Bool,
-        SqlType::Any | SqlType::Null | SqlType::Time => {
+        SqlType::Any | SqlType::Null => {
             unreachable!("unsupported SQL type reached FormalAttributeType conversion")
         }
     }

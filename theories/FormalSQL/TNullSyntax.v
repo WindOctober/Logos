@@ -157,6 +157,7 @@ Definition AttrDouble (name : string) := Attr_double name.
 Definition AttrDecimal (name : string) (precision scale : Z) :=
   Attr_decimal name precision scale.
 Definition AttrDate (name : string) := Attr_date name.
+Definition AttrTime (name : string) := Attr_time name.
 Definition AttrTimestamp (name : string) (precision : Z) := Attr_timestamp name precision.
 Definition AttrTimestamptz (name : string) (precision : Z) := Attr_timestamptz name precision.
 
@@ -191,6 +192,7 @@ Inductive ColumnRef : Type :=
   | DoubleColumn : string -> ColumnRef
   | DecimalColumn : string -> Z -> Z -> ColumnRef
   | DateColumn : string -> ColumnRef
+  | TimeColumn : string -> ColumnRef
   | TimestampColumn : string -> Z -> ColumnRef
   | TimestamptzColumn : string -> Z -> ColumnRef.
 
@@ -203,6 +205,7 @@ Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   | DoubleColumn name => AttrDouble name
   | DecimalColumn name precision scale => AttrDecimal name precision scale
   | DateColumn name => AttrDate name
+  | TimeColumn name => AttrTime name
   | TimestampColumn name precision => AttrTimestamp name precision
   | TimestamptzColumn name precision => AttrTimestamptz name precision
   end.
@@ -215,6 +218,7 @@ Definition DotDouble (name : string) : AggTerm := AExpr (Dot (AttrDouble name)).
 Definition DotDecimal (name : string) (precision scale : Z) : AggTerm :=
   AExpr (Dot (AttrDecimal name precision scale)).
 Definition DotDate (name : string) : AggTerm := AExpr (Dot (AttrDate name)).
+Definition DotTime (name : string) : AggTerm := AExpr (Dot (AttrTime name)).
 Definition DotTimestamp (name : string) (precision : Z) : AggTerm :=
   AExpr (Dot (AttrTimestamp name precision)).
 Definition DotTimestamptz (name : string) (precision : Z) : AggTerm :=
@@ -229,6 +233,7 @@ Definition DotColumn (column : ColumnRef) : AggTerm :=
   | DoubleColumn name => DotDouble name
   | DecimalColumn name precision scale => DotDecimal name precision scale
   | DateColumn name => DotDate name
+  | TimeColumn name => DotTime name
   | TimestampColumn name precision => DotTimestamp name precision
   | TimestamptzColumn name precision => DotTimestamptz name precision
   end.
@@ -245,6 +250,7 @@ Definition CstDoubleBits (bits : Z) : AggTerm := CstDouble (Float64OfBits bits).
 Definition CstDecimal (precision scale coeff : Z) : AggTerm :=
   AExpr (Constant (Value_decimal (decimal_checked precision scale coeff))).
 Definition CstDate (date : Z) : AggTerm := AExpr (Constant (Value_date (Some date))).
+Definition CstTime (time : Z) : AggTerm := AExpr (Constant (Value_time (Some time))).
 Definition CstTimestamp (timestamp : Z) : AggTerm :=
   AExpr (Constant (Value_timestamp (Some timestamp))).
 Definition CstTimestamptz (timestamp : Z) : AggTerm :=
@@ -257,6 +263,7 @@ Definition NullFloat : AggTerm := AExpr (Constant (Value_float None)).
 Definition NullDouble : AggTerm := AExpr (Constant (Value_double None)).
 Definition NullDecimal : AggTerm := AExpr (Constant (Value_decimal None)).
 Definition NullDate : AggTerm := AExpr (Constant (Value_date None)).
+Definition NullTime : AggTerm := AExpr (Constant (Value_time None)).
 Definition NullTimestamp : AggTerm := AExpr (Constant (Value_timestamp None)).
 Definition NullTimestamptz : AggTerm := AExpr (Constant (Value_timestamptz None)).
 
@@ -272,6 +279,8 @@ Definition SelectDecimal (name : string) (precision scale : Z) : SelectItemT :=
   SelectAs (DotDecimal name precision scale) (AttrDecimal name precision scale).
 Definition SelectDate (name : string) : SelectItemT :=
   SelectAs (DotDate name) (AttrDate name).
+Definition SelectTime (name : string) : SelectItemT :=
+  SelectAs (DotTime name) (AttrTime name).
 Definition SelectTimestamp (name : string) (precision : Z) : SelectItemT :=
   SelectAs (DotTimestamp name precision) (AttrTimestamp name precision).
 Definition SelectTimestamptz (name : string) (precision : Z) : SelectItemT :=

@@ -1019,6 +1019,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 typed_column("SLACKER", SqlType::Boolean),
                 typed_column("HIREDATE", SqlType::Date),
                 decimal_column("BONUS", 10, 2),
+                typed_column("SHIFT_START", SqlType::Time),
                 timestamp_column("EVENT_TS", Some(6)),
             ],
         }],
@@ -1029,7 +1030,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert_eq!(
         lowered.schema.as_ref().unwrap().tables[0].attributes.len(),
-        6
+        7
     );
     assert!(
         lowered
@@ -1045,7 +1046,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 .as_ref()
                 .unwrap()
                 .rocq_create_schema
-                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_decimal \"BONUS\" 10 2 :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
+                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_decimal \"BONUS\" 10 2 :: Attr_time \"SHIFT_START\" :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
         );
     assert!(
         lowered
@@ -1065,12 +1066,12 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
     );
     assert!(
         lowered.diagnostics.is_empty(),
-        "schema-only lowering should not warn for supported DATE/TIMESTAMP columns"
+        "schema-only lowering should not warn for supported temporal columns"
     );
 }
 
 #[test]
-fn rejects_time_schema_attribute_instead_of_encoding_as_string() {
+fn lowers_time_schema_attribute() {
     let schema = Schema {
         tables: vec![Table {
             name: "t".to_owned(),
@@ -1080,27 +1081,100 @@ fn rejects_time_schema_attribute_instead_of_encoding_as_string() {
 
     let lowered = lower_schema(&schema);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(
         lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "schema_time_type_not_supported")
+            .schema
+            .as_ref()
+            .unwrap()
+            .rocq_create_schema
+            .contains("Attr_time \"clock_time\"")
     );
-    assert!(lowered.schema.is_none());
 }
 
 #[test]
-fn rejects_time_query_attribute_instead_of_encoding_as_string() {
+fn lowers_time_query_attribute() {
     let output = vec![typed_column("clock_time", SqlType::Time)];
     let query = Query {
         source_sql: None,
-        rel: RelExpr::TableScan {
-            table: vec!["t".to_owned()],
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: output.clone(),
+            }),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
             output: output.clone(),
         },
         output,
-        features: vec![Feature::TableScan],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("TimeColumn \"clock_time\""));
+}
+
+#[test]
+fn lowers_time_literals() {
+    let output = vec![typed_column("clock_time", SqlType::Time)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "'12:34:56.123456'".to_owned(),
+                }),
+                ty: "TIME".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("CstTime (45296123456)"));
+}
+
+#[test]
+fn rejects_invalid_project_time_literal() {
+    let output = vec![typed_column("clock_time", SqlType::Time)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::Literal {
+                raw: "'25:00:00'".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Projection],
         calcite_rel_text: None,
         calcite_rel_plan: None,
     };
@@ -1112,9 +1186,38 @@ fn rejects_time_query_attribute_instead_of_encoding_as_string() {
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "query_time_type_not_supported")
+            .any(|diagnostic| diagnostic.code == "time_literal_not_supported")
     );
-    assert!(lowered.query.is_none());
+}
+
+#[test]
+fn rejects_invalid_values_time_literal() {
+    let output = vec![typed_column("clock_time", SqlType::Time)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Values {
+            tuples: ValuesTuples::Rows {
+                rows: vec![vec![scalar(ScalarAst::Literal {
+                    raw: "'25:00:00'".to_owned(),
+                })]],
+            },
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::Values],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "time_literal_not_supported")
+    );
 }
 
 #[test]
@@ -1659,6 +1762,223 @@ fn lowers_integer_to_decimal_typmod_cast() {
     );
     assert!(module.rocq_module.contains("CstZ (12)"));
     assert!(module.rocq_module.contains("CstZ (2)"));
+}
+
+#[test]
+fn infers_integer_cast_source_from_case_division() {
+    let input = vec![column("amount"), column("count")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::Call {
+                        operator: "/".to_owned(),
+                        op: ScalarOp::Divide,
+                        args: vec![
+                            ScalarAst::Call {
+                                operator: "CASE".to_owned(),
+                                op: ScalarOp::Case,
+                                args: vec![
+                                    ScalarAst::Call {
+                                        operator: "IS NOT NULL".to_owned(),
+                                        op: ScalarOp::IsNotNull,
+                                        args: vec![ScalarAst::InputRef { index: 0 }],
+                                    },
+                                    ScalarAst::TypeAnnotation {
+                                        expr: Box::new(ScalarAst::Call {
+                                            operator: "CAST".to_owned(),
+                                            op: ScalarOp::Cast,
+                                            args: vec![ScalarAst::InputRef { index: 0 }],
+                                        }),
+                                        ty: "INTEGER".to_owned(),
+                                    },
+                                    ScalarAst::Literal {
+                                        raw: "0".to_owned(),
+                                    },
+                                ],
+                            },
+                            ScalarAst::InputRef { index: 1 },
+                        ],
+                    }],
+                }),
+                ty: "INTEGER".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![column("average_amount")],
+        },
+        output: vec![column("average_amount")],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(
+        !lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_source_expression_not_supported")
+    );
+}
+
+#[test]
+fn infers_power_cast_source_as_double_before_rejecting_cast_pair() {
+    let input = vec![typed_column("amount", SqlType::Double)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::Call {
+                        operator: "POWER".to_owned(),
+                        op: ScalarOp::Power,
+                        args: vec![
+                            ScalarAst::InputRef { index: 0 },
+                            ScalarAst::TypeAnnotation {
+                                expr: Box::new(ScalarAst::Literal {
+                                    raw: "2.0".to_owned(),
+                                }),
+                                ty: "DOUBLE".to_owned(),
+                            },
+                        ],
+                    }],
+                }),
+                ty: "INTEGER".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![column("powered_amount")],
+        },
+        output: vec![column("powered_amount")],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_not_supported")
+    );
+    assert!(
+        !lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_source_expression_not_supported")
+    );
+}
+
+#[test]
+fn rejects_case_cast_source_with_incompatible_literal_branch() {
+    let input = vec![typed_column("date_value", SqlType::Date)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::Call {
+                        operator: "CASE".to_owned(),
+                        op: ScalarOp::Case,
+                        args: vec![
+                            ScalarAst::Literal {
+                                raw: "true".to_owned(),
+                            },
+                            ScalarAst::Literal {
+                                raw: "'bad-date'".to_owned(),
+                            },
+                            ScalarAst::InputRef { index: 0 },
+                        ],
+                    }],
+                }),
+                ty: "DATE".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("date_cast", SqlType::Date)],
+        },
+        output: vec![typed_column("date_cast", SqlType::Date)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_source_expression_not_supported")
+    );
+}
+
+#[test]
+fn infers_string_literal_cast_source_before_rejecting_cast_pair() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::Literal {
+                        raw: "'SECURITY'".to_owned(),
+                    }],
+                }),
+                ty: "INTEGER".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![column("bad_cast")],
+        },
+        output: vec![column("bad_cast")],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_not_supported")
+    );
+    assert!(
+        !lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "cast_source_type_not_supported")
+    );
 }
 
 #[test]

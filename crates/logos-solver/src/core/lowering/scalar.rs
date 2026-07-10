@@ -611,6 +611,7 @@ impl LoweringContext {
             }
             ScalarAst::TypeAnnotation { ty, .. }
                 if type_annotation_is_date(ty)
+                    || type_annotation_is_time(ty)
                     || type_annotation_is_timestamp(ty)
                     || type_annotation_is_timestamp_tz(ty)
                     || type_annotation_is_interval(ty) =>
@@ -618,14 +619,6 @@ impl LoweringContext {
                 Some(FormalAggregateTerm::Expr {
                     term: self.lower_function_term(path, ast, scope)?,
                 })
-            }
-            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time(ty) => {
-                self.error(
-                    path,
-                    "temporal_literal_not_supported",
-                    "TIME literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
-                );
-                None
             }
             ScalarAst::TypeAnnotation { expr, ty } => {
                 if type_annotation_is_decimal(ty) && formal_type_from_annotation(ty).is_none() {
@@ -698,7 +691,7 @@ impl LoweringContext {
                         None
                     })?;
                     let source_ty = self
-                        .infer_function_type(&format!("{path}.castArg"), cast_arg, scope)
+                        .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
                         .or_else(|| {
                             self.error(
                                 path,
@@ -1061,6 +1054,7 @@ impl LoweringContext {
             return None;
         }
 
+        let result_ty = self.infer_case_type(&format!("{path}.resultType"), args, scope);
         let mut branches = Vec::with_capacity(args.len() / 2);
         for (branch_index, pair) in args[..args.len() - 1].chunks_exact(2).enumerate() {
             if !self.case_when_is_boolean(
@@ -1076,21 +1070,26 @@ impl LoweringContext {
                     &pair[0],
                     scope,
                 )?,
-                then_expr: self.lower_aggregate_term(
-                    &format!("{path}.branches[{branch_index}].then"),
-                    &pair[1],
-                    scope,
-                )?,
+                then_expr: self
+                    .lower_aggregate_term(
+                        &format!("{path}.branches[{branch_index}].then"),
+                        &pair[1],
+                        scope,
+                    )
+                    .map(|term| annotate_case_literal_term(term, result_ty))?,
             });
         }
 
         Some(FormalAggregateTerm::Case {
             branches,
-            else_expr: Box::new(self.lower_aggregate_term(
-                &format!("{path}.else"),
-                args.last().expect("CASE arity checked"),
-                scope,
-            )?),
+            else_expr: Box::new(
+                self.lower_aggregate_term(
+                    &format!("{path}.else"),
+                    args.last().expect("CASE arity checked"),
+                    scope,
+                )
+                .map(|term| annotate_case_literal_term(term, result_ty))?,
+            ),
         })
     }
 
@@ -1207,6 +1206,8 @@ impl LoweringContext {
             }
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_date(ty) => self
                 .lower_temporal_type_annotation(path, expr, ty, scope, FormalAttributeType::Date),
+            ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_time(ty) => self
+                .lower_temporal_type_annotation(path, expr, ty, scope, FormalAttributeType::Time),
             ScalarAst::TypeAnnotation { expr, ty } if type_annotation_is_timestamp_tz(ty) => {
                 let raw = typed_literal_raw(expr)
                     .or_else(|| cast_literal_raw(expr))
@@ -1273,14 +1274,6 @@ impl LoweringContext {
                     raw: interval.to_string(),
                     ty: Some(FormalAttributeType::Z),
                 })
-            }
-            ScalarAst::TypeAnnotation { ty, .. } if type_annotation_is_time(ty) => {
-                self.error(
-                    path,
-                    "temporal_literal_not_supported",
-                    "TIME literals require a dedicated FormalSQL temporal semantics before they can be lowered soundly.",
-                );
-                None
             }
             ScalarAst::TypeAnnotation { expr, ty } => {
                 if type_annotation_is_decimal(ty) && formal_type_from_annotation(ty).is_none() {
@@ -1365,7 +1358,7 @@ impl LoweringContext {
                             None
                         })?;
                         let source_ty = self
-                            .infer_function_type(&format!("{path}.castArg"), cast_arg, scope)
+                            .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
                             .or_else(|| {
                                 self.error(
                                     path,
@@ -1659,7 +1652,7 @@ impl LoweringContext {
 
         if let Some(cast_arg) = cast_arg(expr) {
             let source_ty = self
-                .infer_function_type(&format!("{path}.castArg"), cast_arg, scope)
+                .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
                 .or_else(|| {
                     self.error(
                         path,
@@ -1705,6 +1698,20 @@ impl LoweringContext {
                 raw: raw.to_owned(),
                 ty: Some(FormalAttributeType::Date),
             }),
+            FormalAttributeType::Time => {
+                if !is_null_literal(raw) && !super::emit::time_literal_conforms_to_day(raw) {
+                    self.error(
+                        path,
+                        "time_literal_not_supported",
+                        "TIME literal must be a valid time-of-day with at most microsecond precision.",
+                    );
+                    return None;
+                }
+                Some(FormalFunctionTerm::Constant {
+                    raw: raw.to_owned(),
+                    ty: Some(FormalAttributeType::Time),
+                })
+            }
             FormalAttributeType::Timestamp { precision } => {
                 if !is_null_literal(raw)
                     && !super::emit::timestamp_literal_conforms_to_precision(
@@ -1741,6 +1748,9 @@ impl LoweringContext {
         ast: &ScalarAst,
         scope: &Scope,
     ) -> Option<FormalAttributeType> {
+        if let Some(ty) = self.direct_function_type(path, ast, scope) {
+            return Some(ty);
+        }
         match ast {
             ScalarAst::InputRef { index } => Some(scope.attribute(*index)?.formal_ty),
             ScalarAst::CorrelatedRef {
@@ -1754,10 +1764,10 @@ impl LoweringContext {
             ),
             ScalarAst::TypeAnnotation { ty, .. } => formal_type_from_annotation(ty),
             ScalarAst::Literal { .. } => None,
-            ScalarAst::Call {
-                op: ScalarOp::Cast, ..
-            } => None,
             ScalarAst::Call { op, .. } => {
+                if let Some(ty) = self.infer_call_type(path, op, ast, scope) {
+                    return Some(ty);
+                }
                 self.error(
                     path,
                     "cast_source_expression_not_supported",
@@ -1772,6 +1782,158 @@ impl LoweringContext {
             | ScalarAst::RelSubquery { .. }
             | ScalarAst::Sarg { .. } => None,
         }
+    }
+
+    fn infer_call_type(
+        &mut self,
+        path: &str,
+        op: &ScalarOp,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        let ScalarAst::Call { args, .. } = ast else {
+            return None;
+        };
+        match op {
+            ScalarOp::Cast if args.len() == 1 => self.infer_cast_operand_type(
+                &format!("{path}.castArg"),
+                args.first().expect("CAST arity checked"),
+                scope,
+            ),
+            ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide => {
+                self.infer_arithmetic_type(path, op, args, scope)
+            }
+            ScalarOp::Power => self.infer_power_type(path, args, scope),
+            ScalarOp::Case => self.infer_case_type(path, args, scope),
+            op if is_boolean_value_function(op) => Some(FormalAttributeType::Bool),
+            _ => None,
+        }
+    }
+
+    fn infer_arithmetic_type(
+        &mut self,
+        path: &str,
+        op: &ScalarOp,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        match args {
+            [arg] if matches!(op, ScalarOp::Minus) => {
+                let ty = self.infer_function_type(&format!("{path}.arg"), arg, scope)?;
+                is_numeric_type(ty).then_some(ty)
+            }
+            [left, right] => {
+                let left_ty =
+                    self.infer_numeric_operand_type(&format!("{path}.left"), left, scope)?;
+                let right_ty =
+                    self.infer_numeric_operand_type(&format!("{path}.right"), right, scope)?;
+                if left_ty == FormalAttributeType::Z && right_ty == FormalAttributeType::Z {
+                    return Some(FormalAttributeType::Z);
+                }
+                if is_float_type(left_ty) || is_float_type(right_ty) {
+                    return (left_ty == right_ty && is_float_type(left_ty)).then_some(left_ty);
+                }
+                if matches!(
+                    (left_ty, right_ty),
+                    (
+                        FormalAttributeType::Decimal { .. },
+                        FormalAttributeType::Decimal { .. }
+                    )
+                ) {
+                    if matches!(op, ScalarOp::Divide) {
+                        return None;
+                    }
+                    return decimal_binary_result_type(op, &left_ty, &right_ty);
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn infer_power_type(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        let [left, right] = args else {
+            return None;
+        };
+        let left_ty = self.infer_numeric_operand_type(&format!("{path}.left"), left, scope)?;
+        let right_ty = self.infer_numeric_operand_type(&format!("{path}.right"), right, scope)?;
+        if left_ty == FormalAttributeType::Double && right_ty == FormalAttributeType::Double {
+            Some(FormalAttributeType::Double)
+        } else {
+            None
+        }
+    }
+
+    fn infer_case_type(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        if args.len() < 3 || args.len() % 2 == 0 {
+            return None;
+        }
+        let mut result_ty = None;
+        for (branch_index, pair) in args[..args.len() - 1].chunks_exact(2).enumerate() {
+            let branch_ty = self.infer_case_result_operand_type(
+                &format!("{path}.branches[{branch_index}].then"),
+                &pair[1],
+                scope,
+            );
+            result_ty = merge_case_result_type(result_ty, branch_ty)?;
+        }
+        merge_case_result_type(
+            result_ty,
+            self.infer_case_result_operand_type(
+                &format!("{path}.else"),
+                args.last().expect("CASE arity checked"),
+                scope,
+            ),
+        )?
+    }
+
+    fn infer_numeric_operand_type(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        self.infer_function_type(path, ast, scope)
+            .or_else(|| match ast {
+                ScalarAst::Literal { raw } => infer_untyped_integer_literal_type(raw),
+                _ => None,
+            })
+    }
+
+    fn infer_cast_operand_type(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        self.infer_function_type(path, ast, scope)
+            .or_else(|| match ast {
+                ScalarAst::Literal { raw } => infer_literal_cast_source_type(raw),
+                _ => None,
+            })
+    }
+
+    fn infer_case_result_operand_type(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        self.infer_function_type(path, ast, scope)
+            .or_else(|| match ast {
+                ScalarAst::Literal { raw } => infer_literal_cast_source_type(raw),
+                _ => None,
+            })
     }
 }
 
@@ -1921,6 +2083,7 @@ fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
         "VARCHAR" | "CHAR" | "STRING" => Some(FormalAttributeType::String),
         "BOOLEAN" | "BOOL" => Some(FormalAttributeType::Bool),
         "DATE" => Some(FormalAttributeType::Date),
+        "TIME" => Some(FormalAttributeType::Time),
         "TIMESTAMP" => Some(FormalAttributeType::Timestamp {
             precision: type_annotation_precision(ty),
         }),
@@ -2083,6 +2246,52 @@ fn decimal_binary_result_type(
         precision: Some(result_precision),
         scale: Some(result_scale),
     })
+}
+
+fn infer_untyped_integer_literal_type(raw: &str) -> Option<FormalAttributeType> {
+    let raw = raw.trim();
+    if is_null_literal(raw) {
+        return None;
+    }
+    if raw.parse::<i64>().is_ok() {
+        return Some(FormalAttributeType::Z);
+    }
+    None
+}
+
+fn infer_literal_cast_source_type(raw: &str) -> Option<FormalAttributeType> {
+    let raw = raw.trim();
+    if is_null_literal(raw) {
+        return None;
+    }
+    if raw.starts_with('\'') && raw.ends_with('\'') {
+        return Some(FormalAttributeType::String);
+    }
+    if raw.eq_ignore_ascii_case("true") || raw.eq_ignore_ascii_case("false") {
+        return Some(FormalAttributeType::Bool);
+    }
+    infer_untyped_integer_literal_type(raw)
+}
+
+fn merge_case_result_type(
+    current: Option<FormalAttributeType>,
+    next: Option<FormalAttributeType>,
+) -> Option<Option<FormalAttributeType>> {
+    match (current, next) {
+        (None, ty) | (ty, None) => Some(ty),
+        (Some(left), Some(right)) if left == right => Some(Some(left)),
+        _ => None,
+    }
+}
+
+fn annotate_case_literal_term(
+    term: FormalAggregateTerm,
+    result_ty: Option<FormalAttributeType>,
+) -> FormalAggregateTerm {
+    match result_ty {
+        Some(ty) => annotate_literal_term(term, ty),
+        None => term,
+    }
 }
 
 fn decimal_division_precision_is_safe(
@@ -2399,6 +2608,16 @@ fn is_comparison_predicate(op: &ScalarOp) -> bool {
 
 fn is_float_type(ty: FormalAttributeType) -> bool {
     matches!(ty, FormalAttributeType::Float | FormalAttributeType::Double)
+}
+
+fn is_numeric_type(ty: FormalAttributeType) -> bool {
+    matches!(
+        ty,
+        FormalAttributeType::Z
+            | FormalAttributeType::Float
+            | FormalAttributeType::Double
+            | FormalAttributeType::Decimal { .. }
+    )
 }
 
 fn is_floating_comparison_mismatch(

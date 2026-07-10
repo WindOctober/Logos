@@ -497,6 +497,11 @@ impl LoweringContext {
                             );
                             return None;
                         }
+                        self.validate_literal_for_output_type(
+                            &format!("{path}.rows[{row_index}][{column_index}]"),
+                            &cell.raw,
+                            column.ty,
+                        )?;
                         Some(FormalValueLiteral {
                             raw: cell.raw.clone(),
                             ty: column.ty,
@@ -1194,6 +1199,13 @@ impl LoweringContext {
                         );
                         return None;
                     }
+                    if !raw.eq_ignore_ascii_case("null") {
+                        self.validate_literal_for_output_type(
+                            &format!("{path}.exprs[{index}]"),
+                            raw,
+                            output_ty,
+                        )?;
+                    }
                 }
                 if let Some(expr_ty) = self.direct_function_type(
                     &format!("{path}.exprs[{index}].type"),
@@ -1226,6 +1238,49 @@ impl LoweringContext {
                 })
             })
             .collect()
+    }
+
+    fn validate_literal_for_output_type(
+        &mut self,
+        path: &str,
+        raw: &str,
+        output_ty: FormalAttributeType,
+    ) -> Option<()> {
+        if raw.eq_ignore_ascii_case("null") {
+            return Some(());
+        }
+        match output_ty {
+            FormalAttributeType::Date if !super::emit::date_literal_conforms_to_day(raw) => {
+                self.error(
+                    path,
+                    "date_literal_not_supported",
+                    "FormalSQL DATE lowering requires a valid canonical date literal or encoded day value.",
+                );
+                None
+            }
+            FormalAttributeType::Time if !super::emit::time_literal_conforms_to_day(raw) => {
+                self.error(
+                    path,
+                    "time_literal_not_supported",
+                    "FormalSQL TIME lowering requires a valid time-of-day literal or encoded microsecond value.",
+                );
+                None
+            }
+            FormalAttributeType::Timestamp { precision }
+                if !super::emit::timestamp_literal_conforms_to_precision(
+                    raw,
+                    timestamp_precision(precision),
+                ) =>
+            {
+                self.error(
+                    path,
+                    "timestamp_literal_not_supported",
+                    "FormalSQL TIMESTAMP lowering requires a valid timestamp literal within the target precision.",
+                );
+                None
+            }
+            _ => Some(()),
+        }
     }
 
     fn lower_group_keys(
