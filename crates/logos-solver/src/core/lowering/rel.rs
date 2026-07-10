@@ -182,8 +182,8 @@ impl LoweringContext {
                 op,
                 all,
                 inputs,
-                output: _,
-            } => self.lower_set(path, *op, *all, inputs),
+                output,
+            } => self.lower_set(path, *op, *all, inputs, output),
             RelExpr::Sort { input, fetch, .. } => {
                 if let Some(fetch) = fetch {
                     let count = self.lower_row_count(&format!("{path}.fetch"), fetch)?;
@@ -605,20 +605,13 @@ impl LoweringContext {
         op: SetOp,
         all: bool,
         inputs: &[RelExpr],
+        output: &[Column],
     ) -> Option<FormalQuery> {
         if inputs.len() < 2 {
             self.error(
                 path,
                 "set_arity_not_supported",
                 "FormalSQL Q_Set is binary.",
-            );
-            return None;
-        }
-        if !all {
-            self.error(
-                path,
-                "set_distinct_semantics_not_supported",
-                "FormalSQL bag set operators model bag multiplicities; SQL DISTINCT set operations need an explicit duplicate-elimination encoding.",
             );
             return None;
         }
@@ -630,15 +623,73 @@ impl LoweringContext {
         let mut iter = inputs.iter().enumerate();
         let (_, first) = iter.next()?;
         let mut acc = self.lower_rel(&format!("{path}.inputs[0]"), first)?;
+        // SQL EXCEPT DISTINCT is delta(left) - delta(right), not
+        // delta(left - right): {x,x} EXCEPT {x} must be empty.
+        if !all && matches!(op, SetOp::Except) {
+            acc = self.distinct_query(&format!("{path}.inputs[0].distinct"), acc, output)?;
+        }
         for (index, input) in iter {
-            let right = self.lower_rel(&format!("{path}.inputs[{index}]"), input)?;
+            let mut right = self.lower_rel(&format!("{path}.inputs[{index}]"), input)?;
+            if !all && matches!(op, SetOp::Except) {
+                right = self.distinct_query(
+                    &format!("{path}.inputs[{index}].distinct"),
+                    right,
+                    output,
+                )?;
+            }
             acc = FormalQuery::Set {
                 op: formal_op,
                 left: Box::new(acc),
                 right: Box::new(right),
             };
         }
+        if !all && !matches!(op, SetOp::Except) {
+            acc = self.distinct_query(&format!("{path}.distinct"), acc, output)?;
+        }
         Some(acc)
+    }
+
+    fn distinct_query(
+        &mut self,
+        path: &str,
+        input: FormalQuery,
+        output: &[Column],
+    ) -> Option<FormalQuery> {
+        if !has_unique_column_names(output) {
+            self.error(
+                path,
+                "set_distinct_duplicate_output_name",
+                "FormalSQL duplicate elimination needs unique output attributes.",
+            );
+            return None;
+        }
+
+        let scope = self.lower_scope(&format!("{path}.scope"), output)?;
+        let group_by = (0..output.len())
+            .map(|index| {
+                let attr = scope.attribute(index)?;
+                Some(FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute {
+                        name: attr.name,
+                        ty: attr.formal_ty,
+                    },
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let select = output
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                self.identity_select_item(&format!("{path}.select[{index}]"), column)
+            })
+            .collect::<Option<Vec<_>>>()?;
+
+        Some(FormalQuery::Group {
+            select,
+            group_by,
+            having: FormalFormula::True,
+            input: Box::new(input),
+        })
     }
 
     fn lower_join(

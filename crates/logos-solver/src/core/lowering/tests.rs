@@ -4045,7 +4045,7 @@ fn rejects_duplicate_projection_aliases() {
 }
 
 #[test]
-fn rejects_distinct_set_semantics() {
+fn lowers_union_distinct_as_duplicate_elimination() {
     let input = || RelExpr::TableScan {
         table: vec!["t".to_owned()],
         output: vec![column("a")],
@@ -4067,13 +4067,57 @@ fn rejects_distinct_set_semantics() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "set_distinct_semantics_not_supported")
-    );
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalQuery::Group {
+        group_by, input, ..
+    }) = lowered.query
+    else {
+        panic!("UNION DISTINCT should lower to duplicate elimination over bag union");
+    };
+    assert_eq!(group_by.len(), 1);
+    assert!(matches!(
+        *input,
+        FormalQuery::Set {
+            op: FormalSetOp::Union,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn lowers_except_distinct_by_deduplicating_each_input() {
+    let input = || RelExpr::TableScan {
+        table: vec!["t".to_owned()],
+        output: vec![column("a")],
+    };
+    let rel = RelExpr::Set {
+        op: SetOp::Except,
+        all: false,
+        inputs: vec![input(), input()],
+        output: vec![column("a")],
+    };
+    let query = Query {
+        source_sql: None,
+        rel,
+        output: vec![column("a")],
+        features: vec![Feature::Except, Feature::SetDistinct],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let Some(FormalQuery::Set {
+        op: FormalSetOp::Diff,
+        left,
+        right,
+    }) = lowered.query
+    else {
+        panic!("EXCEPT DISTINCT should lower to bag difference over deduplicated inputs");
+    };
+    assert!(matches!(*left, FormalQuery::Group { .. }));
+    assert!(matches!(*right, FormalQuery::Group { .. }));
 }
 
 fn column(name: &str) -> Column {
