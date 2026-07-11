@@ -1,4 +1,4 @@
-From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra SqlOrder SqlListAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env ValueDecimal ValueFloat.
+From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra SqlOrder SqlListAlgebra Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env ValueNumeric ValueNumericTypmod ValueFloat ValueInteger.
 From Stdlib Require Import List String ZArith Floats.
 From Flocq Require Import IEEE754.Bits.
 
@@ -153,10 +153,13 @@ Definition projected_tuple (env : Env.env TNull) (s : SelectListT) (t : tuple TN
   projection TNull (env_t TNull env t) (@Select_List TNull s).
 
 Definition AttrZ (name : string) := Attr_Z name.
+Definition AttrInt32 (name : string) := Attr_int32 name.
+Definition AttrInt64 (name : string) := Attr_int64 name.
 Definition AttrString (name : string) := Attr_string name.
 Definition AttrBool (name : string) := Attr_bool name.
 Definition AttrFloat (name : string) := Attr_float name.
 Definition AttrDouble (name : string) := Attr_double name.
+Definition AttrNumeric (name : string) := Attr_numeric name.
 Definition AttrDecimal (name : string) (precision scale : Z) :=
   Attr_decimal name precision scale.
 Definition AttrDate (name : string) := Attr_date name.
@@ -189,10 +192,13 @@ Definition SortDescNullsLast (attribute : attribute TNull) : SortKeyT :=
 
 Inductive ColumnRef : Type :=
   | ZColumn : string -> ColumnRef
+  | Int32Column : string -> ColumnRef
+  | Int64Column : string -> ColumnRef
   | StringColumn : string -> ColumnRef
   | BoolColumn : string -> ColumnRef
   | FloatColumn : string -> ColumnRef
   | DoubleColumn : string -> ColumnRef
+  | NumericColumn : string -> ColumnRef
   | DecimalColumn : string -> Z -> Z -> ColumnRef
   | DateColumn : string -> ColumnRef
   | TimeColumn : string -> ColumnRef
@@ -202,10 +208,13 @@ Inductive ColumnRef : Type :=
 Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   match column with
   | ZColumn name => AttrZ name
+  | Int32Column name => AttrInt32 name
+  | Int64Column name => AttrInt64 name
   | StringColumn name => AttrString name
   | BoolColumn name => AttrBool name
   | FloatColumn name => AttrFloat name
   | DoubleColumn name => AttrDouble name
+  | NumericColumn name => AttrNumeric name
   | DecimalColumn name precision scale => AttrDecimal name precision scale
   | DateColumn name => AttrDate name
   | TimeColumn name => AttrTime name
@@ -214,10 +223,13 @@ Definition ColumnAttribute (column : ColumnRef) : attribute TNull :=
   end.
 
 Definition DotZ (name : string) : AggTerm := AExpr (Dot (AttrZ name)).
+Definition DotInt32 (name : string) : AggTerm := AExpr (Dot (AttrInt32 name)).
+Definition DotInt64 (name : string) : AggTerm := AExpr (Dot (AttrInt64 name)).
 Definition DotString (name : string) : AggTerm := AExpr (Dot (AttrString name)).
 Definition DotBool (name : string) : AggTerm := AExpr (Dot (AttrBool name)).
 Definition DotFloat (name : string) : AggTerm := AExpr (Dot (AttrFloat name)).
 Definition DotDouble (name : string) : AggTerm := AExpr (Dot (AttrDouble name)).
+Definition DotNumeric (name : string) : AggTerm := AExpr (Dot (AttrNumeric name)).
 Definition DotDecimal (name : string) (precision scale : Z) : AggTerm :=
   AExpr (Dot (AttrDecimal name precision scale)).
 Definition DotDate (name : string) : AggTerm := AExpr (Dot (AttrDate name)).
@@ -230,10 +242,13 @@ Definition DotTimestamptz (name : string) (precision : Z) : AggTerm :=
 Definition DotColumn (column : ColumnRef) : AggTerm :=
   match column with
   | ZColumn name => DotZ name
+  | Int32Column name => DotInt32 name
+  | Int64Column name => DotInt64 name
   | StringColumn name => DotString name
   | BoolColumn name => DotBool name
   | FloatColumn name => DotFloat name
   | DoubleColumn name => DotDouble name
+  | NumericColumn name => DotNumeric name
   | DecimalColumn name precision scale => DotDecimal name precision scale
   | DateColumn name => DotDate name
   | TimeColumn name => DotTime name
@@ -242,6 +257,10 @@ Definition DotColumn (column : ColumnRef) : AggTerm :=
   end.
 
 Definition CstZ (z : Z) : AggTerm := AExpr (Constant (Value_Z (Some z))).
+Definition CstInt32 (z : Z) : AggTerm :=
+  AExpr (Constant (Value_int32 (int32_checked z))).
+Definition CstInt64 (z : Z) : AggTerm :=
+  AExpr (Constant (Value_int64 (int64_checked z))).
 Definition CstString (s : string) : AggTerm := AExpr (Constant (Value_string (Some s))).
 Definition CstBool (b : bool) : AggTerm := AExpr (Constant (Value_bool (Some b))).
 Definition CstFloat (f : float32) : AggTerm := AExpr (Constant (Value_float (Some f))).
@@ -250,8 +269,11 @@ Definition Float32OfBits (bits : Z) : float32 := mk_float32 (b32_of_bits bits).
 Definition Float64OfBits (bits : Z) : float64 := mk_float64 (b64_of_bits bits).
 Definition CstFloatBits (bits : Z) : AggTerm := CstFloat (Float32OfBits bits).
 Definition CstDoubleBits (bits : Z) : AggTerm := CstDouble (Float64OfBits bits).
+Definition CstNumeric (coeff scale : Z) : AggTerm :=
+  AExpr (Constant (Value_numeric (Some (numeric_of_scaled coeff scale)))).
 Definition CstDecimal (precision scale coeff : Z) : AggTerm :=
-  AExpr (Constant (Value_decimal (decimal_checked precision scale coeff))).
+  AExpr (Constant (Value_numeric
+    (numeric_of_scaled_with_typmod precision scale coeff))).
 Definition CstDate (date : Z) : AggTerm := AExpr (Constant (Value_date (Some date))).
 Definition CstTime (time : Z) : AggTerm := AExpr (Constant (Value_time (Some time))).
 Definition CstTimestamp (timestamp : Z) : AggTerm :=
@@ -260,17 +282,24 @@ Definition CstTimestamptz (timestamp : Z) : AggTerm :=
   AExpr (Constant (Value_timestamptz (Some timestamp))).
 
 Definition NullZ : AggTerm := AExpr (Constant (Value_Z None)).
+Definition NullInt32 : AggTerm := AExpr (Constant (Value_int32 None)).
+Definition NullInt64 : AggTerm := AExpr (Constant (Value_int64 None)).
 Definition NullString : AggTerm := AExpr (Constant (Value_string None)).
 Definition NullBool : AggTerm := AExpr (Constant (Value_bool None)).
 Definition NullFloat : AggTerm := AExpr (Constant (Value_float None)).
 Definition NullDouble : AggTerm := AExpr (Constant (Value_double None)).
-Definition NullDecimal : AggTerm := AExpr (Constant (Value_decimal None)).
+Definition NullNumeric : AggTerm := AExpr (Constant (Value_numeric None)).
+Definition NullDecimal : AggTerm := NullNumeric.
 Definition NullDate : AggTerm := AExpr (Constant (Value_date None)).
 Definition NullTime : AggTerm := AExpr (Constant (Value_time None)).
 Definition NullTimestamp : AggTerm := AExpr (Constant (Value_timestamp None)).
 Definition NullTimestamptz : AggTerm := AExpr (Constant (Value_timestamptz None)).
 
 Definition SelectZ (name : string) : SelectItemT := SelectAs (DotZ name) (AttrZ name).
+Definition SelectInt32 (name : string) : SelectItemT :=
+  SelectAs (DotInt32 name) (AttrInt32 name).
+Definition SelectInt64 (name : string) : SelectItemT :=
+  SelectAs (DotInt64 name) (AttrInt64 name).
 Definition SelectString (name : string) : SelectItemT :=
   SelectAs (DotString name) (AttrString name).
 Definition SelectBool (name : string) : SelectItemT := SelectAs (DotBool name) (AttrBool name).
@@ -278,6 +307,8 @@ Definition SelectFloat (name : string) : SelectItemT :=
   SelectAs (DotFloat name) (AttrFloat name).
 Definition SelectDouble (name : string) : SelectItemT :=
   SelectAs (DotDouble name) (AttrDouble name).
+Definition SelectNumeric (name : string) : SelectItemT :=
+  SelectAs (DotNumeric name) (AttrNumeric name).
 Definition SelectDecimal (name : string) (precision scale : Z) : SelectItemT :=
   SelectAs (DotDecimal name precision scale) (AttrDecimal name precision scale).
 Definition SelectDate (name : string) : SelectItemT :=

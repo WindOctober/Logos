@@ -139,13 +139,21 @@ impl LoweringContext {
         if args.len() != 2 {
             return Some(predicate_name(op).to_owned());
         }
-        let left = self.direct_function_type(&format!("{path}.leftType"), &args[0], scope);
-        let right = self.direct_function_type(&format!("{path}.rightType"), &args[1], scope);
+        let left = self.comparison_operand_type(&format!("{path}.leftType"), &args[0], scope);
+        let right = self.comparison_operand_type(&format!("{path}.rightType"), &args[1], scope);
         if is_floating_comparison_mismatch(left, right) {
             self.error(
                 path,
                 "floating_comparison_predicate_not_supported",
                 "FLOAT/DOUBLE predicates are lowered only when both operands have the same modeled floating type.",
+            );
+            return None;
+        }
+        if !comparison_types_are_supported(left, right) {
+            self.error(
+                path,
+                "comparison_operand_type_not_supported",
+                "FormalSQL comparison lowering requires operands from the same modeled SQL comparison domain.",
             );
             return None;
         }
@@ -161,6 +169,20 @@ impl LoweringContext {
             }
             _ => Some(predicate_name(op).to_owned()),
         }
+    }
+
+    fn comparison_operand_type(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        self.direct_function_type(path, ast, scope)
+            .or_else(|| match ast {
+                ScalarAst::Literal { raw } => infer_literal_cast_source_type(raw),
+                ScalarAst::Call { op, .. } => self.infer_call_type(path, op, ast, scope),
+                _ => None,
+            })
     }
 
     fn lower_in_formula(
@@ -301,6 +323,14 @@ impl LoweringContext {
                     right_column,
                     AttributeTypeContext::QueryInput,
                 )?;
+                if !comparison_types_are_supported(left_ty, Some(right_ty)) {
+                    self.error(
+                        &format!("{path}.equality[{index}]"),
+                        "comparison_operand_type_not_supported",
+                        "FormalSQL IN-subquery equality lowering requires operands from the same modeled SQL comparison domain.",
+                    );
+                    return None;
+                }
                 if is_floating_comparison_mismatch(left_ty, Some(right_ty)) {
                     self.error(
                         &format!("{path}.equality[{index}]"),
@@ -460,6 +490,46 @@ impl LoweringContext {
                 );
                 None
             }
+            ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && args.len() == 2
+                    && self
+                        .integral_binary_type(&format!("{path}.integerArgs"), args, scope)
+                        .is_some() =>
+            {
+                let ty = self.integral_binary_type(&format!("{path}.integerArgs"), args, scope)?;
+                Some(FormalAggregateTerm::Function {
+                    symbol: integer_binary_function_symbol(op, ty)?.to_owned(),
+                    args: args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            self.lower_aggregate_term(&format!("{path}.args[{index}]"), arg, scope)
+                                .map(|term| annotate_literal_term(term, ty))
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                })
+            }
+            ScalarAst::Call {
+                op: ScalarOp::Minus,
+                args,
+                ..
+            } if args.len() == 1
+                && self
+                    .infer_function_type(&format!("{path}.argType"), &args[0], scope)
+                    .is_some_and(is_integral_type) =>
+            {
+                let ty = self.infer_function_type(&format!("{path}.argType"), &args[0], scope)?;
+                Some(FormalAggregateTerm::Function {
+                    symbol: integer_unary_minus_symbol(ty)?.to_owned(),
+                    args: vec![
+                        self.lower_aggregate_term(&format!("{path}.arg"), &args[0], scope)
+                            .map(|term| annotate_literal_term(term, ty))?,
+                    ],
+                })
+            }
             ScalarAst::Call {
                 op: ScalarOp::Minus,
                 args,
@@ -485,9 +555,9 @@ impl LoweringContext {
                     && self.decimal_binary_args(&format!("{path}.decimalArgs"), args, scope) =>
             {
                 let symbol = match op {
-                    ScalarOp::Plus => "plus_decimal",
-                    ScalarOp::Minus => "minus_decimal",
-                    ScalarOp::Multiply => "mult_decimal",
+                    ScalarOp::Plus => "plus_numeric",
+                    ScalarOp::Minus => "minus_numeric",
+                    ScalarOp::Multiply => "mult_numeric",
                     _ => unreachable!("decimal arithmetic guard checked"),
                 };
                 Some(FormalAggregateTerm::Function {
@@ -518,7 +588,7 @@ impl LoweringContext {
                 ..
             } if args.len() == 1 && self.decimal_unary_arg(path, &args[0], scope) => {
                 Some(FormalAggregateTerm::Function {
-                    symbol: "opp_decimal".to_owned(),
+                    symbol: "opp_numeric".to_owned(),
                     args: vec![self.lower_aggregate_term(
                         &format!("{path}.arg"),
                         &args[0],
@@ -645,14 +715,27 @@ impl LoweringContext {
                         );
                         return None;
                     }
-                    if matches!(formal_ty, FormalAttributeType::Decimal { .. })
-                        && !raw.eq_ignore_ascii_case("null")
-                        && super::emit::decimal_literal_for_type(raw, Some(&formal_ty)).is_none()
+                    if matches!(
+                        formal_ty,
+                        FormalAttributeType::Int32 | FormalAttributeType::Int64
+                    ) && !raw.eq_ignore_ascii_case("null")
+                        && !integer_literal_fits_type(raw, formal_ty)
                     {
                         self.error(
                             path,
-                            "decimal_literal_not_supported",
-                            "FormalSQL DECIMAL lowering supports PostgreSQL-style fixed-scale decimal literals only when coercion to DECIMAL(p,s) succeeds without precision overflow.",
+                            "integer_literal_out_of_range",
+                            "FormalSQL INTEGER/BIGINT lowering rejects literals outside the target SQL integer range.",
+                        );
+                        return None;
+                    }
+                    if is_exact_numeric_type(formal_ty)
+                        && !raw.eq_ignore_ascii_case("null")
+                        && !numeric_literal_fits_type(raw, formal_ty)
+                    {
+                        self.error(
+                            path,
+                            "numeric_literal_not_supported",
+                            "FormalSQL NUMERIC/DECIMAL lowering accepts finite decimal literals only; constrained values must also fit DECIMAL(p,s). NaN and infinities are rejected.",
                         );
                         return None;
                     }
@@ -667,19 +750,6 @@ impl LoweringContext {
                     && is_float_type(formal_ty)
                 {
                     self.validate_floating_expression_annotation(path, expr, formal_ty, scope)?;
-                }
-                if let Some(target_ty) = explicit_decimal_annotation_type(ty) {
-                    if let Some(args) = decimal_division_cast_args(expr)
-                        && args.len() == 2
-                        && self.decimal_binary_args(&format!("{path}.decimalArgs"), args, scope)
-                    {
-                        return self.lower_decimal_division_aggregate_term(
-                            path,
-                            args,
-                            scope,
-                            Some(target_ty),
-                        );
-                    }
                 }
                 if let Some(cast_arg) = cast_arg(expr) {
                     let target_ty = formal_type_from_annotation(ty).or_else(|| {
@@ -723,17 +793,8 @@ impl LoweringContext {
                         None
                     }
                 } else {
-                    if matches!(
-                        formal_type_from_annotation(ty),
-                        Some(FormalAttributeType::Decimal { .. })
-                    ) {
-                        self.error(
-                            path,
-                            "decimal_expression_not_supported",
-                            "DECIMAL expression annotation is supported only for fixed-scale literals, no-op casts, or explicitly cast Decimal division.",
-                        );
-                        return None;
-                    }
+                    // Rex type annotations describe Calcite's inferred result type; they
+                    // are not source-level SQL casts and must not introduce typmod rounding.
                     self.lower_aggregate_term(path, expr, scope)
                 }
             }
@@ -746,14 +807,13 @@ impl LoweringContext {
     fn decimal_binary_args(&mut self, path: &str, args: &[ScalarAst], scope: &Scope) -> bool {
         let left = self.direct_function_type(&format!("{path}.leftType"), &args[0], scope);
         let right = self.direct_function_type(&format!("{path}.rightType"), &args[1], scope);
-        matches!(left, Some(FormalAttributeType::Decimal { .. }))
-            && matches!(right, Some(FormalAttributeType::Decimal { .. }))
+        left.is_some_and(is_exact_numeric_type) && right.is_some_and(is_exact_numeric_type)
     }
 
     fn decimal_unary_arg(&mut self, path: &str, arg: &ScalarAst, scope: &Scope) -> bool {
         matches!(
             self.direct_function_type(&format!("{path}.argType"), arg, scope),
-            Some(FormalAttributeType::Decimal { .. })
+            Some(FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. })
         )
     }
 
@@ -761,7 +821,7 @@ impl LoweringContext {
         args.iter().enumerate().any(|(index, arg)| {
             matches!(
                 self.direct_function_type(&format!("{path}[{index}]"), arg, scope),
-                Some(FormalAttributeType::Decimal { .. })
+                Some(FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. })
             )
         })
     }
@@ -855,21 +915,24 @@ impl LoweringContext {
             return None;
         }
         let result_ty = self.decimal_division_result_type(path, args, scope, annotated_ty)?;
-        let mut lowered_args = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| {
-                self.lower_aggregate_term(&format!("{path}.args[{index}]"), arg, scope)
-            })
-            .collect::<Option<Vec<_>>>()?;
+        let left_scale =
+            self.numeric_operand_dscale(&format!("{path}.leftScale"), &args[0], scope)?;
+        let right_scale =
+            self.numeric_operand_dscale(&format!("{path}.rightScale"), &args[1], scope)?;
+        let mut lowered_args = vec![
+            self.lower_aggregate_term(&format!("{path}.args[0]"), &args[0], scope)?,
+            z_constant_aggregate(left_scale),
+            self.lower_aggregate_term(&format!("{path}.args[1]"), &args[1], scope)?,
+            z_constant_aggregate(right_scale),
+        ];
         let symbol = if let Some(result_ty) = result_ty {
             let result_precision = decimal_type_precision(&result_ty)?;
             let result_scale = decimal_type_scale(&result_ty)?;
             lowered_args.push(z_constant_aggregate(result_precision));
             lowered_args.push(z_constant_aggregate(result_scale));
-            "divide_decimal_typmod"
+            "divide_numeric_typmod"
         } else {
-            "divide_decimal"
+            "divide_numeric"
         };
         Some(FormalAggregateTerm::Function {
             symbol: symbol.to_owned(),
@@ -893,21 +956,24 @@ impl LoweringContext {
             return None;
         }
         let result_ty = self.decimal_division_result_type(path, args, scope, annotated_ty)?;
-        let mut lowered_args = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| {
-                self.lower_function_term(&format!("{path}.args[{index}]"), arg, scope)
-            })
-            .collect::<Option<Vec<_>>>()?;
+        let left_scale =
+            self.numeric_operand_dscale(&format!("{path}.leftScale"), &args[0], scope)?;
+        let right_scale =
+            self.numeric_operand_dscale(&format!("{path}.rightScale"), &args[1], scope)?;
+        let mut lowered_args = vec![
+            self.lower_function_term(&format!("{path}.args[0]"), &args[0], scope)?,
+            z_constant_function(left_scale),
+            self.lower_function_term(&format!("{path}.args[1]"), &args[1], scope)?,
+            z_constant_function(right_scale),
+        ];
         let symbol = if let Some(result_ty) = result_ty {
             let result_precision = decimal_type_precision(&result_ty)?;
             let result_scale = decimal_type_scale(&result_ty)?;
             lowered_args.push(z_constant_function(result_precision));
             lowered_args.push(z_constant_function(result_scale));
-            "divide_decimal_typmod"
+            "divide_numeric_typmod"
         } else {
-            "divide_decimal"
+            "divide_numeric"
         };
         Some(FormalFunctionTerm::Function {
             symbol: symbol.to_owned(),
@@ -923,15 +989,15 @@ impl LoweringContext {
         target_ty: FormalAttributeType,
         scope: &Scope,
     ) -> Option<FormalAggregateTerm> {
-        let result_precision = decimal_type_precision(&target_ty)?;
-        let result_scale = decimal_type_scale(&target_ty)?;
+        self.validate_total_numeric_cast(path, arg, target_ty, scope)?;
+        let mut args = vec![self.lower_aggregate_term(path, arg, scope)?];
+        if let FormalAttributeType::Decimal { precision, scale } = target_ty {
+            args.push(z_constant_aggregate(precision));
+            args.push(z_constant_aggregate(scale));
+        }
         Some(FormalAggregateTerm::Function {
             symbol: function.to_owned(),
-            args: vec![
-                self.lower_aggregate_term(path, arg, scope)?,
-                z_constant_aggregate(result_precision),
-                z_constant_aggregate(result_scale),
-            ],
+            args,
         })
     }
 
@@ -943,16 +1009,88 @@ impl LoweringContext {
         target_ty: FormalAttributeType,
         scope: &Scope,
     ) -> Option<FormalFunctionTerm> {
-        let result_precision = decimal_type_precision(&target_ty)?;
-        let result_scale = decimal_type_scale(&target_ty)?;
+        self.validate_total_numeric_cast(path, arg, target_ty, scope)?;
+        let mut args = vec![self.lower_function_term(path, arg, scope)?];
+        if let FormalAttributeType::Decimal { precision, scale } = target_ty {
+            args.push(z_constant_function(precision));
+            args.push(z_constant_function(scale));
+        }
         Some(FormalFunctionTerm::Function {
             symbol: function.to_owned(),
-            args: vec![
-                self.lower_function_term(path, arg, scope)?,
-                z_constant_function(result_precision),
-                z_constant_function(result_scale),
-            ],
+            args,
         })
+    }
+
+    fn validate_total_numeric_cast(
+        &mut self,
+        path: &str,
+        arg: &ScalarAst,
+        target_ty: FormalAttributeType,
+        scope: &Scope,
+    ) -> Option<()> {
+        let FormalAttributeType::Decimal {
+            precision: target_precision,
+            scale: target_scale,
+        } = target_ty
+        else {
+            return Some(());
+        };
+        if let Some(raw) = typed_literal_raw(arg) {
+            if numeric_literal_fits_type(raw, target_ty) {
+                return Some(());
+            }
+            self.error(
+                path,
+                "numeric_cast_literal_overflow",
+                "The NUMERIC literal does not fit the target DECIMAL(p,s) typmod.",
+            );
+            return None;
+        }
+        let source_ty = self.infer_cast_operand_type(path, arg, scope)?;
+        if target_scale > target_precision {
+            self.error(
+                path,
+                "numeric_cast_runtime_error_not_modeled",
+                "Non-literal casts to DECIMAL(p,s) with s > p are conservatively rejected because totality requires fractional-magnitude constraints not represented by the type alone.",
+            );
+            return None;
+        }
+        let target_integral = target_precision - target_scale;
+        let is_total = match source_ty {
+            FormalAttributeType::Decimal {
+                precision: source_precision,
+                scale: source_scale,
+            } => {
+                if source_scale > source_precision {
+                    return self.reject_non_total_numeric_cast(path);
+                }
+                let source_integral = source_precision - source_scale;
+                let carry = u32::from(target_scale < source_scale);
+                target_integral >= source_integral.saturating_add(carry)
+            }
+            FormalAttributeType::Int32 => target_integral >= 10,
+            FormalAttributeType::Int64 => target_integral >= 19,
+            _ => false,
+        };
+        if is_total {
+            Some(())
+        } else {
+            self.error(
+                path,
+                "numeric_cast_runtime_error_not_modeled",
+                "This DECIMAL(p,s) cast can overflow for a valid input. FormalSQL has no runtime-error observation, so lowering it as SQL NULL would be unsound.",
+            );
+            None
+        }
+    }
+
+    fn reject_non_total_numeric_cast(&mut self, path: &str) -> Option<()> {
+        self.error(
+            path,
+            "numeric_cast_runtime_error_not_modeled",
+            "The source DECIMAL(p,s) has s > p, so type metadata alone cannot prove this cast total for every valid input.",
+        );
+        None
     }
 
     fn decimal_division_result_type(
@@ -976,6 +1114,69 @@ impl LoweringContext {
             return None;
         }
         Some(Some(result_ty))
+    }
+
+    pub(super) fn numeric_operand_dscale(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> Option<u32> {
+        fn infer(ast: &ScalarAst, scope: &Scope) -> Option<u32> {
+            match ast {
+                ScalarAst::InputRef { index } => match scope.attribute(*index)?.formal_ty {
+                    FormalAttributeType::Decimal { scale, .. } => Some(scale),
+                    FormalAttributeType::Z
+                    | FormalAttributeType::Int32
+                    | FormalAttributeType::Int64 => Some(0),
+                    _ => None,
+                },
+                ScalarAst::Literal { raw } => {
+                    super::emit::parse_decimal_literal(raw).map(|(_, scale)| scale)
+                }
+                ScalarAst::TypeAnnotation { expr, ty } => {
+                    if cast_arg(expr).is_some()
+                        && let Some(FormalAttributeType::Decimal { scale, .. }) =
+                            formal_type_from_annotation(ty)
+                    {
+                        return Some(scale);
+                    }
+                    if matches!(expr.as_ref(), ScalarAst::Literal { .. })
+                        && let Some(FormalAttributeType::Decimal { scale, .. }) =
+                            formal_type_from_annotation(ty)
+                    {
+                        return Some(scale);
+                    }
+                    infer(expr, scope)
+                }
+                ScalarAst::Call { op, args, .. } if args.len() == 2 => {
+                    let left = infer(&args[0], scope)?;
+                    let right = infer(&args[1], scope)?;
+                    match op {
+                        ScalarOp::Plus | ScalarOp::Minus => Some(left.max(right)),
+                        ScalarOp::Multiply => left.checked_add(right),
+                        _ => None,
+                    }
+                }
+                ScalarAst::Call {
+                    op: ScalarOp::Minus,
+                    args,
+                    ..
+                } if args.len() == 1 => infer(&args[0], scope),
+                _ => None,
+            }
+        }
+
+        if let Some(scale) = infer(ast, scope) {
+            Some(scale)
+        } else {
+            self.error(
+                path,
+                "numeric_display_scale_not_available",
+                "PostgreSQL scale-sensitive NUMERIC evaluation requires display scale derived from a column typmod, finite literal, explicit cast, or modeled arithmetic expression.",
+            );
+            None
+        }
     }
 
     pub(super) fn direct_function_type(
@@ -1005,36 +1206,24 @@ impl LoweringContext {
                     self.direct_function_type(&format!("{path}.leftType"), &args[0], scope)?;
                 let right_ty =
                     self.direct_function_type(&format!("{path}.rightType"), &args[1], scope)?;
-                decimal_binary_result_type(op, &left_ty, &right_ty)
+                if matches!(left_ty, FormalAttributeType::Numeric)
+                    || matches!(right_ty, FormalAttributeType::Numeric)
+                {
+                    Some(FormalAttributeType::Numeric)
+                } else {
+                    decimal_binary_result_type(op, &left_ty, &right_ty)
+                }
             }
             ScalarAst::Call {
-                op: ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide,
+                op: op @ (ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide),
                 args,
                 ..
-            } if args.len() == 2 => self.homogeneous_float_binary_type(path, args, scope),
+            } if args.len() == 2 => self.infer_arithmetic_type(path, op, args, scope),
             ScalarAst::Call {
-                op: ScalarOp::Divide,
+                op: op @ ScalarOp::Minus,
                 args,
                 ..
-            } if args.len() == 2 && self.decimal_binary_args(path, args, scope) => None,
-            ScalarAst::Call {
-                op: ScalarOp::Minus,
-                args,
-                ..
-            } if args.len() == 1 && self.decimal_unary_arg(path, &args[0], scope) => {
-                self.direct_function_type(&format!("{path}.argType"), &args[0], scope)
-            }
-            ScalarAst::Call {
-                op: ScalarOp::Minus,
-                args,
-                ..
-            } if args.len() == 1
-                && self
-                    .direct_function_type(&format!("{path}.argType"), &args[0], scope)
-                    .is_some_and(is_float_type) =>
-            {
-                self.direct_function_type(&format!("{path}.argType"), &args[0], scope)
-            }
+            } if args.len() == 1 => self.infer_arithmetic_type(path, op, args, scope),
             _ => None,
         }
     }
@@ -1045,7 +1234,7 @@ impl LoweringContext {
         args: &[ScalarAst],
         scope: &Scope,
     ) -> Option<FormalAggregateTerm> {
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             self.error(
                 path,
                 "case_arity_not_supported",
@@ -1300,31 +1489,30 @@ impl LoweringContext {
                         );
                         return None;
                     }
-                    if matches!(formal_ty, FormalAttributeType::Decimal { .. })
+                    if is_exact_numeric_type(formal_ty)
                         && !raw.eq_ignore_ascii_case("null")
-                        && super::emit::decimal_literal_for_type(raw, Some(&formal_ty)).is_none()
+                        && !numeric_literal_fits_type(raw, formal_ty)
                     {
                         self.error(
                             path,
-                            "decimal_literal_not_supported",
-                            "FormalSQL DECIMAL lowering supports PostgreSQL-style fixed-scale decimal literals only when coercion to DECIMAL(p,s) succeeds without precision overflow.",
+                            "numeric_literal_not_supported",
+                            "FormalSQL NUMERIC/DECIMAL lowering accepts finite decimal literals only; constrained values must also fit DECIMAL(p,s). NaN and infinities are rejected.",
                         );
                         return None;
                     }
                     if let FormalAttributeType::Timestamp { precision }
                     | FormalAttributeType::Timestamptz { precision } = formal_ty
-                    {
-                        if !super::emit::timestamp_literal_conforms_to_precision(
+                        && !super::emit::timestamp_literal_conforms_to_precision(
                             raw,
                             timestamp_precision(precision),
-                        ) {
-                            self.error(
-                                path,
-                                "timestamp_precision_not_supported",
-                                "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
-                            );
-                            return None;
-                        }
+                        )
+                    {
+                        self.error(
+                            path,
+                            "timestamp_precision_not_supported",
+                            "TIMESTAMP literal has more fractional precision than its annotated SQL precision.",
+                        );
+                        return None;
                     }
                     return Some(FormalFunctionTerm::Constant {
                         raw: raw.to_owned(),
@@ -1336,67 +1524,46 @@ impl LoweringContext {
                 {
                     self.validate_floating_expression_annotation(path, expr, formal_ty, scope)?;
                 }
-                if let Some(FormalAttributeType::Decimal { .. }) = formal_type_from_annotation(ty) {
-                    if let Some(args) = decimal_division_cast_args(expr)
-                        && args.len() == 2
-                        && self.decimal_binary_args(&format!("{path}.decimalArgs"), args, scope)
-                    {
-                        return self.lower_decimal_division_function_term(
+                if let Some(FormalAttributeType::Decimal { .. }) = formal_type_from_annotation(ty)
+                    && let Some(cast_arg) = cast_arg(expr)
+                {
+                    let target_ty = formal_type_from_annotation(ty).or_else(|| {
+                        self.error(
                             path,
-                            args,
-                            scope,
-                            explicit_decimal_annotation_type(ty),
+                            "cast_target_type_not_supported",
+                            "FormalSQL lowering cannot infer the target type of this explicit CAST.",
                         );
-                    }
-                    if let Some(cast_arg) = cast_arg(expr) {
-                        let target_ty = formal_type_from_annotation(ty).or_else(|| {
+                        None
+                    })?;
+                    let source_ty = self
+                        .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
+                        .or_else(|| {
                             self.error(
                                 path,
-                                "cast_target_type_not_supported",
-                                "FormalSQL lowering cannot infer the target type of this explicit CAST.",
+                                "cast_source_type_not_supported",
+                                "FormalSQL lowering cannot infer the source type of this explicit CAST.",
                             );
                             None
                         })?;
-                        let source_ty = self
-                            .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
-                            .or_else(|| {
-                                self.error(
-                                    path,
-                                    "cast_source_type_not_supported",
-                                    "FormalSQL lowering cannot infer the source type of this explicit CAST.",
-                                );
-                                None
-                            })?;
-                        if source_ty == target_ty {
-                            return self.lower_function_term(
-                                &format!("{path}.castArg"),
-                                cast_arg,
-                                scope,
-                            );
-                        }
-                        if let Some(function) = decimal_typmod_cast_function(&source_ty, &target_ty)
-                        {
-                            return self.lower_decimal_cast_function_term(
-                                &format!("{path}.castArg"),
-                                cast_arg,
-                                function,
-                                target_ty,
-                                scope,
-                            );
-                        }
+                    if source_ty == target_ty {
+                        return self.lower_function_term(
+                            &format!("{path}.castArg"),
+                            cast_arg,
+                            scope,
+                        );
+                    }
+                    if let Some(function) = decimal_typmod_cast_function(&source_ty, &target_ty) {
+                        return self.lower_decimal_cast_function_term(
+                            &format!("{path}.castArg"),
+                            cast_arg,
+                            function,
+                            target_ty,
+                            scope,
+                        );
                     }
                 }
-                if matches!(
-                    formal_type_from_annotation(ty),
-                    Some(FormalAttributeType::Decimal { .. })
-                ) {
-                    self.error(
-                        path,
-                        "decimal_expression_not_supported",
-                        "DECIMAL expression annotation is supported only for fixed-scale literals, no-op casts, or explicitly cast Decimal division.",
-                    );
-                    return None;
-                }
+                // Ignore inferred Rex typmods. Only an explicit ScalarOp::Cast above
+                // is allowed to round a PostgreSQL NUMERIC value to DECIMAL(p,s).
                 self.lower_function_term(path, expr, scope)
             }
             ScalarAst::Call { op, args, .. }
@@ -1405,9 +1572,9 @@ impl LoweringContext {
                     && self.decimal_binary_args(&format!("{path}.decimalArgs"), args, scope) =>
             {
                 let symbol = match op {
-                    ScalarOp::Plus => "plus_decimal",
-                    ScalarOp::Minus => "minus_decimal",
-                    ScalarOp::Multiply => "mult_decimal",
+                    ScalarOp::Plus => "plus_numeric",
+                    ScalarOp::Minus => "minus_numeric",
+                    ScalarOp::Multiply => "mult_numeric",
                     _ => unreachable!("decimal arithmetic guard checked"),
                 };
                 Some(FormalFunctionTerm::Function {
@@ -1455,6 +1622,46 @@ impl LoweringContext {
                     "FLOAT/DOUBLE arithmetic is lowered only when all operands have the same modeled floating type.",
                 );
                 None
+            }
+            ScalarAst::Call { op, args, .. }
+                if matches!(
+                    op,
+                    ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply | ScalarOp::Divide
+                ) && args.len() == 2
+                    && self
+                        .integral_binary_type(&format!("{path}.integerArgs"), args, scope)
+                        .is_some() =>
+            {
+                let ty = self.integral_binary_type(&format!("{path}.integerArgs"), args, scope)?;
+                Some(FormalFunctionTerm::Function {
+                    symbol: integer_binary_function_symbol(op, ty)?.to_owned(),
+                    args: args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            self.lower_function_term(&format!("{path}.args[{index}]"), arg, scope)
+                                .map(|term| annotate_function_literal_term(term, ty))
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                })
+            }
+            ScalarAst::Call {
+                op: ScalarOp::Minus,
+                args,
+                ..
+            } if args.len() == 1
+                && self
+                    .infer_function_type(&format!("{path}.argType"), &args[0], scope)
+                    .is_some_and(is_integral_type) =>
+            {
+                let ty = self.infer_function_type(&format!("{path}.argType"), &args[0], scope)?;
+                Some(FormalFunctionTerm::Function {
+                    symbol: integer_unary_minus_symbol(ty)?.to_owned(),
+                    args: vec![
+                        self.lower_function_term(&format!("{path}.arg"), &args[0], scope)
+                            .map(|term| annotate_function_literal_term(term, ty))?,
+                    ],
+                })
             }
             ScalarAst::Call {
                 op: ScalarOp::Minus,
@@ -1507,7 +1714,7 @@ impl LoweringContext {
                 ..
             } if args.len() == 1 && self.decimal_unary_arg(path, &args[0], scope) => {
                 Some(FormalFunctionTerm::Function {
-                    symbol: "opp_decimal".to_owned(),
+                    symbol: "opp_numeric".to_owned(),
                     args: vec![self.lower_function_term(
                         &format!("{path}.arg"),
                         &args[0],
@@ -1830,18 +2037,20 @@ impl LoweringContext {
                 if left_ty == FormalAttributeType::Z && right_ty == FormalAttributeType::Z {
                     return Some(FormalAttributeType::Z);
                 }
+                if is_integral_type(left_ty) && is_integral_type(right_ty) {
+                    return Some(integral_binary_result_type(left_ty, right_ty));
+                }
                 if is_float_type(left_ty) || is_float_type(right_ty) {
                     return (left_ty == right_ty && is_float_type(left_ty)).then_some(left_ty);
                 }
-                if matches!(
-                    (left_ty, right_ty),
-                    (
-                        FormalAttributeType::Decimal { .. },
-                        FormalAttributeType::Decimal { .. }
-                    )
-                ) {
+                if is_exact_numeric_type(left_ty) && is_exact_numeric_type(right_ty) {
                     if matches!(op, ScalarOp::Divide) {
                         return None;
+                    }
+                    if matches!(left_ty, FormalAttributeType::Numeric)
+                        || matches!(right_ty, FormalAttributeType::Numeric)
+                    {
+                        return Some(FormalAttributeType::Numeric);
                     }
                     return decimal_binary_result_type(op, &left_ty, &right_ty);
                 }
@@ -1875,7 +2084,7 @@ impl LoweringContext {
         args: &[ScalarAst],
         scope: &Scope,
     ) -> Option<FormalAttributeType> {
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return None;
         }
         let mut result_ty = None;
@@ -1897,7 +2106,7 @@ impl LoweringContext {
         )?
     }
 
-    fn infer_numeric_operand_type(
+    pub(super) fn infer_numeric_operand_type(
         &mut self,
         path: &str,
         ast: &ScalarAst,
@@ -1934,6 +2143,21 @@ impl LoweringContext {
                 ScalarAst::Literal { raw } => infer_literal_cast_source_type(raw),
                 _ => None,
             })
+    }
+
+    fn integral_binary_type(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+    ) -> Option<FormalAttributeType> {
+        let [left, right] = args else {
+            return None;
+        };
+        let left_ty = self.infer_numeric_operand_type(&format!("{path}.left"), left, scope)?;
+        let right_ty = self.infer_numeric_operand_type(&format!("{path}.right"), right, scope)?;
+        (is_integral_type(left_ty) && is_integral_type(right_ty))
+            .then_some(integral_binary_result_type(left_ty, right_ty))
     }
 }
 
@@ -2072,14 +2296,18 @@ fn type_annotation_is_decimal(ty: &str) -> bool {
 fn formal_type_from_annotation(ty: &str) -> Option<FormalAttributeType> {
     let head = type_annotation_head(ty)?;
     match head {
-        "INTEGER" | "INT" | "BIGINT" | "SMALLINT" | "TINYINT" => Some(FormalAttributeType::Z),
+        "INTEGER" | "INT" | "SMALLINT" | "TINYINT" => Some(FormalAttributeType::Int32),
+        "BIGINT" => Some(FormalAttributeType::Int64),
         "REAL" | "FLOAT4" => Some(FormalAttributeType::Float),
         "FLOAT" => float_type_from_precision(type_annotation_precision(ty)),
         "DOUBLE" | "FLOAT8" => Some(FormalAttributeType::Double),
-        "DECIMAL" | "NUMERIC" => {
-            let (precision, scale) = decimal_annotation_typmod(ty)?;
-            Some(FormalAttributeType::Decimal { precision, scale })
-        }
+        "DECIMAL" | "NUMERIC" => match decimal_annotation_typmod(ty) {
+            Some((precision, scale)) => Some(FormalAttributeType::Decimal { precision, scale }),
+            None if type_annotation_arg_strings(ty)?.is_empty() => {
+                Some(FormalAttributeType::Numeric)
+            }
+            None => None,
+        },
         "VARCHAR" | "CHAR" | "STRING" => Some(FormalAttributeType::String),
         "BOOLEAN" | "BOOL" => Some(FormalAttributeType::Bool),
         "DATE" => Some(FormalAttributeType::Date),
@@ -2105,14 +2333,14 @@ fn float_type_from_precision(precision: Option<u32>) -> Option<FormalAttributeTy
 
 fn decimal_type_scale(ty: &FormalAttributeType) -> Option<u32> {
     match ty {
-        FormalAttributeType::Decimal { scale, .. } => *scale,
+        FormalAttributeType::Decimal { scale, .. } => Some(*scale),
         _ => None,
     }
 }
 
 fn decimal_type_precision(ty: &FormalAttributeType) -> Option<u32> {
     match ty {
-        FormalAttributeType::Decimal { precision, .. } => *precision,
+        FormalAttributeType::Decimal { precision, .. } => Some(*precision),
         _ => None,
     }
 }
@@ -2130,21 +2358,14 @@ fn decimal_divisor_is_static_nonzero(ast: &ScalarAst) -> bool {
         }
         _ => return false,
     };
-    super::emit::decimal_literal_for_type(raw, Some(&ty))
-        .is_some_and(|(coeff, _, _)| coeff.parse::<i128>().is_ok_and(|value| value != 0))
-}
-
-fn explicit_decimal_annotation_type(ty: &str) -> Option<FormalAttributeType> {
-    if !type_annotation_is_decimal(ty) {
-        return None;
-    }
-    let formal_ty = formal_type_from_annotation(ty)?;
-    match formal_ty {
-        FormalAttributeType::Decimal {
-            precision: Some(_),
-            scale: Some(_),
-        } => Some(formal_ty),
-        _ => None,
+    match ty {
+        FormalAttributeType::Numeric => super::emit::parse_decimal_literal(raw)
+            .is_some_and(|(coeff, _)| coeff.parse::<i128>().is_ok_and(|value| value != 0)),
+        FormalAttributeType::Decimal { .. } => {
+            super::emit::decimal_literal_for_type(raw, Some(&ty))
+                .is_some_and(|(coeff, _, _)| coeff.parse::<i128>().is_ok_and(|value| value != 0))
+        }
+        _ => false,
     }
 }
 
@@ -2154,24 +2375,30 @@ fn decimal_typmod_cast_function(
 ) -> Option<&'static str> {
     match (source, target) {
         (
-            FormalAttributeType::Decimal { .. },
-            FormalAttributeType::Decimal {
-                precision: Some(_),
-                scale: Some(_),
-            },
-        ) => Some("cast_decimal_typmod"),
+            FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. },
+            FormalAttributeType::Numeric,
+        ) => Some("cast_numeric"),
+        (FormalAttributeType::Z, FormalAttributeType::Numeric) => Some("cast_z_to_numeric"),
+        (FormalAttributeType::Int32, FormalAttributeType::Numeric) => Some("cast_int32_to_numeric"),
+        (FormalAttributeType::Int64, FormalAttributeType::Numeric) => Some("cast_int64_to_numeric"),
         (
-            FormalAttributeType::Z,
-            FormalAttributeType::Decimal {
-                precision: Some(_),
-                scale: Some(_),
-            },
-        ) => Some("cast_z_to_decimal_typmod"),
+            FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. },
+            FormalAttributeType::Decimal { .. },
+        ) => Some("cast_numeric_typmod"),
+        (FormalAttributeType::Z, FormalAttributeType::Decimal { .. }) => {
+            Some("cast_z_to_numeric_typmod")
+        }
+        (FormalAttributeType::Int32, FormalAttributeType::Decimal { .. }) => {
+            Some("cast_int32_to_numeric_typmod")
+        }
+        (FormalAttributeType::Int64, FormalAttributeType::Decimal { .. }) => {
+            Some("cast_int64_to_numeric_typmod")
+        }
         _ => None,
     }
 }
 
-fn decimal_annotation_typmod(ty: &str) -> Option<(Option<u32>, Option<u32>)> {
+fn decimal_annotation_typmod(ty: &str) -> Option<(u32, u32)> {
     let args = type_annotation_arg_strings(ty)?;
     match args.as_slice() {
         [] => None,
@@ -2180,7 +2407,7 @@ fn decimal_annotation_typmod(ty: &str) -> Option<(Option<u32>, Option<u32>)> {
             if precision == 0 || precision > 1000 {
                 return None;
             }
-            Some((Some(precision), Some(0)))
+            Some((precision, 0))
         }
         [precision, scale] => {
             let precision = parse_decimal_typmod_part(precision)?;
@@ -2188,20 +2415,9 @@ fn decimal_annotation_typmod(ty: &str) -> Option<(Option<u32>, Option<u32>)> {
             if precision == 0 || precision > 1000 || scale > 1000 {
                 return None;
             }
-            Some((Some(precision), Some(scale)))
+            Some((precision, scale))
         }
         _ => None,
-    }
-}
-
-fn decimal_division_cast_args(expr: &ScalarAst) -> Option<&[ScalarAst]> {
-    match expr {
-        ScalarAst::Call {
-            op: ScalarOp::Divide,
-            args,
-            ..
-        } => Some(args),
-        other => cast_arg(other).and_then(decimal_division_cast_args),
     }
 }
 
@@ -2243,8 +2459,8 @@ fn decimal_binary_result_type(
         return None;
     }
     Some(FormalAttributeType::Decimal {
-        precision: Some(result_precision),
-        scale: Some(result_scale),
+        precision: result_precision,
+        scale: result_scale,
     })
 }
 
@@ -2254,9 +2470,22 @@ fn infer_untyped_integer_literal_type(raw: &str) -> Option<FormalAttributeType> 
         return None;
     }
     if raw.parse::<i64>().is_ok() {
-        return Some(FormalAttributeType::Z);
+        if raw.parse::<i32>().is_ok() {
+            return Some(FormalAttributeType::Int32);
+        }
+        return Some(FormalAttributeType::Int64);
     }
     None
+}
+
+fn integer_literal_fits_type(raw: &str, ty: FormalAttributeType) -> bool {
+    let raw = raw.trim();
+    match ty {
+        FormalAttributeType::Int32 => raw.parse::<i32>().is_ok(),
+        FormalAttributeType::Int64 => raw.parse::<i64>().is_ok(),
+        FormalAttributeType::Z => raw.parse::<i64>().is_ok(),
+        _ => false,
+    }
 }
 
 fn infer_literal_cast_source_type(raw: &str) -> Option<FormalAttributeType> {
@@ -2448,6 +2677,7 @@ fn interval_unit(ty: &str) -> Option<&'static str> {
 fn typed_literal_raw(ast: &ScalarAst) -> Option<&str> {
     match ast {
         ScalarAst::Literal { raw } => Some(raw),
+        ScalarAst::TypeAnnotation { expr, .. } => typed_literal_raw(expr),
         _ => None,
     }
 }
@@ -2610,14 +2840,54 @@ fn is_float_type(ty: FormalAttributeType) -> bool {
     matches!(ty, FormalAttributeType::Float | FormalAttributeType::Double)
 }
 
+fn is_integral_type(ty: FormalAttributeType) -> bool {
+    matches!(
+        ty,
+        FormalAttributeType::Z | FormalAttributeType::Int32 | FormalAttributeType::Int64
+    )
+}
+
+fn integral_binary_result_type(
+    left: FormalAttributeType,
+    right: FormalAttributeType,
+) -> FormalAttributeType {
+    match (left, right) {
+        (FormalAttributeType::Int64, _)
+        | (_, FormalAttributeType::Int64)
+        | (FormalAttributeType::Z, _)
+        | (_, FormalAttributeType::Z) => FormalAttributeType::Int64,
+        _ => FormalAttributeType::Int32,
+    }
+}
+
 fn is_numeric_type(ty: FormalAttributeType) -> bool {
     matches!(
         ty,
         FormalAttributeType::Z
+            | FormalAttributeType::Int32
+            | FormalAttributeType::Int64
             | FormalAttributeType::Float
             | FormalAttributeType::Double
+            | FormalAttributeType::Numeric
             | FormalAttributeType::Decimal { .. }
     )
+}
+
+pub(super) fn is_exact_numeric_type(ty: FormalAttributeType) -> bool {
+    matches!(
+        ty,
+        FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. }
+    )
+}
+
+fn numeric_literal_fits_type(raw: &str, ty: FormalAttributeType) -> bool {
+    match ty {
+        FormalAttributeType::Numeric => super::emit::parse_decimal_literal(raw).is_some(),
+        FormalAttributeType::Decimal { .. } => {
+            super::emit::decimal_literal_for_type(raw, Some(&ty)).is_some()
+        }
+        _ => false,
+    }
 }
 
 fn is_floating_comparison_mismatch(
@@ -2630,6 +2900,22 @@ fn is_floating_comparison_mismatch(
         (None, Some(right)) => is_float_type(right),
         _ => false,
     }
+}
+
+fn comparison_types_are_supported(
+    left: Option<FormalAttributeType>,
+    right: Option<FormalAttributeType>,
+) -> bool {
+    let (Some(left), Some(right)) = (left, right) else {
+        return true;
+    };
+    if left == right {
+        return true;
+    }
+    if is_integral_type(left) && is_integral_type(right) {
+        return true;
+    }
+    is_exact_numeric_type(left) && is_exact_numeric_type(right)
 }
 
 fn floating_function_symbol(op: &ScalarOp, ty: FormalAttributeType) -> Option<&'static str> {
@@ -2650,6 +2936,34 @@ fn floating_unary_minus_symbol(ty: FormalAttributeType) -> Option<&'static str> 
     match ty {
         FormalAttributeType::Float => Some("opp."),
         FormalAttributeType::Double => Some("opp_double"),
+        _ => None,
+    }
+}
+
+fn integer_binary_function_symbol(op: &ScalarOp, ty: FormalAttributeType) -> Option<&'static str> {
+    match (op, ty) {
+        (ScalarOp::Plus, FormalAttributeType::Int32) => Some("plus_int32"),
+        (ScalarOp::Minus, FormalAttributeType::Int32) => Some("minus_int32"),
+        (ScalarOp::Multiply, FormalAttributeType::Int32) => Some("mult_int32"),
+        (ScalarOp::Divide, FormalAttributeType::Int32) => Some("divide_int32"),
+        (ScalarOp::Plus, FormalAttributeType::Int64 | FormalAttributeType::Z) => Some("plus_int64"),
+        (ScalarOp::Minus, FormalAttributeType::Int64 | FormalAttributeType::Z) => {
+            Some("minus_int64")
+        }
+        (ScalarOp::Multiply, FormalAttributeType::Int64 | FormalAttributeType::Z) => {
+            Some("mult_int64")
+        }
+        (ScalarOp::Divide, FormalAttributeType::Int64 | FormalAttributeType::Z) => {
+            Some("divide_int64")
+        }
+        _ => None,
+    }
+}
+
+fn integer_unary_minus_symbol(ty: FormalAttributeType) -> Option<&'static str> {
+    match ty {
+        FormalAttributeType::Int32 => Some("opp_int32"),
+        FormalAttributeType::Int64 | FormalAttributeType::Z => Some("opp_int64"),
         _ => None,
     }
 }
@@ -2694,15 +3008,22 @@ pub(super) fn aggregate_function_name_for_type(
 ) -> Option<String> {
     let name = function.to_ascii_lowercase();
     match (name.as_str(), arg_ty) {
+        ("sum", Some(FormalAttributeType::Int32)) => Some("sum_int32".to_owned()),
+        ("sum", Some(FormalAttributeType::Int64)) => Some("sum_int64_numeric".to_owned()),
+        ("avg", Some(FormalAttributeType::Int32)) => Some("avg_int32_numeric".to_owned()),
+        ("avg", Some(FormalAttributeType::Int64)) => Some("avg_int64_numeric".to_owned()),
+        ("max" | "min", Some(FormalAttributeType::Int32)) => Some(format!("{name}_int32")),
+        ("max" | "min", Some(FormalAttributeType::Int64)) => Some(format!("{name}_int64")),
         ("sum" | "max" | "min" | "avg", Some(FormalAttributeType::Float)) => {
             Some(format!("{name}."))
         }
         ("sum" | "max" | "min" | "avg", Some(FormalAttributeType::Double)) => {
             Some(format!("{name}_double"))
         }
-        ("max" | "min", Some(FormalAttributeType::Decimal { .. })) => {
-            Some(format!("{name}_decimal"))
-        }
+        (
+            "sum" | "max" | "min" | "avg",
+            Some(FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. }),
+        ) => Some(format!("{name}_numeric")),
         _ => Some(name),
     }
 }
@@ -2724,6 +3045,18 @@ pub(super) fn annotate_literal_term(
         } => FormalAggregateTerm::Expr {
             term: FormalFunctionTerm::Constant { raw, ty: Some(ty) },
         },
+        other => other,
+    }
+}
+
+pub(super) fn annotate_function_literal_term(
+    term: FormalFunctionTerm,
+    ty: FormalAttributeType,
+) -> FormalFunctionTerm {
+    match term {
+        FormalFunctionTerm::Constant { raw, ty: None } => {
+            FormalFunctionTerm::Constant { raw, ty: Some(ty) }
+        }
         other => other,
     }
 }

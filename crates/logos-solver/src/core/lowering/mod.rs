@@ -342,15 +342,15 @@ impl LoweringContext {
     ) -> Option<FormalAttributeType> {
         match &column.ty {
             SqlType::Decimal { precision, scale } => {
-                if precision.is_none() || scale.is_none() {
+                if precision.is_none() != scale.is_none() {
                     self.error(
                         path,
-                        "unconstrained_numeric_not_supported",
-                        "PostgreSQL unconstrained NUMERIC/DECIMAL is not encoded as fixed DECIMAL(p,s) in FormalSQL.",
+                        "incomplete_numeric_typmod",
+                        "NUMERIC/DECIMAL must either omit both typmod fields or provide both precision and scale.",
                     );
                     return None;
                 }
-                if !decimal_typmod_is_supported(*precision, *scale) {
+                if precision.is_some() && !decimal_typmod_is_supported(*precision, *scale) {
                     self.error(
                         path,
                         "decimal_typmod_not_supported",
@@ -386,7 +386,7 @@ impl LoweringContext {
             "unresolved_null_defaulted_to_integer",
             "Unresolved NULL output type is defaulted to INTEGER as a fallback. This is sound only when the NULL-producing relation is semantically empty or otherwise unobservable; ordinary observable NULLs should be resolved to a concrete SQL type before lowering.",
         );
-        FormalAttributeType::Z
+        FormalAttributeType::Int32
     }
 
     fn correlated_attribute(
@@ -489,13 +489,24 @@ impl Scope {
 
 fn sql_type_to_formal_attribute_type(ty: &SqlType) -> FormalAttributeType {
     match ty {
-        SqlType::Integer | SqlType::BigInt => FormalAttributeType::Z,
+        SqlType::Integer => FormalAttributeType::Int32,
+        SqlType::BigInt => FormalAttributeType::Int64,
         SqlType::Float => FormalAttributeType::Float,
         SqlType::Double => FormalAttributeType::Double,
-        SqlType::Decimal { precision, scale } => FormalAttributeType::Decimal {
+        SqlType::Decimal {
+            precision: None,
+            scale: None,
+        } => FormalAttributeType::Numeric,
+        SqlType::Decimal {
+            precision: Some(precision),
+            scale: Some(scale),
+        } => FormalAttributeType::Decimal {
             precision: *precision,
             scale: *scale,
         },
+        SqlType::Decimal { .. } => {
+            unreachable!("incomplete NUMERIC typmod reached FormalAttributeType conversion")
+        }
         SqlType::Varchar => FormalAttributeType::String,
         SqlType::Date => FormalAttributeType::Date,
         SqlType::Time => FormalAttributeType::Time,

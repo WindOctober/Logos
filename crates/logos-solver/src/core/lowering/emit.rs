@@ -88,8 +88,7 @@ pub(super) fn can_emit_bag_bridge_proof(
 }
 
 pub(super) fn emit_rocq_bag_bridge_proof_module() -> FormalProofModule {
-    let rocq_module = format!(
-        "\
+    let rocq_module = "\
 From SQLFS Require Import SqlSyntax GenericInstance Values SqlAlgebra SqlListAlgebra SqlListFacts FiniteBag FiniteSet Bool3.
 From Logos Require Import FormalSQL.OccFacts FormalSQL.PiFacts FormalSQL.RewriteSpec.
 From LogosGenerated Require Import Schema Queries.
@@ -152,13 +151,12 @@ Check source_list_query.
 Check target_list_query.
 Check generated_equivalence_input.
 "
-    );
+    .to_owned();
     FormalProofModule { rocq_module }
 }
 
 pub(super) fn emit_rocq_list_proof_module() -> FormalProofModule {
-    let rocq_module = format!(
-        "\
+    let rocq_module = "\
 From SQLFS Require Import SqlSyntax GenericInstance Values SqlAlgebra SqlListAlgebra SqlListFacts FiniteBag FiniteSet Bool3.
 From Logos Require Import FormalSQL.OccFacts FormalSQL.PiFacts FormalSQL.RewriteSpec.
 From LogosGenerated Require Import Schema Queries.
@@ -206,7 +204,7 @@ Check source_list_query.
 Check target_list_query.
 Check generated_equivalence_input.
 "
-    );
+    .to_owned();
     FormalProofModule { rocq_module }
 }
 
@@ -353,14 +351,13 @@ impl RocqQueryDefinitions {
     }
 
     fn emit_query(&self, query: &FormalQuery, allow_query_refs: bool) -> String {
-        if allow_query_refs {
-            if let Some(index) = self
+        if allow_query_refs
+            && let Some(index) = self
                 .shared_queries
                 .iter()
                 .position(|candidate| candidate == query)
-            {
-                return format!("shared_query_{index}");
-            }
+        {
+            return format!("shared_query_{index}");
         }
 
         match query {
@@ -571,10 +568,13 @@ fn emit_rocq_sort_key_constructor(
 fn column_ref_constructor(attribute_ty: FormalAttributeType) -> &'static str {
     match attribute_ty {
         FormalAttributeType::Z => "ZColumn",
+        FormalAttributeType::Int32 => "Int32Column",
+        FormalAttributeType::Int64 => "Int64Column",
         FormalAttributeType::String => "StringColumn",
         FormalAttributeType::Bool => "BoolColumn",
         FormalAttributeType::Float => "FloatColumn",
         FormalAttributeType::Double => "DoubleColumn",
+        FormalAttributeType::Numeric => "NumericColumn",
         FormalAttributeType::Decimal { .. } => "DecimalColumn",
         FormalAttributeType::Date => "DateColumn",
         FormalAttributeType::Time => "TimeColumn",
@@ -601,12 +601,11 @@ fn emit_rocq_select_item(item: &FormalSelectItem) -> String {
     if let FormalAggregateTerm::Expr {
         term: FormalFunctionTerm::Attribute { name, ty },
     } = &item.expr
+        && name == &item.alias
+        && attribute_types_emit_equivalent(*ty, item.alias_ty)
+        && let Some(select_constructor) = identity_select_constructor(*ty)
     {
-        if name == &item.alias && attribute_types_emit_equivalent(*ty, item.alias_ty) {
-            if let Some(select_constructor) = identity_select_constructor(*ty) {
-                return emit_rocq_named_helper(select_constructor, name, *ty);
-            }
-        }
+        return emit_rocq_named_helper(select_constructor, name, *ty);
     }
     format!(
         "SelectAs ({}) ({})",
@@ -736,10 +735,13 @@ fn emit_rocq_call(function: &str, args: &[String]) -> String {
 fn emit_rocq_attribute(ty: FormalAttributeType, name: &str) -> String {
     let helper = match ty {
         FormalAttributeType::Z => "AttrZ",
+        FormalAttributeType::Int32 => "AttrInt32",
+        FormalAttributeType::Int64 => "AttrInt64",
         FormalAttributeType::String => "AttrString",
         FormalAttributeType::Bool => "AttrBool",
         FormalAttributeType::Float => "AttrFloat",
         FormalAttributeType::Double => "AttrDouble",
+        FormalAttributeType::Numeric => "AttrNumeric",
         FormalAttributeType::Decimal { .. } => "AttrDecimal",
         FormalAttributeType::Date => "AttrDate",
         FormalAttributeType::Time => "AttrTime",
@@ -760,12 +762,14 @@ fn emit_rocq_query_attribute_list(attributes: &[FormalAttribute]) -> String {
 fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
     match ty {
         FormalAttributeType::Z => format!("Attr_Z {}", rocq_string_literal(name)),
+        FormalAttributeType::Int32 => format!("Attr_int32 {}", rocq_string_literal(name)),
+        FormalAttributeType::Int64 => format!("Attr_int64 {}", rocq_string_literal(name)),
         FormalAttributeType::String => format!("Attr_string {}", rocq_string_literal(name)),
         FormalAttributeType::Bool => format!("Attr_bool {}", rocq_string_literal(name)),
         FormalAttributeType::Float => format!("Attr_float {}", rocq_string_literal(name)),
         FormalAttributeType::Double => format!("Attr_double {}", rocq_string_literal(name)),
+        FormalAttributeType::Numeric => format!("Attr_numeric {}", rocq_string_literal(name)),
         FormalAttributeType::Decimal { precision, scale } => {
-            let (precision, scale) = checked_decimal_typmod(precision, scale);
             format!(
                 "Attr_decimal {} {precision} {scale}",
                 rocq_string_literal(name)
@@ -789,7 +793,6 @@ fn emit_rocq_schema_attribute(ty: FormalAttributeType, name: &str) -> String {
 fn emit_rocq_named_helper(helper: &str, name: &str, ty: FormalAttributeType) -> String {
     match ty {
         FormalAttributeType::Decimal { precision, scale } => {
-            let (precision, scale) = checked_decimal_typmod(precision, scale);
             format!("{helper} {} {precision} {scale}", rocq_string_literal(name))
         }
         FormalAttributeType::Timestamp { precision }
@@ -804,20 +807,16 @@ fn emit_rocq_named_helper(helper: &str, name: &str, ty: FormalAttributeType) -> 
     }
 }
 
-fn checked_decimal_typmod(precision: Option<u32>, scale: Option<u32>) -> (u32, u32) {
-    match (precision, scale) {
-        (Some(precision), Some(scale)) => (precision, scale),
-        _ => panic!("unchecked DECIMAL typmod reached Rocq emitter"),
-    }
-}
-
 fn identity_select_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
     match attribute_ty {
         FormalAttributeType::Z => Some("SelectZ"),
+        FormalAttributeType::Int32 => Some("SelectInt32"),
+        FormalAttributeType::Int64 => Some("SelectInt64"),
         FormalAttributeType::String => Some("SelectString"),
         FormalAttributeType::Bool => Some("SelectBool"),
         FormalAttributeType::Float => Some("SelectFloat"),
         FormalAttributeType::Double => Some("SelectDouble"),
+        FormalAttributeType::Numeric => Some("SelectNumeric"),
         FormalAttributeType::Decimal { .. } => Some("SelectDecimal"),
         FormalAttributeType::Date => Some("SelectDate"),
         FormalAttributeType::Time => Some("SelectTime"),
@@ -860,10 +859,13 @@ fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
 fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
     match attribute_ty {
         FormalAttributeType::Z => Some("DotZ"),
+        FormalAttributeType::Int32 => Some("DotInt32"),
+        FormalAttributeType::Int64 => Some("DotInt64"),
         FormalAttributeType::String => Some("DotString"),
         FormalAttributeType::Bool => Some("DotBool"),
         FormalAttributeType::Float => Some("DotFloat"),
         FormalAttributeType::Double => Some("DotDouble"),
+        FormalAttributeType::Numeric => Some("DotNumeric"),
         FormalAttributeType::Decimal { .. } => Some("DotDecimal"),
         FormalAttributeType::Date => Some("DotDate"),
         FormalAttributeType::Time => Some("DotTime"),
@@ -877,10 +879,13 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
     if trimmed.eq_ignore_ascii_case("null") {
         return match ty {
             Some(FormalAttributeType::Z) => "NullZ".to_owned(),
+            Some(FormalAttributeType::Int32) => "NullInt32".to_owned(),
+            Some(FormalAttributeType::Int64) => "NullInt64".to_owned(),
             Some(FormalAttributeType::String) | None => "NullString".to_owned(),
             Some(FormalAttributeType::Bool) => "NullBool".to_owned(),
             Some(FormalAttributeType::Float) => "NullFloat".to_owned(),
             Some(FormalAttributeType::Double) => "NullDouble".to_owned(),
+            Some(FormalAttributeType::Numeric) => "NullNumeric".to_owned(),
             Some(FormalAttributeType::Decimal { .. }) => "NullDecimal".to_owned(),
             Some(FormalAttributeType::Date) => "NullDate".to_owned(),
             Some(FormalAttributeType::Time) => "NullTime".to_owned(),
@@ -901,31 +906,43 @@ fn emit_rocq_constant_aggregate(raw: &str, ty: Option<FormalAttributeType>) -> S
             _ => unreachable!("float_literal_bits_for_type only accepts FLOAT/DOUBLE"),
         };
     }
-    if matches!(ty, Some(FormalAttributeType::Date)) {
-        if let Some(days) = parse_date_literal(trimmed) {
-            return format!("CstDate ({days})");
-        }
+    if matches!(ty, Some(FormalAttributeType::Date))
+        && let Some(days) = parse_date_literal(trimmed)
+    {
+        return format!("CstDate ({days})");
     }
-    if matches!(ty, Some(FormalAttributeType::Time)) {
-        if let Some(micros) = parse_time_literal(trimmed) {
-            return format!("CstTime ({micros})");
-        }
+    if matches!(ty, Some(FormalAttributeType::Time))
+        && let Some(micros) = parse_time_literal(trimmed)
+    {
+        return format!("CstTime ({micros})");
     }
-    if let Some(FormalAttributeType::Timestamp { precision }) = ty {
-        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
-            return format!("CstTimestamp ({micros})");
-        }
+    if let Some(FormalAttributeType::Timestamp { precision }) = ty
+        && let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision))
+    {
+        return format!("CstTimestamp ({micros})");
     }
-    if let Some(FormalAttributeType::Timestamptz { precision }) = ty {
-        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
-            return format!("CstTimestamptz ({micros})");
+    if let Some(FormalAttributeType::Timestamptz { precision }) = ty
+        && let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision))
+    {
+        return format!("CstTimestamptz ({micros})");
+    }
+    if matches!(ty, Some(FormalAttributeType::Numeric)) {
+        if let Some((coeff, scale)) = parse_decimal_literal(trimmed) {
+            return format!("CstNumeric ({coeff}) ({scale})");
         }
+        panic!("unsupported NUMERIC aggregate literal reached Rocq emitter: {trimmed}");
     }
     if matches!(ty, Some(FormalAttributeType::Decimal { .. })) {
         if let Some((coeff, precision, scale)) = decimal_literal_for_type(trimmed, ty.as_ref()) {
             return format!("CstDecimal ({precision}) ({scale}) ({coeff})");
         }
         panic!("unsupported DECIMAL aggregate literal reached Rocq emitter: {trimmed}");
+    }
+    if matches!(ty, Some(FormalAttributeType::Int32)) && is_integer_literal(trimmed) {
+        return format!("CstInt32 ({trimmed})");
+    }
+    if matches!(ty, Some(FormalAttributeType::Int64)) && is_integer_literal(trimmed) {
+        return format!("CstInt64 ({trimmed})");
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("CstString {}", rocq_string_literal(&unquoted));
@@ -945,11 +962,15 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
     if trimmed.eq_ignore_ascii_case("null") {
         return match ty {
             Some(FormalAttributeType::Z) => "Value_Z None".to_owned(),
+            Some(FormalAttributeType::Int32) => "Value_int32 None".to_owned(),
+            Some(FormalAttributeType::Int64) => "Value_int64 None".to_owned(),
             Some(FormalAttributeType::String) | None => "Value_string None".to_owned(),
             Some(FormalAttributeType::Bool) => "Value_bool None".to_owned(),
             Some(FormalAttributeType::Float) => "Value_float None".to_owned(),
             Some(FormalAttributeType::Double) => "Value_double None".to_owned(),
-            Some(FormalAttributeType::Decimal { .. }) => "Value_decimal None".to_owned(),
+            Some(FormalAttributeType::Numeric | FormalAttributeType::Decimal { .. }) => {
+                "Value_numeric None".to_owned()
+            }
             Some(FormalAttributeType::Date) => "Value_date None".to_owned(),
             Some(FormalAttributeType::Time) => "Value_time None".to_owned(),
             Some(FormalAttributeType::Timestamp { .. }) => "Value_timestamp None".to_owned(),
@@ -973,31 +994,45 @@ fn emit_rocq_value(raw: &str, ty: Option<FormalAttributeType>) -> String {
             _ => unreachable!("float_literal_bits_for_type only accepts FLOAT/DOUBLE"),
         };
     }
-    if matches!(ty, Some(FormalAttributeType::Date)) {
-        if let Some(days) = parse_date_literal(trimmed) {
-            return format!("Value_date (Some ({days})%Z)");
-        }
+    if matches!(ty, Some(FormalAttributeType::Date))
+        && let Some(days) = parse_date_literal(trimmed)
+    {
+        return format!("Value_date (Some ({days})%Z)");
     }
-    if matches!(ty, Some(FormalAttributeType::Time)) {
-        if let Some(micros) = parse_time_literal(trimmed) {
-            return format!("Value_time (Some ({micros})%Z)");
-        }
+    if matches!(ty, Some(FormalAttributeType::Time))
+        && let Some(micros) = parse_time_literal(trimmed)
+    {
+        return format!("Value_time (Some ({micros})%Z)");
     }
-    if let Some(FormalAttributeType::Timestamp { precision }) = ty {
-        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
-            return format!("Value_timestamp (Some ({micros})%Z)");
-        }
+    if let Some(FormalAttributeType::Timestamp { precision }) = ty
+        && let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision))
+    {
+        return format!("Value_timestamp (Some ({micros})%Z)");
     }
-    if let Some(FormalAttributeType::Timestamptz { precision }) = ty {
-        if let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision)) {
-            return format!("Value_timestamptz (Some ({micros})%Z)");
+    if let Some(FormalAttributeType::Timestamptz { precision }) = ty
+        && let Some(micros) = parse_timestamp_literal(trimmed, timestamp_precision(precision))
+    {
+        return format!("Value_timestamptz (Some ({micros})%Z)");
+    }
+    if matches!(ty, Some(FormalAttributeType::Numeric)) {
+        if let Some((coeff, scale)) = parse_decimal_literal(trimmed) {
+            return format!("Value_numeric (Some (numeric_of_scaled ({coeff}) ({scale})))");
         }
+        panic!("unsupported NUMERIC value literal reached Rocq emitter: {trimmed}");
     }
     if matches!(ty, Some(FormalAttributeType::Decimal { .. })) {
         if let Some((coeff, precision, scale)) = decimal_literal_for_type(trimmed, ty.as_ref()) {
-            return format!("Value_decimal (decimal_checked ({precision}) ({scale}) ({coeff}))");
+            return format!(
+                "Value_numeric (numeric_of_scaled_with_typmod ({precision}) ({scale}) ({coeff}))"
+            );
         }
         panic!("unsupported DECIMAL value literal reached Rocq emitter: {trimmed}");
+    }
+    if matches!(ty, Some(FormalAttributeType::Int32)) && is_integer_literal(trimmed) {
+        return format!("Value_int32 (int32_checked ({trimmed})%Z)");
+    }
+    if matches!(ty, Some(FormalAttributeType::Int64)) && is_integer_literal(trimmed) {
+        return format!("Value_int64 (int64_checked ({trimmed})%Z)");
     }
     if let Some(unquoted) = sql_string_literal_content(trimmed) {
         return format!("Value_string (Some {})", rocq_string_literal(&unquoted));
@@ -1113,9 +1148,8 @@ pub(super) fn decimal_literal_for_type(
 ) -> Option<(String, u32, u32)> {
     let (coeff, literal_scale) = parse_decimal_literal(raw)?;
     let Some(FormalAttributeType::Decimal {
-        precision: Some(precision),
-        scale: Some(target_scale),
-        ..
+        precision,
+        scale: target_scale,
     }) = ty
     else {
         return None;
@@ -1302,11 +1336,11 @@ fn split_timestamp_offset(value: &str) -> Option<(&str, Option<i64>)> {
         return Some((timestamp.trim_end(), Some(0)));
     }
     let search_start = value
-        .find(|ch| ch == ' ' || ch == 'T')
+        .find([' ', 'T'])
         .map(|index| index + 1)
         .unwrap_or(value.len());
     let offset_start = value[search_start..]
-        .rfind(|ch| ch == '+' || ch == '-')
+        .rfind(['+', '-'])
         .map(|index| search_start + index);
     match offset_start {
         Some(index) => {

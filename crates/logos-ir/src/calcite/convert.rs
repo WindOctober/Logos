@@ -18,9 +18,9 @@ use crate::calcite::{
 use crate::error::{Error, Result};
 use crate::ir::{
     AggregateCall, AggregateModifiers, Column, CorrelationBinding, Feature, JoinType, LogosIrFile,
-    Query, RelExpr, SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, Schema,
-    SetOp, SortDirection, SortKey, SortNullDirection, SqlType, Table, ValuesTuples, WindowAst,
-    WindowOrderKey,
+    Query, RelExpr, SargAst, SargBound, SargItem, ScalarAst, ScalarClass, ScalarExpr, ScalarOp,
+    Schema, SetOp, SortDirection, SortKey, SortNullDirection, SqlType, Table, ValuesTuples,
+    WindowAst, WindowOrderKey,
 };
 
 pub fn convert_file(path: impl AsRef<Path>) -> Result<LogosIrFile> {
@@ -460,13 +460,10 @@ fn calcite_rex_ast(
     schema_index: &SchemaColumnIndex,
 ) -> Result<ScalarAst> {
     if is_rex_subquery(rex) {
-        let subquery_rel = rex
-            .subquery_rel
-            .as_ref()
-            .ok_or_else(|| Error::MissingField {
-                node: "RexSubQuery",
-                field: "subqueryRel",
-            })?;
+        let subquery_rel = rex.subquery_rel.as_ref().ok_or(Error::MissingField {
+            node: "RexSubQuery",
+            field: "subqueryRel",
+        })?;
         let operator = rex
             .operator
             .clone()
@@ -507,13 +504,13 @@ fn calcite_rex_ast(
             .collect::<Result<Vec<_>>>()?;
         let op = classify_scalar_op(&operator);
         let call = ScalarAst::Call { operator, op, args };
-        if is_cast_kind(rex) {
-            if let Some(ty) = rex_type_annotation(rex) {
-                return Ok(ScalarAst::TypeAnnotation {
-                    expr: Box::new(call),
-                    ty,
-                });
-            }
+        if is_cast_kind(rex)
+            && let Some(ty) = rex_type_annotation(rex)
+        {
+            return Ok(ScalarAst::TypeAnnotation {
+                expr: Box::new(call),
+                ty,
+            });
         }
         return Ok(call);
     }
@@ -521,13 +518,10 @@ fn calcite_rex_ast(
 }
 
 fn calcite_rex_field_access_ast(rex: &CalciteRex) -> Result<ScalarAst> {
-    let reference = rex
-        .reference_expr
-        .as_ref()
-        .ok_or_else(|| Error::MissingField {
-            node: "RexFieldAccess",
-            field: "referenceExpr",
-        })?;
+    let reference = rex.reference_expr.as_ref().ok_or(Error::MissingField {
+        node: "RexFieldAccess",
+        field: "referenceExpr",
+    })?;
     if !is_rex_correl_variable(reference) {
         return Err(Error::InvalidScalar(format!(
             "unsupported RexFieldAccess reference: {}",
@@ -538,11 +532,11 @@ fn calcite_rex_field_access_ast(rex: &CalciteRex) -> Result<ScalarAst> {
         .correlation_name
         .clone()
         .or_else(|| reference.text.clone())
-        .ok_or_else(|| Error::MissingField {
+        .ok_or(Error::MissingField {
             node: "RexCorrelVariable",
             field: "correlationName",
         })?;
-    let field = rex.field_name.clone().ok_or_else(|| Error::MissingField {
+    let field = rex.field_name.clone().ok_or(Error::MissingField {
         node: "RexFieldAccess",
         field: "fieldName",
     })?;
@@ -551,7 +545,7 @@ fn calcite_rex_field_access_ast(rex: &CalciteRex) -> Result<ScalarAst> {
         .as_deref()
         .map(|ty| parse_sql_type_with_typmod(ty, rex.precision, rex.scale))
         .transpose()?
-        .ok_or_else(|| Error::MissingField {
+        .ok_or(Error::MissingField {
             node: "RexFieldAccess",
             field: "type",
         })?;
@@ -608,13 +602,13 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
                     ty,
                 });
             }
-            if let Some(raw) = timestamp_literal_text(rex) {
-                if is_null_literal(&raw) || timestamp_literal_has_explicit_offset(&raw) {
-                    return Ok(ScalarAst::TypeAnnotation {
-                        expr: Box::new(ScalarAst::Literal { raw }),
-                        ty,
-                    });
-                }
+            if let Some(raw) = timestamp_literal_text(rex)
+                && (is_null_literal(&raw) || timestamp_literal_has_explicit_offset(&raw))
+            {
+                return Ok(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal { raw }),
+                    ty,
+                });
             }
             return Err(Error::InvalidScalar(format!(
                 "TIMESTAMP WITH TIME ZONE literal requires source SQL or an explicit literal offset because Calcite Rex may not preserve the original time-zone semantics: {}",
@@ -649,37 +643,43 @@ fn calcite_rex_literal_ast(rex: &CalciteRex) -> Result<ScalarAst> {
             }
         }
         if type_annotation_head(&ty).is_some_and(|head| matches!(head, "DECIMAL" | "NUMERIC"))
-            && let Some((raw, source_ty)) = decimal_literal_from_source_cast(rex)
+            && let Some((raw, target_ty)) = decimal_literal_from_source_cast(rex)
         {
             return Ok(ScalarAst::TypeAnnotation {
-                expr: Box::new(ScalarAst::Literal { raw }),
-                ty: source_ty,
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal { raw }),
+                        ty: "NUMERIC".to_owned(),
+                    }],
+                }),
+                ty: target_ty,
             });
         }
     }
-    if is_character_type(rex) {
-        if let Some(value) = rex
+    if is_character_type(rex)
+        && let Some(value) = rex
             .literal_value_as_string
             .as_deref()
             .or(rex.literal_value2.as_deref())
-        {
-            return Ok(ScalarAst::Literal {
-                raw: sql_string_literal(value),
-            });
-        }
+    {
+        return Ok(ScalarAst::Literal {
+            raw: sql_string_literal(value),
+        });
     }
-    if let Some(ty) = rex_type_annotation(rex) {
-        if let Some(raw) = structured_literal_value(rex) {
-            return Ok(ScalarAst::TypeAnnotation {
-                expr: Box::new(ScalarAst::Literal { raw }),
-                ty,
-            });
-        }
+    if let Some(ty) = rex_type_annotation(rex)
+        && let Some(raw) = structured_literal_value(rex)
+    {
+        return Ok(ScalarAst::TypeAnnotation {
+            expr: Box::new(ScalarAst::Literal { raw }),
+            ty,
+        });
     }
-    if let Some(text) = &rex.text {
-        if let Ok(ast) = parse_calcite_scalar_ast(text) {
-            return Ok(ast);
-        }
+    if let Some(text) = &rex.text
+        && let Ok(ast) = parse_calcite_scalar_ast(text)
+    {
+        return Ok(ast);
     }
     Ok(ScalarAst::Literal {
         raw: rex.text.clone().unwrap_or_else(|| {
@@ -935,23 +935,21 @@ fn rex_type_annotation(rex: &CalciteRex) -> Option<String> {
     }
     let ty = rex.ty.as_deref()?.trim();
     let normalized = normalize_type_annotation(ty)?;
-    if normalized == "FLOAT" {
-        if let Some(precision) = rex
+    if normalized == "FLOAT"
+        && let Some(precision) = rex
             .precision
             .and_then(|precision| u32::try_from(precision).ok())
             .or_else(|| parse_type_precision(ty))
-        {
-            return Some(format!("FLOAT({precision})"));
-        }
+    {
+        return Some(format!("FLOAT({precision})"));
     }
-    if normalized == "TIMESTAMP" || normalized == "TIMESTAMP_WITH_TIME_ZONE" {
-        if let Some(precision) = rex
+    if (normalized == "TIMESTAMP" || normalized == "TIMESTAMP_WITH_TIME_ZONE")
+        && let Some(precision) = rex
             .precision
             .and_then(|precision| u32::try_from(precision).ok())
             .or_else(|| parse_type_precision(ty))
-        {
-            return Some(format!("{normalized}({precision})"));
-        }
+    {
+        return Some(format!("{normalized}({precision})"));
     }
     if normalized == "DECIMAL" {
         let precision = rex
@@ -1093,20 +1091,20 @@ fn parse_timestamp_cast_source(
     let value = parser.consume_cast_literal()?;
     parser.consume_keyword("AS")?;
     if allow_time_zone && parser.consume_keyword("TIMESTAMPTZ").is_some() {
-        if let Some(precision) = parser.consume_precision()? {
-            if precision != expected_precision {
-                return None;
-            }
+        if let Some(precision) = parser.consume_precision()?
+            && precision != expected_precision
+        {
+            return None;
         }
         parser.consume_char(')')?;
         parser.finish()?;
         return Some(value);
     }
     parser.consume_keyword("TIMESTAMP")?;
-    if let Some(precision) = parser.consume_precision()? {
-        if precision != expected_precision {
-            return None;
-        }
+    if let Some(precision) = parser.consume_precision()?
+        && precision != expected_precision
+    {
+        return None;
     }
     if parser.consume_optional_keywords(&["WITH", "LOCAL", "TIME", "ZONE"]) && !allow_time_zone {
         return None;
@@ -1156,9 +1154,9 @@ fn parse_cast_target_type_annotation(parser: &mut SourceParser<'_>) -> Option<St
         .or_else(|| parser.peek_keyword("DOUBLE"))
         .is_some()
     {
-        let normalized = if parser.consume_keyword("REAL").is_some() {
-            "REAL".to_owned()
-        } else if parser.consume_keyword("FLOAT4").is_some() {
+        let normalized = if parser.consume_keyword("REAL").is_some()
+            || parser.consume_keyword("FLOAT4").is_some()
+        {
             "REAL".to_owned()
         } else if parser.consume_keyword("FLOAT8").is_some() {
             "DOUBLE".to_owned()
@@ -1226,20 +1224,20 @@ fn parse_timestamp_tz_literal_source(source: &str, expected_precision: u32) -> O
     let mut parser = SourceParser::new(source);
     if parser.consume_keyword("TIMESTAMPTZ").is_none() {
         parser.consume_keyword("TIMESTAMP")?;
-        if let Some(precision) = parser.consume_precision()? {
-            if precision != expected_precision {
-                return None;
-            }
+        if let Some(precision) = parser.consume_precision()?
+            && precision != expected_precision
+        {
+            return None;
         }
         if !parser.consume_optional_keywords(&["WITH", "LOCAL", "TIME", "ZONE"])
             && !parser.consume_optional_keywords(&["WITH", "TIME", "ZONE"])
         {
             return None;
         }
-    } else if let Some(precision) = parser.consume_precision()? {
-        if precision != expected_precision {
-            return None;
-        }
+    } else if let Some(precision) = parser.consume_precision()?
+        && precision != expected_precision
+    {
+        return None;
     }
     let value = parser.consume_sql_string_literal()?;
     parser.finish()?;
@@ -1256,7 +1254,7 @@ fn timestamp_literal_has_explicit_offset(raw: &str) -> bool {
         return true;
     }
     value
-        .find(|ch| ch == ' ' || ch == 'T')
+        .find([' ', 'T'])
         .map(|index| &value[index + 1..])
         .is_some_and(|tail| tail.contains('+') || tail.contains('-'))
 }
@@ -1537,7 +1535,12 @@ fn schema_column_index(schema: &Schema) -> SchemaColumnIndex {
     schema
         .tables
         .iter()
-        .map(|table| (table_key(&[table.name.clone()]), table.columns.clone()))
+        .map(|table| {
+            (
+                table_key(std::slice::from_ref(&table.name)),
+                table.columns.clone(),
+            )
+        })
         .collect()
 }
 
@@ -3372,9 +3375,15 @@ mod tests {
             panic!("expected decimal type annotation");
         };
         assert_eq!(ty, "DECIMAL(4,2)");
+        let ScalarAst::Call { op, args, .. } = expr.as_ref() else {
+            panic!("expected preserved explicit cast");
+        };
+        assert_eq!(op, &ScalarOp::Cast);
         assert!(matches!(
-            expr.as_ref(),
-            ScalarAst::Literal { raw } if raw == "1.235"
+            args.as_slice(),
+            [ScalarAst::TypeAnnotation { expr, ty }]
+                if ty == "NUMERIC"
+                    && matches!(expr.as_ref(), ScalarAst::Literal { raw } if raw == "1.235")
         ));
     }
 }

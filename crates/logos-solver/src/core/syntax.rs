@@ -110,21 +110,17 @@ pub struct FormalValueLiteral {
 pub enum FormalAttributeType {
     String,
     Z,
+    Int32,
+    Int64,
     Bool,
     Float,
     Double,
-    Decimal {
-        precision: Option<u32>,
-        scale: Option<u32>,
-    },
+    Numeric,
+    Decimal { precision: u32, scale: u32 },
     Date,
     Time,
-    Timestamp {
-        precision: Option<u32>,
-    },
-    Timestamptz {
-        precision: Option<u32>,
-    },
+    Timestamp { precision: Option<u32> },
+    Timestamptz { precision: Option<u32> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

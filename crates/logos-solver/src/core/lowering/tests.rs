@@ -7,6 +7,15 @@ use logos_ir::ir::{
     SqlType, Table, ValuesTuples,
 };
 
+fn emit_rocq_query_module_for_test(query: &Query) -> FormalQueryModule {
+    let lowered = lower_query(query);
+    let list_query = lowered
+        .list_query
+        .as_ref()
+        .expect("test query should lower to a FormalSQL list query");
+    emit_rocq_query_module(list_query, list_query)
+}
+
 #[test]
 fn sql_time_zone_canonicalizes_fixed_offsets_for_postgres() {
     let zone = SqlTimeZone::try_parse("+08:00").unwrap();
@@ -223,6 +232,153 @@ fn lowers_double_arithmetic_with_double_symbol() {
     );
     assert!(module.rocq_module.contains("AFunction \"plus_double\""));
     assert!(!module.rocq_module.contains("AFunction \"plus.\""));
+}
+
+#[test]
+fn lowers_integer_and_bigint_arithmetic_with_checked_symbols() {
+    let input = vec![
+        typed_column("left_int", SqlType::Integer),
+        typed_column("right_int", SqlType::Integer),
+        typed_column("big_value", SqlType::BigInt),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            exprs: vec![
+                scalar(ScalarAst::Call {
+                    operator: "+".to_owned(),
+                    op: ScalarOp::Plus,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::InputRef { index: 1 },
+                    ],
+                }),
+                scalar(ScalarAst::Call {
+                    operator: "*".to_owned(),
+                    op: ScalarOp::Multiply,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::InputRef { index: 2 },
+                    ],
+                }),
+                scalar(ScalarAst::Call {
+                    operator: "+".to_owned(),
+                    op: ScalarOp::Plus,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::Literal {
+                            raw: "1".to_owned(),
+                        },
+                    ],
+                }),
+            ],
+            correlations: Vec::new(),
+            output: vec![
+                typed_column("int_sum", SqlType::Integer),
+                typed_column("mixed_product", SqlType::BigInt),
+                typed_column("int_plus_literal", SqlType::Integer),
+            ],
+        },
+        output: vec![
+            typed_column("int_sum", SqlType::Integer),
+            typed_column("mixed_product", SqlType::BigInt),
+            typed_column("int_plus_literal", SqlType::Integer),
+        ],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AFunction \"plus_int32\""));
+    assert!(module.rocq_module.contains("AFunction \"mult_int64\""));
+    assert!(module.rocq_module.contains("CstInt32 (1)"));
+}
+
+#[test]
+fn rejects_integer_expression_output_type_mismatch() {
+    let input = vec![
+        typed_column("left_int", SqlType::Integer),
+        typed_column("right_int", SqlType::Integer),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("sum_value", SqlType::BigInt)],
+        },
+        output: vec![typed_column("sum_value", SqlType::BigInt)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "integer_output_type_not_supported")
+    );
+}
+
+#[test]
+fn rejects_out_of_range_integer_literal_annotation() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: Vec::new(),
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "2147483648".to_owned(),
+                }),
+                ty: "INTEGER".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![typed_column("too_big", SqlType::Integer)],
+        },
+        output: vec![typed_column("too_big", SqlType::Integer)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "integer_literal_out_of_range")
+    );
 }
 
 #[test]
@@ -734,6 +890,90 @@ fn rejects_mixed_float_double_equality_predicate() {
 }
 
 #[test]
+fn rejects_integer_temporal_comparison_predicate() {
+    let output = vec![
+        typed_column("id", SqlType::Integer),
+        typed_column("created_on", SqlType::Date),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["events".to_owned()],
+                output: output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "=".to_owned(),
+                op: ScalarOp::Eq,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "comparison_operand_type_not_supported")
+    );
+}
+
+#[test]
+fn lowers_mixed_integer_bigint_comparison_predicate() {
+    let output = vec![
+        typed_column("small_id", SqlType::Integer),
+        typed_column("large_id", SqlType::BigInt),
+    ];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Filter {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["ids".to_owned()],
+                output: output.clone(),
+            }),
+            predicate: scalar(ScalarAst::Call {
+                operator: "<".to_owned(),
+                op: ScalarOp::Lt,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            }),
+            correlations: Vec::new(),
+            output: output.clone(),
+        },
+        output,
+        features: vec![Feature::TableScan, Feature::Selection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let FormalQuery::Selection {
+        predicate: FormalFormula::Predicate { predicate, .. },
+        ..
+    } = lowered.query.as_ref().unwrap()
+    else {
+        panic!("expected selection predicate");
+    };
+    assert_eq!(predicate, "<");
+}
+
+#[test]
 fn rejects_floating_order_predicate_in_value_context() {
     let input = vec![
         typed_column("left_value", SqlType::Double),
@@ -883,9 +1123,54 @@ fn rejects_unknown_arg_type_aggregate_projected_as_double() {
 
     assert_eq!(lowered.status, LoweringStatus::Blocked);
     assert!(
-        lowered.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "floating_aggregate_argument_type_not_supported"
-        })
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "integer_sum_output_type_not_supported" })
+    );
+}
+
+#[test]
+fn lowers_literal_integer_sum_as_bigint_counted_aggregate() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["measurements".to_owned()],
+                output: vec![column("id")],
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "SUM(7)".to_owned(),
+                function: "SUM".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::Literal {
+                    raw: "7".to_owned(),
+                })],
+                filter: None,
+            }],
+            output: vec![typed_column("sum_value", SqlType::BigInt)],
+        },
+        output: vec![typed_column("sum_value", SqlType::BigInt)],
+        features: vec![Feature::TableScan, Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.list_query.as_ref().unwrap(),
+        lowered.list_query.as_ref().unwrap(),
+    );
+    assert!(module.rocq_module.contains("AAggregate \"sum_int32\""));
+    assert!(
+        module
+            .rocq_module
+            .contains("Constant (Value_int32 (int32_checked (7)%Z))")
     );
 }
 
@@ -1046,7 +1331,7 @@ fn lowers_schema_to_formal_sql_create_table_shape() {
                 .as_ref()
                 .unwrap()
                 .rocq_create_schema
-                .contains("Attr_Z \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_decimal \"BONUS\" 10 2 :: Attr_time \"SHIFT_START\" :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
+                .contains("Attr_int32 \"EMPNO\" :: Attr_string \"ENAME\" :: Attr_bool \"SLACKER\" :: Attr_date \"HIREDATE\" :: Attr_decimal \"BONUS\" 10 2 :: Attr_time \"SHIFT_START\" :: Attr_timestamp \"EVENT_TS\" 6 :: nil")
         );
     assert!(
         lowered
@@ -1285,7 +1570,7 @@ fn lowers_decimal_literal_and_arithmetic() {
             .as_ref()
             .expect("decimal query should lower"),
     );
-    assert!(module.rocq_module.contains("AFunction \"plus_decimal\""));
+    assert!(module.rocq_module.contains("AFunction \"plus_numeric\""));
     assert!(module.rocq_module.contains("CstDecimal (10) (2) (125)"));
     assert!(
         module
@@ -1442,7 +1727,7 @@ fn rejects_decimal_literal_precision_overflow_after_rounding() {
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "decimal_literal_not_supported")
+            .any(|diagnostic| diagnostic.code == "numeric_literal_not_supported")
     );
 }
 
@@ -1516,7 +1801,7 @@ fn rejects_malformed_decimal_annotation() {
 }
 
 #[test]
-fn rejects_bare_decimal_annotation() {
+fn overrides_calcite_decimal_output_for_unconstrained_numeric_literal() {
     let query = Query {
         source_sql: None,
         rel: RelExpr::Project {
@@ -1541,13 +1826,49 @@ fn rejects_bare_decimal_annotation() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "decimal_typmod_not_supported")
+            .any(|diagnostic| diagnostic.code == "calcite_numeric_type_overridden")
     );
+}
+
+#[test]
+fn rejects_numeric_nan_and_infinity_literals() {
+    for raw in ["NaN", "Infinity", "-Infinity"] {
+        let query = Query {
+            source_sql: None,
+            rel: RelExpr::Project {
+                input: Box::new(RelExpr::TableScan {
+                    table: vec!["t".to_owned()],
+                    output: vec![column("id")],
+                }),
+                exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                    expr: Box::new(ScalarAst::Literal {
+                        raw: raw.to_owned(),
+                    }),
+                    ty: "NUMERIC".to_owned(),
+                })],
+                correlations: Vec::new(),
+                output: vec![decimal_column_unconstrained("amount")],
+            },
+            output: vec![decimal_column_unconstrained("amount")],
+            features: vec![Feature::TableScan, Feature::Projection],
+            calcite_rel_text: None,
+            calcite_rel_plan: None,
+        };
+
+        let lowered = lower_query(&query);
+        assert_eq!(lowered.status, LoweringStatus::Blocked, "literal: {raw}");
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.code == "numeric_literal_not_supported" })
+        );
+    }
 }
 
 #[test]
@@ -1674,8 +1995,8 @@ fn lowers_nested_decimal_arithmetic() {
             .as_ref()
             .expect("decimal query should lower"),
     );
-    assert!(module.rocq_module.contains("AFunction \"plus_decimal\""));
-    assert!(module.rocq_module.contains("AFunction \"mult_decimal\""));
+    assert!(module.rocq_module.contains("AFunction \"plus_numeric\""));
+    assert!(module.rocq_module.contains("AFunction \"mult_numeric\""));
 }
 
 #[test]
@@ -1715,10 +2036,90 @@ fn lowers_decimal_typmod_cast() {
     assert!(
         module
             .rocq_module
-            .contains("AFunction \"cast_decimal_typmod\"")
+            .contains("AFunction \"cast_numeric_typmod\"")
     );
     assert!(module.rocq_module.contains("CstZ (12)"));
     assert!(module.rocq_module.contains("CstZ (2)"));
+}
+
+#[test]
+fn lowers_preserved_source_numeric_literal_cast() {
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![column("id")],
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::TypeAnnotation {
+                        expr: Box::new(ScalarAst::Literal {
+                            raw: "1.235".to_owned(),
+                        }),
+                        ty: "NUMERIC".to_owned(),
+                    }],
+                }),
+                ty: "DECIMAL(4, 2)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount", 4, 2)],
+        },
+        output: vec![decimal_column("amount", 4, 2)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"cast_numeric_typmod\"")
+    );
+}
+
+#[test]
+fn rejects_numeric_typmod_cast_with_possible_runtime_overflow() {
+    let input = vec![decimal_column("amount", 2, 4)];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input,
+            }),
+            exprs: vec![scalar(ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::InputRef { index: 0 }],
+                }),
+                ty: "DECIMAL(2, 5)".to_owned(),
+            })],
+            correlations: Vec::new(),
+            output: vec![decimal_column("amount_cast", 2, 5)],
+        },
+        output: vec![decimal_column("amount_cast", 2, 5)],
+        features: vec![Feature::TableScan, Feature::Projection],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "numeric_cast_runtime_error_not_modeled" })
+    );
 }
 
 #[test]
@@ -1740,9 +2141,9 @@ fn lowers_integer_to_decimal_typmod_cast() {
                 ty: "DECIMAL(12, 2)".to_owned(),
             })],
             correlations: Vec::new(),
-            output: vec![decimal_column("amount_decimal", 12, 2)],
+            output: vec![decimal_column("amount_numeric", 12, 2)],
         },
-        output: vec![decimal_column("amount_decimal", 12, 2)],
+        output: vec![decimal_column("amount_numeric", 12, 2)],
         features: vec![Feature::TableScan, Feature::Projection],
         calcite_rel_text: None,
         calcite_rel_plan: None,
@@ -1758,7 +2159,7 @@ fn lowers_integer_to_decimal_typmod_cast() {
     assert!(
         module
             .rocq_module
-            .contains("AFunction \"cast_z_to_decimal_typmod\"")
+            .contains("AFunction \"cast_int32_to_numeric_typmod\"")
     );
     assert!(module.rocq_module.contains("CstZ (12)"));
     assert!(module.rocq_module.contains("CstZ (2)"));
@@ -2025,7 +2426,7 @@ fn rejects_bare_decimal_division_projected_to_fixed_typmod() {
 }
 
 #[test]
-fn decimal_division_uses_result_annotation_scale() {
+fn inferred_decimal_division_annotation_does_not_act_as_cast() {
     let input = vec![decimal_column("left_amount", 4, 2)];
     let query = Query {
         source_sql: None,
@@ -2061,18 +2462,13 @@ fn decimal_division_uses_result_annotation_scale() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let module = emit_rocq_query_module(
-        lowered.list_query.as_ref().unwrap(),
-        lowered.list_query.as_ref().unwrap(),
-    );
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
     assert!(
-        module
-            .rocq_module
-            .contains("AFunction \"divide_decimal_typmod\"")
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_division_output_typmod_not_supported")
     );
-    assert!(module.rocq_module.contains("CstZ (10)"));
-    assert!(module.rocq_module.contains("CstZ (2)"));
 }
 
 #[test]
@@ -2206,7 +2602,7 @@ fn rejects_mixed_decimal_arithmetic() {
 }
 
 #[test]
-fn rejects_decimal_avg_aggregate() {
+fn lowers_decimal_avg_to_unconstrained_numeric() {
     let input_output = vec![decimal_column("amount", 10, 2)];
     let query = Query {
         source_sql: None,
@@ -2225,9 +2621,51 @@ fn rejects_decimal_avg_aggregate() {
                 args: vec![scalar(ScalarAst::InputRef { index: 0 })],
                 filter: None,
             }],
-            output: vec![decimal_column("avg_amount", 10, 2)],
+            output: vec![decimal_column_unconstrained("avg_amount")],
         },
-        output: vec![decimal_column("avg_amount", 10, 2)],
+        output: vec![decimal_column_unconstrained("avg_amount")],
+        features: vec![Feature::Aggregation],
+        calcite_rel_text: None,
+        calcite_rel_plan: None,
+    };
+
+    let lowered = lower_query(&query);
+
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(
+        module
+            .rocq_module
+            .contains("AFunction \"avg_numeric_at_scale\"")
+    );
+    assert!(module.rocq_module.contains("AAggregate \"sum_numeric\""));
+    assert!(module.rocq_module.contains("AAggregate \"count\""));
+    assert!(module.rocq_module.contains("AttrNumeric \"avg_amount\""));
+}
+
+#[test]
+fn rejects_avg_over_unconstrained_numeric_column_without_dscale() {
+    let input_output = vec![decimal_column_unconstrained("amount")];
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Aggregate {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: input_output,
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: Some(vec![Vec::new()]),
+            agg_calls: vec![AggregateCall {
+                raw: "AVG($0)".to_owned(),
+                function: "AVG".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![decimal_column_unconstrained("avg_amount")],
+        },
+        output: vec![decimal_column_unconstrained("avg_amount")],
         features: vec![Feature::Aggregation],
         calcite_rel_text: None,
         calcite_rel_plan: None,
@@ -2236,31 +2674,40 @@ fn rejects_decimal_avg_aggregate() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(lowered.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
-    }));
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "numeric_display_scale_not_available" })
+    );
 }
 
 #[test]
-fn rejects_decimal_avg_with_fixed_output_scale() {
+fn overrides_calcite_fixed_decimal_avg_output_with_postgres_numeric() {
     let input_output = vec![decimal_column("amount", 10, 2)];
+    let aggregate = RelExpr::Aggregate {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["t".to_owned()],
+            output: input_output,
+        }),
+        group_keys: Vec::new(),
+        grouping_sets: Some(vec![Vec::new()]),
+        agg_calls: vec![AggregateCall {
+            raw: "AVG($0)".to_owned(),
+            function: "AVG".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: vec![decimal_column("avg_amount", 10, 3)],
+    };
     let query = Query {
         source_sql: None,
-        rel: RelExpr::Aggregate {
-            input: Box::new(RelExpr::TableScan {
-                table: vec!["t".to_owned()],
-                output: input_output,
-            }),
-            group_keys: Vec::new(),
-            grouping_sets: Some(vec![Vec::new()]),
-            agg_calls: vec![AggregateCall {
-                raw: "AVG($0)".to_owned(),
-                function: "AVG".to_owned(),
-                distinct: false,
-                modifiers: AggregateModifiers::default(),
-                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
-                filter: None,
-            }],
+        rel: RelExpr::Project {
+            input: Box::new(aggregate),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
             output: vec![decimal_column("avg_amount", 10, 3)],
         },
         output: vec![decimal_column("avg_amount", 10, 3)],
@@ -2271,14 +2718,20 @@ fn rejects_decimal_avg_with_fixed_output_scale() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(lowered.diagnostics.iter().any(
-        |diagnostic| diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
-    ));
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "calcite_aggregate_type_overridden")
+    );
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("NumericColumn \"avg_amount\""));
+    assert!(!module.rocq_module.contains("DecimalColumn \"avg_amount\""));
 }
 
 #[test]
-fn rejects_decimal_sum_aggregate() {
+fn lowers_decimal_sum_to_unconstrained_numeric() {
     let input_output = vec![decimal_column("amount", 10, 2)];
     let query = Query {
         source_sql: None,
@@ -2297,9 +2750,9 @@ fn rejects_decimal_sum_aggregate() {
                 args: vec![scalar(ScalarAst::InputRef { index: 0 })],
                 filter: None,
             }],
-            output: vec![decimal_column("sum_amount", 10, 2)],
+            output: vec![decimal_column_unconstrained("sum_amount")],
         },
-        output: vec![decimal_column("sum_amount", 10, 2)],
+        output: vec![decimal_column_unconstrained("sum_amount")],
         features: vec![Feature::Aggregation],
         calcite_rel_text: None,
         calcite_rel_plan: None,
@@ -2307,14 +2760,13 @@ fn rejects_decimal_sum_aggregate() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(lowered.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "decimal_aggregate_unconstrained_numeric_not_supported"
-    }));
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("AAggregate \"sum_numeric\""));
 }
 
 #[test]
-fn rejects_decimal_min_output_typmod_mismatch() {
+fn overrides_decimal_min_output_with_postgres_numeric() {
     let input_output = vec![decimal_column("amount", 10, 2)];
     let query = Query {
         source_sql: None,
@@ -2343,17 +2795,19 @@ fn rejects_decimal_min_output_typmod_mismatch() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "decimal_output_typmod_not_supported")
+            .any(|diagnostic| diagnostic.code == "calcite_aggregate_type_overridden")
     );
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("AttrNumeric \"min_amount\""));
 }
 
 #[test]
-fn rejects_unconstrained_decimal_input_scope() {
+fn preserves_unconstrained_numeric_through_calcite_fixed_projection() {
     let query = Query {
         source_sql: None,
         rel: RelExpr::Project {
@@ -2373,21 +2827,26 @@ fn rejects_unconstrained_decimal_input_scope() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == "unconstrained_numeric_not_supported")
+            .any(|diagnostic| diagnostic.code == "calcite_numeric_type_overridden")
     );
 }
 
 #[test]
-fn rejects_unconstrained_decimal_table_scan_output() {
+fn lowers_unconstrained_numeric_table_scan_output() {
     let query = Query {
         source_sql: None,
-        rel: RelExpr::TableScan {
-            table: vec!["t".to_owned()],
+        rel: RelExpr::Project {
+            input: Box::new(RelExpr::TableScan {
+                table: vec!["t".to_owned()],
+                output: vec![decimal_column_unconstrained("amount")],
+            }),
+            exprs: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            correlations: Vec::new(),
             output: vec![decimal_column_unconstrained("amount")],
         },
         output: vec![decimal_column_unconstrained("amount")],
@@ -2398,13 +2857,9 @@ fn rejects_unconstrained_decimal_table_scan_output() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "unconstrained_numeric_not_supported")
-    );
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("NumericColumn \"amount\""));
 }
 
 #[test]
@@ -2991,7 +3446,7 @@ fn lowers_left_join_with_exists_desugaring() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(module.rocq_module.contains("SetQuery SetUnion"));
     assert!(module.rocq_module.contains("ExistsQuery"));
-    assert!(module.rocq_module.contains("NullZ"));
+    assert!(module.rocq_module.contains("NullInt32"));
     assert!(!module.rocq_module.contains("LeftJoin"));
 }
 
@@ -3170,7 +3625,7 @@ fn lowers_sort_offset_fetch_to_list_observation() {
     };
     assert_eq!(keys.len(), 1);
     assert_eq!(keys[0].attribute_name, "b");
-    assert_eq!(keys[0].attribute_ty, FormalAttributeType::Z);
+    assert_eq!(keys[0].attribute_ty, FormalAttributeType::Int32);
     assert_eq!(keys[0].direction, FormalSortDirection::Desc);
     assert_eq!(keys[0].null_direction, FormalNullDirection::First);
     assert!(matches!(*input, FormalListQuery::Bag { .. }));
@@ -3265,9 +3720,9 @@ fn lowers_count_star_as_explicit_aggregate() {
                 args: Vec::new(),
                 filter: None,
             }],
-            output: vec![column("c")],
+            output: vec![typed_column("c", SqlType::BigInt)],
         },
-        output: vec![column("c")],
+        output: vec![typed_column("c", SqlType::BigInt)],
         features: vec![Feature::Aggregation],
         calcite_rel_text: None,
         calcite_rel_plan: None,
@@ -3323,9 +3778,9 @@ fn lowers_distinct_aggregate_as_explicit_aggregate() {
                 args: vec![scalar(ScalarAst::InputRef { index: 0 })],
                 filter: None,
             }],
-            output: vec![column("c")],
+            output: vec![typed_column("c", SqlType::BigInt)],
         },
-        output: vec![column("c")],
+        output: vec![typed_column("c", SqlType::BigInt)],
         features: vec![Feature::Aggregation, Feature::DistinctAggregate],
         calcite_rel_text: None,
         calcite_rel_plan: None,
@@ -3623,12 +4078,12 @@ fn lowers_correlated_exists_by_binding_index_not_field_name() {
     assert!(
         module
             .rocq_module
-            .contains("Pred \"=\" ([DotZ \"__logos_cor_cor0_0\"; DotZ \"DEPTNO\"])")
+            .contains("Pred \"=\" ([DotInt32 \"__logos_cor_cor0_0\"; DotInt32 \"DEPTNO\"])")
     );
     assert!(
         !module
             .rocq_module
-            .contains("Pred \"=\" ([DotZ \"DEPTNO\"; DotZ \"DEPTNO\"])")
+            .contains("Pred \"=\" ([DotInt32 \"DEPTNO\"; DotInt32 \"DEPTNO\"])")
     );
 }
 
@@ -3718,12 +4173,12 @@ fn lowers_correlated_join_output_after_calcite_renaming() {
     assert!(
         module
             .rocq_module
-            .contains("Pred \"=\" ([DotZ \"id\"; DotZ \"__logos_cor_cor0_2\"])")
+            .contains("Pred \"=\" ([DotInt32 \"id\"; DotInt32 \"__logos_cor_cor0_2\"])")
     );
     assert!(
         !module
             .rocq_module
-            .contains("ExistsQuery (Sigma (Pred \"=\" ([DotZ \"id\"; DotZ \"id0\"])")
+            .contains("ExistsQuery (Sigma (Pred \"=\" ([DotInt32 \"id\"; DotInt32 \"id0\"])")
     );
 }
 
@@ -3841,8 +4296,8 @@ fn lowers_values_null_using_inferred_column_type() {
     ) else {
         panic!("VALUES rows should lower to typed singleton constants");
     };
-    assert_eq!(null_ty, FormalAttributeType::Z);
-    assert_eq!(one_ty, FormalAttributeType::Z);
+    assert_eq!(null_ty, FormalAttributeType::Int32);
+    assert_eq!(one_ty, FormalAttributeType::Int32);
 }
 
 #[test]
@@ -3874,7 +4329,7 @@ fn lowers_values_null_using_concrete_output_type() {
     else {
         panic!("concrete VALUES output type should type bare NULL");
     };
-    assert_eq!(ty, FormalAttributeType::Z);
+    assert_eq!(ty, FormalAttributeType::Int32);
 }
 
 #[test]
@@ -3906,7 +4361,7 @@ fn defaults_untyped_all_null_values_column_to_integer() {
     else {
         panic!("fallback VALUES output type should type bare NULL");
     };
-    assert_eq!(ty, FormalAttributeType::Z);
+    assert_eq!(ty, FormalAttributeType::Int32);
     assert!(
         lowered
             .diagnostics
@@ -3975,8 +4430,8 @@ fn lowers_untyped_null_values_filter_without_static_empty_rewrite() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(matches!(lowered.query, Some(FormalQuery::Selection { .. })));
     assert!(module.rocq_module.contains("Sigma"));
-    assert!(module.rocq_module.contains("NullZ"));
-    assert!(module.rocq_module.contains("AttrZ \"A\""));
+    assert!(module.rocq_module.contains("NullInt32"));
+    assert!(module.rocq_module.contains("AttrInt32 \"A\""));
     assert!(!module.rocq_module.contains("EmptyRelation"));
     assert!(
         lowered
