@@ -1,5 +1,4 @@
 pub mod calcite;
-pub mod diagnostics;
 pub mod error;
 pub mod frontend;
 pub mod ir;
