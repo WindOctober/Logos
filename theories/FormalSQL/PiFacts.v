@@ -18,12 +18,6 @@ Definition well_sorted_database (db : db_state) : Prop :=
     t inBE (@_instance TNull db tbl) ->
     labels TNull t =S= @_basesort TNull db tbl.
 
-Definition select_list_sort (s : SelectListT) : Fset.set (A TNull) :=
-  match s with
-  | @_Select_List _ l =>
-      Fset.mk_set _ (map (fun x => match x with @Select_As _ _ a => a end) l)
-  end.
-
 Lemma pi_sort :
   forall db s q,
     @sort TNull relname (@_basesort TNull db) (Pi s q) =S= select_list_sort s.
@@ -90,7 +84,7 @@ Proof.
 intros db s1 q1 s2 q2 t Hdb Hleft Hsort_mismatch Hequiv.
 assert (Hright : t inBE eval_query_in_state db (Pi s2 q2)).
 {
-  unfold query_equiv in Hequiv.
+  apply query_equiv_implies_bag_equality in Hequiv.
   change (Febag.mem _ t (eval_query_in_state db (Pi s2 q2)) = true).
   rewrite <-
     (@Febag.mem_eq_2
@@ -110,17 +104,23 @@ Lemma nonempty_pi_equiv_iff_sort_and_occ :
     well_sorted_database db ->
     query_nonempty db (Pi s1 q1) ->
     query_equiv db (Pi s1 q1) (Pi s2 q2) <->
+      query_succeeds db (Pi s1 q1) /\
+      query_succeeds db (Pi s2 q2) /\
       select_list_sort s1 =S= select_list_sort s2 /\
       forall t, query_occ db (Pi s1 q1) t = query_occ db (Pi s2 q2) t.
 Proof.
 intros db s1 q1 s2 q2 Hdb Hnonempty.
 split.
 - intro Hequiv.
+  pose proof
+    (query_equiv_implies_success db (Pi s1 q1) (Pi s2 q2) Hequiv)
+    as [Hsafe1 Hsafe2].
+  split; [exact Hsafe1 | split; [exact Hsafe2 |]].
   split.
   + destruct Hnonempty as [t Hleft].
     assert (Hright : t inBE eval_query_in_state db (Pi s2 q2)).
     {
-      unfold query_equiv in Hequiv.
+      apply query_equiv_implies_bag_equality in Hequiv.
       change (Febag.mem _ t (eval_query_in_state db (Pi s2 q2)) = true).
       rewrite <-
         (@Febag.mem_eq_2
@@ -133,12 +133,13 @@ split.
     }
     eapply common_pi_output_tuple_implies_same_select_list_sort; eauto.
   + intro t.
-    unfold query_equiv in Hequiv.
+    apply query_equiv_implies_bag_equality in Hequiv.
     unfold query_occ.
     rewrite Febag.nb_occ_equal in Hequiv.
     apply Hequiv.
-- intros [_ Hocc].
-  unfold query_equiv, query_occ in *.
+- intros [Hsafe1 [Hsafe2 [_ Hocc]]].
+  apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+  unfold query_occ in *.
   rewrite Febag.nb_occ_equal.
   intro t.
   apply Hocc.

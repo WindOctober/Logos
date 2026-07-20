@@ -20,21 +20,34 @@ Definition query_nonempty (db : db_state) (q : Query) : Prop :=
 Lemma query_equiv_iff_occ :
   forall db q1 q2,
     query_equiv db q1 q2 <->
+    query_succeeds db q1 /\
+    query_succeeds db q2 /\
     forall t, query_occ db q1 t = query_occ db q2 t.
 Proof.
 intros db q1 q2.
-unfold query_equiv, query_occ.
-rewrite Febag.nb_occ_equal.
-split; intro H; exact H.
+rewrite query_equiv_iff_success_and_bag_equality.
+split.
+- intros [Hsafe1 [Hsafe2 Hequal]].
+  split; [exact Hsafe1 | split; [exact Hsafe2 |]].
+  unfold query_occ.
+  now rewrite Febag.nb_occ_equal in Hequal.
+- intros [Hsafe1 [Hsafe2 Hocc]].
+  split; [exact Hsafe1 | split; [exact Hsafe2 |]].
+  rewrite Febag.nb_occ_equal.
+  exact Hocc.
 Qed.
 
 Lemma pi_congr :
   forall db s q1 q2,
     query_equiv db q1 q2 ->
+    query_succeeds db (Pi s q1) ->
+    query_succeeds db (Pi s q2) ->
     query_equiv db (Pi s q1) (Pi s q2).
 Proof.
-intros db s q1 q2 Hq.
-unfold query_equiv, eval_query_in_state, eval_query_in_env, Pi in *.
+intros db s q1 q2 Hq Hsafe1 Hsafe2.
+apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+apply query_equiv_implies_bag_equality in Hq.
+unfold eval_query_in_state, eval_query_in_env, Pi in *.
 rewrite (@eval_query_unfold TNull relname
           (@_basesort TNull db)
           (@_instance TNull db)
@@ -66,10 +79,14 @@ Qed.
 Lemma sigma_congr :
   forall db f q1 q2,
     query_equiv db q1 q2 ->
+    query_succeeds db (Sigma f q1) ->
+    query_succeeds db (Sigma f q2) ->
     query_equiv db (Sigma f q1) (Sigma f q2).
 Proof.
-intros db f q1 q2 Hq.
-unfold query_equiv, eval_query_in_state, Sigma, eval_query_in_env in *.
+intros db f q1 q2 Hq Hsafe1 Hsafe2.
+apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+apply query_equiv_implies_bag_equality in Hq.
+unfold eval_query_in_state, Sigma, eval_query_in_env in *.
 rewrite (@eval_query_unfold TNull relname
           (@_basesort TNull db)
           (@_instance TNull db)
@@ -100,7 +117,7 @@ Lemma query_satisfies_of_equiv :
 Proof.
 intros db q1 q2 f Hq Htrue t Ht.
 apply Htrue.
-unfold query_equiv in Hq.
+apply query_equiv_implies_bag_equality in Hq.
 change (Febag.mem _ t (eval_query_in_state db q1) = true).
 rewrite (@Febag.mem_eq_2
            _ _ _

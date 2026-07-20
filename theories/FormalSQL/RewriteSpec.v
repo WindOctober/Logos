@@ -175,26 +175,26 @@ rewrite Hpres.
 exact Hu_conclusion.
 Qed.
 
-Lemma eval_conj_and :
+Lemma eval_and :
   forall db env t p h,
-    eval_formula_in_env db env t (conj_and p h) =
+    eval_formula_in_env db env t (And p h) =
     (eval_formula_in_env db env t p && eval_formula_in_env db env t h)%bool.
 Proof.
 intros db env t p h.
-unfold eval_formula_in_env, conj_and.
+unfold eval_formula_in_env, And.
 rewrite eval_sql_formula_unfold.
 apply Bool.is_true_andb.
 Qed.
 
 Lemma query_satisfies_conj_l :
   forall db q p h,
-    query_satisfies db q (conj_and p h) ->
+    query_satisfies db q (And p h) ->
     query_satisfies db q p.
 Proof.
 intros db q p h Hboth t Ht.
 specialize (Hboth t Ht).
 unfold eval_formula_in_state in *.
-rewrite eval_conj_and in Hboth.
+rewrite eval_and in Hboth.
 destruct (eval_formula_in_env db nil t p);
   destruct (eval_formula_in_env db nil t h);
   simpl in Hboth; try discriminate; reflexivity.
@@ -202,13 +202,13 @@ Qed.
 
 Lemma query_satisfies_conj_r :
   forall db q p h,
-    query_satisfies db q (conj_and p h) ->
+    query_satisfies db q (And p h) ->
     query_satisfies db q h.
 Proof.
 intros db q p h Hboth t Ht.
 specialize (Hboth t Ht).
 unfold eval_formula_in_state in *.
-rewrite eval_conj_and in Hboth.
+rewrite eval_and in Hboth.
 destruct (eval_formula_in_env db nil t p);
   destruct (eval_formula_in_env db nil t h);
   simpl in Hboth; try discriminate; reflexivity.
@@ -217,10 +217,13 @@ Qed.
 Lemma sigma_id_of_query_satisfies :
   forall db q f,
     query_satisfies db q f ->
+    query_succeeds db (Sigma f q) ->
+    query_succeeds db q ->
     query_equiv db (Sigma f q) q.
 Proof.
-intros db q f Htrue.
-unfold query_equiv, eval_query_in_state, Sigma, eval_query_in_env.
+intros db q f Htrue Hsafe1 Hsafe2.
+apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+unfold eval_query_in_state, Sigma, eval_query_in_env.
 rewrite (@eval_query_unfold TNull relname
           (@_basesort TNull db)
           (@_instance TNull db)
@@ -265,10 +268,13 @@ Qed.
 Lemma sigma_drop_redundant_conjunct :
   forall db q p h,
     query_satisfies db q h ->
-    query_equiv db (Sigma (conj_and p h) q) (Sigma p q).
+    query_succeeds db (Sigma (And p h) q) ->
+    query_succeeds db (Sigma p q) ->
+    query_equiv db (Sigma (And p h) q) (Sigma p q).
 Proof.
-intros db q p h Hh.
-unfold query_equiv, eval_query_in_state, Sigma, eval_query_in_env.
+intros db q p h Hh Hsafe1 Hsafe2.
+apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+unfold eval_query_in_state, Sigma, eval_query_in_env.
 rewrite 2 eval_query_unfold.
 apply Febag.filter_eq.
 - rewrite <- eval_query_unfold.
@@ -281,9 +287,9 @@ apply Febag.filter_eq.
     apply Febag.nb_occ_mem.
     intro Hzero; rewrite Hzero in Ht1; lia.
   }
-  change (eval_formula_in_env db nil t1 (conj_and p h) =
+  change (eval_formula_in_env db nil t1 (And p h) =
           eval_formula_in_env db nil t2 p).
-  rewrite eval_conj_and.
+  rewrite eval_and.
   replace (eval_formula_in_env db nil t1 h) with (eval_formula_in_state db t1 h)
     by reflexivity.
   rewrite (Hh t1).
@@ -323,10 +329,13 @@ Qed.
 
 Lemma sigma_sigma_merge :
   forall db q outer inner,
-    query_equiv db (Sigma outer (Sigma inner q)) (Sigma (conj_and outer inner) q).
+    query_succeeds db (Sigma outer (Sigma inner q)) ->
+    query_succeeds db (Sigma (And outer inner) q) ->
+    query_equiv db (Sigma outer (Sigma inner q)) (Sigma (And outer inner) q).
 Proof.
-intros db q outer inner.
-unfold query_equiv, eval_query_in_state, Sigma, eval_query_in_env.
+intros db q outer inner Hsafe1 Hsafe2.
+apply query_equiv_intro; [exact Hsafe1 | exact Hsafe2 |].
+unfold eval_query_in_state, Sigma, eval_query_in_env.
 rewrite (@eval_query_unfold TNull relname
           (@_basesort TNull db)
           (@_instance TNull db)
@@ -347,7 +356,7 @@ rewrite (@eval_query_unfold TNull relname
           unknown3
           contains_nulls
           nil
-          (@Q_Sigma TNull relname (conj_and outer inner) q)).
+          (@Q_Sigma TNull relname (And outer inner) q)).
 set (base := @eval_query TNull relname
               (@_basesort TNull db)
               (@_instance TNull db)
@@ -357,7 +366,7 @@ set (base := @eval_query TNull relname
               q).
 rewrite Febag.nb_occ_equal; intro t.
 rewrite !Febag.nb_occ_filter.
-- unfold conj_and.
+- unfold And.
   cbn.
   unfold interp_conj.
   symmetry; apply andb3_indicator_mul_factor.
@@ -370,7 +379,7 @@ rewrite !Febag.nb_occ_filter.
     unknown3
     contains_nulls
     contains_nulls_eq
-    nil (conj_and outer inner) t1 t2 Ht12).
+    nil (And outer inner) t1 t2 Ht12).
 - intros t1 t2 _ Ht12.
   unfold eval_formula_in_env, eval_query_in_env.
   apply (@is_true_eval_f_eq
