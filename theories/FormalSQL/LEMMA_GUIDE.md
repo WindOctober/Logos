@@ -175,16 +175,24 @@ Definition successful_outcome_equiv {A : Type}
 ### `successful_relation_equiv` [`vendor/FormalSQL/src/data/sql/SqlOutcome.v`]
 
 For nondeterministic relational evaluators, equivalence requires a successful
-output, excludes all error outcomes on both sides, and equates the sets of
-successful outputs.
+output, excludes all error outcomes on both sides, and matches successful
+outputs in both directions through the supplied observable-value relation.
 
 ```coq
 Definition successful_relation_equiv {A : Type}
+    (value_equiv : A -> A -> Prop)
     (left right : sql_outcome A -> Prop) : Prop :=
   (exists value, left (SqlSuccess value)) /\
   (forall error, ~ left (SqlError error)) /\
   (forall error, ~ right (SqlError error)) /\
-  (forall value, left (SqlSuccess value) <-> right (SqlSuccess value)).
+  (forall left_value,
+    left (SqlSuccess left_value) ->
+    exists right_value,
+      right (SqlSuccess right_value) /\ value_equiv left_value right_value) /\
+  (forall right_value,
+    right (SqlSuccess right_value) ->
+    exists left_value,
+      left (SqlSuccess left_value) /\ value_equiv left_value right_value).
 ```
 
 ### `outcome_equiv` and `outcome_relation_equiv` [`vendor/FormalSQL/src/data/sql/SqlOutcome.v`]
@@ -212,7 +220,18 @@ Definition outcome_equiv {A : Type}
 
 `query_expr_outcome_equiv` and `query_program_outcome_equiv` in
 `SqlQuerySemantics.v` add exact ordered output-schema equality and lift this
-relation pointwise over a read-only query program.
+relation pointwise over a read-only query program. Both safe and
+error-preserving query equivalence compare ordered result lists with
+`ordered_rows_equiv`: order and multiplicity are exact, while corresponding
+rows use `OTuple`'s extensional SQL-row equality rather than Coq representation
+equality.
+
+### `query_expr_equiv_implies_outcome_equiv` and `query_program_equiv_implies_outcome_equiv` [`vendor/FormalSQL/src/data/sql/SqlQuerySemantics.v`]
+
+A safe equivalence proof is a stronger certificate than error-preserving
+equivalence. In `OUTCOME-UNCONDITIONAL` mode, prove safety in Rocq and apply one
+of these lemmas when that route is simpler. The host does not classify a query
+as safe.
 
 ### Structured conditional verification [`theories/FormalSQL/VerificationConditions.v`]
 
@@ -861,16 +880,20 @@ abstraction for order-insensitive regions, not a peer query semantics. The
 semantic completeness claim concerns the defined normalized core, not proof
 search or the unverified Rust/Calcite frontend.
 
-### `query_expr_equiv_of_observations` [`vendor/FormalSQL/src/data/sql/SqlQueryFacts.v`]
+### `query_expr_equiv_of_ordered_observations` [`vendor/FormalSQL/src/data/sql/SqlQueryFacts.v`]
 
 Use this to prove a general typed ordered-observation goal. Its premises, in
 order, are ordered-output equality, one successful source observation, source
-safety, target safety, and an iff between every successful list observation.
-Equal failures do not count as equivalence.
+safety, target safety, and bidirectional successful-list witnesses related by
+`ordered_rows_equiv`. Thus list position, length, and multiplicity remain exact,
+while hidden tuple representations are compared through `OTuple`.
 
 ```coq
-apply query_expr_equiv_of_observations.
+apply query_expr_equiv_of_ordered_observations.
 ```
+
+`query_expr_equiv_of_observations` remains a convenience specialization when
+both sides expose the exact same Rocq list representatives.
 
 ### `bag_query_expr_equiv_iff_bag_query_equiv` [`vendor/FormalSQL/src/data/sql/SqlQueryFacts.v`]
 
@@ -911,6 +934,11 @@ abstraction remains a relation of bags: never select one bag when tied top-k
 evaluation admits several. Use `outcome_alpha_bag_query_expr_singleton` only
 when a `QExpr_Bag` result supplies the proved deterministic singleton case.
 
+For error-preserving goals, use
+`query_bag_effect_typed_outcome_equiv_iff_possible_bag_equiv`. It preserves the
+set of runtime-error categories exactly while abstracting only successful row
+lists to possible bags.
+
 
 ### `query_expr_context_equiv_safe` [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v`]
 
@@ -921,9 +949,9 @@ and source-success premises before obtaining success-only `query_expr_equiv`.
 
 ### `query_success_bags_of_success_rel_equiv` and `query_bag_effect_equiv_of_success_bags_safe` [`vendor/FormalSQL/src/data/sql/SqlQueryFacts.v`, `vendor/FormalSQL/src/data/sql/SqlQueryContexts.v`]
 
-These are the two directions of the local reset workflow. The first maps a
-fixed-environment iff between exact successful row lists through `alpha` to
-equality of `query_success_bags`. After an enclosing operator has been handled
+These are the two directions of the local reset workflow. The first maps
+bidirectionally matched ordered row lists through `alpha` to equality of
+`query_success_bags`. After an enclosing operator has been handled
 with lifted bag relations, `query_bag_effect_equiv_of_success_bags_safe`
 returns to exact typed equivalence. It requires both result effects to be
 `BagEffect`, equal possible bags, explicit safety of both outer queries, and a
