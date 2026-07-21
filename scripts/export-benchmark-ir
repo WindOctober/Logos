@@ -1,19 +1,35 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MATERIALIZER_DIR = ROOT / "benchmarks/adapters/materializers"
+if str(MATERIALIZER_DIR) not in sys.path:
+    sys.path.insert(0, str(MATERIALIZER_DIR))
+
+from materializer_sql import mask_sql_regions, substitute_unprotected  # noqa: E402
+
+_TSQL_DATE_DAY_SOURCE = re.compile(
+    r"(?is)(?P<predicate_prefix>\bBETWEEN\s+CAST\s*\(\s*"
+    r"(?P<lower_literal>'(?:''|[^'])*')\s+AS\s+DATE\s*\)\s+AND\s*)"
+    r"(?P<upper_prefix>\(\s*CAST\s*\(\s*"
+    r"(?P<upper_literal>'(?:''|[^'])*')\s+AS\s+DATE\s*\)\s*\+\s*)"
+    r"(?P<days>[0-9]+)"
+    r"(?P<unit>\s+days\b)?"
+    r"(?P<suffix>\s*\))"
+)
 
 
 @dataclass
@@ -258,7 +274,17 @@ def export_case(
         return
 
     case_dir.mkdir(parents=True, exist_ok=True)
+    if force:
+        # A failed re-export must never leave one side (or its old metadata)
+        # looking current.  Consumers use the pair only when both sides were
+        # produced by this invocation, so clear the complete authority set
+        # before invoking either frontend.
+        for artifact in (before_ir, after_ir, metadata_path):
+            artifact.unlink(missing_ok=True)
+    before_sql, after_sql, pair_preprocessing = patch_tsql_date_day_pair(case)
     metadata = build_metadata(config, case)
+    if pair_preprocessing is not None:
+        metadata["frontendPairPreprocessing"] = [pair_preprocessing]
 
     with tempfile.TemporaryDirectory(prefix="logos-benchmark-ir-") as tmp:
         work_dir = Path(tmp)
@@ -269,12 +295,173 @@ def export_case(
             work_dir.mkdir(parents=True, exist_ok=True)
 
         schema_path = write_text(work_dir / "schema.sql", case.schema_sql)
-        before_sql_path = write_text(work_dir / "before.sql", ensure_sql_terminated(case.before_sql))
-        after_sql_path = write_text(work_dir / "after.sql", ensure_sql_terminated(case.after_sql))
+        before_sql_path = write_text(work_dir / "before.sql", ensure_sql_terminated(before_sql))
+        after_sql_path = write_text(work_dir / "after.sql", ensure_sql_terminated(after_sql))
 
-        run_frontend(config, case, schema_path, before_sql_path, before_ir, "before", keep_intermediate)
-        run_frontend(config, case, schema_path, after_sql_path, after_ir, "after", keep_intermediate)
-        write_text(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+        try:
+            run_frontend(
+                config,
+                case,
+                schema_path,
+                before_sql_path,
+                before_ir,
+                "before",
+                keep_intermediate,
+            )
+            run_frontend(
+                config,
+                case,
+                schema_path,
+                after_sql_path,
+                after_ir,
+                "after",
+                keep_intermediate,
+            )
+            write_text(
+                metadata_path,
+                json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+            )
+        except Exception:
+            # A failed attempt is diagnostic evidence, not a usable authority
+            # pair.  Keep an explicitly requested debug/ directory, but never
+            # leave either public IR side or metadata looking independently
+            # current.
+            for artifact in (before_ir, after_ir, metadata_path):
+                artifact.unlink(missing_ok=True)
+            raise
+
+
+def patch_tsql_date_day_pair(case: Case) -> tuple[str, str, dict[str, Any] | None]:
+    """Remove SQLGlot's false ``days`` alias only under a paired TPC-DS proof.
+
+    TPC-DS's T-SQL-like generator spells a DATE displacement as ``DATE + N
+    days`` in one member and ``DATE + N`` in its paired variant.  SQLGlot
+    interprets ``days`` as an expression alias and emits invalid nested SQL.
+    This bridge is deliberately pair-level: every BETWEEN upper-bound site,
+    date literal, and day count must form the same multiset on both sides, and
+    exactly one complete side must carry the source unit token.
+    """
+
+    read_dialect = case.read_dialect or case.benchmark.get("readDialect")
+    source_dialect = case.source_dialect or case.benchmark.get("sourceDialect")
+    if str(read_dialect).casefold() != "tsql" or str(source_dialect).casefold() != "tsql_like":
+        return case.before_sql, case.after_sql, None
+
+    sources = (case.before_sql, case.after_sql)
+    # Bracket-quoted T-SQL identifiers can legally contain an entire predicate
+    # lookalike.  The shared standard-SQL scanner intentionally does not assign
+    # bracket semantics, so this narrow bridge rejects any structural bracket
+    # token instead of guessing where such an identifier ends.
+    if any(
+        "[" in (masked := mask_sql_regions(sql)) or "]" in masked
+        for sql in sources
+    ):
+        return case.before_sql, case.after_sql, None
+
+    def unprotected_matches(sql: str) -> list[re.Match[str]]:
+        found: list[re.Match[str]] = []
+
+        def retain(match: re.Match[str]) -> str:
+            found.append(match)
+            return match.group(0)
+
+        # The match starts in SQL code and the replacement byte-preserves its
+        # date literal.  `start_only` rejects a lookalike wholly inside a
+        # comment/string while allowing the intended quoted DATE token.
+        substitute_unprotected(
+            _TSQL_DATE_DAY_SOURCE,
+            retain,
+            sql,
+            start_only=True,
+        )
+        return found
+
+    matches = tuple(unprotected_matches(sql) for sql in sources)
+    if not matches[0] or not matches[1]:
+        return case.before_sql, case.after_sql, None
+    signatures = tuple(
+        Counter(
+            (
+                match.group("lower_literal"),
+                match.group("upper_literal"),
+                match.group("days"),
+            )
+            for match in side
+        )
+        for side in matches
+    )
+    unit_vectors = tuple(
+        [match.group("unit") is not None for match in side] for side in matches
+    )
+    complete_unit_sides = (
+        all(unit_vectors[0]) and not any(unit_vectors[1]),
+        all(unit_vectors[1]) and not any(unit_vectors[0]),
+    )
+
+    if (
+        signatures[0] != signatures[1]
+        or sum(complete_unit_sides) != 1
+        or any(
+            lower != upper
+            for signature in signatures
+            for lower, upper, _days in signature
+        )
+    ):
+        return case.before_sql, case.after_sql, None
+
+    unit_side = 0 if complete_unit_sides[0] else 1
+
+    def explicit_day_interval(match: re.Match[str]) -> str:
+        return (
+            match.group("predicate_prefix")
+            + match.group("upper_prefix")
+            + f"INTERVAL '{match.group('days')}' DAY"
+            + match.group("suffix")
+        )
+
+    patched = tuple(
+        substitute_unprotected(
+            _TSQL_DATE_DAY_SOURCE,
+            explicit_day_interval,
+            sql,
+            start_only=True,
+        )
+        for sql in sources
+    )
+    return patched[0], patched[1], {
+        "kind": "paired-tsql-between-date-day-unit",
+        "sourceSideWithDayUnit": "before" if unit_side == 0 else "after",
+        "occurrencesPerSide": len(matches[0]),
+        "predicateOnly": True,
+        "orderedQueryPairPreserved": True,
+        "sourceSha256": {
+            side: hashlib.sha256(sql.encode()).hexdigest()
+            for side, sql in zip(("before", "after"), sources)
+        },
+        "frontendInputSha256": {
+            side: hashlib.sha256(ensure_sql_terminated(sql).encode()).hexdigest()
+            for side, sql in zip(("before", "after"), patched)
+        },
+        "dateDayMultiset": [
+            {
+                "lowerDateLiteral": lower_literal,
+                "upperDateLiteral": upper_literal,
+                "days": days,
+                "count": count,
+            }
+            for (
+                lower_literal,
+                upper_literal,
+                days,
+            ), count in sorted(signatures[0].items())
+        ],
+        "semanticNote": (
+            "The benchmark pair has the same DATE-plus-day-count predicates. "
+            "Only the T-SQL-like source spelling adds the otherwise misparsed "
+            "`days` token; both frontend inputs use the same explicit DAY "
+            "interval accepted by Calcite."
+        ),
+    }
 
 
 def run_frontend(
