@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import re
+import shlex
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -38,6 +39,7 @@ def main() -> None:
     parser.add_argument("--solver-bin", type=Path, default=Path("target/debug/logos-solver"))
     parser.add_argument("--summary", type=Path, default=Path("var/logos-solver-cex/llm-assessment-batch/summary.json"))
     args = parser.parse_args()
+    resolve_repository_paths(args)
 
     args.log_root.mkdir(parents=True, exist_ok=True)
     args.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -64,8 +66,7 @@ class SolverCase:
 
 def discover_canonical_cases(args: argparse.Namespace) -> list[SolverCase]:
     exporter = load_exporter()
-    config_path = resolve_path(args.config)
-    config = json.loads(config_path.read_text())
+    config = json.loads(args.config.read_text())
     selected = set(args.benchmark or [])
     case_patterns = [re.compile(pattern) for pattern in args.case or []]
 
@@ -102,11 +103,12 @@ def discover_canonical_cases(args: argparse.Namespace) -> list[SolverCase]:
 def frontend_command(config: dict[str, Any], case: Any) -> str:
     adapter = case.benchmark.get("adapter", config["defaults"].get("adapter", "none"))
     if adapter == "none":
-        return "scripts/calcite-ir"
+        return shlex.quote(str(ROOT / "scripts/calcite-ir"))
     if adapter == "sqlglot":
         read = case.read_dialect or case.benchmark["readDialect"]
         write = case.write_dialect or case.benchmark["writeDialect"]
-        return f"scripts/calcite-ir-sqlglot --read {shell_word(read)} --write {shell_word(write)}"
+        frontend = shlex.quote(str(ROOT / "scripts/calcite-ir-sqlglot"))
+        return f"{frontend} --read {shlex.quote(read)} --write {shlex.quote(write)}"
     raise ValueError(f"unsupported adapter: {adapter}")
 
 
@@ -182,7 +184,7 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
     if args.force:
         cmd.append("--force-llm-assessment")
 
-    completed = subprocess.run(cmd, text=True, capture_output=True)
+    completed = subprocess.run(cmd, text=True, capture_output=True, cwd=ROOT)
     report_path = log_dir / "report.json"
     report = None
     error = None
@@ -217,7 +219,16 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
 def solver_command_prefix(args: argparse.Namespace) -> list[str]:
     if args.solver_bin.exists():
         return [str(args.solver_bin)]
-    return ["cargo", "run", "-q", "-p", "logos-solver", "--"]
+    return [
+        "cargo",
+        "run",
+        "-q",
+        "--manifest-path",
+        str(ROOT / "Cargo.toml"),
+        "-p",
+        "logos-solver",
+        "--",
+    ]
 
 
 def load_exporter():
@@ -235,6 +246,11 @@ def resolve_path(path: str | Path) -> Path:
     return candidate if candidate.is_absolute() else ROOT / candidate
 
 
+def resolve_repository_paths(args: argparse.Namespace) -> None:
+    for name in ("config", "prepared_root", "log_root", "cache_dir", "solver_bin", "summary"):
+        setattr(args, name, resolve_path(getattr(args, name)))
+
+
 def ensure_sql_terminated(sql: str) -> str:
     stripped = sql.strip()
     if not stripped:
@@ -246,10 +262,6 @@ def write_text(path: Path, content: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
     return path
-
-
-def shell_word(value: str) -> str:
-    return "'" + value.replace("'", "'\\''") + "'"
 
 
 if __name__ == "__main__":
