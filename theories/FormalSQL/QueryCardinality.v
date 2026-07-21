@@ -6,9 +6,9 @@ From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
   FiniteSet OrderedSet Bool3 Join FlatData Env Formula Projection SqlOutcome
   SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
-  ListFacts ListPermut Partition ValueInteger.
+  ListFacts ListPermut Partition ValueInteger SchemaConstraints.
 From Logos.FormalSQL Require Import
-  SchemaConstraints SchemaCardinality TNullSyntax RewriteSpec.
+  SchemaCardinality TNullSyntax RewriteSpec.
 From Stdlib Require Import List String ZArith Lia SetoidList SetoidPermutation
   RelationClasses Morphisms Sorting.Sorted.
 
@@ -844,7 +844,9 @@ Lemma int32_primary_key_true_matches_at_most_one :
 Proof.
 intros fact_name dimension_name fact_value dimension_rows
   Hfact Htyped Hprimary.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_singleton_primary_key_projection_nodup
+    dimension_name dimension_rows Htyped Hprimary) as Hkeys.
 assert (Hvalues :
   NoDup (map (fun row => dot TNull row (Attr_int32 dimension_name))
     dimension_rows)).
@@ -1653,7 +1655,10 @@ intros left_first_name left_second_name
   right_first_name right_second_name
   left_first_value left_second_value right_rows
   Hleft_first Hleft_second Hright_first Hright_second Hprimary.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_composite_primary_key_projection_nodup
+    right_first_name right_second_name right_rows
+    Hright_first Hright_second Hprimary) as Hkeys.
 eapply NoDup_map_constant_filter_length_le_one with
   (key_of := project_row
     [Attr_int32 right_first_name; Attr_int32 right_second_name])
@@ -1749,7 +1754,7 @@ repeat split; [exact Hnonempty| |].
 - intros row Hrow attribute Hattribute.
   apply filter_In in Hrow as [Hrow _].
   eapply Hnonnull; eauto.
-- now apply NoDup_map_filter.
+- now apply NoDupA_map_filter.
 Qed.
 
 (** Fixed-first-key handoff. The caller supplies fact rows for one key value,

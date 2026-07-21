@@ -26,11 +26,12 @@ formal-sql: check-rocq-env submodules
 smoke: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/Smoke.v
 
+# The ordered theory commands are exhaustively checked against the structured
+# Rust trusted-theory registry by the proof-stage unit tests.
 logos-formal-sql-lemmas: formal-sql
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/TNullSyntax.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/NumericFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/RewriteSpec.v
-	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/SchemaConstraints.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/VerificationConditions.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/SchemaCardinality.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/QueryCardinality.v

@@ -4,8 +4,7 @@
 
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
-  FiniteSet ValueInteger ValueString.
-From Logos.FormalSQL Require Import SchemaConstraints.
+  FiniteSet ValueInteger ValueString SchemaConstraints.
 From Stdlib Require Import List String ZArith.
 
 Import ListNotations.

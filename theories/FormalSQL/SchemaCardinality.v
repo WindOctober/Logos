@@ -4,8 +4,7 @@
 
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
-  FiniteSet OrderedSet ValueInteger.
-From Logos.FormalSQL Require Import SchemaConstraints.
+  FiniteSet OrderedSet ValueInteger SchemaConstraints.
 From Stdlib Require Import List String ZArith NArith Lia.
 
 Import ListNotations.
@@ -100,6 +99,23 @@ destruct (conforming_int32_value name value Hconforms)
 destruct payload as [integer |]; cbn in Hnonnull.
 - now eexists.
 - discriminate.
+Qed.
+
+(** The only bridge from typed PostgreSQL equality to Rocq self-equality used
+    by the cardinality development.  It is intentionally restricted to
+    conforming, non-NULL INTEGER values. *)
+Lemma sql_value_equal_true_int32_refl :
+  forall name value,
+    value_conforms_attribute (Attr_int32 name) value ->
+    NullValues.is_null_value value = false ->
+    sql_value_equal_true value value.
+Proof.
+intros name value Htyped Hnonnull.
+destruct (conforming_nonnull_int32_value name value Htyped Hnonnull)
+  as [integer ->].
+unfold sql_value_equal_true.
+cbn.
+now rewrite Z.compare_refl.
 Qed.
 
 (** Shift the signed carrier into its finite zero-based ordinal. *)
@@ -212,6 +228,25 @@ induction rows as [|first rest IH]; intro Hinjective; cbn in *.
 Qed.
 
 (** Singleton complete INT32 primary keys. *)
+Lemma int32_singleton_primary_key_projection_nodup :
+  forall name rows,
+    rows_attribute_conform (Attr_int32 name) rows ->
+    primary_key_conforms [Attr_int32 name] rows ->
+    NoDup (map (project_row [Attr_int32 name]) rows).
+Proof.
+intros name rows Htyped Hprimary.
+apply (primary_key_conforms_nodup _ _ Hprimary).
+intros key_values Hkey.
+apply in_map_iff in Hkey as [row [<- Hrow]].
+rewrite project_row_cons, project_row_nil.
+split.
+- apply (sql_value_equal_true_int32_refl name).
+  + now apply Htyped.
+  + eapply primary_key_conforms_not_null; eauto.
+    now left.
+- exact I.
+Qed.
+
 Lemma int32_singleton_primary_key_codes_nodup :
   forall name rows,
     rows_attribute_conform (Attr_int32 name) rows ->
@@ -223,7 +258,9 @@ Lemma int32_singleton_primary_key_codes_nodup :
 Proof.
 intros name rows Htyped Hprimary.
 pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_singleton_primary_key_projection_nodup name rows Htyped Hprimary)
+  as Hkeys.
 eapply NoDup_map_by_key with
   (key_of := project_row [Attr_int32 name]); [exact Hkeys |].
 intros left right Hleft Hright Hequal.
@@ -391,6 +428,34 @@ destruct
 now subst.
 Qed.
 
+Lemma int32_composite_primary_key_projection_nodup :
+  forall first_name second_name rows,
+    rows_attribute_conform (Attr_int32 first_name) rows ->
+    rows_attribute_conform (Attr_int32 second_name) rows ->
+    primary_key_conforms
+      [Attr_int32 first_name; Attr_int32 second_name] rows ->
+    NoDup
+      (map
+        (project_row [Attr_int32 first_name; Attr_int32 second_name])
+        rows).
+Proof.
+intros first_name second_name rows Hfirst_typed Hsecond_typed Hprimary.
+pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
+apply (primary_key_conforms_nodup _ _ Hprimary).
+intros key_values Hkey.
+apply in_map_iff in Hkey as [row [<- Hrow]].
+rewrite !project_row_cons, project_row_nil.
+split.
+- apply (sql_value_equal_true_int32_refl first_name).
+  + now apply Hfirst_typed.
+  + eapply Hnonnull; [exact Hrow|now left].
+- split.
+  + apply (sql_value_equal_true_int32_refl second_name).
+    * now apply Hsecond_typed.
+    * eapply Hnonnull; [exact Hrow|now right; left].
+  + exact I.
+Qed.
+
 Lemma int32_composite_primary_key_codes_nodup :
   forall first_name second_name rows,
     rows_attribute_conform (Attr_int32 first_name) rows ->
@@ -407,7 +472,10 @@ Lemma int32_composite_primary_key_codes_nodup :
 Proof.
 intros first_name second_name rows Hfirst_typed Hsecond_typed Hprimary.
 pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_composite_primary_key_projection_nodup
+    first_name second_name rows Hfirst_typed Hsecond_typed Hprimary)
+  as Hkeys.
 eapply NoDup_map_by_key with
   (key_of := project_row
     [Attr_int32 first_name; Attr_int32 second_name]); [exact Hkeys |].
@@ -518,7 +586,10 @@ Proof.
 intros first_name second_name rows fixed_first
   Hfirst_typed Hsecond_typed Hprimary Hfixed.
 pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_composite_primary_key_projection_nodup
+    first_name second_name rows Hfirst_typed Hsecond_typed Hprimary)
+  as Hkeys.
 assert
   (Hcodes :
     NoDup
@@ -584,7 +655,10 @@ Proof.
 intros first_name second_name rows fixed_second
   Hfirst_typed Hsecond_typed Hprimary Hfixed.
 pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
-pose proof (primary_key_conforms_nodup _ _ Hprimary) as Hkeys.
+pose proof
+  (int32_composite_primary_key_projection_nodup
+    first_name second_name rows Hfirst_typed Hsecond_typed Hprimary)
+  as Hkeys.
 assert
   (Hcodes :
     NoDup

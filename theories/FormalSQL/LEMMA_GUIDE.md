@@ -8,21 +8,66 @@ problem workspace.
 
 `Schema.generated_schema_conforms db` is the complete trusted premise for a
 generated database. It includes the exact relation names and base sorts,
-`database_values_conform`, every declared `NOT NULL`, and every declared
-primary key. Generated proofs must use this predicate directly rather than
-reconstructing a weaker schema premise.
+`database_values_conform`, and the authoritative integrity contract emitted in
+`Schema.generated_schema_constraints`. The contract carries every declared
+`NOT NULL`, primary key, ordinary unique key, snapshot foreign key, check, and
+logical unique-index invariant. Generated proofs must use this predicate
+directly rather than reconstructing a weaker schema premise or consulting an
+untrusted metadata sidecar.
 
 Base rows are exposed by `instance_rows` as `Febag.elements` of the stored
 bag. The list retains bag multiplicity; it is never a set of rows. A primary
 key requires a nonempty ordered attribute list, non-NULL projected components,
-and `NoDup` of the projected key list.
+and `NoDupA sql_key_equal_true` of the projected key list. An ordinary unique
+key has the same SQL-equality uniqueness condition but permits NULL. Because
+SQL equality on a NULL-bearing component is UNKNOWN rather than TRUE, two such
+keys do not conflict, matching PostgreSQL's default NULL-distinct behavior.
+Do not replace either relation with raw Rocq structural equality.
+
+Foreign keys use read-only PostgreSQL `MATCH SIMPLE` snapshot semantics. A
+referencing row is accepted when any source component is NULL; otherwise a
+referenced row must match on every component through the attribute-indexed
+`foreign_key_value_equal_true`. Referenced columns must be a declared primary
+or ordinary unique key, source and referenced arities must agree, and every
+component must belong to a supported PostgreSQL referential-equality family.
+The model accepts identical declared types and exact INTEGER/BIGINT cross-type
+pairs. Heterogeneous character types fail closed because PostgreSQL chooses the
+referenced key's operator family directionally, which can differ from ordinary
+mixed-type SQL equality. Referential actions remain in the parser-facing
+contract but are omitted from the read-only proof AST.
+
+A check accepts exactly error-free TRUE or UNKNOWN. FALSE violates it, and a
+formula runtime error cannot describe a valid stored row. A partial unique
+index includes a row only when its error-free predicate evaluates TRUE; FALSE
+and UNKNOWN do not participate, while a predicate error invalidates the
+snapshot. Indexed expressions need be error-free only for participating rows.
+Their evaluated keys use PostgreSQL NULL-distinct typed equality. Physical
+index direction and NULL placement are discarded before the proof AST;
+lowering accepts `varchar_pattern_ops` only for TEXT/VARCHAR expressions, where
+its equality agrees with the modeled string equality under the frozen C
+environment, and rejects every unsupported operator class or operand type.
+
+The generated/validator environment is frozen to UTF-8 with libc `C`
+collation. FormalSQL routes string equality directly through typmod-aware
+`sql_string_compare`; `sql_value_equal_true_string_collation` exposes that
+comparison to proofs. It never uses Rocq structural string equality as an
+integrity shortcut.
 
 Useful projection lemmas from
-[`theories/FormalSQL/SchemaConstraints.v`] include:
+[`vendor/FormalSQL/src/data/proof_of_concept/SchemaConstraints.v`] include:
 
 - `instance_rows_nb_occ` for the bag/list multiplicity bridge;
 - `primary_key_conforms_nonempty`, `primary_key_conforms_not_null`, and
   `primary_key_conforms_nodup`;
+- `unique_key_conforms_nodupA`, `unique_key_two_rows_conflict`, and
+  `unique_key_two_rows_conform_if_not_equal` for SQL NULL-distinct uniqueness;
+- `foreign_key_match_simple_null_component`,
+  `foreign_key_match_simple_referenced_row`, and the
+  `foreign_key_value_equal_true_int32_int64`/reverse bridge lemmas;
+- `check_row_conforms_true`, `check_row_conforms_unknown`,
+  `check_row_false_violates`, and `check_row_error_violates`;
+- `unique_index_row_participates_true`, the FALSE/UNKNOWN/error exclusion
+  lemmas, and the `unique_index_conforms_*` selectors;
 - `schema_constraints_conform_member` for selecting a generated table
   constraint;
 - `database_conforms_schema_relnames`,
@@ -30,12 +75,13 @@ Useful projection lemmas from
   `database_conforms_schema_values`, and
   `database_conforms_schema_constraints`.
 
-Carrier-list equality is exact for conforming `INT32` primary keys. When a
-PostgreSQL operator class identifies more representations, structural `NoDup`
-admits additional invalid database states and is therefore a conservative
-over-approximation rather than a weakening of a proof obligation. Do not use a
-string, float, numeric, partial, or otherwise non-`INT32` key to derive
-PostgreSQL cardinality until a corresponding SQL-equality bridge is available.
+`primary_key_conforms_nodup` deliberately requires a self-equality premise
+before converting semantic `NoDupA` into structural `NoDup`. The cardinality
+library supplies this bridge only for typed, non-NULL `INT32` projections via
+`int32_singleton_primary_key_projection_nodup` and
+`int32_composite_primary_key_projection_nodup`. Do not use a string, float,
+numeric, partial, or otherwise non-`INT32` key to derive structural
+cardinality until a corresponding SQL-equality bridge is proved.
 
 ## PostgreSQL INTEGER Cardinality
 
