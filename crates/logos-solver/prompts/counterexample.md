@@ -29,6 +29,9 @@ JSON schema:
 
 Rules:
 - The witnessSql must be valid PostgreSQL SQL.
+- Every top-level witnessSql statement must begin directly with INSERT, UPDATE,
+  or DELETE. CTE-prefixed statements, transaction control, SET, DDL, CALL, and
+  DO are rejected by the deterministic checker.
 - Use small table instances unless a larger instance is required.
 - Prefer INSERT statements.
 - The deterministic checker will execute the schema, then witnessSql, then both
@@ -39,6 +42,13 @@ Rules:
 Schema:
 ```sql
 {{SCHEMA_SQL}}
+```
+
+Authoritative benchmark integrity contract (this includes constraints carried
+outside the parser-facing DDL; the deterministic validator enforces it):
+
+```text
+{{INTEGRITY_CONTRACT}}
 ```
 
 Source query:
