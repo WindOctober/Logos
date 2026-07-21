@@ -46,34 +46,42 @@ PaperTools/scripts/run-benchmark-tools --tool all
 ```
 
 Individual tools can be selected with `--tool sqlsolver`, `--tool qed`, or
-`--tool cosette`.
+`--tool cosette`. Use `--tool qed-cosette` to run the two external paper
+baselines without executing SQLSolver.
 
 ## Cosette Frontend Profile
 
 The generated Cosette profile is a frontend-compatibility profile over
-Cosette's public DSL, not a full SQL normalizer. The Cosette parser accepts a
-narrow SQL subset inside `query q1 \`...\`;`: `SELECT`, `SELECT DISTINCT`,
-comma `FROM`, subqueries in `FROM`, explicit `INNER JOIN ... ON`, `UNION ALL`,
-`WHERE` predicates over `=`, `<`, `>`, `AND`, `OR`, `NOT`, `EXISTS`, integer
-and string literals, arithmetic `+ - * /`, aggregate calls, qualified-column
-`GROUP BY`, and `HAVING`.
+Cosette's public DSL, not a SQL normalizer. The adapter emits each query without
+semantic rewrites: it does not fold expressions, reassociate joins, qualify
+names, remove ordering, or otherwise rewrite PostgreSQL semantics into Cosette
+syntax. Before DSL embedding, shared protected-aware lexical normalization
+removes comments, compacts structural whitespace, and strips one structural
+trailing semicolon while leaving protected text unchanged.
 
-`benchmarks/adapters/materializers/materialize_cosette.py` applies only conservative
-frontend rewrites before emitting a case: it adds self-aliases to unaliased base
-tables, qualifies columns in single-table scopes, removes top-level `ORDER BY`
-where Cosette's unordered relation semantics make order irrelevant, removes
-`ORDER BY`/`LIMIT` only for scalar aggregate queries that already return at most
-one row, and rewrites finite literal `IN` lists plus `<=`, `>=`, and `<>`/`!=`
-into parser-supported predicates.
+`benchmarks/adapters/materializers/materialize_cosette.py` admits only the
+unmodified overlap with Cosette's narrow parser and scalar model. Protected
+SQL regions are excluded from feature detection. Every case is still emitted
+for an auditable tool run. `metadata.json` reports two independent axes:
+`syntaxCompatibility` covers the parser surface, while
+`semanticProfileCompatibility` covers source constraints, SQL NULL behavior,
+type lowering, and runtime-error/overflow semantics. Their blocker lists are
+systematic; no case-id or rewrite-class allow/deny list participates in the
+classification. The older aggregate `cosetteCompatibility` field is retained
+only for generated-profile compatibility.
 
-Cases using constructs outside that subset are still generated with their
-source SQL but are marked in `metadata.json` as
-`"cosetteCompatibility": "unsupported"` with `cosetteUnsupportedFeatures`.
-Examples include CTEs, outer joins, `VALUES`, `EXCEPT`/`INTERSECT`, window
-functions, `ROLLUP`/`GROUPING SETS`, `CASE`, `CAST`, `LIKE`, SQL `NULL`
-predicates, `IN`/`NOT IN` subqueries, date/interval arithmetic, decimal
-literals, unsupported scalar functions, and `LIMIT`/top-k semantics that cannot
-be removed without changing benchmark meaning.
+Call admission is closed: only unqualified `SUM`, `COUNT`, `MAX`, and `MIN`
+over one simple unquoted column path, plus `COUNT(*)`, are classified as
+compatible. Every other unprotected call name or aggregate form is flagged.
+
+Conservatively flagged constructs include CTEs, joins outside the admitted
+comma-product surface, derived relations, `VALUES`, duplicate-eliminating set
+operations, window and grouping-set syntax, `CASE`, `CAST`, SQL `NULL` and
+three-valued predicates, unsupported comparisons and functions, date/interval
+and decimal values, checked integer arithmetic, literal or subquery `IN`,
+`BETWEEN`, `ORDER BY`, and row slicing. These forms remain byte-present so
+runtime errors, type resolution, grouping ordinals, and predicate precedence
+cannot be erased by an unproved textual rewrite.
 
 ## Benchmark Semantics
 
@@ -364,9 +372,18 @@ benchmarks/core/.generated/qed/nonwetune-flat/<benchmark>__<case>/
 ```
 
 The QED profile emits a single `qed.sql` file per case, with simplified `CREATE TABLE`
-declarations followed by the two queries. Identifiers are double-quoted, QED-unsupported
-DDL constraints are omitted, schema columns are pruned to the parser-visible query
-fragment, and Calcite/QED interval precision spelling is patched where needed.
+declarations followed by the two queries. Every selected relation retains its complete
+row type, including the column order observed by `SELECT *`; columns are never replaced
+by a guessed dummy projection. `qed.sql` passes through exactly representable `NOT NULL`
+constraints but deliberately withholds every PRIMARY/UNIQUE key while Calcite plans the
+queries. This avoids QED parser's declaration-order versus name-sorted key-index bug from
+changing a query before serialization. Safe primary keys and all-non-NULL unique keys are
+instead recorded in `constraintCoverage.postParseKeys` (with `renderedKeys` retained as a
+compatibility alias) and injected by column name only after the parser fixes the final
+JSON field order. A key whose table or column was pruned is conservatively dropped and
+recorded. Foreign keys, unattested checks, and nullable unique keys are likewise omitted;
+`constraintCompatibility` records every conservative relaxation. Calcite/QED interval
+precision spelling is patched where needed.
 
 For Cosette runs, generate the DSL-facing profile with:
 
@@ -400,7 +417,9 @@ verify q1 q2;
 This adapter is a tool-facing frontend profile. Cosette's public DSL exposes `int`
 and `string` scalar sorts, so richer SQL scalar types are lowered into those two
 sorts for frontend testing. Constraints not expressible in the DSL remain in the
-source metadata rather than being silently treated as Cosette assumptions.
+source metadata and cause a semantic-profile blocker rather than being silently
+treated as Cosette assumptions. Syntax or profile flags never pre-filter the run:
+all emitted cases remain in the experimental denominator.
 
 ## Calcite IR Ingestion
 

@@ -12,11 +12,40 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+try:
+    from materializer_sql import (
+        ASCII_SQL_WHITESPACE_PATTERN,
+        POSTGRES_IDENTIFIER_CONTINUATION_CLASS,
+        mask_sql_regions,
+        parse_schema,
+        split_top_level_commas,
+        strip_sql_comments,
+        substitute_unprotected,
+    )
+except ModuleNotFoundError:  # Imported as benchmarks.adapters.materializers.*
+    from .materializer_sql import (
+        ASCII_SQL_WHITESPACE_PATTERN,
+        POSTGRES_IDENTIFIER_CONTINUATION_CLASS,
+        mask_sql_regions,
+        parse_schema,
+        split_top_level_commas,
+        strip_sql_comments,
+        substitute_unprotected,
+    )
+
 
 ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = ROOT / "scripts/export-benchmark-ir"
 DEFAULT_CONFIG = "benchmarks/core/ingestion.json"
 DEFAULT_OUTPUT = "benchmarks/core/.generated/qed"
+_QED_INTERVAL_PRECISION = re.compile(
+    rf"(?<![{POSTGRES_IDENTIFIER_CONTINUATION_CLASS}.])"
+    rf"INTERVAL{ASCII_SQL_WHITESPACE_PATTERN}+'([0-9]{{3,}})'"
+    rf"{ASCII_SQL_WHITESPACE_PATTERN}+DAY"
+    rf"(?![{POSTGRES_IDENTIFIER_CONTINUATION_CLASS}.])"
+    rf"(?!{ASCII_SQL_WHITESPACE_PATTERN}*\()",
+    flags=re.IGNORECASE | re.ASCII,
+)
 
 
 @dataclass
@@ -30,6 +59,14 @@ class Column:
 class Table:
     name: str
     columns: list[Column] = field(default_factory=list)
+    primary_keys: list[tuple[str, ...]] = field(default_factory=list)
+    unique_keys: list[tuple[str, ...]] = field(default_factory=list)
+    applied_constraints: list[dict[str, Any]] = field(default_factory=list)
+    omitted_constraints: list[dict[str, Any]] = field(default_factory=list)
+
+
+class QedJsonRepairError(RuntimeError):
+    """The parser JSON cannot be aligned with the attested QED schema."""
 
 
 def main() -> int:
@@ -85,7 +122,7 @@ def main() -> int:
             try:
                 status = materialize_case(config, case, output_dir, skip_parser=args.skip_parser)
                 materialized += 1
-                if status != "parsed":
+                if not args.skip_parser and status != "parsed":
                     parser_failed += 1
                 print(f"materialized {benchmark_id}/{case.case_id}: {status}", file=sys.stderr)
             except Exception as exc:
@@ -99,7 +136,9 @@ def finish(materialized: int, parser_failed: int, failed: int) -> int:
         f"summary: materialized={materialized} parser_failed={parser_failed} failed={failed}",
         file=sys.stderr,
     )
-    return 1 if failed else 0
+    if materialized == 0:
+        print("failed: the selected QED materialization produced zero cases", file=sys.stderr)
+    return 1 if failed or materialized == 0 else 0
 
 
 def remove_selected_outputs(output_dir: Path, target: str) -> None:
@@ -176,10 +215,11 @@ def materialize_case(
             normalize=adapter == "sqlglot" or benchmark_id == "wetune-issues",
         )
         quote_schema_identifiers = adapter == "sqlglot" or benchmark_id == "wetune-issues"
-        schema_sql = render_qed_schema(
+        schema_sql, constraint_coverage = render_qed_schema(
             case.schema_sql,
             before_sql + "\n" + after_sql,
             quote_identifiers=quote_schema_identifiers,
+            constraints=case.constraints,
         )
 
     qed_sql = schema_sql + "\n" + ensure_sql_terminated(before_sql) + ensure_sql_terminated(after_sql)
@@ -188,6 +228,21 @@ def materialize_case(
 
     parser_status = {"skipped": True} if skip_parser else run_qed_parser(case_dir / "qed.sql")
     parser_problem = None if skip_parser else classify_qed_parser_problem(parser_status)
+    json_repair = None
+    if (
+        not skip_parser
+        and parser_problem is None
+        and parser_status.get("jsonExists")
+    ):
+        try:
+            json_repair = repair_qed_json(
+                case_dir / "qed.json",
+                expected_table_keys=constraint_coverage["renderedKeys"],
+            )
+            apply_qed_json_repair_coverage(constraint_coverage, json_repair)
+        except QedJsonRepairError as exc:
+            json_repair = {"status": "error", "message": str(exc)}
+            parser_problem = {"kind": "parser-error", "message": str(exc)}
     if parser_problem and (case_dir / "qed.json").exists():
         (case_dir / "qed.json").unlink()
         parser_status["jsonExists"] = False
@@ -211,13 +266,19 @@ def materialize_case(
                         "renderer": "logos-qed-schema-renderer",
                         "semanticNote": (
                             "DDL is simplified to QED parser-supported CREATE TABLE "
-                            "statements. Identifiers are double-quoted and unsupported "
-                            "constraints/indexes are omitted."
+                            "statements. Every selected relation retains all source "
+                            "columns and NOT NULL declarations, but no key declaration "
+                            "is exposed during Calcite planning. Attested keys are "
+                            "injected into parser JSON afterward; conservative omissions "
+                            "are enumerated in constraintCoverage."
                         ),
                     },
                     "before": before_report,
                     "after": after_report,
                 },
+                "constraintCompatibility": constraint_coverage["compatibility"],
+                "constraintCoverage": constraint_coverage,
+                "qedJsonRepair": json_repair,
                 "parser": parser_status,
                 "parserProblem": parser_problem,
             },
@@ -271,8 +332,26 @@ def normalize_query(
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr)
+    logical_command = [
+        "benchmarks/scripts/sqlglot-normalize",
+        "--input",
+        f"<temporary>/{source.name}",
+        "--output",
+        f"<temporary>/{target.name}",
+        "--report",
+        f"<temporary>/{report.name}",
+        "--read",
+        read,
+        "--write",
+        write,
+        "--identify",
+    ]
     return patch_qed_sql(target.read_text()), {
-        "command": command,
+        "command": logical_command,
+        "commandPathPolicy": (
+            "Repository-relative executable plus stable <temporary> placeholders; "
+            "the executed scratch directory is intentionally not serialized."
+        ),
         "returnCode": completed.returncode,
         "stderrTail": tail(completed.stderr),
         "report": json.loads(report.read_text()),
@@ -304,6 +383,335 @@ def run_qed_parser(sql_path: Path) -> dict[str, Any]:
         "stdoutTail": tail(started.stdout),
         "stderrTail": tail(started.stderr),
     }
+
+
+def apply_qed_json_repair_coverage(
+    coverage: dict[str, Any],
+    attestation: dict[str, Any],
+) -> None:
+    """Reflect conservative JSON key drops in one materializer coverage record."""
+
+    applied = coverage.get("applied")
+    omitted = coverage.get("omitted")
+    dropped_keys = attestation.get("droppedKeys")
+    if (
+        not isinstance(applied, list)
+        or not isinstance(omitted, list)
+        or not isinstance(dropped_keys, list)
+    ):
+        raise QedJsonRepairError(
+            "QED repair coverage/attestation has malformed applied, omitted, or droppedKeys"
+        )
+    dropped_identities: set[tuple[str, str, tuple[str, ...]]] = set()
+    for dropped in dropped_keys:
+        if (
+            not isinstance(dropped, dict)
+            or dropped.get("kind") not in {"primary", "unique"}
+            or not isinstance(dropped.get("table"), str)
+            or not isinstance(dropped.get("columns"), list)
+            or not isinstance(dropped.get("reason"), str)
+        ):
+            raise QedJsonRepairError(
+                f"malformed conservatively dropped QED key: {dropped!r}"
+            )
+        dropped_identities.add(
+            (
+                dropped["kind"],
+                dropped["table"].casefold(),
+                tuple(sorted(column.casefold() for column in dropped["columns"])),
+            )
+        )
+        omitted.append(
+            constraint_entry(
+                dropped["kind"],
+                "qed-json-repair",
+                dropped["table"],
+                dropped["columns"],
+                dropped["reason"],
+                missingColumns=dropped.get("missingColumns") or [],
+                nullableColumns=dropped.get("nullableColumns") or [],
+            )
+        )
+    coverage["applied"] = [
+        entry
+        for entry in applied
+        if not (
+            isinstance(entry, dict)
+            and entry.get("kind") in {"primary", "unique"}
+            and isinstance(entry.get("table"), str)
+            and isinstance(entry.get("columns"), list)
+            and all(isinstance(column, str) for column in entry["columns"])
+            and (
+                entry["kind"],
+                entry["table"].casefold(),
+                tuple(sorted(column.casefold() for column in entry["columns"])),
+            )
+            in dropped_identities
+        )
+    ]
+    coverage["omitted"] = deduplicate_constraint_entries(omitted)
+    coverage["compatibility"] = (
+        "conservative-relaxation" if coverage["omitted"] else "exact"
+    )
+
+
+def repair_qed_json(
+    json_path: str | Path,
+    metadata_path: str | Path | None = None,
+    *,
+    expected_table_keys: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Inject attested keys against QED's final serialized field order.
+
+    QED's parser associates DDL key indexes with CREATE TABLE declaration order
+    but emits each JSON schema's [fields] in map order.  Supplying a key to the
+    parser can therefore both constrain Calcite planning with the wrong columns
+    and serialize an unsound key.  The materializer deliberately withholds all
+    keys from qed.sql, then this function injects attested keys only after the
+    parser has fixed the JSON field order.  It is the single authority used by
+    direct materialization and by the standalone benchmark runner. Expected
+    keys come either from the in-memory post-parse attestation or from the
+    backward-compatible [metadata.json/constraintCoverage/renderedKeys] field.
+
+    Repair is deterministic and idempotent.  If RelPruner removed a rendered
+    key column, or serialized it as unexpectedly nullable, that key is dropped
+    and attested as a conservative relaxation: proving the stronger
+    unconstrained problem remains sound for the source schema.  RelPruner can
+    likewise remove an entire keyed table; that key is dropped conservatively.
+    A duplicate schema/field, malformed schema shape, or malformed attestation
+    remains an error because it cannot be interpreted safely.
+    """
+
+    json_path = Path(json_path)
+    metadata: dict[str, Any] | None = None
+    metadata_file = Path(metadata_path) if metadata_path is not None else None
+    if metadata_file is not None:
+        try:
+            loaded_metadata = json.loads(metadata_file.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise QedJsonRepairError(f"cannot read QED metadata {metadata_file}: {exc}") from exc
+        if not isinstance(loaded_metadata, dict):
+            raise QedJsonRepairError(f"QED metadata is not an object: {metadata_file}")
+        metadata = loaded_metadata
+        if expected_table_keys is None:
+            coverage = metadata.get("constraintCoverage")
+            if not isinstance(coverage, dict) or not isinstance(coverage.get("renderedKeys"), list):
+                raise QedJsonRepairError(
+                    "QED metadata lacks constraintCoverage.renderedKeys"
+                )
+            expected_table_keys = coverage["renderedKeys"]
+    if expected_table_keys is None:
+        raise QedJsonRepairError("expected QED table keys were not provided")
+
+    expected: dict[str, dict[str, Any]] = {}
+    for raw_key in expected_table_keys:
+        if not isinstance(raw_key, dict):
+            raise QedJsonRepairError("rendered key attestation contains a non-object")
+        kind = raw_key.get("kind")
+        table_name = raw_key.get("table")
+        columns = raw_key.get("columns")
+        if (
+            kind not in {"primary", "unique"}
+            or not isinstance(table_name, str)
+            or not isinstance(columns, list)
+            or not columns
+            or not all(isinstance(column, str) for column in columns)
+        ):
+            raise QedJsonRepairError(f"malformed rendered key attestation: {raw_key!r}")
+        folded_table = table_name.casefold()
+        table_expected = expected.setdefault(
+            folded_table,
+            {"table": table_name, "keys": []},
+        )
+        if table_expected["table"] != table_name:
+            raise QedJsonRepairError(
+                f"case-insensitive duplicate rendered table name: {table_name}"
+            )
+        folded_columns = tuple(column.casefold() for column in columns)
+        if len(set(folded_columns)) != len(folded_columns):
+            raise QedJsonRepairError(
+                f"rendered key repeats a column on table {table_name}: {columns}"
+            )
+        table_expected["keys"].append(
+            {"kind": kind, "columns": list(columns)}
+        )
+
+    try:
+        document = json.loads(json_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QedJsonRepairError(f"cannot read QED JSON {json_path}: {exc}") from exc
+    if not isinstance(document, dict) or not isinstance(document.get("schemas"), list):
+        raise QedJsonRepairError(f"QED JSON has no schema array: {json_path}")
+
+    schemas_by_name: dict[str, dict[str, Any]] = {}
+    for raw_schema in document["schemas"]:
+        if not isinstance(raw_schema, dict) or not isinstance(raw_schema.get("name"), str):
+            raise QedJsonRepairError("QED JSON contains a schema without a string name")
+        raw_keys = raw_schema.get("key")
+        if (
+            not isinstance(raw_keys, list)
+            or any(
+                not isinstance(key, list)
+                or any(not isinstance(index, int) or isinstance(index, bool) for index in key)
+                for key in raw_keys
+            )
+        ):
+            raise QedJsonRepairError(
+                f"QED JSON schema {raw_schema['name']} has malformed key indexes"
+            )
+        folded_name = raw_schema["name"].casefold()
+        if folded_name in schemas_by_name:
+            raise QedJsonRepairError(
+                f"QED JSON contains duplicate schema name {raw_schema['name']}"
+            )
+        schemas_by_name[folded_name] = raw_schema
+        # Never trust a parser-emitted key index: even a table without an
+        # expected key must not retain an accidental constraint. Attested keys
+        # are injected below after field-order validation.
+        raw_schema["key"] = []
+
+    table_attestations: list[dict[str, Any]] = []
+    dropped_keys: list[dict[str, Any]] = []
+    for folded_table in sorted(expected):
+        table_expected = expected[folded_table]
+        table_name = table_expected["table"]
+        schema = schemas_by_name.get(folded_table)
+        if schema is None:
+            for expected_key in table_expected["keys"]:
+                dropped_keys.append(
+                    {
+                        "kind": expected_key["kind"],
+                        "table": table_name,
+                        "columns": expected_key["columns"],
+                        "reason": "qed-json-pruned-rendered-key-table",
+                        "missingColumns": expected_key["columns"],
+                        "nullableColumns": [],
+                    }
+                )
+            table_attestations.append(
+                {
+                    "table": table_name,
+                    "fieldCount": None,
+                    "keys": [],
+                    "status": "pruned-by-qed-parser",
+                }
+            )
+            continue
+        fields = schema.get("fields")
+        nullabilities = schema.get("nullable")
+        if (
+            not isinstance(fields, list)
+            or not all(isinstance(field, str) for field in fields)
+            or not isinstance(nullabilities, list)
+            or len(nullabilities) != len(fields)
+            or not all(isinstance(nullable, bool) for nullable in nullabilities)
+        ):
+            raise QedJsonRepairError(
+                f"QED JSON has malformed fields/nullability for table {table_name}"
+            )
+        field_indexes: dict[str, int] = {}
+        for index, field_name in enumerate(fields):
+            folded_field = field_name.casefold()
+            if folded_field in field_indexes:
+                raise QedJsonRepairError(
+                    f"QED JSON table {table_name} has duplicate field {field_name}"
+                )
+            field_indexes[folded_field] = index
+
+        repaired_keys: list[list[int]] = []
+        key_attestations: list[dict[str, Any]] = []
+        for expected_key in table_expected["keys"]:
+            indexes: list[int] = []
+            missing_columns: list[str] = []
+            nullable_columns: list[str] = []
+            for column_name in expected_key["columns"]:
+                index = field_indexes.get(column_name.casefold())
+                if index is None:
+                    missing_columns.append(column_name)
+                    continue
+                if nullabilities[index]:
+                    nullable_columns.append(column_name)
+                indexes.append(index)
+            if missing_columns or nullable_columns:
+                reason = (
+                    "qed-json-pruned-rendered-key-column"
+                    if missing_columns and not nullable_columns
+                    else "qed-json-rendered-key-column-unexpectedly-nullable"
+                    if nullable_columns and not missing_columns
+                    else "qed-json-rendered-key-not-attested"
+                )
+                dropped_keys.append(
+                    {
+                        "kind": expected_key["kind"],
+                        "table": table_name,
+                        "columns": expected_key["columns"],
+                        "reason": reason,
+                        "missingColumns": missing_columns,
+                        "nullableColumns": nullable_columns,
+                    }
+                )
+                continue
+            canonical_indexes = sorted(indexes)
+            if canonical_indexes not in repaired_keys:
+                repaired_keys.append(canonical_indexes)
+            key_attestations.append(
+                {
+                    "kind": expected_key["kind"],
+                    "columns": expected_key["columns"],
+                    "jsonIndexes": canonical_indexes,
+                }
+            )
+        repaired_keys.sort()
+        schema["key"] = repaired_keys
+        table_attestations.append(
+            {
+                "table": table_name,
+                "fieldCount": len(fields),
+                "keys": key_attestations,
+            }
+        )
+
+    attestation = {
+        "version": 1,
+        "status": (
+            "verified-with-conservative-key-drops"
+            if dropped_keys
+            else "verified-and-normalized"
+        ),
+        "policy": (
+            "source keys withheld during QED planning; all parser key indexes "
+            "cleared, then attested keys injected by column name against serialized "
+            "QED field indexes"
+        ),
+        "tables": table_attestations,
+        "droppedKeys": dropped_keys,
+    }
+    try:
+        json_path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+        )
+    except OSError as exc:
+        raise QedJsonRepairError(f"cannot write repaired QED JSON {json_path}: {exc}") from exc
+
+    if metadata is not None and metadata_file is not None:
+        coverage = metadata.get("constraintCoverage")
+        if not isinstance(coverage, dict):
+            raise QedJsonRepairError(
+                "QED metadata lacks an object-valued constraintCoverage"
+            )
+        apply_qed_json_repair_coverage(coverage, attestation)
+        metadata["constraintCompatibility"] = coverage["compatibility"]
+        metadata["qedJsonRepair"] = attestation
+        metadata["qedJson"] = json_path.name
+        try:
+            metadata_file.write_text(
+                json.dumps(metadata, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+            )
+        except OSError as exc:
+            raise QedJsonRepairError(
+                f"cannot record QED JSON repair in {metadata_file}: {exc}"
+            ) from exc
+    return attestation
 
 
 def classify_qed_parser_problem(parser_status: dict[str, Any]) -> dict[str, str] | None:
@@ -357,58 +765,98 @@ def build_metadata(config: dict[str, Any], case: Any, flat_case_id: str) -> dict
     }
 
 
-def render_qed_schema(schema_sql: str, query_sql: str, quote_identifiers: bool) -> str:
-    tables = prune_schema_columns(parse_schema(schema_sql), query_sql)
+def render_qed_schema(
+    schema_sql: str,
+    query_sql: str,
+    quote_identifiers: bool,
+    constraints: Any = None,
+) -> tuple[str, dict[str, Any]]:
+    all_tables = parse_schema(
+        schema_sql,
+        clean_identifier=clean_identifier,
+        parse_table=parse_table,
+    )
+    tables = select_schema_tables(all_tables, query_sql)
+    coverage: dict[str, Any] = {
+        "compatibility": "exact",
+        "policy": (
+            "QED receives every column of each selected source relation. "
+            "CREATE TABLE exposes NOT NULL but deliberately omits PRIMARY/UNIQUE "
+            "during Calcite planning. Safe source keys are attested here and "
+            "injected by repair_qed_json only after the parser fixes its final "
+            "serialized field order. Unsupported constraints are conservative "
+            "relaxations enumerated below."
+        ),
+        "applied": [
+            entry
+            for table in tables
+            for entry in table.applied_constraints
+        ],
+        "omitted": [
+            entry
+            for table in tables
+            for entry in table.omitted_constraints
+        ],
+    }
+    apply_constraint_metadata(tables, all_tables, constraints, coverage)
+    post_parse_keys = [
+        constraint_entry(kind, "post-parse-attestation", table.name, key)
+        for table in tables
+        for kind, keys in (
+            ("primary", table.primary_keys),
+            ("unique", table.unique_keys),
+        )
+        for key in keys
+    ]
+    coverage["postParseKeys"] = post_parse_keys
+    # Compatibility alias for existing one-click runners. These keys are no
+    # longer rendered in qed.sql; they are candidates for post-parse injection.
+    coverage["renderedKeys"] = post_parse_keys
+    coverage["keyApplicationStage"] = "post-parse-json"
+
     rendered = []
     for table in tables:
-        columns = []
+        declarations = []
         for column in table.columns:
             suffix = " NOT NULL" if column.not_null else ""
-            columns.append(
+            declarations.append(
                 f"  {render_identifier(column.name, quote_identifiers)} {column.type_sql}{suffix}"
             )
-        if not columns:
+        if not declarations:
             continue
         rendered.append(
             f"CREATE TABLE {render_identifier(table.name, quote_identifiers)} (\n"
-            + ",\n".join(columns)
+            + ",\n".join(declarations)
             + "\n);\n"
         )
-    return "\n".join(rendered)
+    coverage["applied"] = deduplicate_constraint_entries(coverage["applied"])
+    coverage["omitted"] = deduplicate_constraint_entries(coverage["omitted"])
+    if coverage["omitted"]:
+        coverage["compatibility"] = "conservative-relaxation"
+    return "\n".join(rendered), coverage
 
 
-def prune_schema_columns(tables: list[Table], query_sql: str) -> list[Table]:
+def select_schema_tables(tables: list[Table], query_sql: str) -> list[Table]:
+    """Select source relations without ever pruning their row type.
+
+    QED needs a smaller application schema for some WeTune inputs, but column
+    pruning is not semantics preserving in the presence of [SELECT *] or row
+    multiplicities that differ only in a dropped column.  Relation selection is
+    therefore conservative at the table boundary: once selected, a relation is
+    rendered with every source column.
+    """
+
     aliases = collect_table_aliases(query_sql)
     referenced_tables = {table.lower() for table in aliases.values()}
     referenced_tables.update(
         table.name.lower() for table in tables if identifier_is_referenced(query_sql, table.name)
     )
-    refs = collect_column_refs(query_sql, aliases)
-    refs_lower = {(table.lower(), column.lower()) for table, column in refs}
-    referenced_columns = {column.lower() for _, column in refs}
-
-    by_name = {table.name: table for table in tables}
-    pruned = []
-    for table in tables:
-        if referenced_tables and table.name.lower() not in referenced_tables:
-            continue
-        columns = [
-            column
-            for column in table.columns
-            if (table.name.lower(), column.name.lower()) in refs_lower
-            or column.name.lower() in referenced_columns
-            or unqualified_column_is_referenced(query_sql, column.name)
-        ]
-        if not columns and table.columns:
-            columns = [preferred_dummy_column(table)]
-        pruned.append(Table(name=table.name, columns=columns))
-    if pruned:
-        return pruned
-    return list(by_name.values())
-
-
-def unqualified_column_is_referenced(sql: str, column_name: str) -> bool:
-    return identifier_is_referenced(sql, column_name, forbid_preceding_dot=True)
+    selected = [
+        table
+        for table in tables
+        if not referenced_tables or table.name.lower() in referenced_tables
+    ]
+    return selected or list(tables)
 
 
 def identifier_is_referenced(sql: str, identifier: str, forbid_preceding_dot: bool = False) -> bool:
@@ -418,13 +866,6 @@ def identifier_is_referenced(sql: str, identifier: str, forbid_preceding_dot: bo
         return True
     bare_prefix = r"(?<![.A-Za-z0-9_])" if forbid_preceding_dot else r"(?<![A-Za-z0-9_])"
     return bool(re.search(rf"(?is){bare_prefix}{re.escape(identifier)}(?![A-Za-z0-9_])", sql))
-
-
-def preferred_dummy_column(table: Table) -> Column:
-    for column in table.columns:
-        if column.type_sql.upper() not in {"VARCHAR(255)", "CHAR", "CHAR(255)"}:
-            return column
-    return table.columns[0]
 
 
 def collect_table_aliases(sql: str) -> dict[str, str]:
@@ -486,50 +927,182 @@ def collect_comma_from_aliases(sql: str, stopwords: set[str]) -> dict[str, str]:
     return aliases
 
 
-def collect_column_refs(sql: str, aliases: dict[str, str]) -> set[tuple[str, str]]:
-    refs: set[tuple[str, str]] = set()
-    for match in re.finditer(r'"((?:""|[^"])+?)"\."((?:""|[^"])+?)"', sql):
-        qualifier = match.group(1).replace('""', '"')
-        column = match.group(2).replace('""', '"')
-        refs.add((aliases.get(qualifier, qualifier), column))
-    for match in re.finditer(
-        r"(?is)\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b",
-        sql,
-    ):
-        qualifier, column = match.group(1), match.group(2)
-        refs.add((aliases.get(qualifier, qualifier), column))
-    return refs
+_DDL_IDENTIFIER = r'("(?:""|[^"])+?"|`(?:``|[^`])+?`|[A-Za-z_][A-Za-z0-9_]*)'
 
 
-def parse_schema(schema_sql: str) -> list[Table]:
-    tables = []
-    position = 0
-    pattern = re.compile(r"(?is)\bCREATE\s+TABLE\b")
-    while True:
-        match = pattern.search(schema_sql, position)
+def constraint_entry(
+    kind: str,
+    source: str,
+    table: str | None = None,
+    columns: tuple[str, ...] | list[str] | None = None,
+    reason: str | None = None,
+    **details: Any,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {"kind": kind, "source": source}
+    if table is not None:
+        entry["table"] = table
+    if columns is not None:
+        entry["columns"] = list(columns)
+    if reason is not None:
+        entry["reason"] = reason
+    entry.update({key: value for key, value in details.items() if value is not None})
+    return entry
+
+
+def deduplicate_constraint_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in entries:
+        key = json.dumps(entry, sort_keys=True, separators=(",", ":"))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(entry)
+    return result
+
+
+def find_table(tables: list[Table], name: str) -> Table | None:
+    folded = name.casefold()
+    return next((table for table in tables if table.name.casefold() == folded), None)
+
+
+def find_column(table: Table, name: str) -> Column | None:
+    folded = name.casefold()
+    return next((column for column in table.columns if column.name.casefold() == folded), None)
+
+
+def canonical_key(table: Table, columns: list[str] | tuple[str, ...]) -> tuple[str, ...] | None:
+    if not columns:
+        return None
+    canonical: list[str] = []
+    for name in columns:
+        column = find_column(table, name)
+        if column is None:
+            return None
+        if column.name.casefold() in {item.casefold() for item in canonical}:
+            return None
+        canonical.append(column.name)
+    return tuple(canonical)
+
+
+def apply_not_null(table: Table, column_name: str) -> str | None:
+    column = find_column(table, column_name)
+    if column is None:
+        return None
+    column.not_null = True
+    return column.name
+
+
+def apply_primary_key(table: Table, columns: list[str] | tuple[str, ...]) -> tuple[str, ...] | None:
+    key = canonical_key(table, columns)
+    if key is None:
+        return None
+    for column_name in key:
+        apply_not_null(table, column_name)
+    if key in table.primary_keys or key in table.unique_keys:
+        return key
+    # SQL permits only one PRIMARY KEY declaration, whereas benchmark metadata
+    # can redundantly restate the same key through several sources.  A second
+    # distinct non-null key has the same QED key semantics when rendered UNIQUE.
+    if table.primary_keys:
+        table.unique_keys.append(key)
+    else:
+        table.primary_keys.append(key)
+    return key
+
+
+def apply_unique_key(table: Table, columns: list[str] | tuple[str, ...]) -> tuple[str, ...] | None:
+    key = canonical_key(table, columns)
+    if key is None:
+        return None
+    if not all(find_column(table, name).not_null for name in key):
+        return None
+    if key not in table.primary_keys and key not in table.unique_keys:
+        table.unique_keys.append(key)
+    return key
+
+
+def parse_key_column_list(text: str) -> list[str] | None:
+    columns: list[str] = []
+    for part in split_top_level_commas(text):
+        match = re.fullmatch(
+            rf"(?is)\s*{_DDL_IDENTIFIER}(?:\s+(?:ASC|DESC))?\s*",
+            part,
+        )
         if not match:
-            break
-        open_paren = find_next_unquoted(schema_sql, "(", match.end())
-        if open_paren < 0:
-            break
-        table_name = clean_identifier(schema_sql[match.end() : open_paren].strip())
-        close_paren = find_matching_paren(schema_sql, open_paren)
-        if close_paren < 0:
-            break
-        tables.append(parse_table(table_name, schema_sql[open_paren + 1 : close_paren]))
-        position = close_paren + 1
-    return tables
+            return None
+        columns.append(clean_identifier(match.group(1)))
+    return columns or None
+
+
+def table_constraint(item: str) -> tuple[str | None, list[str] | None]:
+    semantic = item.strip()
+    named = re.match(
+        rf"(?is)^CONSTRAINT\s+{_DDL_IDENTIFIER}\s+(?P<body>.+)$",
+        semantic,
+    )
+    if named:
+        semantic = named.group("body").strip()
+
+    patterns = (
+        (
+            "primary",
+            rf"(?is)^PRIMARY\s+KEY(?:\s+{_DDL_IDENTIFIER})?\s*\((?P<columns>.*)\)\s*$",
+        ),
+        (
+            "unique",
+            rf"(?is)^UNIQUE(?:\s+(?:KEY|INDEX))?(?:\s+{_DDL_IDENTIFIER})?\s*\((?P<columns>.*)\)\s*$",
+        ),
+    )
+    for kind, pattern in patterns:
+        match = re.match(pattern, semantic)
+        if match:
+            return kind, parse_key_column_list(match.group("columns"))
+
+    masked = normalize_spaces(mask_sql_regions(semantic)).upper()
+    if masked.startswith("FOREIGN KEY"):
+        return "foreign", None
+    if masked.startswith("CHECK"):
+        return "check", None
+    if item.lstrip().upper().startswith("CONSTRAINT"):
+        return "unsupported", None
+    if masked.startswith(("KEY", "INDEX")):
+        return "index", None
+    return None, None
 
 
 def parse_table(table_name: str, body: str) -> Table:
     table = Table(name=table_name)
+    pending_primary: list[list[str]] = []
+    pending_unique: list[list[str]] = []
     for item in split_top_level_commas(body):
         item = item.strip()
         if not item:
             continue
-        upper = normalize_spaces(item).upper()
-        if upper.startswith(("PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "CONSTRAINT", "KEY", "INDEX")):
+
+        kind, key_columns = table_constraint(item)
+        if kind is not None:
+            if kind == "primary" and key_columns is not None:
+                pending_primary.append(key_columns)
+            elif kind == "unique" and key_columns is not None:
+                pending_unique.append(key_columns)
+            elif kind not in {"index"}:
+                table.omitted_constraints.append(
+                    constraint_entry(
+                        kind or "unsupported",
+                        "source-ddl",
+                        table.name,
+                        reason=(
+                            "qed-does-not-support-foreign-keys"
+                            if kind == "foreign"
+                            else "check-not-attested-for-qed"
+                            if kind == "check"
+                            else "constraint-definition-not-exactly-renderable"
+                        ),
+                    )
+                )
             continue
+
         match = re.match(
             r'(?is)\s*("(?:""|[^"])+?"|`(?:``|[^`])+?`|[A-Za-z_][A-Za-z0-9_]*)\s+(.+)$',
             item,
@@ -538,14 +1111,467 @@ def parse_table(table_name: str, body: str) -> Table:
             continue
         name = clean_identifier(match.group(1))
         rest = match.group(2)
-        table.columns.append(
-            Column(
-                name=name,
-                type_sql=normalize_type_for_qed(rest),
-                not_null=bool(re.search(r"(?is)\bNOT\s+NULL\b", rest)),
+        masked_rest = mask_sql_regions(rest)
+        not_null = bool(re.search(r"(?is)\bNOT\s+NULL\b", masked_rest))
+        table.columns.append(Column(name=name, type_sql=normalize_type_for_qed(rest), not_null=not_null))
+        if not_null:
+            table.applied_constraints.append(
+                constraint_entry("not_null", "source-ddl", table.name, [name])
             )
-        )
+        if re.search(r"(?is)\bPRIMARY\s+KEY\b", masked_rest):
+            pending_primary.append([name])
+        if re.search(r"(?is)\bUNIQUE\b", masked_rest):
+            pending_unique.append([name])
+        if re.search(r"(?is)\bREFERENCES\b", masked_rest):
+            table.omitted_constraints.append(
+                constraint_entry(
+                    "foreign",
+                    "source-ddl",
+                    table.name,
+                    [name],
+                    "qed-does-not-support-foreign-keys",
+                )
+            )
+        if re.search(r"(?is)\bCHECK\s*\(", masked_rest):
+            table.omitted_constraints.append(
+                constraint_entry(
+                    "check",
+                    "source-ddl",
+                    table.name,
+                    [name],
+                    "check-not-attested-for-qed",
+                )
+            )
+
+    for columns in pending_primary:
+        key = apply_primary_key(table, columns)
+        if key is None:
+            table.omitted_constraints.append(
+                constraint_entry(
+                    "primary",
+                    "source-ddl",
+                    table.name,
+                    columns,
+                    "constraint-column-not-found",
+                )
+            )
+        else:
+            table.applied_constraints.append(
+                constraint_entry("primary", "source-ddl", table.name, key)
+            )
+    for columns in pending_unique:
+        key = apply_unique_key(table, columns)
+        if key is None:
+            canonical = canonical_key(table, columns)
+            table.omitted_constraints.append(
+                constraint_entry(
+                    "unique",
+                    "source-ddl",
+                    table.name,
+                    canonical or columns,
+                    (
+                        "nullable-unique-not-exactly-representable"
+                        if canonical is not None
+                        else "constraint-column-not-found"
+                    ),
+                )
+            )
+        else:
+            table.applied_constraints.append(
+                constraint_entry("unique", "source-ddl", table.name, key)
+            )
     return table
+
+
+def constraint_reference_value(reference: Any) -> str | None:
+    if isinstance(reference, str):
+        return reference
+    if isinstance(reference, dict) and isinstance(reference.get("value"), str):
+        return reference["value"]
+    return None
+
+
+def resolve_constraint_reference(
+    reference: Any,
+    tables: list[Table],
+) -> tuple[Table | None, Column | None, str | None]:
+    value = constraint_reference_value(reference)
+    if value is None:
+        return None, None, None
+    folded = value.casefold()
+    for table in sorted(tables, key=lambda item: len(item.name), reverse=True):
+        prefix = table.name.casefold() + "__"
+        if not folded.startswith(prefix):
+            continue
+        column = find_column(table, value[len(table.name) + 2 :])
+        return table, column, value
+    return None, None, value
+
+
+def add_applied_constraint(
+    coverage: dict[str, Any],
+    kind: str,
+    source: str,
+    table: Table,
+    columns: tuple[str, ...] | list[str],
+    **details: Any,
+) -> None:
+    coverage["applied"].append(
+        constraint_entry(kind, source, table.name, columns, **details)
+    )
+
+
+def add_omitted_constraint(
+    coverage: dict[str, Any],
+    kind: str,
+    source: str,
+    reason: str,
+    table: Table | str | None = None,
+    columns: tuple[str, ...] | list[str] | None = None,
+    **details: Any,
+) -> None:
+    coverage["omitted"].append(
+        constraint_entry(
+            kind,
+            source,
+            table.name if isinstance(table, Table) else table,
+            columns,
+            reason,
+            **details,
+        )
+    )
+
+
+def apply_pair_constraint_metadata(
+    selected_tables: list[Table],
+    all_tables: list[Table],
+    constraints: list[Any],
+    coverage: dict[str, Any],
+) -> None:
+    selected = {table.name.casefold(): table for table in selected_tables}
+    source = "pair-constraint-metadata"
+    for raw_constraint in constraints:
+        if not isinstance(raw_constraint, dict) or len(raw_constraint) != 1:
+            add_omitted_constraint(
+                coverage,
+                "unknown",
+                source,
+                "malformed-constraint-metadata",
+            )
+            continue
+        kind, payload = next(iter(raw_constraint.items()))
+        references = payload if isinstance(payload, list) else [payload]
+        resolved = [
+            resolve_constraint_reference(reference, all_tables)
+            for reference in references
+        ]
+        owner = resolved[0][0] if resolved else None
+        selected_owner = selected.get(owner.name.casefold()) if owner is not None else None
+        if owner is not None and selected_owner is None:
+            continue
+
+        if kind == "not_null":
+            table, column, value = resolved[0]
+            if selected_owner is None or column is None:
+                add_omitted_constraint(
+                    coverage,
+                    "not_null",
+                    source,
+                    "constraint-reference-not-resolved",
+                    table,
+                    rawReference=value,
+                )
+                continue
+            canonical = apply_not_null(selected_owner, column.name)
+            if canonical is None:
+                add_omitted_constraint(
+                    coverage,
+                    "not_null",
+                    source,
+                    "constraint-column-not-found",
+                    selected_owner,
+                    [column.name],
+                )
+            else:
+                add_applied_constraint(
+                    coverage, "not_null", source, selected_owner, [canonical]
+                )
+            continue
+
+        if kind == "primary":
+            raw_values = [value for _, _, value in resolved if value is not None]
+            if (
+                selected_owner is None
+                or not resolved
+                or any(table is None or column is None for table, column, _ in resolved)
+                or any(table.name.casefold() != owner.name.casefold() for table, _, _ in resolved)
+            ):
+                add_omitted_constraint(
+                    coverage,
+                    "primary",
+                    source,
+                    "constraint-reference-not-resolved",
+                    selected_owner or owner,
+                    rawReferences=raw_values,
+                )
+                continue
+            key = apply_primary_key(
+                selected_owner,
+                [column.name for _, column, _ in resolved],
+            )
+            if key is None:
+                add_omitted_constraint(
+                    coverage,
+                    "primary",
+                    source,
+                    "constraint-column-not-found",
+                    selected_owner,
+                    rawReferences=raw_values,
+                )
+            else:
+                add_applied_constraint(coverage, "primary", source, selected_owner, key)
+            continue
+
+        if kind == "foreign":
+            if selected_owner is None:
+                # An unresolved owner cannot safely be classified as out of scope.
+                if owner is None:
+                    add_omitted_constraint(
+                        coverage,
+                        "foreign",
+                        source,
+                        "constraint-reference-not-resolved",
+                        rawReferences=[value for _, _, value in resolved if value is not None],
+                    )
+                continue
+            source_column = resolved[0][1]
+            target_table = resolved[1][0] if len(resolved) > 1 else None
+            target_column = resolved[1][1] if len(resolved) > 1 else None
+            add_omitted_constraint(
+                coverage,
+                "foreign",
+                source,
+                "qed-does-not-support-foreign-keys",
+                selected_owner,
+                [source_column.name] if source_column is not None else None,
+                refTable=target_table.name if target_table is not None else None,
+                refColumns=[target_column.name] if target_column is not None else None,
+            )
+            continue
+
+        add_omitted_constraint(
+            coverage,
+            kind,
+            source,
+            "constraint-kind-not-exactly-renderable",
+            selected_owner or owner,
+            rawReferences=[value for _, _, value in resolved if value is not None],
+        )
+
+
+def apply_application_constraint_metadata(
+    selected_tables: list[Table],
+    constraints: dict[str, Any],
+    coverage: dict[str, Any],
+) -> None:
+    selected = {table.name.casefold(): table for table in selected_tables}
+    source = "application-constraint-metadata"
+
+    semantic_schema = constraints.get("semanticSchema") or {}
+    for raw_table in semantic_schema.get("tables") or []:
+        if not isinstance(raw_table, dict) or not isinstance(raw_table.get("name"), str):
+            continue
+        table = selected.get(raw_table["name"].casefold())
+        if table is None:
+            continue
+        for raw_column in raw_table.get("columns") or []:
+            if not isinstance(raw_column, dict) or not raw_column.get("notNull"):
+                continue
+            name = raw_column.get("name")
+            canonical = apply_not_null(table, name) if isinstance(name, str) else None
+            if canonical is None:
+                add_omitted_constraint(
+                    coverage,
+                    "not_null",
+                    source,
+                    "constraint-column-not-found",
+                    table,
+                    [name] if isinstance(name, str) else None,
+                )
+            else:
+                add_applied_constraint(
+                    coverage, "not_null", source, table, [canonical]
+                )
+
+    for raw_key in constraints.get("primaryKeys") or []:
+        if not isinstance(raw_key, dict) or not isinstance(raw_key.get("table"), str):
+            continue
+        table = selected.get(raw_key["table"].casefold())
+        if table is None:
+            continue
+        columns = raw_key.get("columns") or []
+        key = apply_primary_key(table, columns) if all(isinstance(item, str) for item in columns) else None
+        if key is None:
+            add_omitted_constraint(
+                coverage,
+                "primary",
+                source,
+                "constraint-column-not-found",
+                table,
+                columns if isinstance(columns, list) else None,
+            )
+        else:
+            add_applied_constraint(coverage, "primary", source, table, key)
+
+    normalized_unique_signatures: set[tuple[str, tuple[str, ...]]] = set()
+    for raw_key in constraints.get("uniqueKeys") or []:
+        if not isinstance(raw_key, dict) or not isinstance(raw_key.get("table"), str):
+            continue
+        table = selected.get(raw_key["table"].casefold())
+        if table is None:
+            continue
+        columns = raw_key.get("columns") or []
+        if not all(isinstance(item, str) for item in columns):
+            add_omitted_constraint(
+                coverage,
+                "unique",
+                source,
+                "constraint-column-not-found",
+                table,
+            )
+            continue
+        signature = (table.name.casefold(), tuple(item.casefold() for item in columns))
+        normalized_unique_signatures.add(signature)
+        nullable_columns = raw_key.get("nullableColumns") or []
+        if nullable_columns:
+            add_omitted_constraint(
+                coverage,
+                "unique",
+                source,
+                "nullable-unique-not-exactly-representable",
+                table,
+                columns,
+                nullableColumns=nullable_columns,
+            )
+            continue
+        key = apply_unique_key(table, columns)
+        if key is None:
+            add_omitted_constraint(
+                coverage,
+                "unique",
+                source,
+                "constraint-columns-not-proven-not-null",
+                table,
+                columns,
+            )
+        else:
+            add_applied_constraint(coverage, "unique", source, table, key)
+
+    for raw_index in constraints.get("uniqueIndexes") or []:
+        if not isinstance(raw_index, dict) or not isinstance(raw_index.get("table"), str):
+            continue
+        table = selected.get(raw_index["table"].casefold())
+        if table is None:
+            continue
+        terms = raw_index.get("terms") or []
+        simple_columns = terms if all(isinstance(item, str) for item in terms) else []
+        signature = (
+            table.name.casefold(),
+            tuple(item.casefold() for item in simple_columns),
+        )
+        if not raw_index.get("where") and signature in normalized_unique_signatures:
+            continue
+        if raw_index.get("where"):
+            add_omitted_constraint(
+                coverage,
+                "unique",
+                source,
+                "partial-unique-index-not-exactly-representable",
+                table,
+                simple_columns or None,
+                predicate=raw_index.get("where"),
+            )
+            continue
+        key = apply_unique_key(table, simple_columns) if simple_columns else None
+        if key is None:
+            add_omitted_constraint(
+                coverage,
+                "unique",
+                source,
+                "expression-or-nullable-unique-index-not-exactly-representable",
+                table,
+                simple_columns or None,
+            )
+        else:
+            add_applied_constraint(coverage, "unique", source, table, key)
+
+    for raw_foreign in constraints.get("foreignKeys") or []:
+        if not isinstance(raw_foreign, dict) or not isinstance(raw_foreign.get("table"), str):
+            continue
+        table = selected.get(raw_foreign["table"].casefold())
+        if table is None:
+            continue
+        add_omitted_constraint(
+            coverage,
+            "foreign",
+            source,
+            "qed-does-not-support-foreign-keys",
+            table,
+            raw_foreign.get("columns"),
+            refTable=raw_foreign.get("refTable"),
+            refColumns=raw_foreign.get("refColumns"),
+        )
+
+    for raw_check in constraints.get("checks") or []:
+        if not isinstance(raw_check, dict) or not isinstance(raw_check.get("table"), str):
+            continue
+        table = selected.get(raw_check["table"].casefold())
+        if table is None:
+            continue
+        add_omitted_constraint(
+            coverage,
+            "check",
+            source,
+            "check-not-attested-for-qed",
+            table,
+            expression=raw_check.get("expression"),
+        )
+
+    for raw_unsupported in constraints.get("unsupportedSemanticConstraints") or []:
+        table_name = raw_unsupported.get("table") if isinstance(raw_unsupported, dict) else None
+        table = selected.get(table_name.casefold()) if isinstance(table_name, str) else None
+        if table_name is not None and table is None:
+            continue
+        add_omitted_constraint(
+            coverage,
+            "unsupported",
+            source,
+            "source-constraint-not-normalized",
+            table or table_name,
+            detail=raw_unsupported,
+        )
+
+
+def apply_constraint_metadata(
+    selected_tables: list[Table],
+    all_tables: list[Table],
+    constraints: Any,
+    coverage: dict[str, Any],
+) -> None:
+    if constraints is None:
+        return
+    if isinstance(constraints, list):
+        apply_pair_constraint_metadata(selected_tables, all_tables, constraints, coverage)
+        return
+    if isinstance(constraints, dict):
+        apply_application_constraint_metadata(selected_tables, constraints, coverage)
+        return
+    add_omitted_constraint(
+        coverage,
+        "unknown",
+        "constraint-metadata",
+        "malformed-constraint-metadata",
+    )
 
 
 def normalize_type_for_qed(type_sql: str) -> str:
@@ -579,7 +1605,12 @@ def patch_qed_interval_precision(sql: str) -> str:
         precision = len(value)
         return f"INTERVAL '{value}' DAY({precision})"
 
-    return re.sub(r"(?i)INTERVAL\s+'([0-9]{3,})'\s+DAY(?!\s*\()", repl, sql)
+    return substitute_unprotected(
+        _QED_INTERVAL_PRECISION,
+        repl,
+        sql,
+        start_only=True,
+    )
 
 
 def ensure_sql_terminated(sql: str) -> str:
@@ -610,147 +1641,8 @@ def clean_identifier(value: str) -> str:
     return value
 
 
-def split_top_level_commas(text: str) -> list[str]:
-    parts = []
-    start = 0
-    depth = 0
-    in_single = False
-    in_double = False
-    in_backtick = False
-    index = 0
-    while index < len(text):
-        char = text[index]
-        next_char = text[index + 1] if index + 1 < len(text) else ""
-        if char == "'" and not in_double and not in_backtick:
-            if in_single and next_char == "'":
-                index += 2
-                continue
-            in_single = not in_single
-        elif char == '"' and not in_single and not in_backtick:
-            in_double = not in_double
-        elif char == "`" and not in_single and not in_double:
-            in_backtick = not in_backtick
-        elif not in_single and not in_double and not in_backtick:
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-            elif char == "," and depth == 0:
-                parts.append(text[start:index])
-                start = index + 1
-        index += 1
-    parts.append(text[start:])
-    return parts
-
-
-def find_next_unquoted(text: str, target: str, start: int) -> int:
-    in_single = False
-    in_double = False
-    in_backtick = False
-    index = start
-    while index < len(text):
-        char = text[index]
-        next_char = text[index + 1] if index + 1 < len(text) else ""
-        if char == "'" and not in_double and not in_backtick:
-            if in_single and next_char == "'":
-                index += 2
-                continue
-            in_single = not in_single
-        elif char == '"' and not in_single and not in_backtick:
-            in_double = not in_double
-        elif char == "`" and not in_single and not in_double:
-            in_backtick = not in_backtick
-        elif char == target and not in_single and not in_double and not in_backtick:
-            return index
-        index += 1
-    return -1
-
-
-def find_matching_paren(text: str, open_index: int) -> int:
-    depth = 0
-    in_single = False
-    in_double = False
-    in_backtick = False
-    index = open_index
-    while index < len(text):
-        char = text[index]
-        next_char = text[index + 1] if index + 1 < len(text) else ""
-        if char == "'" and not in_double and not in_backtick:
-            if in_single and next_char == "'":
-                index += 2
-                continue
-            in_single = not in_single
-        elif char == '"' and not in_single and not in_backtick:
-            in_double = not in_double
-        elif char == "`" and not in_single and not in_double:
-            in_backtick = not in_backtick
-        elif not in_single and not in_double and not in_backtick:
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    return index
-        index += 1
-    return -1
-
-
 def normalize_spaces(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip())
-
-
-def strip_sql_comments(sql: str) -> str:
-    output: list[str] = []
-    index = 0
-    in_single_quote = False
-    in_double_quote = False
-    in_line_comment = False
-    in_block_comment = False
-    while index < len(sql):
-        char = sql[index]
-        next_char = sql[index + 1] if index + 1 < len(sql) else ""
-
-        if in_line_comment:
-            if char == "\n":
-                in_line_comment = False
-                output.append(char)
-            index += 1
-            continue
-
-        if in_block_comment:
-            if char == "*" and next_char == "/":
-                in_block_comment = False
-                output.append(" ")
-                index += 2
-                continue
-            index += 1
-            continue
-
-        if not in_single_quote and not in_double_quote:
-            if char == "-" and next_char == "-":
-                in_line_comment = True
-                output.append(" ")
-                index += 2
-                continue
-            if char == "/" and next_char == "*":
-                in_block_comment = True
-                output.append(" ")
-                index += 2
-                continue
-
-        if char == "'" and not in_double_quote:
-            if in_single_quote and next_char == "'":
-                output.append(char)
-                output.append(next_char)
-                index += 2
-                continue
-            in_single_quote = not in_single_quote
-        elif char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-
-        output.append(char)
-        index += 1
-    return "".join(output)
 
 
 def write_text(path: Path, content: str) -> Path:
