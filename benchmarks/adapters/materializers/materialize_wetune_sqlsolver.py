@@ -8,7 +8,58 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
+
+from materializer_sql import (
+    MYSQL_MATERIALIZER_QUOTE_POLICY,
+    STANDARD_MATERIALIZER_QUOTE_POLICY,
+    find_matching_paren as _shared_find_matching_paren,
+    find_next_unquoted as _shared_find_next_unquoted,
+    normalize_sql_layout as _shared_normalize_sql_layout,
+    parse_schema as _shared_parse_schema,
+    split_top_level_commas as _shared_split_top_level_commas,
+    transform_double_quoted_identifiers as _shared_transform_double_quoted_identifiers,
+)
+
+
+MYSQL_SOURCE_QUOTE_POLICY = MYSQL_MATERIALIZER_QUOTE_POLICY
+POSTGRES_QUERY_QUOTE_POLICY = STANDARD_MATERIALIZER_QUOTE_POLICY
+
+FROZEN_TYPE_AUTHORITY = "parser_facing_normalized_ddl"
+FROZEN_SIDECAR_AUTHORITY = "integrity_declarations_only"
+FROZEN_SIDECAR_RAW_TYPE_SEMANTICS = (
+    "sourceType/sourceDeclaration are authoritative for benchmark semantics; "
+    "normalizedFrontendType is a tool-facing lowering."
+)
+FROZEN_SIDECAR_RAW_TYPE_SEMANTICS_DISPOSITION = (
+    "preserved_for_audit_but_overridden_by_typeAuthority"
+)
+
+find_matching_paren = partial(
+    _shared_find_matching_paren,
+    quote_policy=MYSQL_SOURCE_QUOTE_POLICY,
+)
+find_next_unquoted = partial(
+    _shared_find_next_unquoted,
+    quote_policy=MYSQL_SOURCE_QUOTE_POLICY,
+)
+normalize_sql_layout = partial(
+    _shared_normalize_sql_layout,
+    quote_policy=POSTGRES_QUERY_QUOTE_POLICY,
+)
+parse_schema = partial(
+    _shared_parse_schema,
+    quote_policy=MYSQL_SOURCE_QUOTE_POLICY,
+)
+split_top_level_commas = partial(
+    _shared_split_top_level_commas,
+    quote_policy=MYSQL_SOURCE_QUOTE_POLICY,
+)
+transform_double_quoted_identifiers = partial(
+    _shared_transform_double_quoted_identifiers,
+    quote_policy=POSTGRES_QUERY_QUOTE_POLICY,
+)
 
 
 READ_DIALECT_BY_APP = {
@@ -125,7 +176,9 @@ def main() -> int:
         action="append",
         help="Case id regex to materialize. May be repeated.",
     )
-    parser.add_argument("--force", action="store_true", help="Overwrite existing case directories.")
+    parser.add_argument(
+        "--force", action="store_true", help="Overwrite existing case directories."
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[3]
@@ -139,7 +192,9 @@ def main() -> int:
     with issues_path.open(newline="") as handle:
         for row in csv.reader(handle, delimiter="\t"):
             case_id, app_name, rewrite_type, commit_url, before_sql, after_sql = row
-            if case_patterns and not any(pattern.search(case_id) for pattern in case_patterns):
+            if case_patterns and not any(
+                pattern.search(case_id) for pattern in case_patterns
+            ):
                 continue
             case_dir = output_dir / case_id
             if case_dir.exists() and args.force:
@@ -147,7 +202,7 @@ def main() -> int:
             case_dir.mkdir(parents=True, exist_ok=True)
 
             schema_path = schema_dir / f"{app_name}.base.schema.sql"
-            status = materialize_case(
+            materialize_case(
                 root=root,
                 case_dir=case_dir,
                 case_id=case_id,
@@ -183,11 +238,15 @@ def materialize_case(
     schema_path: Path,
     before_sql: str,
     after_sql: str,
-) -> str:
+) -> None:
     with tempfile.TemporaryDirectory(prefix="wetune-sqlsolver-") as tmp:
         tmp_dir = Path(tmp)
-        before_raw = write_text(tmp_dir / "before.raw.sql", ensure_sql_terminated(before_sql))
-        after_raw = write_text(tmp_dir / "after.raw.sql", ensure_sql_terminated(after_sql))
+        before_raw = write_text(
+            tmp_dir / "before.raw.sql", ensure_sql_terminated(before_sql)
+        )
+        after_raw = write_text(
+            tmp_dir / "after.raw.sql", ensure_sql_terminated(after_sql)
+        )
         before_norm = tmp_dir / "before.normalized.sql"
         after_norm = tmp_dir / "after.normalized.sql"
         read_dialect = READ_DIALECT_BY_APP[app_name]
@@ -198,18 +257,29 @@ def materialize_case(
         normalized_before = before_norm.read_text()
         normalized_after = after_norm.read_text()
         schema_sql = schema_path.read_text()
-        tables = parse_schema(schema_sql)
-        referenced_tables = collect_referenced_tables(normalized_before + "\n" + normalized_after)
+        tables = parse_schema(
+            schema_sql,
+            clean_identifier=clean_identifier,
+            parse_table=parse_table,
+        )
+        referenced_tables = collect_referenced_tables(
+            normalized_before + "\n" + normalized_after
+        )
         selected_tables = tables
         constraints_path = schema_path.with_suffix(".constraints.json")
-        semantic_constraints = (
-            json.loads(constraints_path.read_text()) if constraints_path.exists() else {}
-        )
+        if not constraints_path.is_file():
+            raise FileNotFoundError(
+                f"missing authoritative WeTune constraint sidecar: {constraints_path}"
+            )
+        semantic_constraints = json.loads(constraints_path.read_text())
+        validate_semantic_contract_sidecar(semantic_constraints, constraints_path)
         lowering_audit = audit_type_lowerings(
             normalized_before + "\n" + normalized_after,
             semantic_constraints,
         )
-        rename_map = build_rename_map(selected_tables, normalized_before + "\n" + normalized_after)
+        rename_map = build_rename_map(
+            selected_tables, normalized_before + "\n" + normalized_after
+        )
 
         rendered_schema = render_schema(selected_tables, rename_map)
         rendered_before = render_query(normalized_before, rename_map)
@@ -242,7 +312,6 @@ def materialize_case(
             )
             + "\n",
         )
-        return "materialized"
 
 
 def normalize_query(root: Path, source: Path, target: Path, read_dialect: str) -> None:
@@ -288,6 +357,7 @@ def build_metadata(
     metadata = {
         "sourceBenchmark": "wetune-issues",
         "sourceCase": case_id,
+        "flatCaseId": f"wetune-issues__{case_id}",
         "appName": app_name,
         "rewriteType": rewrite_type,
         "commitUrl": commit_url,
@@ -299,9 +369,7 @@ def build_metadata(
         "referencedTables": sorted(referenced_tables),
         "materializedTables": materialized_tables,
         "semanticConstraints": {
-            "source": str(constraints_path.relative_to(root))
-            if constraints_path.exists()
-            else None,
+            "source": str(constraints_path.relative_to(root)),
             "columns": count_semantic_columns(semantic_constraints),
             "typeLowerings": count_type_lowerings(semantic_constraints),
             "primaryKeys": len(semantic_constraints.get("primaryKeys", [])),
@@ -313,15 +381,72 @@ def build_metadata(
                 semantic_constraints.get("unsupportedSemanticConstraints", [])
             ),
             "includedInSqlsolverDdl": False,
-            "reason": "SQLSolver's DDL frontend does not support the full constraint vocabulary.",
+            "reason": (
+                "SQLSolver's DDL frontend receives only its supported schema subset; "
+                "Logos reconstructs the full contract from this sidecar and the "
+                "renamedIdentifiers mapping."
+            ),
+        },
+        "integrityContract": {
+            "authoritativeForLogos": True,
+            "sourceKind": "wetune_base_schema_sidecar",
+            "typeAuthority": FROZEN_TYPE_AUTHORITY,
+            "sidecarAuthority": FROZEN_SIDECAR_AUTHORITY,
+            "parserFacingDdl": "schema.sql",
+            "semanticSidecar": str(constraints_path.relative_to(root)),
+            "sidecarRawTypeSemantics": semantic_constraints["semanticSchema"][
+                "typeSemantics"
+            ],
+            "sidecarRawTypeSemanticsDisposition": (
+                FROZEN_SIDECAR_RAW_TYPE_SEMANTICS_DISPOSITION
+            ),
+            "identifierRenames": "metadata.json#/renamedIdentifiers",
+            "silentDrops": 0,
+            "sqlsolverDdlComplete": False,
         },
         "typeLoweringAudit": lowering_audit,
         "renamedIdentifiers": {
             key: value for key, value in sorted(rename_map.items()) if key != value
         },
-        "semanticNote": "Identifier alpha-renaming over the full application core schema; constraints are retained in the sidecar metadata and not lowered into SQLSolver DDL when unsupported by the tool frontend.",
+        "semanticNote": (
+            "Identifier alpha-renaming over the full application core schema. "
+            "The selected base sidecar plus renamedIdentifiers is the authoritative "
+            "Logos integrity contract; SQLSolver DDL remains a frontend-compatible subset."
+        ),
     }
     return metadata
+
+
+def validate_semantic_contract_sidecar(semantic_constraints: dict, path: Path) -> None:
+    if not isinstance(semantic_constraints, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    required_list_fields = (
+        "checks",
+        "foreignKeys",
+        "primaryKeys",
+        "uniqueIndexes",
+        "uniqueKeys",
+        "unsupportedSemanticConstraints",
+    )
+    for field_name in required_list_fields:
+        value = semantic_constraints.get(field_name)
+        if not isinstance(value, list):
+            raise ValueError(f"{path} field {field_name!r} must be a list")
+    semantic_schema = semantic_constraints.get("semanticSchema")
+    if not isinstance(semantic_schema, dict) or not isinstance(
+        semantic_schema.get("tables"), list
+    ):
+        raise ValueError(f"{path} must contain semanticSchema.tables as a list")
+    if semantic_schema.get("typeSemantics") != FROZEN_SIDECAR_RAW_TYPE_SEMANTICS:
+        raise ValueError(
+            f"{path} semanticSchema.typeSemantics must equal the frozen raw-source "
+            "audit statement"
+        )
+    unsupported = semantic_constraints["unsupportedSemanticConstraints"]
+    if unsupported:
+        raise ValueError(
+            f"{path} contains {len(unsupported)} unsupported semantic constraint(s)"
+        )
 
 
 def count_semantic_columns(semantic_constraints: dict) -> int:
@@ -376,7 +501,7 @@ def audit_type_lowerings(query_sql: str, semantic_constraints: dict) -> dict:
             "use": "nullness-only" if nullness_only else "value-observing",
         }
         if lowering_is_safe_for_query(column, nullness_only):
-            entry["reason"] = lowering_safety_reason(column, nullness_only)
+            entry["reason"] = lowering_safety_reason(nullness_only)
             safe_lowerings.append(entry)
         else:
             entry["reason"] = lowering_unsafety_reason(column)
@@ -450,7 +575,9 @@ def collect_table_aliases(sql: str) -> dict[str, str]:
     return aliases
 
 
-def collect_qualified_column_refs(sql: str, aliases: dict[str, str]) -> set[tuple[str, str]]:
+def collect_qualified_column_refs(
+    sql: str, aliases: dict[str, str]
+) -> set[tuple[str, str]]:
     refs = set()
     for match in re.finditer(r'"((?:""|[^"])+?)"\."((?:""|[^"])+?)"', sql):
         qualifier = match.group(1).replace('""', '"')
@@ -466,7 +593,10 @@ def collect_unqualified_column_refs(
     column_index: dict[tuple[str, str], dict],
 ) -> set[tuple[str, str]]:
     refs = set()
-    quoted_names = [match.group(1).replace('""', '"') for match in re.finditer(r'"((?:""|[^"])+?)"', sql)]
+    quoted_names = [
+        match.group(1).replace('""', '"')
+        for match in re.finditer(r'"((?:""|[^"])+?)"', sql)
+    ]
     for name in quoted_names:
         candidates = [
             (table, column)
@@ -523,7 +653,7 @@ def lowering_is_safe_for_query(column: dict, nullness_only: bool) -> bool:
     return True
 
 
-def lowering_safety_reason(column: dict, nullness_only: bool) -> str:
+def lowering_safety_reason(nullness_only: bool) -> str:
     if nullness_only:
         return "The query observes only NULL/NOT NULL status, which is preserved by type lowering."
     return "The observed lowering is treated as representation-only for this query use."
@@ -600,26 +730,6 @@ def is_domain_specific_type(source_type: str) -> bool:
     )
 
 
-def parse_schema(schema_sql: str) -> list[Table]:
-    tables = []
-    position = 0
-    pattern = re.compile(r"(?is)\bCREATE\s+TABLE\b")
-    while True:
-        match = pattern.search(schema_sql, position)
-        if not match:
-            break
-        open_paren = find_next_unquoted(schema_sql, "(", match.end())
-        if open_paren < 0:
-            break
-        table_name = clean_identifier(schema_sql[match.end() : open_paren].strip())
-        close_paren = find_matching_paren(schema_sql, open_paren)
-        if close_paren < 0:
-            break
-        tables.append(parse_table(table_name, schema_sql[open_paren + 1 : close_paren]))
-        position = close_paren + 1
-    return tables
-
-
 def parse_table(table_name: str, body: str) -> Table:
     table = Table(name=table_name)
     for item in split_top_level_commas(body):
@@ -642,7 +752,9 @@ def parse_table(table_name: str, body: str) -> Table:
             rest = match.group(2)
             type_sql = normalize_type_for_sqlsolver(rest)
             not_null = bool(re.search(r"(?is)\bNOT\s+NULL\b", rest))
-            table.columns.append(Column(name=name, type_sql=type_sql, not_null=not_null))
+            table.columns.append(
+                Column(name=name, type_sql=type_sql, not_null=not_null)
+            )
     return table
 
 
@@ -669,8 +781,8 @@ def collect_referenced_tables(sql: str) -> set[str]:
     tables = set()
     token_re = re.compile(
         r'(?is)"(?:""|[^"])+?"|[(),]|\bFROM\b|\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|'
-        r'\bHAVING\b|\bLIMIT\b|\bOFFSET\b|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|\bON\b|'
-        r'\bCROSS\b|\bINNER\b|\bLEFT\b|\bRIGHT\b|\bFULL\b|\bOUTER\b|\bAS\b'
+        r"\bHAVING\b|\bLIMIT\b|\bOFFSET\b|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|\bON\b|"
+        r"\bCROSS\b|\bINNER\b|\bLEFT\b|\bRIGHT\b|\bFULL\b|\bOUTER\b|\bAS\b"
     )
     expect_table = False
     in_from_list = False
@@ -680,7 +792,18 @@ def collect_referenced_tables(sql: str) -> set[str]:
         if upper in {"FROM", "JOIN"}:
             expect_table = True
             in_from_list = True
-        elif upper in {"WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "UNION", "EXCEPT", "INTERSECT", "ON"}:
+        elif upper in {
+            "WHERE",
+            "GROUP",
+            "ORDER",
+            "HAVING",
+            "LIMIT",
+            "OFFSET",
+            "UNION",
+            "EXCEPT",
+            "INTERSECT",
+            "ON",
+        }:
             expect_table = False
             in_from_list = False
         elif token == "," and in_from_list:
@@ -753,10 +876,9 @@ def render_schema(tables: list[Table], rename_map: dict[str, str]) -> str:
 
 
 def render_query(sql: str, rename_map: dict[str, str]) -> str:
-    return re.sub(
-        r'"((?:""|[^"])+?)"',
-        lambda match: rename_identifier(match.group(1).replace('""', '"'), rename_map),
+    return transform_double_quoted_identifiers(
         sql,
+        lambda identifier: rename_identifier(identifier, rename_map),
     )
 
 
@@ -779,31 +901,6 @@ def make_safe_identifier(identifier: str) -> str:
     return candidate
 
 
-def split_top_level_commas(text: str) -> list[str]:
-    parts = []
-    start = 0
-    quote = None
-    depth = 0
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                quote = None
-        elif char == '"':
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth = max(0, depth - 1)
-        elif char == "," and depth == 0:
-            parts.append(text[start:index])
-            start = index + 1
-        index += 1
-    parts.append(text[start:])
-    return parts
-
-
 def parse_columns_in_parens(item: str) -> tuple[str, ...]:
     open_paren = find_next_unquoted(item, "(", 0)
     close_paren = find_matching_paren(item, open_paren) if open_paren >= 0 else -1
@@ -815,41 +912,6 @@ def parse_columns_in_parens(item: str) -> tuple[str, ...]:
         if match:
             columns.append(clean_identifier(match.group(1)))
     return tuple(columns)
-
-
-def find_next_unquoted(text: str, needle: str, start: int) -> int:
-    quote = None
-    for index in range(start, len(text)):
-        char = text[index]
-        if quote:
-            if char == quote:
-                quote = None
-        elif char == '"':
-            quote = char
-        elif char == needle:
-            return index
-    return -1
-
-
-def find_matching_paren(text: str, open_index: int) -> int:
-    quote = None
-    depth = 0
-    index = open_index
-    while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                quote = None
-        elif char == '"':
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-        index += 1
-    return -1
 
 
 def clean_identifier(identifier: str) -> str:
@@ -869,8 +931,7 @@ def ensure_sql_terminated(sql: str) -> str:
 
 
 def ensure_one_line(sql: str) -> str:
-    sql = re.sub(r";\s*$", "", sql.strip())
-    return re.sub(r"\s+", " ", sql) + "\n"
+    return normalize_sql_layout(sql, strip_trailing_semicolon=True) + "\n"
 
 
 def write_text(path: Path, content: str) -> Path:

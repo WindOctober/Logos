@@ -11,6 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from materializer_sql import normalize_sql_layout
+
 
 ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = ROOT / "scripts/export-benchmark-ir"
@@ -220,14 +222,44 @@ def normalize_sql(
 def build_metadata(config: dict[str, Any], case: Any, flat_case_id: str) -> dict[str, Any]:
     defaults = config["defaults"]
     benchmark = case.benchmark
+    raw_constraints = case.constraints
+    if raw_constraints is None:
+        constraints: list[dict[str, Any]] = []
+    elif isinstance(raw_constraints, list):
+        constraints = raw_constraints
+    else:
+        raise ValueError(
+            f"{flat_case_id} constraints must be a list or null, "
+            f"got {type(raw_constraints).__name__}"
+        )
+    constraint_scope = benchmark.get("constraintScope", "none")
+    contract_sources: list[dict[str, str]] = [
+        {"kind": "parser_facing_ddl", "path": "schema.sql"}
+    ]
+    if constraint_scope == "pair":
+        contract_sources.append(
+            {"kind": "pair_metadata", "path": "metadata.json#/constraints"}
+        )
     return {
         "sourceBenchmark": benchmark["id"],
         "sourceCase": case.case_id,
         "flatCaseId": flat_case_id,
         "source": case.source_metadata,
         "schemaScope": benchmark["schemaScope"],
-        "constraintScope": benchmark.get("constraintScope", "none"),
-        "constraints": case.constraints,
+        "constraintScope": constraint_scope,
+        "constraints": constraints,
+        "integrityContract": {
+            "authoritativeForLogos": True,
+            "sources": contract_sources,
+            "silentDrops": 0,
+            "sqlsolverDdlComplete": not constraints,
+            "sqlsolverDdlLimitation": (
+                "SQLSolver reads schema.sql only; pair-level declarations are "
+                "retained in adjacent metadata for the authoritative Logos contract."
+                if constraints
+                else None
+            ),
+        },
         "adapter": benchmark.get("adapter", defaults.get("adapter", "none")),
         "sourceDialect": case.source_dialect or benchmark.get("sourceDialect"),
         "readDialect": case.read_dialect or benchmark.get("readDialect"),
@@ -253,63 +285,7 @@ def ensure_sql_terminated(sql: str) -> str:
 
 
 def ensure_one_line(sql: str) -> str:
-    sql = strip_sql_comments(sql)
-    sql = re.sub(r";\s*$", "", sql.strip())
-    return re.sub(r"\s+", " ", sql) + "\n"
-
-
-def strip_sql_comments(sql: str) -> str:
-    output: list[str] = []
-    index = 0
-    in_single_quote = False
-    in_double_quote = False
-    in_line_comment = False
-    in_block_comment = False
-    while index < len(sql):
-        char = sql[index]
-        next_char = sql[index + 1] if index + 1 < len(sql) else ""
-
-        if in_line_comment:
-            if char == "\n":
-                in_line_comment = False
-                output.append(char)
-            index += 1
-            continue
-
-        if in_block_comment:
-            if char == "*" and next_char == "/":
-                in_block_comment = False
-                output.append(" ")
-                index += 2
-                continue
-            index += 1
-            continue
-
-        if not in_single_quote and not in_double_quote:
-            if char == "-" and next_char == "-":
-                in_line_comment = True
-                output.append(" ")
-                index += 2
-                continue
-            if char == "/" and next_char == "*":
-                in_block_comment = True
-                output.append(" ")
-                index += 2
-                continue
-
-        if char == "'" and not in_double_quote:
-            if in_single_quote and next_char == "'":
-                output.append(char)
-                output.append(next_char)
-                index += 2
-                continue
-            in_single_quote = not in_single_quote
-        elif char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-
-        output.append(char)
-        index += 1
-    return "".join(output)
+    return normalize_sql_layout(sql, strip_trailing_semicolon=True) + "\n"
 
 
 def write_text(path: Path, content: str) -> Path:

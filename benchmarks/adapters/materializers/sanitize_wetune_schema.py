@@ -4,7 +4,54 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
+
+from materializer_sql import (
+    MYSQL_MATERIALIZER_QUOTE_POLICY,
+    find_matching_paren as _shared_find_matching_paren,
+    find_next_unquoted as _shared_find_next_unquoted,
+    mask_sql_regions as _shared_mask_sql_regions,
+    normalize_sql_layout as _shared_normalize_sql_layout,
+    parse_schema as _shared_parse_schema,
+    split_sql_statements as _shared_split_sql_statements,
+    split_top_level_commas as _shared_split_top_level_commas,
+    strip_sql_comments as _shared_strip_sql_comments,
+)
+
+
+find_matching_paren = partial(
+    _shared_find_matching_paren,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+find_next_unquoted = partial(
+    _shared_find_next_unquoted,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+mask_sql_regions = partial(
+    _shared_mask_sql_regions,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+normalize_sql_layout = partial(
+    _shared_normalize_sql_layout,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+parse_schema = partial(
+    _shared_parse_schema,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+split_sql_statements = partial(
+    _shared_split_sql_statements,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+split_top_level_commas = partial(
+    _shared_split_top_level_commas,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
+strip_sql_comments = partial(
+    _shared_strip_sql_comments,
+    quote_policy=MYSQL_MATERIALIZER_QUOTE_POLICY,
+)
 
 
 RESERVED_IDENTIFIERS = {
@@ -162,8 +209,12 @@ def sanitize_file(source: Path, target: Path, report_path: Path | None) -> dict:
 
 
 def sanitize_schema(raw: str) -> tuple[list[Table], dict, dict]:
-    stripped = strip_dump_noise(raw)
-    tables = parse_create_tables(stripped)
+    stripped = strip_sql_comments(raw)
+    tables = parse_schema(
+        stripped,
+        clean_identifier=clean_create_table_name,
+        parse_table=parse_table_body,
+    )
     constraints, constraint_audit = parse_alter_constraints(stripped)
     unique_indexes, index_audit = parse_unique_indexes(stripped)
 
@@ -211,37 +262,13 @@ def sanitize_schema(raw: str) -> tuple[list[Table], dict, dict]:
     return tables, audit, semantic_constraints
 
 
-def strip_dump_noise(sql: str) -> str:
-    sql = re.sub(r"(?is)/\*![\s\S]*?\*/\s*;?", "\n", sql)
-    sql = re.sub(r"(?is)/\*[\s\S]*?\*/", "\n", sql)
-    sql = re.sub(r"(?m)^\s*--.*$", "", sql)
-    return sql
-
-
-def parse_create_tables(sql: str) -> list[Table]:
-    tables = []
-    position = 0
-    pattern = re.compile(r"(?is)\bCREATE\s+TABLE\b")
-    while True:
-        match = pattern.search(sql, position)
-        if not match:
-            break
-        name_start = match.end()
-        open_paren = find_next_unquoted(sql, "(", name_start)
-        if open_paren < 0:
-            position = match.end()
-            continue
-        name_part = sql[name_start:open_paren].strip()
-        name_part = re.sub(r"(?is)^IF\s+NOT\s+EXISTS\s+", "", name_part).strip()
-        table_name = normalize_table_name(name_part)
-        close_paren = find_matching_paren(sql, open_paren)
-        if close_paren < 0:
-            position = open_paren + 1
-            continue
-        body = sql[open_paren + 1 : close_paren]
-        tables.append(parse_table_body(table_name, body))
-        position = close_paren + 1
-    return tables
+def clean_create_table_name(name_part: str) -> str:
+    name_part = re.sub(
+        r"(?is)^\s*IF\s+NOT\s+EXISTS\s+",
+        "",
+        name_part,
+    ).strip()
+    return normalize_table_name(name_part)
 
 
 def parse_table_body(table_name: str, body: str) -> Table:
@@ -322,6 +349,7 @@ def parse_column(item: str) -> Column | None:
         return None
     name = clean_identifier(match.group(1))
     rest = match.group(2).strip()
+    searchable_rest = mask_sql_regions(rest)
     type_sql = normalize_column_type(rest)
     if not type_sql:
         return None
@@ -330,12 +358,16 @@ def parse_column(item: str) -> Column | None:
         type_sql=type_sql,
         source_type=extract_source_type(rest),
         source_declaration=normalize_spaces(item),
-        not_null=bool(re.search(r"(?is)\bNOT\s+NULL\b", rest)),
+        not_null=bool(re.search(r"(?is)\bNOT\s+NULL\b", searchable_rest)),
         default=extract_default(rest),
-        generated=bool(re.search(r"(?is)\bGENERATED\b", rest)),
-        auto_increment=bool(re.search(r"(?is)\bAUTO_INCREMENT\b", rest)),
-        inline_primary=bool(re.search(r"(?is)\bPRIMARY\s+KEY\b", rest)),
-        inline_unique=bool(re.search(r"(?is)\bUNIQUE\b", rest)),
+        generated=bool(re.search(r"(?is)\bGENERATED\b", searchable_rest)),
+        auto_increment=bool(
+            re.search(r"(?is)\bAUTO_INCREMENT\b", searchable_rest)
+        ),
+        inline_primary=bool(
+            re.search(r"(?is)\bPRIMARY\s+KEY\b", searchable_rest)
+        ),
+        inline_unique=bool(re.search(r"(?is)\bUNIQUE\b", searchable_rest)),
     )
 
 
@@ -371,6 +403,7 @@ def extract_source_type(rest: str) -> str:
 
 
 def find_first_modifier(rest: str) -> int | None:
+    searchable = mask_sql_regions(rest)
     patterns = (
         r"\bNOT\s+NULL\b",
         r"\bNULL\b",
@@ -387,14 +420,14 @@ def find_first_modifier(rest: str) -> int | None:
     positions = [
         match.start()
         for pattern in patterns
-        for match in [re.search(pattern, rest, flags=re.IGNORECASE)]
+        for match in [re.search(pattern, searchable, flags=re.IGNORECASE)]
         if match
     ]
     return min(positions) if positions else None
 
 
 def extract_default(rest: str) -> str | None:
-    match = re.search(r"(?is)\bDEFAULT\b", rest)
+    match = re.search(r"(?is)\bDEFAULT\b", mask_sql_regions(rest))
     if not match:
         return None
     start = match.end()
@@ -406,7 +439,7 @@ def extract_default(rest: str) -> str | None:
 
 
 def find_default_stop(text: str) -> int | None:
-    quote = None
+    searchable = mask_sql_regions(text)
     depth = 0
     index = 0
     stop_patterns = (
@@ -419,18 +452,10 @@ def find_default_stop(text: str) -> int | None:
         "CONSTRAINT",
         "COMMENT",
     )
-    upper = text.upper()
+    upper = searchable.upper()
     while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                if quote == "'" and index + 1 < len(text) and text[index + 1] == "'":
-                    index += 2
-                    continue
-                quote = None
-        elif char in ("'", '"', "`"):
-            quote = char
-        elif char == "(":
+        char = searchable[index]
+        if char == "(":
             depth += 1
         elif char == ")":
             depth = max(0, depth - 1)
@@ -447,7 +472,7 @@ def find_default_stop(text: str) -> int | None:
 def parse_alter_constraints(sql: str) -> tuple[list[tuple[str, str, object]], dict]:
     constraints = []
     audit = Counter()
-    for statement in split_statements(sql):
+    for statement in split_sql_statements(sql):
         compact = normalize_spaces(statement)
         if not re.match(r"(?is)^ALTER\s+TABLE\b", compact):
             continue
@@ -499,7 +524,7 @@ def parse_alter_constraints(sql: str) -> tuple[list[tuple[str, str, object]], di
 def parse_unique_indexes(sql: str) -> tuple[list[tuple[str, str, object]], dict]:
     constraints = []
     audit = Counter()
-    for statement in split_statements(sql):
+    for statement in split_sql_statements(sql):
         compact = normalize_spaces(statement)
         if not re.match(r"(?is)^CREATE\s+UNIQUE\s+INDEX\b", compact):
             continue
@@ -662,104 +687,6 @@ def nullable_columns(table: Table, columns: tuple[str, ...]) -> list[str]:
     return [name for name in columns if name not in by_name or not by_name[name].not_null]
 
 
-def split_statements(sql: str) -> list[str]:
-    statements = []
-    start = 0
-    quote = None
-    depth = 0
-    index = 0
-    while index < len(sql):
-        char = sql[index]
-        if quote:
-            if char == quote:
-                if quote == "'" and index + 1 < len(sql) and sql[index + 1] == "'":
-                    index += 2
-                    continue
-                quote = None
-        elif char in ("'", '"', "`"):
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth = max(0, depth - 1)
-        elif char == ";" and depth == 0:
-            statements.append(sql[start:index].strip())
-            start = index + 1
-        index += 1
-    tail = sql[start:].strip()
-    if tail:
-        statements.append(tail)
-    return statements
-
-
-def split_top_level_commas(text: str) -> list[str]:
-    parts = []
-    start = 0
-    quote = None
-    depth = 0
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                if quote == "'" and index + 1 < len(text) and text[index + 1] == "'":
-                    index += 2
-                    continue
-                quote = None
-        elif char in ("'", '"', "`"):
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth = max(0, depth - 1)
-        elif char == "," and depth == 0:
-            parts.append(text[start:index])
-            start = index + 1
-        index += 1
-    parts.append(text[start:])
-    return parts
-
-
-def find_next_unquoted(text: str, needle: str, start: int) -> int:
-    quote = None
-    index = start
-    while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                quote = None
-        elif char in ("'", '"', "`"):
-            quote = char
-        elif char == needle:
-            return index
-        index += 1
-    return -1
-
-
-def find_matching_paren(text: str, open_index: int) -> int:
-    quote = None
-    depth = 0
-    index = open_index
-    while index < len(text):
-        char = text[index]
-        if quote:
-            if char == quote:
-                if quote == "'" and index + 1 < len(text) and text[index + 1] == "'":
-                    index += 2
-                    continue
-                quote = None
-        elif char in ("'", '"', "`"):
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-        index += 1
-    return -1
-
-
 def parse_columns_in_parens(item: str) -> tuple[str, ...]:
     open_paren = find_next_unquoted(item, "(", 0)
     if open_paren < 0:
@@ -780,14 +707,8 @@ def normalize_table_name(name_part: str) -> str:
 def split_qualified_name(name: str) -> list[str]:
     parts = []
     start = 0
-    quote = None
-    for index, char in enumerate(name):
-        if quote:
-            if char == quote:
-                quote = None
-        elif char in ('"', "`"):
-            quote = char
-        elif char == ".":
+    for index, char in enumerate(mask_sql_regions(name)):
+        if char == ".":
             parts.append(name[start:index].strip())
             start = index + 1
     parts.append(name[start:].strip())
@@ -854,7 +775,7 @@ def starts_with_any(value: str, prefixes: tuple[str, ...]) -> bool:
 
 
 def normalize_spaces(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
+    return normalize_sql_layout(value)
 
 
 def sum_counters(counters) -> dict[str, int]:
