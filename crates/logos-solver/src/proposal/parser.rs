@@ -38,9 +38,8 @@ mod tests {
     }
 
     #[test]
-    fn accepts_legacy_verdict_values() {
+    fn rejects_obsolete_verdict_field_and_decision_value() {
         let raw = "{\"verdict\":\"not_eq\",\"reason\":\"x\",\"witnessSql\":\"INSERT INTO t VALUES (1);\"}";
-        let proposal = parse_proposal(raw).unwrap();
-        assert_eq!(proposal.decision, Decision::CounterexampleCandidate);
+        assert!(parse_proposal(raw).is_err());
     }
 }
