@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from materializer_sql import normalize_sql_layout
+from sqlsolver_schema_constraints import materialize_pair_constraints
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -32,7 +33,9 @@ def main() -> int:
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT)
     parser.add_argument("--benchmark", action="append")
-    parser.add_argument("--case", action="append", help="Case id regex. May be repeated.")
+    parser.add_argument(
+        "--case", action="append", help="Case id regex. May be repeated."
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -57,7 +60,9 @@ def main() -> int:
         if selected and benchmark_id not in selected:
             continue
         for case in exporter.iter_cases(config, benchmark):
-            if case_patterns and not any(pattern.search(case.case_id) for pattern in case_patterns):
+            if case_patterns and not any(
+                pattern.search(case.case_id) for pattern in case_patterns
+            ):
                 continue
             if args.limit is not None and materialized >= args.limit:
                 return finish(materialized, failed)
@@ -106,12 +111,15 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
     read_dialect = case.read_dialect or benchmark.get("readDialect") or "postgres"
     write_dialect = case.write_dialect or benchmark.get("writeDialect") or "postgres"
     adapter = benchmark.get("adapter", config["defaults"].get("adapter", "none"))
-
     with tempfile.TemporaryDirectory(prefix="logos-sqlsolver-nonwetune-") as tmp:
         tmp_dir = Path(tmp)
         schema_source = write_text(tmp_dir / "schema.source.sql", case.schema_sql)
-        sql1_source = write_text(tmp_dir / "sql1.source.sql", ensure_sql_terminated(case.before_sql))
-        sql2_source = write_text(tmp_dir / "sql2.source.sql", ensure_sql_terminated(case.after_sql))
+        sql1_source = write_text(
+            tmp_dir / "sql1.source.sql", ensure_sql_terminated(case.before_sql)
+        )
+        sql2_source = write_text(
+            tmp_dir / "sql2.source.sql", ensure_sql_terminated(case.after_sql)
+        )
 
         schema_target = tmp_dir / "schema.sql"
         schema_report = tmp_dir / "schema.normalization.json"
@@ -122,6 +130,10 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
             read=read_dialect,
             write="mysql",
             identify=False,
+        )
+        materialized_schema, constraint_materialization = materialize_pair_constraints(
+            schema_target.read_text(),
+            case.constraints,
         )
 
         query_reports: dict[str, dict[str, Any]] = {}
@@ -154,14 +166,19 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
             query_reports["before"] = {"skipped": True}
             query_reports["after"] = {"skipped": True}
 
-        write_text(case_dir / "schema.sql", schema_target.read_text())
+        write_text(case_dir / "schema.sql", materialized_schema)
         write_text(case_dir / "sql1.sql", ensure_one_line(sql1_target.read_text()))
         write_text(case_dir / "sql2.sql", ensure_one_line(sql2_target.read_text()))
         write_text(
             case_dir / "metadata.json",
             json.dumps(
                 {
-                    **build_metadata(config, case, flat_case_id),
+                    **build_materialized_metadata(
+                        config,
+                        case,
+                        flat_case_id,
+                        constraint_materialization,
+                    ),
                     "normalizationForSolverRun": {
                         "schema": {
                             "readDialect": read_dialect,
@@ -219,7 +236,9 @@ def normalize_sql(
         raise RuntimeError(completed.stderr)
 
 
-def build_metadata(config: dict[str, Any], case: Any, flat_case_id: str) -> dict[str, Any]:
+def build_metadata(
+    config: dict[str, Any], case: Any, flat_case_id: str
+) -> dict[str, Any]:
     defaults = config["defaults"]
     benchmark = case.benchmark
     raw_constraints = case.constraints
@@ -269,12 +288,28 @@ def build_metadata(config: dict[str, Any], case: Any, flat_case_id: str) -> dict
             "frontendTargetDialectPurpose",
             defaults.get("frontendTargetDialectPurpose"),
         ),
-        "semanticProfile": benchmark.get("semanticProfile", defaults["semanticProfile"]),
+        "semanticProfile": benchmark.get(
+            "semanticProfile", defaults["semanticProfile"]
+        ),
         "bagSemantics": benchmark.get("bagSemantics", defaults["bagSemantics"]),
         "nullSemantics": benchmark.get("nullSemantics", defaults["nullSemantics"]),
         "featureTags": case.feature_tags,
         "profile": "sqlsolver",
     }
+
+
+def build_materialized_metadata(
+    config: dict[str, Any],
+    case: Any,
+    flat_case_id: str,
+    constraint_materialization: dict[str, Any],
+) -> dict[str, Any]:
+    metadata = build_metadata(config, case, flat_case_id)
+    contract = metadata["integrityContract"]
+    contract["sqlsolverDdlComplete"] = constraint_materialization["ddlComplete"]
+    contract["sqlsolverDdlLimitation"] = None
+    metadata["constraintMaterialization"] = constraint_materialization
+    return metadata
 
 
 def ensure_sql_terminated(sql: str) -> str:

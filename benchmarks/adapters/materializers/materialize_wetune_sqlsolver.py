@@ -21,6 +21,10 @@ from materializer_sql import (
     split_top_level_commas as _shared_split_top_level_commas,
     transform_double_quoted_identifiers as _shared_transform_double_quoted_identifiers,
 )
+from sqlsolver_schema_constraints import (
+    ConstraintSpec,
+    materialize_schema_constraints,
+)
 
 
 MYSQL_SOURCE_QUOTE_POLICY = MYSQL_MATERIALIZER_QUOTE_POLICY
@@ -281,7 +285,32 @@ def materialize_case(
             selected_tables, normalized_before + "\n" + normalized_after
         )
 
+        # SQLSolver treats every UNIQUE key as a total key, while SQL permits
+        # multiple NULL keys. Rebuild UNIQUE declarations from the sidecar
+        # below so only authoritatively non-null keys enter the prover.
+        remove_base_unique_keys_for_sqlsolver(selected_tables)
         rendered_schema = render_schema(selected_tables, rename_map)
+        constraint_specs, residual_constraints = sqlsolver_sidecar_constraint_specs(
+            semantic_constraints,
+            rename_map,
+        )
+        rendered_schema, constraint_materialization = materialize_schema_constraints(
+            rendered_schema,
+            constraint_specs,
+            authority="wetune_base_schema_sidecar",
+        )
+        constraint_materialization["sourceConstraintCount"] = sum(
+            len(semantic_constraints[field])
+            for field in (
+                "checks",
+                "foreignKeys",
+                "primaryKeys",
+                "uniqueIndexes",
+                "uniqueKeys",
+            )
+        )
+        constraint_materialization["residualConstraints"] = residual_constraints
+        constraint_materialization["ddlComplete"] = not residual_constraints
         rendered_before = render_query(normalized_before, rename_map)
         rendered_after = render_query(normalized_after, rename_map)
 
@@ -305,6 +334,7 @@ def materialize_case(
                     semantic_constraints=semantic_constraints,
                     rename_map=rename_map,
                     lowering_audit=lowering_audit,
+                    constraint_materialization=constraint_materialization,
                     status="materialized",
                 ),
                 indent=2,
@@ -353,7 +383,15 @@ def build_metadata(
     rename_map: dict[str, str],
     lowering_audit: dict,
     status: str,
+    constraint_materialization: dict | None = None,
 ) -> dict:
+    ddl_complete = bool(
+        constraint_materialization
+        and constraint_materialization.get("ddlComplete") is True
+    )
+    residual_count = len(
+        (constraint_materialization or {}).get("residualConstraints", [])
+    )
     metadata = {
         "sourceBenchmark": "wetune-issues",
         "sourceCase": case_id,
@@ -380,11 +418,13 @@ def build_metadata(
             "unsupportedSemanticConstraints": len(
                 semantic_constraints.get("unsupportedSemanticConstraints", [])
             ),
-            "includedInSqlsolverDdl": False,
+            "includedInSqlsolverDdl": ddl_complete,
+            "sqlsolverDdlResidualConstraints": residual_count,
             "reason": (
-                "SQLSolver's DDL frontend receives only its supported schema subset; "
-                "Logos reconstructs the full contract from this sidecar and the "
-                "renamedIdentifiers mapping."
+                "Every SQLSolver-supported sidecar constraint is rendered into "
+                "schema.sql. Residual CHECK or partial/expression-unique forms "
+                "remain explicit in constraintMaterialization and prevent a raw "
+                "NEQ result from being promoted to the full source contract."
             ),
         },
         "integrityContract": {
@@ -402,16 +442,19 @@ def build_metadata(
             ),
             "identifierRenames": "metadata.json#/renamedIdentifiers",
             "silentDrops": 0,
-            "sqlsolverDdlComplete": False,
+            "sqlsolverDdlComplete": ddl_complete,
+            "sqlsolverDdlResidualConstraints": residual_count,
         },
         "typeLoweringAudit": lowering_audit,
+        "constraintMaterialization": constraint_materialization,
         "renamedIdentifiers": {
             key: value for key, value in sorted(rename_map.items()) if key != value
         },
         "semanticNote": (
             "Identifier alpha-renaming over the full application core schema. "
             "The selected base sidecar plus renamedIdentifiers is the authoritative "
-            "Logos integrity contract; SQLSolver DDL remains a frontend-compatible subset."
+            "Logos integrity contract. SQLSolver receives every exactly supported "
+            "constraint; residual forms remain audit-visible and fail closed for NEQ."
         ),
     }
     return metadata
@@ -447,6 +490,233 @@ def validate_semantic_contract_sidecar(semantic_constraints: dict, path: Path) -
         raise ValueError(
             f"{path} contains {len(unsupported)} unsupported semantic constraint(s)"
         )
+
+
+def sqlsolver_sidecar_constraint_specs(
+    semantic_constraints: dict,
+    rename_map: dict[str, str],
+) -> tuple[list[ConstraintSpec], list[dict]]:
+    """Select the exact sidecar fragment modeled by SQLSolver's prover.
+
+    Nullable SQL UNIQUE keys are deliberately residual: SQL permits multiple
+    NULL keys, while SQLSolver's uniqueness rewrite treats a declared key as a
+    total functional key. CHECK constraints and partial/expression unique
+    indexes are likewise outside the prover's integrity-constraint language.
+    """
+
+    column_nullability: dict[tuple[str, str], bool] = {}
+    specs: list[ConstraintSpec] = []
+    residual: list[dict] = []
+
+    for table in semantic_constraints["semanticSchema"]["tables"]:
+        table_name = required_nonempty_string(table, "name", "semantic table")
+        columns = table.get("columns")
+        if not isinstance(columns, list):
+            raise ValueError(f"semantic table {table_name!r} columns must be a list")
+        for column in columns:
+            column_name = required_nonempty_string(
+                column,
+                "name",
+                f"semantic table {table_name}",
+            )
+            not_null = column.get("notNull")
+            if not isinstance(not_null, bool):
+                raise ValueError(
+                    f"semantic column {table_name}.{column_name} notNull must be boolean"
+                )
+            column_nullability[(table_name, column_name)] = not not_null
+            if not_null:
+                specs.append(
+                    ConstraintSpec(
+                        "not_null",
+                        rename_identifier(table_name, rename_map),
+                        (rename_identifier(column_name, rename_map),),
+                        source="wetune_sidecar:semanticSchema.notNull",
+                    )
+                )
+
+    primary_keys: set[tuple[str, tuple[str, ...]]] = set()
+    for index, key in enumerate(semantic_constraints["primaryKeys"]):
+        table_name, columns = sidecar_key_columns(key, f"primaryKeys[{index}]")
+        primary_keys.add((table_name, columns))
+        specs.append(
+            ConstraintSpec(
+                "primary_key",
+                rename_identifier(table_name, rename_map),
+                tuple(rename_identifier(column, rename_map) for column in columns),
+                source="wetune_sidecar:primaryKeys",
+            )
+        )
+        for column in columns:
+            if (table_name, column) not in column_nullability:
+                raise ValueError(
+                    f"primary key references unknown column {table_name}.{column}"
+                )
+            column_nullability[(table_name, column)] = False
+
+    for index, key in enumerate(semantic_constraints["uniqueKeys"]):
+        context = f"uniqueKeys[{index}]"
+        table_name, columns = sidecar_key_columns(key, context)
+        if key.get("semantics") != "sql_unique_allows_multiple_nulls":
+            raise ValueError(f"{context} has unsupported NULL uniqueness semantics")
+        declared_nullable = key.get("nullableColumns")
+        if not isinstance(declared_nullable, list) or not all(
+            isinstance(column, str) for column in declared_nullable
+        ):
+            raise ValueError(f"{context} nullableColumns must be a string list")
+        actual_nullable = sorted(
+            column
+            for column in columns
+            if column_nullability.get((table_name, column)) is not False
+        )
+        if sorted(declared_nullable) != actual_nullable:
+            raise ValueError(
+                f"{context} nullableColumns disagrees with semanticSchema: "
+                f"{declared_nullable!r} versus {actual_nullable!r}"
+            )
+        if actual_nullable:
+            residual.append(
+                {
+                    "kind": "nullable_unique_key",
+                    "table": table_name,
+                    "columns": list(columns),
+                    "reason": (
+                        "SQL UNIQUE permits multiple NULL keys, but SQLSolver's "
+                        "uniqueness axiom is total."
+                    ),
+                }
+            )
+            continue
+        specs.append(
+            ConstraintSpec(
+                "unique",
+                rename_identifier(table_name, rename_map),
+                tuple(rename_identifier(column, rename_map) for column in columns),
+                source="wetune_sidecar:uniqueKeys",
+            )
+        )
+
+    for index, foreign in enumerate(semantic_constraints["foreignKeys"]):
+        context = f"foreignKeys[{index}]"
+        table_name, columns = sidecar_key_columns(foreign, context)
+        referenced_table = required_nonempty_string(
+            foreign,
+            "refTable",
+            context,
+        )
+        referenced_columns = required_nonempty_string_list(
+            foreign,
+            "refColumns",
+            context,
+        )
+        if len(columns) != len(referenced_columns):
+            raise ValueError(f"{context} endpoint arity mismatch")
+        for column in referenced_columns:
+            if (referenced_table, column) not in column_nullability:
+                raise ValueError(
+                    f"{context} references unknown column {referenced_table}.{column}"
+                )
+        specs.append(
+            ConstraintSpec(
+                "foreign_key",
+                rename_identifier(table_name, rename_map),
+                tuple(rename_identifier(column, rename_map) for column in columns),
+                referenced_table=rename_identifier(referenced_table, rename_map),
+                referenced_columns=tuple(
+                    rename_identifier(column, rename_map)
+                    for column in referenced_columns
+                ),
+                source="wetune_sidecar:foreignKeys",
+            )
+        )
+
+    for index, unique_index in enumerate(semantic_constraints["uniqueIndexes"]):
+        context = f"uniqueIndexes[{index}]"
+        table_name = required_nonempty_string(unique_index, "table", context)
+        terms = required_nonempty_string_list(unique_index, "terms", context)
+        where = unique_index.get("where")
+        if not isinstance(where, str):
+            raise ValueError(f"{context} where must be a string")
+        simple_columns = tuple(
+            term for term in terms if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", term)
+        )
+        nullable = [
+            column
+            for column in simple_columns
+            if column_nullability.get((table_name, column)) is not False
+        ]
+        if not where and len(simple_columns) == len(terms) and not nullable:
+            specs.append(
+                ConstraintSpec(
+                    "unique",
+                    rename_identifier(table_name, rename_map),
+                    tuple(
+                        rename_identifier(column, rename_map)
+                        for column in simple_columns
+                    ),
+                    source="wetune_sidecar:uniqueIndexes",
+                )
+            )
+        else:
+            residual.append(
+                {
+                    "kind": "partial_or_expression_unique_index",
+                    "table": table_name,
+                    "terms": list(terms),
+                    "where": where,
+                    "reason": (
+                        "SQLSolver has no exact partial/expression or nullable UNIQUE "
+                        "constraint model."
+                    ),
+                }
+            )
+
+    for check in semantic_constraints["checks"]:
+        residual.append(
+            {
+                "kind": "check",
+                "table": check.get("table"),
+                "expression": check.get("expression"),
+                "reason": "SQLSolver parses CHECK syntax but does not use it as a proof constraint.",
+            }
+        )
+
+    return specs, residual
+
+
+def sidecar_key_columns(value: dict, context: str) -> tuple[str, tuple[str, ...]]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{context} must be an object")
+    table_name = required_nonempty_string(value, "table", context)
+    columns = required_nonempty_string_list(value, "columns", context)
+    for column in columns:
+        # Existence is checked by materialize_schema_constraints after the
+        # authoritative rename map is applied.
+        if not column:
+            raise ValueError(f"{context} contains an empty column")
+    return table_name, columns
+
+
+def required_nonempty_string(value: dict, field: str, context: str) -> str:
+    result = value.get(field) if isinstance(value, dict) else None
+    if not isinstance(result, str) or not result:
+        raise ValueError(f"{context} field {field!r} must be a nonempty string")
+    return result
+
+
+def required_nonempty_string_list(
+    value: dict,
+    field: str,
+    context: str,
+) -> tuple[str, ...]:
+    result = value.get(field) if isinstance(value, dict) else None
+    if (
+        not isinstance(result, list)
+        or not result
+        or not all(isinstance(item, str) and item for item in result)
+    ):
+        raise ValueError(f"{context} field {field!r} must be a nonempty string list")
+    return tuple(result)
 
 
 def count_semantic_columns(semantic_constraints: dict) -> int:
@@ -873,6 +1143,13 @@ def render_schema(tables: list[Table], rename_map: dict[str, str]) -> str:
             + "\n);"
         )
     return "\n\n".join(statements) + ("\n" if statements else "")
+
+
+def remove_base_unique_keys_for_sqlsolver(tables: list[Table]) -> None:
+    """Rebuild UNIQUE keys from sidecar nullability instead of raw DDL syntax."""
+
+    for table in tables:
+        table.unique_keys.clear()
 
 
 def render_query(sql: str, rename_map: dict[str, str]) -> str:
