@@ -5,7 +5,7 @@
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
   FiniteSet OrderedSet Bool3 Join FlatData Env Formula Projection SqlOutcome
-  SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
+  SqlAlgebra SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
   ListFacts ListPermut Partition ValueInteger SchemaConstraints.
 From Logos.FormalSQL Require Import
   SchemaCardinality TNullSyntax RewriteSpec.
@@ -115,84 +115,6 @@ induction left as [|left_row left IH]; cbn.
     rewrite Hfalse; cbn; exact IH.
 Qed.
 
-Definition two_way_filtered_cartesian
-    (row : Type) (join : row -> row -> row)
-    (match_dimension : row -> row -> bool)
-    (facts dimension : list row) : list row :=
-  theta_join_list row join match_dimension facts dimension.
-
-Definition three_way_filtered_cartesian
-    (row : Type) (join : row -> row -> row)
-    (match_date match_dimension : row -> row -> bool)
-    (facts dates dimension : list row) : list row :=
-  theta_join_list row join match_dimension
-    (theta_join_list row join match_date facts dates) dimension.
-
-Theorem two_way_filtered_cartesian_length_le :
-  forall (row : Type) (join : row -> row -> row)
-         match_dimension facts dimension,
-    (forall fact,
-      In fact facts ->
-      (List.length (filter (match_dimension fact) dimension) <= 1)%nat) ->
-    (List.length
-      (two_way_filtered_cartesian row join
-        match_dimension facts dimension) <= List.length facts)%nat.
-Proof.
-intros; now apply theta_join_list_functional_length_le.
-Qed.
-
-Theorem three_way_filtered_cartesian_length_le :
-  forall (row : Type) (join : row -> row -> row)
-         match_date match_dimension facts dates dimension,
-    (forall fact,
-      In fact facts ->
-      (List.length (filter (match_date fact) dates) <= 1)%nat) ->
-    (forall fact_date,
-      In fact_date (theta_join_list row join match_date facts dates) ->
-      (List.length (filter (match_dimension fact_date) dimension) <= 1)%nat) ->
-    (List.length
-      (three_way_filtered_cartesian row join match_date match_dimension
-        facts dates dimension) <= List.length facts)%nat.
-Proof.
-intros row join match_date match_dimension facts dates dimension
-  Hdate Hdimension.
-unfold three_way_filtered_cartesian.
-eapply Nat.le_trans.
-- apply theta_join_list_functional_length_le; exact Hdimension.
-- apply theta_join_list_functional_length_le; exact Hdate.
-Qed.
-
-(** A factorized predicate over a nested Cartesian product is exactly the
-    corresponding pair of theta filters.  This is an equality of ordered
-    occurrence lists, not merely a set inclusion. *)
-Lemma three_way_filter_nested_cross_exact :
-  forall (row : Type) (join : row -> row -> row)
-         (date_keep final_keep : row -> bool)
-         (match_date match_dimension : row -> row -> bool)
-         facts dates dimension,
-    (forall fact date,
-      date_keep (join fact date) = match_date fact date) ->
-    (forall fact_date dimension_row,
-      final_keep (join fact_date dimension_row) =
-        andb (date_keep fact_date) (match_dimension fact_date dimension_row)) ->
-    filter final_keep
-      (brute_left_join_list row join
-        (brute_left_join_list row join facts dates) dimension) =
-    three_way_filtered_cartesian row join match_date match_dimension
-      facts dates dimension.
-Proof.
-intros row join date_keep final_keep match_date match_dimension
-  facts dates dimension Hdate Hfinal.
-rewrite filter_brute_left_join_list_as_theta with
-  (accept := fun fact_date dimension_row =>
-    andb (date_keep fact_date) (match_dimension fact_date dimension_row)).
-2: exact Hfinal.
-rewrite theta_join_list_guard_left.
-rewrite filter_brute_left_join_list_as_theta with (accept := match_date).
-- reflexivity.
-- exact Hdate.
-Qed.
-
 (** [query_same_rows_as_bag] permits an arbitrary permutation and arbitrary
     OTuple-equal representatives.  A row predicate used for bag counting must
     therefore be proper for that equality. *)
@@ -214,6 +136,35 @@ Lemma row_attribute_present_conforms_proper :
 Proof.
 intros attribute left right Hequal.
 now apply row_attribute_present_conforms_eq.
+Qed.
+
+(** Row facts crossing a bag boundary must retain presence as well as typing:
+    only then does [OTuple] equality expose the selected cell. *)
+Definition row_attribute_present_nonnull_conforms
+    (attribute : attribute TNull) (row : tuple TNull) : Prop :=
+  row_attribute_present_conforms attribute row /\
+  NullValues.is_null_value (dot TNull row attribute) = false.
+
+Lemma row_attribute_present_nonnull_conforms_proper :
+  forall attribute,
+    tuple_property_proper
+      (row_attribute_present_nonnull_conforms attribute).
+Proof.
+intros attribute left right Hequal; split.
+- intros [[Hpresent Htyped] Hnonnull].
+  split.
+  + now apply (proj1
+      (row_attribute_present_conforms_eq attribute left right Hequal)).
+  + rewrite <- (tuple_eq_dot_alt TNull left right Hequal attribute Hpresent).
+    exact Hnonnull.
+- intros [[Hpresent Htyped] Hnonnull].
+  assert (Hreverse : Oeset.compare (OTuple TNull) right left = Eq).
+  { now apply Oeset.compare_eq_sym. }
+  split.
+  + now apply (proj2
+      (row_attribute_present_conforms_eq attribute left right Hequal)).
+  + rewrite <- (tuple_eq_dot_alt TNull right left Hreverse attribute Hpresent).
+    exact Hnonnull.
 Qed.
 
 Lemma related_permut_Forall_transport :
@@ -454,6 +405,87 @@ eapply related_permut_Forall_transport; [| |exact Helements].
 - now apply Oeset.permut_sym.
 Qed.
 
+(** A conforming table's typed NOT NULL column remains typed and non-NULL in
+    every ordered representative exposed by [QExpr_Bag].  This is the safe
+    schema-to-observation bridge; it does not identify represented tuples by
+    Rocq equality. *)
+Theorem query_same_rows_as_conforming_table_attribute :
+  forall expected constraints actual constraint attribute rows,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    attribute inS
+      (@_basesort TNull expected (constraint_relation constraint)) ->
+    In attribute (constraint_not_null constraint) ->
+    @query_same_rows_as_bag TNull rows
+      (@_instance TNull actual (constraint_relation constraint)) ->
+    Forall (row_attribute_present_nonnull_conforms attribute) rows.
+Proof.
+intros expected constraints actual constraint attribute rows
+  Hschema Hconstraint Hattribute Hnot_null Hrows.
+eapply query_same_rows_as_bag_Forall_between with
+  (first := instance_rows actual (constraint_relation constraint))
+  (bag := @_instance TNull actual (constraint_relation constraint)).
+- apply row_attribute_present_nonnull_conforms_proper.
+- unfold instance_rows; apply query_elements_same_rows_as_bag.
+- exact Hrows.
+- rewrite Forall_forall; intros row Hrow.
+  split.
+  + pose proof
+      (database_conforms_schema_rows_attribute_present
+        expected constraints actual (constraint_relation constraint)
+        attribute Hschema Hattribute) as Hpresent.
+    unfold rows_attribute_present_conform in Hpresent.
+    rewrite Forall_forall in Hpresent.
+    now apply Hpresent.
+  + pose proof
+      (database_conforms_schema_constraints
+        expected constraints actual Hschema) as Hconstraints.
+    pose proof
+      (schema_constraints_conform_member
+        actual constraints constraint Hconstraints Hconstraint) as Htable.
+    assert (Hrows_not_null :
+      rows_attributes_not_null
+        (constraint_not_null constraint)
+        (instance_rows actual (constraint_relation constraint))).
+    {
+      unfold table_constraint_conforms in Htable.
+      eapply rows_constraint_conform_not_null; exact Htable.
+    }
+    exact (Hrows_not_null row Hrow attribute Hnot_null).
+Qed.
+
+(** Lift the schema fact above directly through a successful [QExpr_Bag]
+    observation of a base table.  This keeps generated proofs from repeatedly
+    unpacking the bag observation and reducing the base-table evaluator. *)
+Theorem query_expr_bag_table_success_rows_conform_attribute :
+  forall expected constraints actual constraint attribute outputs env rows
+      unknown contains_nulls symbol_runtime_error aggregate_runtime_error
+      value_is_null,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    attribute inS
+      (@_basesort TNull expected (constraint_relation constraint)) ->
+    In attribute (constraint_not_null constraint) ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown contains_nulls symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Bag TNull relname outputs
+        (@Q_Table TNull relname (constraint_relation constraint)))
+      (SqlSuccess rows) ->
+    Forall (row_attribute_present_nonnull_conforms attribute) rows.
+Proof.
+intros expected constraints actual constraint attribute outputs env rows
+  unknown contains_nulls symbol_runtime_error aggregate_runtime_error
+  value_is_null Hschema Hconstraint Hattribute Hnot_null Hrows.
+apply eval_query_expr_bag_success_iff in Hrows.
+destruct Hrows as [bag [Hbag Hrows]].
+cbn [eval_query_outcome eval_query_runtime_error eval_query] in Hbag.
+inversion Hbag; subst bag.
+eapply query_same_rows_as_conforming_table_attribute;
+  eassumption.
+Qed.
+
 Corollary query_canonical_rows_Forall :
   forall property rows,
     tuple_property_proper property ->
@@ -668,26 +700,6 @@ apply (theta_join_list_permut_eq
   rewrite <- Febag.nb_occ_elements, Febag.nb_occ_mk_bag; reflexivity.
 Qed.
 
-Lemma raw_nested_cross_same_rows_as_bag :
-  forall facts dates dimension : list (tuple TNull),
-    @query_same_rows_as_bag TNull
-      (brute_left_join_list (tuple TNull) (join_tuple TNull)
-        (brute_left_join_list (tuple TNull) (join_tuple TNull) facts dates)
-        dimension)
-      (@query_cross_join_bag TNull
-        (@query_cross_join_bag TNull
-          (@query_rows_bag TNull facts) (@query_rows_bag TNull dates))
-        (@query_rows_bag TNull dimension)).
-Proof.
-intros facts dates dimension.
-eapply query_same_rows_as_bag_bag_transport.
-- apply raw_cross_same_rows_as_bag.
-- apply query_cross_join_bag_congr.
-  + apply query_same_rows_as_bag_iff_bag_eq.
-    apply raw_cross_same_rows_as_bag.
-  + apply bag_eq_refl.
-Qed.
-
 Corollary raw_cross_filter_count_for_any_representative :
   forall keep rows left right,
     tuple_predicate_proper keep ->
@@ -702,26 +714,6 @@ Proof.
 intros keep rows left right Hproper Hrows.
 eapply query_same_rows_as_bag_filter_length_between; eauto.
 apply raw_cross_same_rows_as_bag.
-Qed.
-
-Corollary raw_nested_cross_filter_count_for_any_representative :
-  forall keep rows facts dates dimension,
-    tuple_predicate_proper keep ->
-    @query_same_rows_as_bag TNull rows
-      (@query_cross_join_bag TNull
-        (@query_cross_join_bag TNull
-          (@query_rows_bag TNull facts) (@query_rows_bag TNull dates))
-        (@query_rows_bag TNull dimension)) ->
-    List.length (filter keep rows) =
-    List.length
-      (filter keep
-        (brute_left_join_list (tuple TNull) (join_tuple TNull)
-          (brute_left_join_list (tuple TNull) (join_tuple TNull) facts dates)
-          dimension)).
-Proof.
-intros keep rows facts dates dimension Hproper Hrows.
-eapply query_same_rows_as_bag_filter_length_between; eauto.
-apply raw_nested_cross_same_rows_as_bag.
 Qed.
 
 (** PostgreSQL Bool3 equality for typed INTEGER cells. *)
@@ -1413,212 +1405,6 @@ induction groups as [|group groups IH]; intros output Heval.
 Qed.
 
 End OutcomeLengths.
-
-Lemma nat_le_through_two_equalities :
-  forall first second third fourth last,
-    (first <= second)%nat ->
-    second = third ->
-    third = fourth ->
-    (fourth <= last)%nat ->
-    (first <= last)%nat.
-Proof.
-intros first second third fourth last Hfirst Hsecond Hthird Hlast.
-subst third; subst fourth.
-exact (Nat.le_trans first second last Hfirst Hlast).
-Qed.
-
-(** This handoff theorem combines the exact arbitrary-representative
-    filter count, multiplicity-preserving grouping, and the complete
-    two-INT32 fact primary-key bound.  Dimension functionality is an explicit
-    premise; no foreign key or planner estimate is inferred. *)
-Theorem functional_three_way_composite_int32_group_length_2_64_direct :
-  forall first_name second_name facts dates dimension
-         date_keep final_keep match_date match_dimension
-         cross_rows filtered_rows env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    tuple_predicate_proper final_keep ->
-    @query_same_rows_as_bag TNull cross_rows
-      (@query_cross_join_bag TNull
-        (@query_cross_join_bag TNull
-          (@query_rows_bag TNull facts) (@query_rows_bag TNull dates))
-        (@query_rows_bag TNull dimension)) ->
-    List.length filtered_rows =
-      List.length (filter final_keep cross_rows) ->
-    (forall fact date,
-      date_keep (join_tuple TNull fact date) = match_date fact date) ->
-    (forall fact_date dimension_row,
-      final_keep (join_tuple TNull fact_date dimension_row) =
-        andb (date_keep fact_date) (match_dimension fact_date dimension_row)) ->
-    (forall fact,
-      In fact facts ->
-      (List.length (filter (match_date fact) dates) <= 1)%nat) ->
-    (forall fact_date,
-      In fact_date
-        (theta_join_list (tuple TNull) (join_tuple TNull)
-          match_date facts dates) ->
-      (List.length (filter (match_dimension fact_date) dimension) <= 1)%nat) ->
-    In group
-      (@query_make_groups TNull env filtered_rows group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 64.
-Proof.
-intros first_name second_name facts dates dimension
-  date_keep final_keep match_date match_dimension
-  cross_rows filtered_rows env group_terms group
-  Hfirst Hsecond Hprimary Hproper Hcross Hfiltered Hdate Hfinal
-  Hdate_functional Hdimension_functional Hgroup.
-pose proof
-  (raw_nested_cross_filter_count_for_any_representative
-    final_keep cross_rows facts dates dimension Hproper Hcross) as Htransport.
-rewrite (three_way_filter_nested_cross_exact
-  (tuple TNull) (join_tuple TNull) date_keep final_keep
-  match_date match_dimension facts dates dimension Hdate Hfinal)
-  in Htransport.
-pose proof
-  (three_way_filtered_cartesian_length_le
-    (tuple TNull) (join_tuple TNull) match_date match_dimension
-    facts dates dimension Hdate_functional Hdimension_functional)
-  as Hraw.
-assert (Hmember :
-  (List.length group <=
-   List.length filtered_rows)%nat).
-{
-  eapply query_make_groups_member_length_le; exact Hgroup.
-}
-pose proof
-  (int32_composite_primary_key_length_2_64
-    first_name second_name facts Hfirst Hsecond Hprimary) as Hfact.
-pose proof (nat_le_through_two_equalities _ _ _ _ _
-  Hmember Hfiltered Htransport Hraw) as Hgroup_fact.
-apply Nat2Z.inj_le in Hgroup_fact.
-lia.
-Qed.
-
-(** Bag-consuming grouped operators use the canonical representative.  The
-    earlier theorem remains as a premise-preserving corollary of the direct
-    list theorem because canonicalization preserves occurrence count. *)
-Theorem functional_three_way_composite_int32_canonical_group_length_2_64 :
-  forall first_name second_name facts dates dimension
-         date_keep final_keep match_date match_dimension
-         cross_rows filtered_rows env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    tuple_predicate_proper final_keep ->
-    @query_same_rows_as_bag TNull cross_rows
-      (@query_cross_join_bag TNull
-        (@query_cross_join_bag TNull
-          (@query_rows_bag TNull facts) (@query_rows_bag TNull dates))
-        (@query_rows_bag TNull dimension)) ->
-    List.length filtered_rows =
-      List.length (filter final_keep cross_rows) ->
-    (forall fact date,
-      date_keep (join_tuple TNull fact date) = match_date fact date) ->
-    (forall fact_date dimension_row,
-      final_keep (join_tuple TNull fact_date dimension_row) =
-        andb (date_keep fact_date) (match_dimension fact_date dimension_row)) ->
-    (forall fact,
-      In fact facts ->
-      (List.length (filter (match_date fact) dates) <= 1)%nat) ->
-    (forall fact_date,
-      In fact_date
-        (theta_join_list (tuple TNull) (join_tuple TNull)
-          match_date facts dates) ->
-      (List.length (filter (match_dimension fact_date) dimension) <= 1)%nat) ->
-    In group
-      (@query_make_groups TNull env
-        (@query_canonical_rows TNull filtered_rows) group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 64.
-Proof.
-intros first_name second_name facts dates dimension
-  date_keep final_keep match_date match_dimension
-  cross_rows filtered_rows env group_terms group
-  Hfirst Hsecond Hprimary Hproper Hcross Hfiltered Hdate Hfinal
-  Hdate_functional Hdimension_functional Hgroup.
-eapply functional_three_way_composite_int32_group_length_2_64_direct
-  with
-    (first_name := first_name)
-    (second_name := second_name)
-    (facts := facts)
-    (dates := dates)
-    (dimension := dimension)
-    (cross_rows := cross_rows)
-    (filtered_rows := @query_canonical_rows TNull filtered_rows)
-    (env := env)
-    (group_terms := group_terms)
-    (date_keep := date_keep)
-    (final_keep := final_keep)
-    (match_date := match_date)
-    (match_dimension := match_dimension).
-- exact Hfirst.
-- exact Hsecond.
-- exact Hprimary.
-- exact Hproper.
-- exact Hcross.
-- rewrite query_canonical_rows_length; exact Hfiltered.
-- exact Hdate.
-- exact Hfinal.
-- exact Hdate_functional.
-- exact Hdimension_functional.
-- exact Hgroup.
-Qed.
-
-Theorem functional_two_way_composite_int32_canonical_group_length_2_64 :
-  forall first_name second_name facts dimension
-         final_keep match_dimension cross_rows filtered_rows
-         env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    tuple_predicate_proper final_keep ->
-    @query_same_rows_as_bag TNull cross_rows
-      (@query_cross_join_bag TNull
-        (@query_rows_bag TNull facts) (@query_rows_bag TNull dimension)) ->
-    List.length filtered_rows =
-      List.length (filter final_keep cross_rows) ->
-    (forall fact dimension_row,
-      final_keep (join_tuple TNull fact dimension_row) =
-        match_dimension fact dimension_row) ->
-    (forall fact,
-      In fact facts ->
-      (List.length (filter (match_dimension fact) dimension) <= 1)%nat) ->
-    In group
-      (@query_make_groups TNull env
-        (@query_canonical_rows TNull filtered_rows) group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 64.
-Proof.
-intros first_name second_name facts dimension final_keep match_dimension
-  cross_rows filtered_rows env group_terms group
-  Hfirst Hsecond Hprimary Hproper Hcross Hfiltered Hmatch Hfunctional Hgroup.
-pose proof
-  (raw_cross_filter_count_for_any_representative
-    final_keep cross_rows facts dimension Hproper Hcross) as Htransport.
-rewrite (filter_brute_left_join_list_as_theta
-  (tuple TNull) (join_tuple TNull) final_keep match_dimension
-  facts dimension Hmatch) in Htransport.
-pose proof
-  (two_way_filtered_cartesian_length_le
-    (tuple TNull) (join_tuple TNull) match_dimension facts dimension
-    Hfunctional) as Hraw.
-assert (Hmember :
-  (List.length group <=
-   List.length (@query_canonical_rows TNull filtered_rows))%nat).
-{
-  eapply query_make_groups_member_length_le; exact Hgroup.
-}
-rewrite query_canonical_rows_length in Hmember.
-pose proof
-  (int32_composite_primary_key_length_2_64
-    first_name second_name facts Hfirst Hsecond Hprimary) as Hfact.
-pose proof (nat_le_through_two_equalities _ _ _ _ _
-  Hmember Hfiltered Htransport Hraw) as Hgroup_fact.
-apply Nat2Z.inj_le in Hgroup_fact.
-lia.
-Qed.
 
 (** A complete two-column INT32 key is functional when both strict equality
     predicates are true. Checking only one component would be unsound because

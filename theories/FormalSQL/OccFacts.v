@@ -1,4 +1,4 @@
-From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra Projection FiniteBag Bool3 FTuples OrderedSet Env.
+From SQLFS Require Import SqlSyntax GenericInstance SqlAlgebra Projection FiniteBag Bool3 FTuples OrderedSet Env Interp Partition ListFacts.
 From Logos.FormalSQL Require Import TNullSyntax RewriteSpec.
 
 Import Tuple.
@@ -107,6 +107,105 @@ apply Febag.filter_eq.
   change (eval_formula_in_env db nil x1 f = eval_formula_in_env db nil x2 f).
   apply eval_formula_in_env_eq_tuple.
   exact Hx.
+Qed.
+
+(** Fixed-environment bag congruence is the compositional interface needed
+    below [QExpr_Bag].  These laws do not introduce success assumptions or
+    erase runtime errors; they only transport the pure bag result. *)
+Lemma pi_eval_bag_congr :
+  forall db env select_list left right,
+    eval_query_in_env db env left =BE= eval_query_in_env db env right ->
+    eval_query_in_env db env (Pi select_list left) =BE=
+    eval_query_in_env db env (Pi select_list right).
+Proof.
+intros db env select_list left right Hbag.
+unfold eval_query_in_env, Pi in *.
+rewrite Febag.nb_occ_equal; intro output.
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Pi TNull relname select_list left)).
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Pi TNull relname select_list right)).
+rewrite 2 Febag.map_unfold, 2 Febag.nb_occ_mk_bag.
+apply (Oeset.nb_occ_map_eq_2_3 (OTuple TNull)).
+- intros first second Hequal.
+  apply projection_eq, env_t_eq_2; exact Hequal.
+- intro row; rewrite <- !Febag.nb_occ_elements.
+  revert row; now rewrite <- Febag.nb_occ_equal.
+Qed.
+
+Lemma sigma_eval_bag_congr :
+  forall db env formula left right,
+    eval_query_in_env db env left =BE= eval_query_in_env db env right ->
+    eval_query_in_env db env (Sigma formula left) =BE=
+    eval_query_in_env db env (Sigma formula right).
+Proof.
+intros db env formula left right Hbag.
+unfold eval_query_in_env, Sigma in *.
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Sigma TNull relname formula left)).
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Sigma TNull relname formula right)).
+apply Febag.filter_eq.
+- exact Hbag.
+- intros first second _ Hequal.
+  apply f_equal, eval_formula_eq.
+  + apply contains_nulls_eq.
+  + apply env_t_eq_2; exact Hequal.
+Qed.
+
+Lemma gamma_eval_bag_congr :
+  forall db env select_list group_terms having left right,
+    eval_query_in_env db env left =BE= eval_query_in_env db env right ->
+    eval_query_in_env db env
+      (Gamma select_list group_terms having left) =BE=
+    eval_query_in_env db env
+      (Gamma select_list group_terms having right).
+Proof.
+intros db env select_list group_terms having left right Hbag.
+unfold eval_query_in_env, Gamma in *.
+rewrite Febag.nb_occ_equal; intro output.
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Gamma TNull relname select_list group_terms having left)).
+rewrite (@eval_query_unfold TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls env
+  (@Q_Gamma TNull relname select_list group_terms having right)).
+rewrite 2 Febag.nb_occ_mk_bag.
+apply (Oeset.nb_occ_map_eq_2_3 (OLTuple TNull)).
+- intros first second Hequal.
+  apply projection_eq, env_g_eq_2.
+  rewrite Partition.compare_list_t; exact Hequal.
+- intro group.
+  rewrite 2 Oeset.nb_occ_filter.
+  + apply BasicFacts.if_eq.
+    * reflexivity.
+    * intro Hkeep.
+      apply Oeset.permut_nb_occ.
+      unfold FlatData.make_groups.
+      apply Partition.snd_partition_eq.
+      -- intros first _ second Hequal.
+         rewrite <- ListFacts.map_eq; intros attribute _.
+         apply Interp.interp_aggterm_eq, env_t_eq_2; exact Hequal.
+      -- apply Oeset.nb_occ_permut; intro row.
+         rewrite <- !Febag.nb_occ_elements.
+         revert row; now rewrite <- Febag.nb_occ_equal.
+    * intros; reflexivity.
+  + intros first second _ Hequal.
+    apply f_equal, eval_formula_eq.
+    * apply contains_nulls_eq.
+    * apply (@env_g_eq_2 TNull env
+        (@Group_By TNull group_terms) first second).
+      rewrite Partition.compare_list_t; exact Hequal.
+  + intros first second _ Hequal.
+    apply f_equal, eval_formula_eq.
+    * apply contains_nulls_eq.
+    * apply (@env_g_eq_2 TNull env
+        (@Group_By TNull group_terms) first second).
+      rewrite Partition.compare_list_t; exact Hequal.
 Qed.
 
 Lemma query_satisfies_of_equiv :
