@@ -1,4 +1,6 @@
-From SQLFS Require Import SqlSyntax GenericInstance Values SqlAlgebra SqlOutcome SqlErrorSemantics SqlOrder Projection FTerms ATerms Formula FiniteSet FiniteBag FTuples Bool3 Env ValueNumeric ValueNumericTypmod ValueFloat ValueInteger ValueString.
+From SQLFS Require Import SqlSyntax GenericInstance Values SqlOrder Projection
+  FTerms ATerms FiniteSet FTuples Env ListFacts ValueNumeric
+  ValueNumericTypmod ValueFloat ValueInteger ValueString.
 From Stdlib Require Import List String ZArith Floats.
 From Flocq Require Import IEEE754.Bits.
 
@@ -8,45 +10,11 @@ Import Tuple.
 Open Scope string_scope.
 Open Scope Z_scope.
 
-Definition Query := @query TNull relname.
-Definition Formula := @sql_formula TNull Query.
 Definition SelectListT := @_select_list TNull.
 Definition SelectItemT := @select TNull.
 Definition AggTerm := @aggterm TNull.
 Definition FunTerm := @funterm TNull.
 Definition SortKeyT := sort_key TNull.
-
-Definition Table (name : string) : Query :=
-  @Q_Table TNull relname (Rel name).
-
-Definition EmptyTuple : Query :=
-  @Q_Empty_Tuple TNull relname.
-
-Definition EmptyBagRelation (attrs : list (attribute TNull)) : Query :=
-  @Q_Empty_Relation TNull relname (Fset.mk_set (A TNull) attrs).
-
-Definition SetQuery (op : set_op) (left right : Query) : Query :=
-  @Q_Set TNull relname op left right.
-
-Definition SetUnion := Union.
-Definition SetInter := Inter.
-Definition SetDiff := Diff.
-
-Definition CrossJoin (left right : Query) : Query :=
-  @Q_CrossJoin TNull relname left right.
-
-Definition Pi (select : SelectListT) (input : Query) : Query :=
-  @Q_Pi TNull relname select input.
-
-Definition Sigma (predicate : Formula) (input : Query) : Query :=
-  @Q_Sigma TNull relname predicate input.
-
-Definition Gamma
-    (select : SelectListT)
-    (group_by : list AggTerm)
-    (having : Formula)
-    (input : Query) : Query :=
-  @Q_Gamma TNull relname select group_by having input.
 
 Definition SelectList (items : list SelectItemT) : SelectListT :=
   @_Select_List TNull items.
@@ -84,179 +52,61 @@ Definition ScalarCall
     (operator : ValueCore.scalar_operator) (args : list FunTerm) : FunTerm :=
   @F_Expr TNull operator args.
 
-Definition TrueFormula : Formula :=
-  @Sql_True TNull Query.
-
-Definition Pred (predicate : ValueCore.predicate) (args : list AggTerm) : Formula :=
-  @Sql_Pred TNull Query predicate args.
-
-(** Exact PostgreSQL DATE <= TIMESTAMP comparison.  This is a cross-type
-    predicate, not a checked cast of [date]; its interpretation follows
-    PostgreSQL 17 [date_cmp_timestamp_internal]. *)
-Definition PgDateLteTimestamp
-    (date timestamp : AggTerm) : Formula :=
-  Pred PredicateDateLteTimestamp (date :: timestamp :: nil).
-
-(** Exact PostgreSQL DATE < TIMESTAMP comparison.  Like the non-strict
-    variant, this calls the cross-type comparator directly and never inserts
-    a checked DATE-to-TIMESTAMP cast. *)
-Definition PgDateLtTimestamp
-    (date timestamp : AggTerm) : Formula :=
-  Pred PredicateDateLtTimestamp (date :: timestamp :: nil).
-
-(** Exact PostgreSQL DATE > TIMESTAMP comparison. *)
-Definition PgDateGtTimestamp
-    (date timestamp : AggTerm) : Formula :=
-  Pred PredicateDateGtTimestamp (date :: timestamp :: nil).
-
-(** Exact PostgreSQL DATE >= TIMESTAMP comparison. *)
-Definition PgDateGteTimestamp
-    (date timestamp : AggTerm) : Formula :=
-  Pred PredicateDateGteTimestamp (date :: timestamp :: nil).
-
-Definition And (left right : Formula) : Formula :=
-  @Sql_Conj TNull Query And_F left right.
-
-Definition Or (left right : Formula) : Formula :=
-  @Sql_Conj TNull Query Or_F left right.
-
-Definition Not (formula : Formula) : Formula :=
-  @Sql_Not TNull Query formula.
-
-Definition InQuery (select : list SelectItemT) (query : Query) : Formula :=
-  @Sql_In TNull Query select query.
-
-Definition ExistsQuery (query : Query) : Formula :=
-  @Sql_Exists TNull Query query.
-
-Definition eval_query_in_env (db : db_state) (env : Env.env TNull) (q : Query) :=
-  @eval_query TNull relname
-    (@_basesort TNull db)
-    (@_instance TNull db)
-    unknown3
-    contains_nulls
-    env
-    q.
-
-Definition eval_query_in_state (db : db_state) (q : Query) :=
-  eval_query_in_env db nil q.
-
-Definition eval_query_outcome_in_env
-    (db : db_state) (env : Env.env TNull) (q : Query) :=
-  @eval_query_outcome TNull relname
-    (@_basesort TNull db)
-    (@_instance TNull db)
-    unknown3
-    contains_nulls
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error
-    env
-    q.
-
-Definition eval_query_outcome_in_state (db : db_state) (q : Query) :=
-  eval_query_outcome_in_env db nil q.
-
-Definition query_runtime_error_in_env
-    (db : db_state) (env : Env.env TNull) (q : Query) :=
-  @eval_query_runtime_error TNull relname
-    (@_basesort TNull db)
-    (@_instance TNull db)
-    unknown3
-    contains_nulls
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error
-    env
-    q.
-
-Definition query_runtime_error_in_state (db : db_state) (q : Query) :=
-  query_runtime_error_in_env db nil q.
-
-Definition query_succeeds (db : db_state) (q : Query) : Prop :=
-  query_runtime_error_in_state db q = None.
-
-Definition eval_formula_in_env
-    (db : db_state) (env : Env.env TNull) (t : tuple TNull) (f : Formula) :=
-  Bool.is_true (B TNull)
-    (@eval_sql_formula TNull Query
-      unknown3
-      contains_nulls
-      (eval_query_in_env db)
-      (env_t TNull env t)
-      f).
-
-Definition eval_formula_in_state (db : db_state) (t : tuple TNull) (f : Formula) :=
-  eval_formula_in_env db nil t f.
-
-Definition query_equiv (db : db_state) (q1 q2 : Query) : Prop :=
-  successful_outcome_equiv
-    (fun left right => left =BE= right)
-    (eval_query_outcome_in_state db q1)
-    (eval_query_outcome_in_state db q2).
-
-Lemma query_equiv_iff_success_and_bag_equality :
-  forall db q1 q2,
-    query_equiv db q1 q2 <->
-    query_succeeds db q1 /\
-    query_succeeds db q2 /\
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2.
-Proof.
-intros db q1 q2.
-unfold query_equiv, eval_query_outcome_in_state, eval_query_outcome_in_env,
-  eval_query_outcome, query_succeeds, query_runtime_error_in_state,
-  query_runtime_error_in_env, successful_outcome_equiv.
-destruct (@eval_query_runtime_error TNull relname
-  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls
-  NullValues.interp_scalar_operator_runtime_error
-  NullValues.interp_aggregate_runtime_error nil q1) eqn:Hleft;
-destruct (@eval_query_runtime_error TNull relname
-  (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls
-  NullValues.interp_scalar_operator_runtime_error
-  NullValues.interp_aggregate_runtime_error nil q2) eqn:Hright; simpl.
-- split; intro H; [contradiction | destruct H as [H _]; discriminate].
-- split; intro H; [contradiction | destruct H as [H _]; discriminate].
-- split; intro H; [contradiction | destruct H as [_ [H _]]; discriminate].
-- split; intro H.
-  + repeat split; try reflexivity; exact H.
-  + now destruct H as [_ [_ H]].
-Qed.
-
-Lemma query_equiv_intro :
-  forall db q1 q2,
-    query_succeeds db q1 ->
-    query_succeeds db q2 ->
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2 ->
-    query_equiv db q1 q2.
-Proof.
-intros db q1 q2 Hsafe1 Hsafe2 Hequal.
-apply query_equiv_iff_success_and_bag_equality.
-repeat split; assumption.
-Qed.
-
-Lemma query_equiv_implies_success :
-  forall db q1 q2,
-    query_equiv db q1 q2 ->
-    query_succeeds db q1 /\ query_succeeds db q2.
-Proof.
-intros db q1 q2 Hequiv.
-apply query_equiv_iff_success_and_bag_equality in Hequiv.
-tauto.
-Qed.
-
-Lemma query_equiv_implies_bag_equality :
-  forall db q1 q2,
-    query_equiv db q1 q2 ->
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2.
-Proof.
-intros db q1 q2 Hequiv.
-apply query_equiv_iff_success_and_bag_equality in Hequiv.
-tauto.
-Qed.
-
-Definition query_satisfies (db : db_state) (q : Query) (f : Formula) : Prop :=
-  forall t, t inBE eval_query_in_state db q -> eval_formula_in_state db t f = true.
-
 Definition projected_tuple (env : Env.env TNull) (s : SelectListT) (t : tuple TNull) :=
   projection TNull (env_t TNull env t) (@Select_List TNull s).
+
+(** Pure select-list facts used by both exact query proofs and generated
+    projection obligations.  They do not depend on a query evaluator. *)
+Definition select_list_directly_selects_attr
+    (select_list : SelectListT) (attribute : attribute TNull) : Prop :=
+  match select_list with
+  | @_Select_List _ items =>
+      In
+        (@Select_As TNull
+          (@A_Expr TNull (@F_Dot TNull attribute)) attribute)
+        items
+  end.
+
+Definition select_list_has_unique_outputs
+    (select_list : SelectListT) : Prop :=
+  match select_list with
+  | @_Select_List _ items =>
+      all_diff (map fst (map (@pair_of_select TNull) items))
+  end.
+
+Definition projection_preserves_attr
+    (env : Env.env TNull) (select_list : SelectListT)
+    (attribute : attribute TNull) : Prop :=
+  forall row,
+    attribute inS labels TNull row ->
+    @dot TNull (projected_tuple env select_list row) attribute =
+    @dot TNull row attribute.
+
+Lemma direct_projection_preserves_attr :
+  forall env select_list attribute,
+    select_list_directly_selects_attr select_list attribute ->
+    select_list_has_unique_outputs select_list ->
+    projection_preserves_attr env select_list attribute.
+Proof.
+intros env [items] attribute Hselect Hdistinct row Hattribute.
+unfold projection_preserves_attr, projected_tuple in *.
+change
+  (@dot TNull
+    (projection TNull (env_t TNull env row)
+      (@Select_List TNull (@_Select_List TNull items))) attribute =
+   @dot TNull row attribute).
+rewrite (@dot_projection TNull (env_t TNull env row) items attribute
+  (@A_Expr TNull (@F_Dot TNull attribute)) Hselect Hdistinct).
+unfold Interp.interp_aggterm, Interp.interp_funterm,
+  Interp.interp_dot, env_t.
+simpl.
+change
+  ((if attribute inS? labels TNull row
+    then @dot TNull row attribute
+    else Interp.interp_dot TNull env attribute) =
+   @dot TNull row attribute).
+rewrite Hattribute; reflexivity.
+Qed.
 
 Definition AttrZ (name : string) := Attr_Z name.
 Definition AttrInt32 (name : string) := Attr_int32 name.

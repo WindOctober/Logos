@@ -2,11 +2,11 @@
 
 Route here for: exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT.
 
-This focused catalog contains 38 declarations routed at declaration granularity from `OrderedQueryFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 45 declarations routed at declaration granularity from `OrderedQueryFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `ordered_rows_equiv_skipn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:20`](../OrderedQueryFacts.v#L20)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:22`](../OrderedQueryFacts.v#L22)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -27,7 +27,7 @@ Lemma ordered_rows_equiv_skipn :
 
 ## `ordered_rows_equiv_firstn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:38`](../OrderedQueryFacts.v#L38)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:40`](../OrderedQueryFacts.v#L40)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -46,9 +46,79 @@ Lemma ordered_rows_equiv_firstn :
     ordered_rows_equiv T (firstn count left) (firstn count right).
 ```
 
+## `query_expr_set_has_success`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:339`](../OrderedQueryFacts.v#L339)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for SQL bag/set operations.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_set_has_success` direction for SQL bag/set operations; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `ordered` (rank 36)
+
+Search aliases: `ordered query semantics`, `set operation`
+
+```rocq
+Lemma query_expr_set_has_success :
+  forall env operation left right,
+    query_has_success env left ->
+    query_has_success env right ->
+    query_has_success env (QExpr_Set operation left right).
+```
+
+## `query_expr_unordered_success_Forall`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1068`](../OrderedQueryFacts.v#L1068)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query equivalence.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_unordered_success_Forall` direction for ordered query equivalence; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `ordered` (rank 36)
+
+Search aliases: `ordered query semantics`
+
+```rocq
+Lemma query_expr_unordered_success_Forall :
+  forall env input (property : tuple T -> Prop),
+    tuple_property_semantic_invariant property ->
+    query_success_Forall env input property ->
+    query_success_Forall env (QExpr_Unordered input) property.
+```
+
+## `ordered_rows_equiv_filter`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1394`](../OrderedQueryFacts.v#L1394)
+
+Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `filter` (rank 46), `ordered` (rank 30)
+
+Search aliases: `ordered query semantics`, `filter`, `WHERE`, `equivalence`, `congruence`
+
+```rocq
+Lemma ordered_rows_equiv_filter :
+  forall (keep : tuple T -> bool),
+    (forall left right,
+      Oeset.compare (OTuple T) left right = Eq ->
+      keep left = keep right) ->
+    forall left right,
+      ordered_rows_equiv T left right ->
+      ordered_rows_equiv T
+        (List.filter keep left) (List.filter keep right).
+```
+
 ## `eval_query_expr_distinct_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:578`](../OrderedQueryFacts.v#L578)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1508`](../OrderedQueryFacts.v#L1508)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered query equivalence.
 
@@ -67,9 +137,34 @@ Lemma eval_query_expr_distinct_error_iff :
     eval_query env input (SqlError error).
 ```
 
+## `query_expr_distinct_global_typed_inert_reset`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1523`](../OrderedQueryFacts.v#L1523)
+
+Purpose/direction: States the query expr distinct global typed inert reset law for ordered query equivalence, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
+
+Cross-index: `bag` (rank 50), `ordered` (rank 34), `schema` (rank 50)
+
+Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `schema conformance`, `typing`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_distinct_global_typed_inert_reset :
+  forall input,
+    query_expr_order_behavior input = BagReset ->
+    (forall env bag,
+      query_success_bags basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null
+        env input bag ->
+      bag_eq T (query_distinct_bag bag) bag) ->
+    query_global_typed_outcome_equiv (QExpr_Distinct input) input.
+```
+
 ## `eval_query_expr_rank_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:588`](../OrderedQueryFacts.v#L588)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1559`](../OrderedQueryFacts.v#L1559)
 
 Purpose/direction: Gives necessary and sufficient conditions for window/rank evaluation.
 
@@ -99,7 +194,7 @@ Lemma eval_query_expr_rank_error_iff :
 
 ## `eval_query_expr_window_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:613`](../OrderedQueryFacts.v#L613)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1584`](../OrderedQueryFacts.v#L1584)
 
 Purpose/direction: Gives necessary and sufficient conditions for window/rank evaluation.
 
@@ -129,7 +224,7 @@ Lemma eval_query_expr_window_error_iff :
 
 ## `eval_query_expr_offset_zero_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:641`](../OrderedQueryFacts.v#L641)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1612`](../OrderedQueryFacts.v#L1612)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -150,7 +245,7 @@ Lemma eval_query_expr_offset_zero_iff :
 
 ## `eval_query_expr_fetch_zero_success_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:656`](../OrderedQueryFacts.v#L656)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1627`](../OrderedQueryFacts.v#L1627)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -169,9 +264,35 @@ Lemma eval_query_expr_fetch_zero_success_iff :
     output = nil /\ query_has_success env input.
 ```
 
+## `query_expr_fetch_zero_annihilator_outcome_equiv_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1644`](../OrderedQueryFacts.v#L1644)
+
+Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome` (rank 44), `runtime` (rank 50), `ordered` (rank 20)
+
+Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_expr_fetch_zero_annihilator_outcome_equiv_safe :
+  forall env left right,
+    query_expr_outputs left = query_expr_outputs right ->
+    query_safe env left ->
+    query_safe env right ->
+    query_has_success env left ->
+    query_has_success env right ->
+    query_outcome_equiv env
+      (QExpr_Fetch 0 left) (QExpr_Fetch 0 right).
+```
+
 ## `eval_query_expr_offset_offset_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:670`](../OrderedQueryFacts.v#L670)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1680`](../OrderedQueryFacts.v#L1680)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -192,7 +313,7 @@ Lemma eval_query_expr_offset_offset_iff :
 
 ## `eval_query_expr_fetch_fetch_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:700`](../OrderedQueryFacts.v#L700)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1710`](../OrderedQueryFacts.v#L1710)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -213,7 +334,7 @@ Lemma eval_query_expr_fetch_fetch_iff :
 
 ## `eval_query_expr_offset_fetch_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:730`](../OrderedQueryFacts.v#L730)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1740`](../OrderedQueryFacts.v#L1740)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -236,7 +357,7 @@ Lemma eval_query_expr_offset_fetch_comm_iff :
 
 ## `eval_query_expr_fetch_offset_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:768`](../OrderedQueryFacts.v#L768)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1778`](../OrderedQueryFacts.v#L1778)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -259,7 +380,7 @@ Lemma eval_query_expr_fetch_offset_comm_iff :
 
 ## `eval_query_expr_offset_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:806`](../OrderedQueryFacts.v#L806)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1816`](../OrderedQueryFacts.v#L1816)
 
 Purpose/direction: Relates ordered slicing to the exact list length or bag cardinality shown below.
 
@@ -282,7 +403,7 @@ Lemma eval_query_expr_offset_success_length :
 
 ## `eval_query_expr_fetch_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:820`](../OrderedQueryFacts.v#L820)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1830`](../OrderedQueryFacts.v#L1830)
 
 Purpose/direction: Relates ordered slicing to the exact list length or bag cardinality shown below.
 
@@ -305,7 +426,7 @@ Lemma eval_query_expr_fetch_success_length :
 
 ## `eval_query_expr_order_by_success_occurrences`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:837`](../OrderedQueryFacts.v#L837)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1847`](../OrderedQueryFacts.v#L1847)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -330,7 +451,7 @@ Lemma eval_query_expr_order_by_success_occurrences :
 
 ## `eval_query_expr_order_by_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:860`](../OrderedQueryFacts.v#L860)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1870`](../OrderedQueryFacts.v#L1870)
 
 Purpose/direction: Relates ordered query observation to the exact list length or bag cardinality shown below.
 
@@ -353,7 +474,7 @@ Lemma eval_query_expr_order_by_success_length :
 
 ## `eval_query_expr_order_by_success_ordered`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:881`](../OrderedQueryFacts.v#L881)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1891`](../OrderedQueryFacts.v#L1891)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -374,7 +495,7 @@ Lemma eval_query_expr_order_by_success_ordered :
 
 ## `query_same_rows_as_bag_length_le_one_ordered_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:895`](../OrderedQueryFacts.v#L895)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1905`](../OrderedQueryFacts.v#L1905)
 
 Purpose/direction: Provides the stated reusable upper bound for ordered query equivalence.
 
@@ -396,7 +517,7 @@ Lemma query_same_rows_as_bag_length_le_one_ordered_equiv :
 
 ## `query_expr_order_by_outcome_equiv_of_success_length_le_one`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:931`](../OrderedQueryFacts.v#L931)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1941`](../OrderedQueryFacts.v#L1941)
 
 Purpose/direction: Provides the stated reusable upper bound for ordered query observation.
 
@@ -420,7 +541,7 @@ Theorem query_expr_order_by_outcome_equiv_of_success_length_le_one :
 
 ## `eval_query_expr_order_by_order_by_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:977`](../OrderedQueryFacts.v#L977)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1987`](../OrderedQueryFacts.v#L1987)
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered query observation.
 
@@ -442,7 +563,7 @@ Lemma eval_query_expr_order_by_order_by_iff :
 
 ## `query_expr_offset_zero_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1025`](../OrderedQueryFacts.v#L1025)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2035`](../OrderedQueryFacts.v#L2035)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -462,7 +583,7 @@ Lemma query_expr_offset_zero_global_typed_equiv :
 
 ## `query_expr_offset_offset_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1033`](../OrderedQueryFacts.v#L1033)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2043`](../OrderedQueryFacts.v#L2043)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -484,7 +605,7 @@ Lemma query_expr_offset_offset_global_typed_equiv :
 
 ## `query_expr_fetch_fetch_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1043`](../OrderedQueryFacts.v#L1043)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2053`](../OrderedQueryFacts.v#L2053)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -506,7 +627,7 @@ Lemma query_expr_fetch_fetch_global_typed_equiv :
 
 ## `query_expr_offset_fetch_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1053`](../OrderedQueryFacts.v#L1053)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2063`](../OrderedQueryFacts.v#L2063)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -528,7 +649,7 @@ Lemma query_expr_offset_fetch_global_typed_equiv :
 
 ## `query_expr_fetch_offset_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1063`](../OrderedQueryFacts.v#L1063)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2073`](../OrderedQueryFacts.v#L2073)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -550,7 +671,7 @@ Lemma query_expr_fetch_offset_global_typed_equiv :
 
 ## `query_expr_order_by_order_by_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1073`](../OrderedQueryFacts.v#L1073)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2083`](../OrderedQueryFacts.v#L2083)
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -572,7 +693,7 @@ Lemma query_expr_order_by_order_by_global_typed_equiv :
 
 ## `query_expr_distinct_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1087`](../OrderedQueryFacts.v#L1087)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2097`](../OrderedQueryFacts.v#L2097)
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -594,7 +715,7 @@ Lemma query_expr_distinct_outcome_equiv_congr :
 
 ## `query_expr_order_by_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1147`](../OrderedQueryFacts.v#L1147)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2157`](../OrderedQueryFacts.v#L2157)
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -616,7 +737,7 @@ Lemma query_expr_order_by_outcome_equiv_congr :
 
 ## `query_expr_offset_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1207`](../OrderedQueryFacts.v#L1207)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2217`](../OrderedQueryFacts.v#L2217)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -638,7 +759,7 @@ Lemma query_expr_offset_outcome_equiv_congr :
 
 ## `query_expr_fetch_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1250`](../OrderedQueryFacts.v#L1250)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2260`](../OrderedQueryFacts.v#L2260)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -660,7 +781,7 @@ Lemma query_expr_fetch_outcome_equiv_congr :
 
 ## `query_expr_rank_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1293`](../OrderedQueryFacts.v#L1293)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2303`](../OrderedQueryFacts.v#L2303)
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -685,7 +806,7 @@ Lemma query_expr_rank_outcome_equiv_congr :
 
 ## `query_expr_window_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1422`](../OrderedQueryFacts.v#L1422)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2432`](../OrderedQueryFacts.v#L2432)
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -714,7 +835,7 @@ Lemma query_expr_window_outcome_equiv_congr :
 
 ## `query_expr_order_by_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1529`](../OrderedQueryFacts.v#L1529)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2539`](../OrderedQueryFacts.v#L2539)
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -736,7 +857,7 @@ Lemma query_expr_order_by_equiv_congr :
 
 ## `query_expr_rank_equiv_congr_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1553`](../OrderedQueryFacts.v#L1553)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2563`](../OrderedQueryFacts.v#L2563)
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -770,7 +891,7 @@ Lemma query_expr_rank_equiv_congr_safe :
 
 ## `query_expr_window_equiv_congr_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1585`](../OrderedQueryFacts.v#L1585)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2595`](../OrderedQueryFacts.v#L2595)
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -797,7 +918,7 @@ Lemma query_expr_window_equiv_congr_safe :
 
 ## `query_expr_offset_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1613`](../OrderedQueryFacts.v#L1613)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2623`](../OrderedQueryFacts.v#L2623)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -819,7 +940,7 @@ Lemma query_expr_offset_equiv_congr :
 
 ## `query_expr_fetch_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1654`](../OrderedQueryFacts.v#L1654)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2664`](../OrderedQueryFacts.v#L2664)
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -841,7 +962,7 @@ Lemma query_expr_fetch_equiv_congr :
 
 ## `ordered_rows_equiv_of_Forall2`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1835`](../OrderedQueryFacts.v#L1835)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2841`](../OrderedQueryFacts.v#L2841)
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -865,7 +986,7 @@ Lemma ordered_rows_equiv_of_Forall2 :
 
 ## `ordered_rows_equiv_map_projection`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1852`](../OrderedQueryFacts.v#L1852)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2858`](../OrderedQueryFacts.v#L2858)
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -890,4 +1011,64 @@ Lemma ordered_rows_equiv_map_projection :
         (fun row =>
           projection T (env_t T env row) (@Select_List T select_list))
         right).
+```
+
+## `ordered_rows_equiv_map_two_projections`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2900`](../OrderedQueryFacts.v#L2900)
+
+Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `ordered` (rank 30)
+
+Search aliases: `ordered query semantics`, `equivalence`, `congruence`
+
+```rocq
+Lemma ordered_rows_equiv_map_two_projections :
+  forall env left_select right_select rows,
+    (forall row,
+      In row rows ->
+      Oeset.compare (OTuple T)
+        (projection T (env_t T env row) (@Select_List T left_select))
+        (projection T (env_t T env row) (@Select_List T right_select)) = Eq) ->
+    ordered_rows_equiv T
+      (map
+        (fun row =>
+          projection T (env_t T env row) (@Select_List T left_select))
+        rows)
+      (map
+        (fun row =>
+          projection T (env_t T env row) (@Select_List T right_select))
+        rows).
+```
+
+## `query_distinct_success_bags_functional`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3765`](../OrderedQueryFacts.v#L3765)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query equivalence.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag` (rank 50), `ordered` (rank 34)
+
+Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_distinct_success_bags_functional :
+  forall env input,
+    (forall first second,
+      success_bags env input first ->
+      success_bags env input second ->
+      bag_eq T first second) ->
+    forall first second,
+      success_bags env (QExpr_Distinct input) first ->
+      success_bags env (QExpr_Distinct input) second ->
+      bag_eq T first second.
 ```

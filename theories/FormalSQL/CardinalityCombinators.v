@@ -201,6 +201,83 @@ destruct
   + intros row Hrow; apply Hfunctional; now right.
 Qed.
 
+(** A partial-functional theta join is a semijoin after projecting away the
+    right payload.  Each left occurrence with an accepted match contributes
+    exactly one output occurrence; left occurrences without a match contribute
+    none.  The projection law is required only for accepted input pairs, and
+    semantic permutation preserves arbitrary equal representatives. *)
+Lemma map_theta_join_functional_permut_filter_exists :
+  forall (A B : Type) (OB : Oeset.Rcd B)
+      (join : A -> A -> A) (accept : A -> A -> bool)
+      (project emit : A -> B) left right,
+    (forall left_row right_row,
+      In left_row left ->
+      In right_row right ->
+      accept left_row right_row = true ->
+      Oeset.compare OB (project (join left_row right_row))
+        (emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      (List.length (filter (accept left_row) right) <= 1)%nat) ->
+    Oeset.permut OB
+      (map project (theta_join_list A join accept left right))
+      (map emit
+        (filter
+          (fun left_row => existsb (accept left_row) right) left)).
+Proof.
+intros A B OB join accept project emit left right Hproject Hfunctional.
+unfold theta_join_list.
+induction left as [|left_row left_rows IH]; cbn.
+- apply Oeset.permut_refl.
+- destruct (existsb (accept left_row) right) eqn:Hexists.
+  + apply existsb_exists in Hexists as [right_row [Hright Haccept]].
+    destruct
+      (filter_singleton_of_nonempty_length_le_one A
+        (accept left_row) right)
+      as [only Hmatches].
+    * exists right_row; now split.
+    * apply Hfunctional; now left.
+    * assert (Hselected : In only (filter (accept left_row) right)).
+      { rewrite Hmatches; now left. }
+      apply filter_In in Hselected as [Honly Honly_accept].
+      unfold d_join_list.
+      rewrite Hmatches; cbn.
+      apply
+        (proj1
+          (Oeset.permut_cons OB
+            (project (join left_row only)) (emit left_row)
+            (map project
+              (flat_map
+                (fun row => d_join_list A join accept row right)
+                left_rows))
+            (map emit
+              (filter
+                (fun row => existsb (accept row) right) left_rows))
+            (Hproject left_row only
+              (or_introl eq_refl) Honly Honly_accept))).
+      apply IH.
+      -- intros row other Hrow Hother Haccepted.
+         apply Hproject; [now right | exact Hother | exact Haccepted].
+      -- intros row Hrow; apply Hfunctional; now right.
+  + assert (Hmatches : filter (accept left_row) right = nil).
+    {
+      destruct (filter (accept left_row) right)
+        as [|right_row rest] eqn:Hfilter; [reflexivity|].
+      assert (Hselected : In right_row (filter (accept left_row) right)).
+      { rewrite Hfilter; now left. }
+      apply filter_In in Hselected as [Hright Haccept].
+      assert (Htrue : existsb (accept left_row) right = true).
+      { apply existsb_exists; exists right_row; now split. }
+      rewrite Hexists in Htrue; discriminate.
+    }
+    unfold d_join_list.
+    rewrite Hmatches; cbn.
+    apply IH.
+    * intros row other Hrow Hother Haccepted.
+      apply Hproject; [now right | exact Hother | exact Haccepted].
+    * intros row Hrow; apply Hfunctional; now right.
+Qed.
+
 (** Total matching makes the unmatched-left branch of an anti join empty. *)
 Lemma anti_filter_empty_of_total_match :
   forall (A B : Type) (accept : A -> B -> bool) left right,
@@ -253,6 +330,90 @@ cbn [map]; rewrite app_nil_r.
 now apply map_theta_join_total_functional.
 Qed.
 
+(** If every left occurrence has at most one accepted right occurrence and the
+    final projection erases the right payload, a left join preserves exactly
+    the multiplicity of the left input.  Unlike the total-functional law above,
+    this theorem permits zero matches: the NULL-padded branch then supplies the
+    corresponding output occurrence.  The conclusion is permutation rather
+    than list equality because matched and padded rows occupy separate branches
+    of the list implementation. *)
+Lemma map_left_join_functional_permut :
+  forall (A B : Type) (OB : Oeset.Rcd B)
+      (join : A -> A -> A) (accept : A -> A -> bool)
+      (project : A -> B) (emit : A -> B) (pad : A -> A) left right,
+    (forall left_row right_row,
+      Oeset.compare OB (project (join left_row right_row))
+        (emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      Oeset.compare OB (project (pad left_row)) (emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      (List.length (filter (accept left_row) right) <= 1)%nat) ->
+    Oeset.permut OB
+      (map project
+        (theta_join_list A join accept left right ++
+         map pad
+           (filter
+             (fun left_row => negb (existsb (accept left_row) right)) left)))
+      (map emit left).
+Proof.
+intros A B OB join accept project emit pad left right
+  Hproject Hpad Hfunctional.
+induction left as [|left_row rest IH]; [apply Oeset.permut_refl|].
+specialize (IH
+  (fun row Hrow => Hpad row (or_intror _ Hrow))
+  (fun row Hrow => Hfunctional row (or_intror _ Hrow))).
+unfold theta_join_list, d_join_list in IH.
+unfold List.flat_map in IH.
+unfold theta_join_list.
+unfold List.flat_map at 1.
+unfold d_join_list.
+destruct (existsb (accept left_row) right) eqn:Hexists; cbn [filter].
+- pose proof Hexists as Hexists_eq.
+  apply existsb_exists in Hexists as [matched [Hmatched Haccept]].
+  destruct
+    (filter_singleton_of_nonempty_length_le_one A (accept left_row) right)
+    as [only Hmatches].
+  { exists matched; now split. }
+  { apply Hfunctional; now left. }
+  rewrite Hmatches, Hexists_eq; cbn.
+  apply (proj1
+    (Oeset.permut_cons OB _ _ _ _ (Hproject left_row only))).
+  exact IH.
+- assert (Hmatches : filter (accept left_row) right = nil).
+  { destruct (filter (accept left_row) right) as [|matched tail] eqn:Hfilter;
+      [reflexivity|].
+    assert (Hin : In matched (filter (accept left_row) right)).
+    { rewrite Hfilter; now left. }
+    apply filter_In in Hin as [Hmatched Haccept].
+    assert (Htrue : existsb (accept left_row) right = true).
+    { apply existsb_exists; exists matched; now split. }
+    rewrite Hexists in Htrue; discriminate. }
+  rewrite Hmatches, Hexists; cbn.
+  rewrite map_app; cbn.
+  rewrite map_app in IH.
+  match goal with
+  | |- Oeset.permut OB
+      (?before ++ project (pad left_row) :: ?after)
+      (emit left_row :: ?target) =>
+    eapply Oeset.permut_trans;
+    [ apply Oeset.permut_sym;
+      apply (proj1
+        (Oeset.permut_cons_inside OB
+          (project (pad left_row)) (project (pad left_row))
+          (before ++ after) before after
+          (Oeset.compare_eq_refl OB _)));
+      apply Oeset.permut_refl
+    | apply (proj1
+        (Oeset.permut_cons OB
+          (project (pad left_row)) (emit left_row)
+          (before ++ after) target
+          (Hpad left_row (or_introl eq_refl))));
+      exact IH ]
+  end.
+Qed.
+
 (** Semantic duplicate-freedom of a mapped list pulls back to the source
     through the induced relation, without assuming that the map is injective. *)
 Lemma NoDupA_map_preimage :
@@ -276,6 +437,108 @@ induction rows as [|first rest IH]; intro Hnodup; cbn in Hnodup |- *.
     * exact Hrelated.
     * now apply in_map.
   + now apply IH.
+Qed.
+
+(** Semantic duplicate-freedom transports forward through a map whenever
+    equality of mapped outputs reflects the source relation on represented
+    inputs.  No global injectivity or equivalence instance is required. *)
+Lemma NoDupA_map_of_reflection :
+  forall (A B : Type) (source_relation : A -> A -> Prop)
+      (target_relation : B -> B -> Prop) (project : A -> B) rows,
+    NoDupA source_relation rows ->
+    (forall left right,
+      In left rows ->
+      In right rows ->
+      target_relation (project left) (project right) ->
+      source_relation left right) ->
+    NoDupA target_relation (map project rows).
+Proof.
+intros A B source_relation target_relation project rows Hnodup.
+induction Hnodup as [|first rest Hfirst Hrest IH]; intro Hreflect; cbn.
+- constructor.
+- constructor.
+  + intro Hin.
+    apply InA_alt in Hin as [projected [Hrelated Hin]].
+    apply in_map_iff in Hin as [other [Heq Hother]].
+    subst projected.
+    apply Hfirst.
+    apply InA_alt.
+    exists other; split.
+    * apply Hreflect; [now left | now right | exact Hrelated].
+    * exact Hother.
+  + apply IH.
+    intros left right Hleft Hright Hrelated.
+    apply Hreflect; [now right | now right | exact Hrelated].
+Qed.
+
+(** A functional filtered expansion preserves duplicate-freedom whenever
+    equality of two accepted outputs reflects a source relation.  The right
+    side may be empty for any source occurrence; total matching is unnecessary.
+    Both relations are intentionally arbitrary, so callers may use a primary
+    key relation on source rows and semantic tuple equality on outputs. *)
+Lemma NoDupA_flat_map_filter_map_functional_reflection :
+  forall (Left Right Output : Type)
+      (source_relation : Left -> Left -> Prop)
+      (target_relation : Output -> Output -> Prop)
+      (accept : Left -> Right -> bool)
+      (emit : Left -> Right -> Output)
+      left right,
+    NoDupA source_relation left ->
+    (forall left_row,
+      In left_row left ->
+      (List.length (filter (accept left_row) right) <= 1)%nat) ->
+    (forall left_first left_second right_first right_second,
+      In left_first left -> In left_second left ->
+      In right_first right -> In right_second right ->
+      accept left_first right_first = true ->
+      accept left_second right_second = true ->
+      target_relation
+        (emit left_first right_first) (emit left_second right_second) ->
+      source_relation left_first left_second) ->
+    NoDupA target_relation
+      (flat_map
+        (fun left_row =>
+          map (emit left_row) (filter (accept left_row) right)) left).
+Proof.
+intros Left Right Output source_relation target_relation accept emit
+  left right Hleft.
+induction Hleft as [|head tail Hhead Htail IH];
+  intros Hfunctional Hreflect; cbn.
+- constructor.
+- pose proof (Hfunctional head (or_introl eq_refl)) as Hheadfun.
+  destruct (filter (accept head) right) as [|matched rest] eqn:Hmatches.
+  + cbn. apply IH.
+    * intros row Hrow; apply Hfunctional; now right.
+    * intros l1 l2 r1 r2 Hl1 Hl2 Hr1 Hr2 Ha1 Ha2 Hout.
+      eapply Hreflect with (right_first := r1) (right_second := r2);
+        [now right|now right|exact Hr1|exact Hr2|exact Ha1|exact Ha2|exact Hout].
+  + destruct rest as [|other rest].
+    * assert (Hmatched : In matched right /\ accept head matched = true).
+      { apply filter_In. rewrite Hmatches; now left. }
+      cbn. constructor.
+      -- intro Hin.
+         apply InA_alt in Hin as [out [Hout Hin]].
+         apply in_flat_map in Hin as [tail_row [Htail_row Hin]].
+         apply in_map_iff in Hin as [right_row [Heq Hright_row]].
+         subst out.
+         apply filter_In in Hright_row as [Hright_row Haccept_right].
+         apply Hhead, InA_alt.
+         exists tail_row; split.
+         ++ eapply Hreflect.
+            ** now left.
+            ** now right.
+            ** exact (proj1 Hmatched).
+            ** exact Hright_row.
+            ** exact (proj2 Hmatched).
+            ** exact Haccept_right.
+            ** exact Hout.
+         ++ exact Htail_row.
+      -- apply IH.
+         ++ intros row Hrow; apply Hfunctional; now right.
+         ++ intros l1 l2 r1 r2 Hl1 Hl2 Hr1 Hr2 Ha1 Ha2 Hout.
+            eapply Hreflect with (right_first := r1) (right_second := r2);
+              [now right|now right|exact Hr1|exact Hr2|exact Ha1|exact Ha2|exact Hout].
+    * cbn in Hheadfun; lia.
 Qed.
 
 (** A locally exact semantic-equality code gives an iff between [NoDupA] and

@@ -3,9 +3,9 @@
 (******************************************************************************)
 
 From SQLFS Require Import
-  Env FiniteSet FlatData OrderedSet Partition SqlAlgebra SqlQuerySemantics
+  Env FiniteSet FlatData OrderedSet Partition SqlQuerySemantics
   SqlQuerySyntax SqlQueryWellFormed.
-From Stdlib Require Import Bool List.
+From Stdlib Require Import Bool List Sorting.Permutation.
 
 Import ListNotations.
 Import Tuple.
@@ -136,6 +136,552 @@ Qed.
 
 End PartitionFilter.
 
+(** Mapping partition members may change their type, provided that the map
+    preserves the key used on each source occurrence.  This heterogeneous
+    form is intentionally stronger than [Partition.partition_map], whose map
+    is an endofunction. *)
+Local Lemma partition_insert_map_heterogeneous :
+  forall (A B Key : Type) (key_order : Oset.Rcd Key)
+      (emit : A -> B) key row groups,
+    @Partition.insert_in_partition B Key key_order key (emit row)
+      (map (fun group => (fst group, map emit (snd group))) groups) =
+    map (fun group => (fst group, map emit (snd group)))
+      (@Partition.insert_in_partition A Key key_order key row groups).
+Proof.
+  intros A B Key key_order emit key row groups.
+  induction groups as [|[other members] groups IH]; cbn; [reflexivity|].
+  destruct (Oset.eq_bool key_order key other); cbn;
+    [reflexivity|now rewrite IH].
+Qed.
+
+Theorem partition_map_heterogeneous :
+  forall (A B Key : Type) (key_order : Oset.Rcd Key)
+      (keyA : A -> Key) (keyB : B -> Key) (emit : A -> B) rows,
+    (forall row, In row rows -> keyB (emit row) = keyA row) ->
+    @Partition.partition B Key key_order keyB (map emit rows) =
+    map (fun group => (fst group, map emit (snd group)))
+      (@Partition.partition A Key key_order keyA rows).
+Proof.
+  intros A B Key key_order keyA keyB emit rows Hkeys.
+  unfold Partition.partition.
+  assert (Hrec : forall remaining,
+    (forall row, In row remaining -> keyB (emit row) = keyA row) ->
+    forall groups,
+      @Partition.partition_rec B Key key_order keyB
+        (map (fun group => (fst group, map emit (snd group))) groups)
+        (map emit remaining) =
+      map (fun group => (fst group, map emit (snd group)))
+        (@Partition.partition_rec A Key key_order keyA groups remaining)).
+  {
+    intro remaining; induction remaining as [|row remaining IH];
+      intros Hremaining groups; cbn; [reflexivity|].
+    rewrite (Hremaining row (or_introl eq_refl)).
+    rewrite partition_insert_map_heterogeneous.
+    apply IH.
+    intros current Hcurrent.
+    apply Hremaining; now right.
+  }
+  exact (Hrec rows Hkeys nil).
+Qed.
+
+(** FormalSQL's historical occurrence permutation specializes to Stdlib's
+    ordinary [Permutation] when its relation is Leibniz equality. *)
+Lemma list_permut_eq_implies_Permutation :
+  forall (A : Type) (left right : list A),
+    ListPermut._permut (@eq A) left right ->
+    Sorting.Permutation.Permutation left right.
+Proof.
+  intros A left right Hpermut.
+  induction Hpermut as
+    [|first second tail before after Hequal Htail IH].
+  - constructor.
+  - subst second.
+    eapply Sorting.Permutation.Permutation_trans with
+      (l' := first :: before ++ after).
+    + now apply Sorting.Permutation.perm_skip.
+    + apply Sorting.Permutation.Permutation_middle.
+Qed.
+
+Local Lemma all_diff_implies_NoDup :
+  forall (A : Type) (items : list A),
+    ListFacts.all_diff items -> NoDup items.
+Proof.
+  intros A items.
+  induction items as [|item items IH]; intro Hdiff.
+  - constructor.
+  - constructor.
+    + destruct items as [|next rest].
+      * exact (fun Hin => Hin).
+      * rewrite ListFacts.all_diff_unfold in Hdiff.
+        intro Hin; exact ((proj1 Hdiff item Hin) eq_refl).
+    + apply IH.
+      destruct items as [|next rest].
+      * exact I.
+      * rewrite ListFacts.all_diff_unfold in Hdiff.
+        exact (proj2 Hdiff).
+Qed.
+
+(** The keys materialized by [Partition.partition] are permutation-equivalent
+    to every duplicate-free list having exactly the input key support.  This
+    exposes the representation boundary needed by GROUP BY/DISTINCT proofs
+    without choosing a particular key type or deduplication algorithm. *)
+Theorem partition_keys_Permutation_of_NoDup_support :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (key_of : A -> Key) rows selected,
+    NoDup selected ->
+    (forall key, In key selected <-> In key (map key_of rows)) ->
+    Sorting.Permutation.Permutation
+      (map fst (@Partition.partition A Key key_order key_of rows))
+      selected.
+Proof.
+  intros A Key key_order key_of rows selected Hselected Hsupport.
+  apply Sorting.Permutation.NoDup_Permutation.
+  - apply all_diff_implies_NoDup.
+    apply Partition.partition_all_diff_values.
+  - exact Hselected.
+  - intro key.
+    assert (Hpartition :
+      In key (map fst (@Partition.partition A Key key_order key_of rows)) <->
+      In key (map key_of rows)).
+    {
+      split.
+      - intro Hkey.
+        apply in_map_iff in Hkey.
+        destruct Hkey as [[found members] [Hfound Hmembers]].
+        cbn in Hfound; subst found.
+        pose proof
+          (@Partition.in_partition_diff_nil A Key key_order
+            key_of rows key members Hmembers) as Hnonempty.
+        destruct members as [|row members]; [contradiction|].
+        apply in_map_iff.
+        exists row; split.
+        + apply (@Partition.partition_homogeneous_values
+            A Key key_order key_of rows key (row :: members)
+            Hmembers row).
+          now left.
+        + eapply @Partition.in_partition.
+          * exact Hmembers.
+          * now left.
+      - intro Hkey.
+        apply in_map_iff in Hkey.
+        destruct Hkey as [row [Hrow_key Hrow]].
+        pose proof
+          (proj1
+            (@ListPermut.in_permut_in A rows
+              (flat_map
+                (fun item : Key * list A => snd item)
+                (@Partition.partition A Key key_order key_of rows))
+              (@Partition.partition_permut
+                A Key key_order key_of rows) row) Hrow) as Hflat.
+        apply in_flat_map in Hflat.
+        destruct Hflat as [[found members] [Hmembers Hrow_members]].
+        apply in_map_iff.
+        exists (found, members); split; [cbn|exact Hmembers].
+        transitivity (key_of row); [|exact Hrow_key].
+        symmetry.
+        apply (@Partition.partition_homogeneous_values
+          A Key key_order key_of rows found members
+          Hmembers row Hrow_members).
+    }
+    rewrite Hpartition.
+    symmetry; apply Hsupport.
+Qed.
+
+(** The key list of [Partition.partition] is an ordered nub: new keys are
+    appended at their first occurrence and later occurrences leave that list
+    unchanged.  These local definitions and facts expose that implementation
+    invariant only for the ordered-refinement proof below. *)
+Local Definition ordered_key_insert
+    {Key : Type} (key_order : Oset.Rcd Key)
+    (key : Key) (keys : list Key) : list Key :=
+  if Oset.mem_bool key_order key keys then keys else keys ++ [key].
+
+Local Definition ordered_key_sequence
+    {Key : Type} (key_order : Oset.Rcd Key)
+    (keys : list Key) : list Key :=
+  fold_left (fun seen key => ordered_key_insert key_order key seen) keys nil.
+
+Local Lemma ordered_key_insert_seen :
+  forall (Key : Type) (key_order : Oset.Rcd Key) key keys,
+    In key keys -> ordered_key_insert key_order key keys = keys.
+Proof.
+  intros Key key_order key keys Hin.
+  unfold ordered_key_insert.
+  rewrite (proj2 (Oset.mem_bool_true_iff key_order key keys) Hin).
+  reflexivity.
+Qed.
+
+Local Lemma ordered_key_insert_owns :
+  forall (Key : Type) (key_order : Oset.Rcd Key) key keys,
+    In key (ordered_key_insert key_order key keys).
+Proof.
+  intros Key key_order key keys.
+  unfold ordered_key_insert.
+  destruct (Oset.mem_bool key_order key keys) eqn:Hmember.
+  - now apply Oset.mem_bool_true_iff in Hmember.
+  - apply in_or_app; right; now left.
+Qed.
+
+Local Lemma ordered_key_insert_preserves :
+  forall (Key : Type) (key_order : Oset.Rcd Key) key current keys,
+    In current keys ->
+    In current (ordered_key_insert key_order key keys).
+Proof.
+  intros Key key_order key current keys Hin.
+  unfold ordered_key_insert.
+  destruct (Oset.mem_bool key_order key keys).
+  - exact Hin.
+  - apply in_or_app; now left.
+Qed.
+
+Local Lemma fold_left_ordered_key_insert_preserves :
+  forall (Key : Type) (key_order : Oset.Rcd Key) additions initial current,
+    In current initial ->
+    In current
+      (fold_left
+        (fun seen key => ordered_key_insert key_order key seen)
+        additions initial).
+Proof.
+  intros Key key_order additions.
+  induction additions as [|key additions IH]; intros initial current Hin; cbn.
+  - exact Hin.
+  - apply IH.
+    now apply ordered_key_insert_preserves.
+Qed.
+
+Local Lemma ordered_key_sequence_contains :
+  forall (Key : Type) (key_order : Oset.Rcd Key) key keys,
+    In key keys -> In key (ordered_key_sequence key_order keys).
+Proof.
+  intros Key key_order key keys Hin.
+  apply in_split in Hin as [before [after ->]].
+  unfold ordered_key_sequence.
+  rewrite fold_left_app; cbn.
+  apply fold_left_ordered_key_insert_preserves.
+  apply ordered_key_insert_owns.
+Qed.
+
+Local Lemma ordered_key_sequence_app_singleton :
+  forall (Key : Type) (key_order : Oset.Rcd Key) keys key,
+    ordered_key_sequence key_order (keys ++ [key]) =
+    ordered_key_insert key_order key
+      (ordered_key_sequence key_order keys).
+Proof.
+  intros Key key_order keys key.
+  unfold ordered_key_sequence.
+  rewrite fold_left_app.
+  reflexivity.
+Qed.
+
+Local Lemma ordered_key_sequence_insert_factor :
+  forall (Fine Coarse : Type)
+      (fine_order : Oset.Rcd Fine) (coarse_order : Oset.Rcd Coarse)
+      (factor : Fine -> Coarse) fine fine_keys,
+    ordered_key_sequence coarse_order
+      (map factor (ordered_key_insert fine_order fine fine_keys)) =
+    ordered_key_insert coarse_order (factor fine)
+      (ordered_key_sequence coarse_order (map factor fine_keys)).
+Proof.
+  intros Fine Coarse fine_order coarse_order factor fine fine_keys.
+  unfold ordered_key_insert at 1.
+  destruct (Oset.mem_bool fine_order fine fine_keys) eqn:Hfine.
+  - apply Oset.mem_bool_true_iff in Hfine.
+    symmetry.
+    apply ordered_key_insert_seen.
+    apply ordered_key_sequence_contains.
+    apply in_map.
+    exact Hfine.
+  - rewrite map_app; cbn.
+    apply ordered_key_sequence_app_singleton.
+Qed.
+
+Local Lemma ordered_key_sequence_map_factor :
+  forall (Fine Coarse : Type)
+      (fine_order : Oset.Rcd Fine) (coarse_order : Oset.Rcd Coarse)
+      (factor : Fine -> Coarse) fine_keys,
+    ordered_key_sequence coarse_order
+      (map factor (ordered_key_sequence fine_order fine_keys)) =
+    ordered_key_sequence coarse_order (map factor fine_keys).
+Proof.
+  intros Fine Coarse fine_order coarse_order factor fine_keys.
+  induction fine_keys using rev_ind.
+  - reflexivity.
+  - rewrite (@ordered_key_sequence_app_singleton
+      Fine fine_order fine_keys x).
+    rewrite ordered_key_sequence_insert_factor.
+    rewrite IHfine_keys.
+    rewrite map_app; cbn.
+    symmetry.
+    apply (@ordered_key_sequence_app_singleton Coarse coarse_order).
+Qed.
+
+Local Lemma map_fst_insert_in_partition :
+  forall (A Key : Type) (key_order : Oset.Rcd Key) key row groups,
+    map fst (@Partition.insert_in_partition A Key key_order key row groups) =
+    ordered_key_insert key_order key (map fst groups).
+Proof.
+  intros A Key key_order key row groups.
+  induction groups as [|[other members] groups IH]; cbn.
+  - reflexivity.
+  - destruct (Oset.eq_bool key_order key other) eqn:Hequal; cbn.
+    + unfold ordered_key_insert; cbn; now rewrite Hequal.
+    + rewrite IH.
+      unfold ordered_key_insert; cbn; rewrite Hequal.
+      fold (Oset.mem_bool key_order key (map fst groups)).
+      destruct (Oset.mem_bool key_order key (map fst groups)); reflexivity.
+Qed.
+
+Local Lemma map_fst_partition_rec :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (key_of : A -> Key) rows groups,
+    map fst (@Partition.partition_rec A Key key_order key_of groups rows) =
+    fold_left
+      (fun keys row => ordered_key_insert key_order (key_of row) keys)
+      rows (map fst groups).
+Proof.
+  intros A Key key_order key_of rows.
+  induction rows as [|row rows IH]; intro groups; cbn.
+  - reflexivity.
+  - rewrite IH, map_fst_insert_in_partition.
+    reflexivity.
+Qed.
+
+Local Lemma fold_left_ordered_key_insert_map :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (key_of : A -> Key) rows initial,
+    fold_left
+      (fun keys row => ordered_key_insert key_order (key_of row) keys)
+      rows initial =
+    fold_left
+      (fun keys key => ordered_key_insert key_order key keys)
+      (map key_of rows) initial.
+Proof.
+  intros A Key key_order key_of rows.
+  induction rows as [|row rows IH]; intro initial; cbn.
+  - reflexivity.
+  - apply IH.
+Qed.
+
+Local Lemma map_fst_partition_ordered_key_sequence :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (key_of : A -> Key) rows,
+    map fst (@Partition.partition A Key key_order key_of rows) =
+    ordered_key_sequence key_order (map key_of rows).
+Proof.
+  intros A Key key_order key_of rows.
+  unfold Partition.partition, ordered_key_sequence.
+  rewrite map_fst_partition_rec.
+  apply fold_left_ordered_key_insert_map.
+Qed.
+
+Local Lemma partition_factored_key_order_exact :
+  forall (A Fine Coarse : Type)
+      (fine_order : Oset.Rcd Fine) (coarse_order : Oset.Rcd Coarse)
+      (fine_key : A -> Fine) (coarse_key : A -> Coarse)
+      (factor : Fine -> Coarse) rows,
+    (forall row, In row rows -> coarse_key row = factor (fine_key row)) ->
+    map fst (@Partition.partition A Coarse coarse_order coarse_key rows) =
+    map fst
+      (@Partition.partition (Fine * list A) Coarse coarse_order
+        (fun fine_group => factor (fst fine_group))
+        (@Partition.partition A Fine fine_order fine_key rows)).
+Proof.
+  intros A Fine Coarse fine_order coarse_order
+    fine_key coarse_key factor rows Hkeys.
+  rewrite (@Partition.partition_eq_1_strong
+    A Coarse coarse_order coarse_key
+    (fun row => factor (fine_key row)) rows Hkeys).
+  repeat rewrite map_fst_partition_ordered_key_sequence.
+  rewrite <- (@map_map A Fine Coarse fine_key factor rows).
+  rewrite <- (@map_map (Fine * list A) Fine Coarse
+    (@fst Fine (list A)) factor
+    (@Partition.partition A Fine fine_order fine_key rows)).
+  rewrite map_fst_partition_ordered_key_sequence.
+  symmetry.
+  apply ordered_key_sequence_map_factor.
+Qed.
+
+(** A stored partition group is exactly the reverse of the input occurrences
+    whose key equals that stored key. *)
+Theorem partition_member_exact_key_filter :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (key_of : A -> Key) rows key members,
+    In (key, members)
+      (@Partition.partition A Key key_order key_of rows) ->
+    members =
+      rev
+        (filter
+          (fun row => Oset.eq_bool key_order (key_of row) key)
+          rows).
+Proof.
+  intros A Key key_order key_of rows key members Hgroup.
+  set (keep := fun current => Oset.eq_bool key_order current key).
+  assert (Hselected : In (key, members)
+    (filter (fun group => keep (fst group))
+      (@Partition.partition A Key key_order key_of rows))).
+  {
+    apply filter_In; split; [exact Hgroup|].
+    unfold keep; cbn.
+    apply Oset.eq_bool_refl.
+  }
+  rewrite <- (@partition_filter_by_key_exact
+    A Key key_order keep key_of rows) in Hselected.
+  assert (Hconstant : forall row,
+    In row (filter (fun item => keep (key_of item)) rows) ->
+    key_of row = key).
+  {
+    intros row Hrow.
+    apply filter_In in Hrow as [_ Hkeep].
+    unfold keep in Hkeep.
+    now apply Oset.eq_bool_true_iff in Hkeep.
+  }
+  rewrite (@Partition.partition_cst
+    A Key key_order key_of key
+    (filter (fun item => keep (key_of item)) rows) Hconstant)
+    in Hselected.
+  destruct (filter (fun item => keep (key_of item)) rows)
+    as [|first rest] eqn:Hrows; cbn in Hselected; [contradiction|].
+  destruct Hselected as [Hequal|[]].
+  injection Hequal as Hmembers.
+  subst members.
+  unfold keep in Hrows |- *.
+  now rewrite Hrows.
+Qed.
+
+Local Lemma keyed_lists_Forall2_of_fst_eq :
+  forall (Key Left Right : Type)
+      (R : Left -> Right -> Prop)
+      (left : list (Key * Left)) (right : list (Key * Right)),
+    map fst left = map fst right ->
+    (forall key left_members right_members,
+      In (key, left_members) left ->
+      In (key, right_members) right ->
+      R left_members right_members) ->
+    Forall2
+      (fun left_group right_group =>
+        fst left_group = fst right_group /\
+        R (snd left_group) (snd right_group))
+      left right.
+Proof.
+  intros Key Left Right R left.
+  induction left as [|[left_key left_members] left IH];
+    intros [|[right_key right_members] right] Hkeys Hmembers;
+    cbn in Hkeys; try discriminate.
+  - constructor.
+  - injection Hkeys as Hkey Htail.
+    subst right_key.
+    constructor.
+    + split; [reflexivity|].
+      apply (Hmembers left_key left_members right_members); now left.
+    + apply IH; [exact Htail|].
+      intros key left_tail right_tail Hleft Hright.
+      apply (Hmembers key left_tail right_tail); now right.
+Qed.
+
+Local Lemma partition_factored_members_Permutation :
+  forall (A Fine Coarse : Type)
+      (fine_order : Oset.Rcd Fine) (coarse_order : Oset.Rcd Coarse)
+      (fine_key : A -> Fine) (coarse_key : A -> Coarse)
+      (factor : Fine -> Coarse) rows key coarse_members fine_groups,
+    (forall row, In row rows -> coarse_key row = factor (fine_key row)) ->
+    In (key, coarse_members)
+      (@Partition.partition A Coarse coarse_order coarse_key rows) ->
+    In (key, fine_groups)
+      (@Partition.partition (Fine * list A) Coarse coarse_order
+        (fun fine_group => factor (fst fine_group))
+        (@Partition.partition A Fine fine_order fine_key rows)) ->
+    Sorting.Permutation.Permutation coarse_members
+      (concat (map snd fine_groups)).
+Proof.
+  intros A Fine Coarse fine_order coarse_order fine_key coarse_key
+    factor rows key coarse_members fine_groups Hkeys Hcoarse Hfine.
+  pose proof (partition_member_exact_key_filter
+    A Coarse coarse_order coarse_key rows key coarse_members Hcoarse)
+    as Hcoarse_exact.
+  pose proof (partition_member_exact_key_filter
+    (Fine * list A) Coarse coarse_order
+    (fun fine_group => factor (fst fine_group))
+    (@Partition.partition A Fine fine_order fine_key rows)
+    key fine_groups Hfine) as Hfine_exact.
+  rewrite Hcoarse_exact, Hfine_exact.
+  assert (Hfilters :
+    filter
+      (fun row => Oset.eq_bool coarse_order (coarse_key row) key)
+      rows =
+    filter
+      (fun row =>
+        Oset.eq_bool coarse_order (factor (fine_key row)) key)
+      rows).
+  {
+    apply filter_ext_in.
+    intros row Hrow.
+    now rewrite (Hkeys row Hrow).
+  }
+  rewrite Hfilters.
+  pose proof
+    (@Partition.partition_permut A Fine fine_order fine_key
+      (filter
+        (fun row =>
+          Oset.eq_bool coarse_order (factor (fine_key row)) key)
+        rows)) as Hpartition.
+  apply list_permut_eq_implies_Permutation in Hpartition.
+  rewrite (@partition_filter_by_key_exact
+    A Fine fine_order
+    (fun fine => Oset.eq_bool coarse_order (factor fine) key)
+    fine_key rows) in Hpartition.
+  assert (Hconcat : forall groups : list (Fine * list A),
+    concat (map snd groups) = flat_map snd groups).
+  {
+    intro groups.
+    induction groups as [|[fine members] groups IH]; cbn.
+    - reflexivity.
+    - now rewrite IH.
+  }
+  rewrite Hconcat.
+  eapply Sorting.Permutation.Permutation_trans.
+  - apply Sorting.Permutation.Permutation_sym.
+    apply Sorting.Permutation.Permutation_rev.
+  - eapply Sorting.Permutation.Permutation_trans; [exact Hpartition|].
+    apply Sorting.Permutation.Permutation_flat_map.
+    apply Sorting.Permutation.Permutation_rev.
+Qed.
+
+(** Ordered factored-key refinement.  Directly partitioning rows by a coarse
+    key and first partitioning by a fine key before coarsening the stored fine
+    keys discover coarse groups in the same order.  Corresponding coarse
+    groups contain exactly the same row occurrences, although the two-stage
+    accumulation order may differ. *)
+Theorem partition_factored_key_refinement_Forall2 :
+  forall (A Fine Coarse : Type)
+      (fine_order : Oset.Rcd Fine) (coarse_order : Oset.Rcd Coarse)
+      (fine_key : A -> Fine) (coarse_key : A -> Coarse)
+      (factor : Fine -> Coarse) rows,
+    (forall row, In row rows -> coarse_key row = factor (fine_key row)) ->
+    Forall2
+      (fun coarse_group refined_group =>
+        fst coarse_group = fst refined_group /\
+        Sorting.Permutation.Permutation
+          (snd coarse_group)
+          (concat (map snd (snd refined_group))))
+      (@Partition.partition A Coarse coarse_order coarse_key rows)
+      (@Partition.partition (Fine * list A) Coarse coarse_order
+        (fun fine_group => factor (fst fine_group))
+        (@Partition.partition A Fine fine_order fine_key rows)).
+Proof.
+  intros A Fine Coarse fine_order coarse_order fine_key coarse_key
+    factor rows Hkeys.
+  eapply (@keyed_lists_Forall2_of_fst_eq
+    Coarse (list A) (list (Fine * list A))
+    (fun coarse_members fine_groups =>
+      Sorting.Permutation.Permutation coarse_members
+        (concat (map snd fine_groups)))).
+  - now apply partition_factored_key_order_exact.
+  - intros key coarse_members fine_groups Hcoarse Hfine.
+    now apply (partition_factored_members_Permutation
+      A Fine Coarse fine_order coarse_order fine_key coarse_key
+      factor rows key).
+Qed.
+
 (** The grouping key used by [query_make_groups], exposed only to keep the
     theorem below readable.  It is definitionally the key in
     [FlatData.make_groups]. *)
@@ -145,6 +691,165 @@ Definition query_grouping_key
   map (fun term => interp_aggterm T (env_t T env row) term) group_terms.
 
 Arguments query_grouping_key {T} _ _ _.
+
+(** Recover a fine grouping key from the representative at the head of a
+    materialized group.  The empty branch is only a totality default; ordinary
+    nonempty-key [query_make_groups] groups are nonempty. *)
+Definition query_grouping_head_key
+    (T : Tuple.Rcd) (env : Env.env T)
+    (group_terms : list (@aggterm T))
+    (group : list (tuple T)) : list (value T) :=
+  match group with
+  | nil => nil
+  | row :: _ => query_grouping_key env group_terms row
+  end.
+
+Arguments query_grouping_head_key {T} _ _ _.
+
+(** The rows being grouped may be produced by a schema-changing projection.
+    If that projection preserves each source grouping key, grouping the
+    projected rows is exactly the pointwise image of the source partition. *)
+Theorem query_make_groups_map_heterogeneous :
+  forall (T : Tuple.Rcd) (A : Type) env group_terms
+      (keyA : A -> list (value T)) (emit : A -> tuple T) rows,
+    group_terms <> nil ->
+    (forall item, In item rows ->
+      query_grouping_key env group_terms (emit item) = keyA item) ->
+    @query_make_groups T env (map emit rows) group_terms =
+    map (fun keyed => map emit (snd keyed))
+      (@Partition.partition A (list (value T))
+        (OrderedSet.mk_olists (OVal T)) keyA rows).
+Proof.
+  intros T A env group_terms keyA emit rows Hterms Hkeys.
+  destruct group_terms as [|term terms]; [contradiction|].
+  unfold query_make_groups, FlatData.make_groups.
+  pose proof (partition_map_heterogeneous
+    A (tuple T) (list (value T))
+    (OrderedSet.mk_olists (OVal T)) keyA
+    (fun row =>
+      map
+        (fun current =>
+          interp_aggterm T (env_t T env row) current)
+        (term :: terms)) emit rows) as Hpartition.
+  assert (Hkey_exact : forall item, In item rows ->
+    (fun row =>
+      map
+        (fun current =>
+          interp_aggterm T (env_t T env row) current)
+        (term :: terms)) (emit item) = keyA item).
+  {
+    intros item Hitem.
+    exact (Hkeys item Hitem).
+  }
+  specialize (Hpartition Hkey_exact).
+  rewrite Hpartition, map_map.
+  apply map_ext; intros [key members].
+  reflexivity.
+Qed.
+
+(** Query-level ordered refinement.  When the coarse grouping key factors
+    through the fine grouping key, direct coarse grouping aligns position by
+    position with fine grouping followed by coarsening the representative fine
+    keys.  Each aligned pair contains the same row occurrences. *)
+Theorem query_make_groups_factored_refinement_Forall2 :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows
+      fine_terms coarse_terms
+      (factor : list (value T) -> list (value T)),
+    fine_terms <> nil ->
+    coarse_terms <> nil ->
+    (forall row, In row rows ->
+      query_grouping_key env coarse_terms row =
+      factor (query_grouping_key env fine_terms row)) ->
+    Forall2 (@Sorting.Permutation.Permutation (tuple T))
+      (@query_make_groups T env rows coarse_terms)
+      (map
+        (fun coarse_group => concat (snd coarse_group))
+        (@Partition.partition
+          (list (tuple T)) (list (value T))
+          (OrderedSet.mk_olists (OVal T))
+          (fun fine_group =>
+            factor (query_grouping_head_key env fine_terms fine_group))
+          (@query_make_groups T env rows fine_terms))).
+Proof.
+  intros T env rows [|fine_term fine_terms] [|coarse_term coarse_terms]
+    factor Hfine Hcoarse Hkeys; try contradiction.
+  set (key_order := OrderedSet.mk_olists (OVal T)).
+  set (fine_key := query_grouping_key env (fine_term :: fine_terms)).
+  set (coarse_key := query_grouping_key env (coarse_term :: coarse_terms)).
+  set (fine_partition :=
+    @Partition.partition (tuple T) (list (value T))
+      key_order fine_key rows).
+  set (refined_partition :=
+    @Partition.partition (list (value T) * list (tuple T))
+      (list (value T)) key_order
+      (fun fine_group => factor (fst fine_group)) fine_partition).
+  pose proof
+    (partition_factored_key_refinement_Forall2
+      (tuple T) (list (value T)) (list (value T))
+      key_order key_order fine_key coarse_key factor rows Hkeys)
+    as Hrefinement.
+  fold fine_partition in Hrefinement.
+  fold refined_partition in Hrefinement.
+  assert (Hmapped :
+    Forall2 (@Sorting.Permutation.Permutation (tuple T))
+      (map snd
+        (@Partition.partition (tuple T) (list (value T))
+          key_order coarse_key rows))
+      (map
+        (fun refined_group =>
+          concat (map snd (snd refined_group)))
+        refined_partition)).
+  {
+    induction Hrefinement as
+      [|coarse_group refined_group coarse_tail refined_tail
+        [_ Hmembers] _ IH].
+    - constructor.
+    - constructor; assumption.
+  }
+  assert (Hmapped_partition :
+    @Partition.partition (list (tuple T)) (list (value T)) key_order
+      (fun fine_group =>
+        factor
+          (query_grouping_head_key env
+            (fine_term :: fine_terms) fine_group))
+      (map snd fine_partition) =
+    map
+      (fun refined_group =>
+        (fst refined_group, map snd (snd refined_group)))
+      refined_partition).
+  {
+    unfold refined_partition.
+    apply partition_map_heterogeneous.
+    intros [fine_value members] Hmember; cbn.
+    assert (Hnonempty : members <> nil).
+    {
+      eapply Partition.in_partition_diff_nil.
+      exact Hmember.
+    }
+    destruct members as [|first rest]; [contradiction|].
+    pose proof
+      (@Partition.partition_homogeneous_values
+        (tuple T) (list (value T)) key_order fine_key rows
+        fine_value (first :: rest) Hmember first
+        (or_introl eq_refl)) as Hfirst.
+    cbn [query_grouping_head_key].
+    unfold fine_key in Hfirst.
+    now rewrite Hfirst.
+  }
+  change (Forall2 (@Sorting.Permutation.Permutation (tuple T))
+    (map snd
+      (@Partition.partition (tuple T) (list (value T))
+        key_order coarse_key rows))
+    (map (fun coarse_group => concat (snd coarse_group))
+      (@Partition.partition (list (tuple T)) (list (value T)) key_order
+        (fun fine_group =>
+          factor
+            (query_grouping_head_key env
+              (fine_term :: fine_terms) fine_group))
+        (map snd fine_partition)))).
+  rewrite Hmapped_partition, map_map.
+  exact Hmapped.
+Qed.
 
 (** This lift deliberately requires at least one grouping term.  Empty global
     grouping has one empty group on empty input, so treating it as an ordinary
@@ -171,129 +876,345 @@ Proof.
   apply partition_members_filter_by_key_exact.
 Qed.
 
-(** Admissibility is syntax directed.  These small constructors preserve all
-    of the premises in [SqlQueryWellFormed] instead of asking each generated
-    proof to unfold the mutual fixpoint. *)
-Section AdmissibilityConstructors.
+(** Flattening the groups selected by a key predicate contains exactly the
+    selected input occurrences, modulo FormalSQL's semantic tuple equality. *)
+Theorem query_make_groups_selected_members_permut :
+  forall (T : Tuple.Rcd) env rows group_terms keep,
+    group_terms <> nil ->
+    Oeset.permut (OTuple T)
+      (filter
+        (fun row => keep (query_grouping_key env group_terms row)) rows)
+      (concat
+        (filter
+          (fun members =>
+            match members with
+            | nil => false
+            | row :: _ => keep (query_grouping_key env group_terms row)
+            end)
+          (@query_make_groups T env rows group_terms))).
+Proof.
+  intros T env rows group_terms keep Hterms.
+  rewrite <- (query_make_groups_filter_by_key_exact
+    T env group_terms rows keep Hterms).
+  destruct group_terms as [|term terms]; [contradiction|].
+  unfold query_make_groups, FlatData.make_groups.
+  assert (Hconcat : forall groups :
+    list (list (value T) * list (tuple T)),
+    concat (map snd groups) =
+    flat_map (fun group => snd group) groups).
+  {
+    intro groups; induction groups as [|[key members] groups IH];
+      cbn; now rewrite ?IH.
+  }
+  rewrite Hconcat.
+  apply ListPermut._permut_incl with (@eq (tuple T)).
+  - intros left right ->; apply Oeset.compare_eq_refl.
+  - apply Partition.partition_permut.
+Qed.
 
-Context {T : Tuple.Rcd} {relname : Type}.
-Variable basesort : relname -> SqlQueryWellFormed.setA T.
+(** The same selected-member fact under literal row equality, ready for
+    Stdlib results such as permutation-invariant folds and sums. *)
+Theorem query_make_groups_selected_members_Permutation :
+  forall (T : Tuple.Rcd) env rows group_terms keep,
+    group_terms <> nil ->
+    Sorting.Permutation.Permutation
+      (filter
+        (fun row => keep (query_grouping_key env group_terms row)) rows)
+      (concat
+        (filter
+          (fun members =>
+            match members with
+            | nil => false
+            | row :: _ => keep (query_grouping_key env group_terms row)
+            end)
+          (@query_make_groups T env rows group_terms))).
+Proof.
+  intros T env rows group_terms keep Hterms.
+  rewrite <- (query_make_groups_filter_by_key_exact
+    T env group_terms rows keep Hterms).
+  destruct group_terms as [|term terms]; [contradiction|].
+  unfold query_make_groups, FlatData.make_groups.
+  assert (Hconcat : forall groups :
+    list (list (value T) * list (tuple T)),
+    concat (map snd groups) =
+    flat_map (fun group => snd group) groups).
+  {
+    intro groups; induction groups as [|[key members] groups IH];
+      cbn; now rewrite ?IH.
+  }
+  rewrite Hconcat.
+  apply list_permut_eq_implies_Permutation.
+  apply Partition.partition_permut.
+Qed.
 
-Lemma formula_expr_admissible_conj_intro :
-  forall operation left right,
-    @formula_expr_admissible T relname basesort left ->
-    @formula_expr_admissible T relname basesort right ->
-    @formula_expr_admissible T relname basesort
-      (FExpr_Conj operation left right).
-Proof. intros; cbn; tauto. Qed.
+(** All rows with one exact nonempty grouping key form one group.  The member
+    order is [rev rows] because [Partition.partition] accumulates at the head.
+    Empty global grouping is deliberately excluded: on empty input it has one
+    empty group rather than no groups. *)
+Theorem query_make_groups_constant_nonempty_key :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows group_terms
+      (key : list (value T)),
+    group_terms <> nil ->
+    (forall row,
+      In row rows ->
+      query_grouping_key env group_terms row = key) ->
+    @query_make_groups T env rows group_terms =
+      match rows with
+      | nil => nil
+      | _ :: _ => rev rows :: nil
+      end.
+Proof.
+  intros T env rows [|term terms] key Hnonempty Hconstant;
+    [contradiction|].
+  unfold query_make_groups, make_groups.
+  rewrite (@Partition.partition_cst _ _ _ _ key rows).
+  - destruct rows; reflexivity.
+  - exact Hconstant.
+Qed.
 
-Lemma query_expr_admissible_bag_intro :
-  forall outputs query,
-    @query_output_attributes_unique T outputs ->
-    @bag_query_admissible T relname basesort query ->
-    @query_outputs_sort T outputs =S=
-      @SqlAlgebra.sort T relname basesort query ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Bag outputs query).
-Proof. intros; cbn; tauto. Qed.
+(** Combining exact key filtering with constant-key grouping yields either no
+    selected group or the one exact accumulator-ordered selected group. *)
+Theorem query_make_groups_matching_one_key_exact :
+  forall (T : Tuple.Rcd) (env : Env.env T) group_terms rows
+      (keep : list (value T) -> bool) key,
+    group_terms <> nil ->
+    (forall row,
+      In row
+        (filter
+          (fun item =>
+            keep (query_grouping_key env group_terms item)) rows) ->
+      query_grouping_key env group_terms row = key) ->
+    filter
+      (fun members =>
+        match members with
+        | nil => false
+        | row :: _ => keep (query_grouping_key env group_terms row)
+        end)
+      (@query_make_groups T env rows group_terms) =
+    match
+      filter
+        (fun item =>
+          keep (query_grouping_key env group_terms item)) rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [rev
+          (filter
+            (fun item =>
+              keep (query_grouping_key env group_terms item)) rows)]
+    end.
+Proof.
+  intros T env group_terms rows keep key Hterms Hconstant.
+  rewrite <-
+    (query_make_groups_filter_by_key_exact
+      T env group_terms rows keep Hterms).
+  exact
+    (@query_make_groups_constant_nonempty_key T env
+      (filter
+        (fun item =>
+          keep (query_grouping_key env group_terms item)) rows)
+      group_terms key Hterms Hconstant).
+Qed.
 
-Lemma query_expr_admissible_set_intro :
-  forall operation left right,
-    @query_expr_admissible T relname basesort left ->
-    @query_expr_admissible T relname basesort right ->
-    query_expr_outputs left = query_expr_outputs right ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Set operation left right).
-Proof. intros; cbn; tauto. Qed.
+(** Every two members of an ordinary nonempty-key group have the same complete
+    grouping-key vector. *)
+Lemma query_make_groups_members_same_key_nonempty :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows group_terms group left right,
+    group_terms <> nil ->
+    In group (@query_make_groups T env rows group_terms) ->
+    In left group ->
+    In right group ->
+    query_grouping_key env group_terms left =
+    query_grouping_key env group_terms right.
+Proof.
+  intros T env rows [|term terms] group left right Hterms Hgroup Hleft Hright;
+    [contradiction|].
+  unfold query_make_groups in Hgroup.
+  cbn [FlatData.make_groups] in Hgroup.
+  unfold query_grouping_key.
+  apply in_map_iff in Hgroup as [[key members] [Hequal Hin]].
+  cbn in Hequal; subst members.
+  pose proof
+    (@Partition.partition_homogeneous_values
+      _ _ _ _ _ _ _ Hin left Hleft) as Hleft_key.
+  pose proof
+    (@Partition.partition_homogeneous_values
+      _ _ _ _ _ _ _ Hin right Hright) as Hright_key.
+  now rewrite Hleft_key, Hright_key.
+Qed.
 
-Lemma query_expr_admissible_natural_join_intro :
-  forall left right,
-    @query_expr_admissible T relname basesort left ->
-    @query_expr_admissible T relname basesort right ->
-    @query_expr_admissible T relname basesort
-      (QExpr_NaturalJoin left right).
-Proof. intros; cbn; tauto. Qed.
+(** A concrete group is exactly the reverse of the input rows whose complete
+    key equals the key of any chosen member.  This is the row-selection bridge
+    used before applying permutation-invariant aggregate regrouping facts. *)
+Theorem query_make_groups_member_exact_key_filter :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows group_terms group row,
+    group_terms <> nil ->
+    In group (@query_make_groups T env rows group_terms) ->
+    In row group ->
+    group =
+      rev
+        (filter
+          (fun item =>
+            Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+              (query_grouping_key env group_terms item)
+              (query_grouping_key env group_terms row))
+          rows).
+Proof.
+  intros T env rows group_terms group row Hterms Hgroup Hrow.
+  set (key_order := OrderedSet.mk_olists (OVal T)).
+  set (chosen := query_grouping_key env group_terms row).
+  set (keep := fun key => Oset.eq_bool key_order key chosen).
+  assert (Hconstant : forall item,
+    In item
+      (filter
+        (fun candidate =>
+          keep (query_grouping_key env group_terms candidate)) rows) ->
+    query_grouping_key env group_terms item = chosen).
+  {
+    intros item Hitem.
+    apply filter_In in Hitem; destruct Hitem as [_ Hkeep].
+    unfold keep in Hkeep.
+    now apply Oset.eq_bool_true_iff in Hkeep.
+  }
+  pose proof (query_make_groups_matching_one_key_exact
+    T env group_terms rows keep chosen Hterms Hconstant) as Hmatching.
+  assert (Hgroup_selected : In group
+    (filter
+      (fun members =>
+        match members with
+        | nil => false
+        | first :: _ => keep (query_grouping_key env group_terms first)
+        end)
+      (@query_make_groups T env rows group_terms))).
+  {
+    apply filter_In; split; [exact Hgroup|].
+    destruct group as [|first rest]; [contradiction|].
+    unfold keep.
+    apply Oset.eq_bool_true_iff.
+    unfold chosen.
+    exact (query_make_groups_members_same_key_nonempty
+      T env rows group_terms (first :: rest) first row
+      Hterms Hgroup (or_introl eq_refl) Hrow).
+  }
+  rewrite Hmatching in Hgroup_selected.
+  assert (Hrow_selected : In row
+    (filter
+      (fun item => keep (query_grouping_key env group_terms item)) rows)).
+  {
+    apply filter_In; split.
+    - destruct group_terms as [|term terms]; [contradiction|].
+      unfold query_make_groups in Hgroup.
+      cbn [FlatData.make_groups] in Hgroup.
+      eapply Partition.in_map_snd_partition; eassumption.
+    - unfold keep, chosen.
+      apply Oset.eq_bool_true_iff.
+      reflexivity.
+  }
+  destruct
+    (filter
+      (fun item => keep (query_grouping_key env group_terms item)) rows)
+    as [|first rest] eqn:Hselected; [contradiction|].
+  cbn in Hgroup_selected.
+  destruct Hgroup_selected as [Hequal | []].
+  subst group.
+  unfold keep, key_order, chosen in Hselected |- *.
+  now rewrite Hselected.
+Qed.
 
-Lemma query_expr_admissible_cross_join_intro :
-  forall left right,
-    @query_expr_admissible T relname basesort left ->
-    @query_expr_admissible T relname basesort right ->
-    @query_output_sorts_disjoint T
-      (query_expr_sort left) (query_expr_sort right) ->
-    @query_expr_admissible T relname basesort
-      (QExpr_CrossJoin left right).
-Proof. intros; cbn; tauto. Qed.
+(** Aggregate clients normally need only occurrence preservation, not the
+    accumulator-specific [rev] exposed by the exact partition theorem. *)
+Corollary query_make_groups_member_key_filter_Permutation :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows group_terms group row,
+    group_terms <> nil ->
+    In group (@query_make_groups T env rows group_terms) ->
+    In row group ->
+    Sorting.Permutation.Permutation group
+      (filter
+        (fun item =>
+          Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+            (query_grouping_key env group_terms item)
+            (query_grouping_key env group_terms row))
+        rows).
+Proof.
+intros T env rows group_terms group row Hterms Hgroup Hrow.
+rewrite (query_make_groups_member_exact_key_filter
+  T env rows group_terms group row Hterms Hgroup Hrow).
+apply Sorting.Permutation.Permutation_sym.
+apply Sorting.Permutation.Permutation_rev.
+Qed.
 
-Lemma query_expr_admissible_join_intro :
-  forall kind predicate matched_select left_select right_select left right,
-    @formula_expr_admissible T relname basesort predicate ->
-    @query_expr_admissible T relname basesort left ->
-    @query_expr_admissible T relname basesort right ->
-    query_join_projection_sorts_compatible
-      kind matched_select left_select right_select ->
-    query_join_projections_unique
-      kind matched_select left_select right_select ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Join kind predicate matched_select left_select right_select
-        left right).
-Proof. intros; cbn; tauto. Qed.
+(** Global grouping always forms exactly one logical group, including the SQL
+    empty-input group.  The exact member order remains the partition helper's
+    accumulator order; the length corollary is the preferred public consumer. *)
+Theorem query_make_groups_global_exact :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows,
+    @query_make_groups T env rows [] = [rev rows].
+Proof.
+intros T env [|row rows]; [reflexivity|].
+unfold query_make_groups, FlatData.make_groups.
+rewrite (@Partition.partition_cst _ _ _ _
+  ([] : list (value T)) (row :: rows)).
+- reflexivity.
+- intros; reflexivity.
+Qed.
 
-Lemma query_expr_admissible_project_intro :
-  forall select_list input,
-    @query_expr_admissible T relname basesort input ->
-    query_select_list_outputs_unique select_list ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Project select_list input).
-Proof. intros; cbn; tauto. Qed.
+Corollary query_make_groups_global_length_one :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows,
+    length (@query_make_groups T env rows []) = 1%nat.
+Proof.
+intros; now rewrite query_make_groups_global_exact.
+Qed.
 
-Lemma query_expr_admissible_filter_intro :
-  forall formula input,
-    @query_expr_admissible T relname basesort input ->
-    @formula_expr_admissible T relname basesort formula ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Filter formula input).
-Proof. intros; cbn; tauto. Qed.
+(** For a nonempty grouping key, semantic permutation of the input rows
+    induces semantic permutation of the resulting groups.  Group comparison
+    itself is permutation-aware through [OLTuple], so neither the order in
+    which groups are discovered nor the accumulator order within a group is
+    exposed by this statement.  Empty global grouping is excluded because its
+    empty-input correction is not the ordinary [make_groups] partition. *)
+Lemma query_make_groups_permut_nonempty :
+  forall (T : Tuple.Rcd) (env : Env.env T) group_terms left right,
+    group_terms <> nil ->
+    Oeset.permut (OTuple T) left right ->
+    Oeset.permut (OLTuple T)
+      (@query_make_groups T env left group_terms)
+      (@query_make_groups T env right group_terms).
+Proof.
+  intros T env [|term group_terms] left right Hnonempty Hrows;
+    [contradiction|].
+  apply Oeset.nb_occ_permut; intro group.
+  cbn [query_make_groups].
+  eapply FlatData.make_groups_eq.
+  - apply Env.equiv_env_refl.
+  - exact Hrows.
+Qed.
 
-Lemma query_expr_admissible_group_intro :
-  forall select_list group_terms having input,
-    @query_expr_admissible T relname basesort input ->
-    @formula_expr_admissible T relname basesort having ->
-    query_select_list_outputs_unique select_list ->
-    @query_expr_admissible T relname basesort
-      (QExpr_Group select_list group_terms having input).
-Proof. intros; cbn; tauto. Qed.
-
-Lemma query_expr_admissible_grouping_sets_intro :
-  forall grouping_sets input,
-    @query_expr_admissible T relname basesort input ->
-    query_grouping_sets_well_formed grouping_sets ->
-    @query_expr_admissible T relname basesort
-      (QExpr_GroupingSets grouping_sets input).
-Proof. intros; cbn; tauto. Qed.
-
-Lemma query_expr_admissible_distinct_intro :
-  forall input,
-    @query_expr_admissible T relname basesort input ->
-    @query_expr_admissible T relname basesort (QExpr_Distinct input).
-Proof. intros; cbn; assumption. Qed.
-
-Lemma query_expr_admissible_offset_intro :
-  forall count input,
-    @query_expr_admissible T relname basesort input ->
-    @query_expr_admissible T relname basesort (QExpr_Offset count input).
-Proof. intros; cbn; assumption. Qed.
-
-Lemma query_expr_admissible_fetch_intro :
-  forall count input,
-    @query_expr_admissible T relname basesort input ->
-    @query_expr_admissible T relname basesort (QExpr_Fetch count input).
-Proof. intros; cbn; assumption. Qed.
-
-Lemma query_expr_admissible_order_by_intro :
-  forall keys input,
-    @query_expr_admissible T relname basesort input ->
-    query_sort_keys_in_scope (query_expr_sort input) keys ->
-    @query_expr_admissible T relname basesort (QExpr_OrderBy keys input).
-Proof. intros; cbn; tauto. Qed.
-
-End AdmissibilityConstructors.
+(** Filtering and projecting semantically permuted groups preserves semantic
+    row permutation whenever both operations respect semantic group equality.
+    This packages the relation-sensitive [permut_filter_eq]/[_permut_map]
+    combination used after HAVING. *)
+Lemma group_filter_map_permutation :
+  forall (T : Tuple.Rcd) left right
+      (keep : list (tuple T) -> bool)
+      (emit : list (tuple T) -> tuple T),
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      keep first = keep second) ->
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      Oeset.compare (OTuple T) (emit first) (emit second) = Eq) ->
+    Oeset.permut (OLTuple T) left right ->
+    Oeset.permut (OTuple T)
+      (map emit (filter keep left))
+      (map emit (filter keep right)).
+Proof.
+  intros T left right keep emit Hkeep Hemit Hgroups.
+  eapply (@ListPermut._permut_map
+    (list (tuple T)) (list (tuple T)) (tuple T) (tuple T)
+    (fun first second => Oeset.compare (OLTuple T) first second = Eq)
+    (fun first second => Oeset.compare (OTuple T) first second = Eq)
+    emit emit (filter keep left) (filter keep right)).
+  - intros first second Hfirst Hsecond Hequal; now apply Hemit.
+  - apply ListPermut.permut_filter_eq.
+    + intros first second Hfirst Hequal; now apply Hkeep.
+    + exact Hgroups.
+Qed.

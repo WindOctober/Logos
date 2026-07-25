@@ -617,6 +617,29 @@ Proof.
   destruct (is_null_value value); discriminate.
 Qed.
 
+(** SQL [value = TRUE] and [value IS TRUE] need not return the same Bool3:
+    for a nullable Boolean, equality returns UNKNOWN while [IS TRUE] returns
+    FALSE.  A filter observes only [Bool.is_true], however, and that acceptance
+    decision agrees for every SQL value (including NULL and non-Booleans). *)
+Lemma interp_predicate_eq_true_is_true_acceptance : forall value,
+  Bool.is_true Bool3
+    (NullValues.interp_predicate PredicateEq
+      [value; Value_bool (Some true)]) =
+  Bool.is_true Bool3
+    (NullValues.interp_predicate PredicateIsTrue [value]).
+Proof.
+  intro value.
+  destruct value.
+  all: try match goal with
+           | string_value : string_value |- _ =>
+               destruct string_value as [typmod [text |]]
+           | boolean : option bool |- _ =>
+               destruct boolean as [boolean |]; [destruct boolean |]
+           | optional : option ?A |- _ => destruct optional
+           end.
+  all: reflexivity.
+Qed.
+
 Lemma interp_predicate_is_true_bool3 : forall value,
   NullValues.interp_predicate PredicateIsTrue [bool3_to_value_bool value] =
   match value with true3 => true3 | false3 | unknown3 => false3 end.

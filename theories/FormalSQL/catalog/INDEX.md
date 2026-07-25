@@ -12,11 +12,11 @@ First-stop compositional wrappers over generated tnull query terms.
 
 | Rank | Declaration | Primary card |
 |---:|---|---|
-| 2 | `tnull_qexpr_bag_outcome_eq_of_runtime_and_bag_eq` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 3 | `tnull_direct_table_projection_query_bag_eq` | [relational-algebra.md](relational-algebra.md) |
-| 4 | `tnull_direct_projection_query_bag_eq` | [relational-algebra.md](relational-algebra.md) |
-| 4 | `tnull_double_projection_query_bag_eq` | [relational-algebra.md](relational-algebra.md) |
-| 4 | `tnull_single_double_projection_query_bag_eq` | [relational-algebra.md](relational-algebra.md) |
+| 0 | `tnull_direct_columns_group_outcome_equiv_of_projected_support` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 0 | `tnull_join_condition_pred_acceptance_exact_safe` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
+| 2 | `tnull_eval_group_bag_direct_columns_true_no_error` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 2 | `tnull_projection_envs_eq_of_select_items` | [relational-algebra.md](relational-algebra.md) |
+| 2 | `tnull_row_eq_trans` | [relational-algebra.md](relational-algebra.md) |
 
 ### `outcome` — query outcome equivalence
 
@@ -24,11 +24,11 @@ Error-preserving query-outcome bridges and congruences.
 
 | Rank | Declaration | Primary card |
 |---:|---|---|
-| 2 | `tnull_qexpr_bag_outcome_eq_of_runtime_and_bag_eq` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 22 | `query_expr_filter_outcome_equiv_of_always_true` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 24 | `query_expr_filter_outcome_equiv_of_global_acceptance` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 24 | `query_expr_outcome_equiv_of_eval_iff` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 24 | `query_expr_outcome_equiv_of_global_typed` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
+| 0 | `eval_grouping_sets_outcome_Forall2_congr` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 0 | `tnull_direct_columns_group_outcome_equiv_of_projected_support` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 2 | `eval_join_bag_safe_of_acceptance_projection_exact` | [relational-algebra.md](relational-algebra.md) |
+| 4 | `query_expr_group_outcome_equiv_of_supported_child_outcomes` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 4 | `tnull_eval_group_bag_direct_columns_true_equiv_of_projection_support` | [aggregate-grouping.md](aggregate-grouping.md) |
 
 ### `grouping` — grouping and HAVING
 
@@ -36,11 +36,11 @@ Group construction, grouped-key filters, and aggregate outcomes.
 
 | Rank | Declaration | Primary card |
 |---:|---|---|
-| 2 | `tnull_eval_groups_having_key_conj_after_bag_filter_exact` | [aggregate-grouping.md](aggregate-grouping.md) |
-| 2 | `tnull_eval_groups_having_key_conj_filter_exact` | [aggregate-grouping.md](aggregate-grouping.md) |
-| 20 | `eval_groups_having_key_conj_after_bag_formula_filter_exact` | [aggregate-grouping.md](aggregate-grouping.md) |
-| 20 | `eval_groups_having_key_conj_filter_exact` | [aggregate-grouping.md](aggregate-grouping.md) |
-| 24 | `eval_grouping_sets_cons_error_iff` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 0 | `eval_grouping_sets_outcome_Forall2_congr` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 0 | `tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows` | [numeric-derived.md](numeric-derived.md) |
+| 0 | `tnull_direct_columns_group_outcome_equiv_of_projected_support` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 2 | `eval_grouping_sets_success_fold_iff` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 2 | `tnull_closed_group_sum_numeric_dot_value_runtime_exact` | [numeric-derived.md](numeric-derived.md) |
 
 ### `runtime` — runtime safety and errors
 
@@ -48,11 +48,11 @@ Runtime-error propagation, absence, success, and lifting.
 
 | Rank | Declaration | Primary card |
 |---:|---|---|
-| 2 | `tnull_qexpr_bag_outcome_eq_of_runtime_and_bag_eq` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 3 | `tnull_cross_join_runtime_error_none` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 4 | `tnull_pi_runtime_error_none` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 4 | `tnull_sigma_runtime_error_none` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
-| 6 | `tnull_cross_join_runtime_error_congr` | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) |
+| 0 | `eval_grouping_sets_outcome_Forall2_congr` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 2 | `eval_join_bag_safe_of_acceptance_projection_exact` | [relational-algebra.md](relational-algebra.md) |
+| 2 | `tnull_eval_group_bag_direct_columns_true_no_error` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 4 | `eval_grouping_sets_error_prefix_iff` | [aggregate-grouping.md](aggregate-grouping.md) |
+| 4 | `tnull_direct_columns_group_outcome_equiv_of_projected_support` | [aggregate-grouping.md](aggregate-grouping.md) |
 
 ## Decision tree
 
@@ -66,19 +66,19 @@ Runtime-error propagation, absence, success, and lifting.
 
 | Goal shape / SQL feature | Focused catalog | Declarations |
 |---|---|---:|
-| UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE | [null-predicates.md](null-predicates.md) | 100 |
-| query-level nullable syntax adapters, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 62 |
-| NUMERIC representation, precision/scale, division, rounding, AVG states | [numeric-primitives.md](numeric-primitives.md) | 85 |
-| INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow | [numeric-derived.md](numeric-derived.md) | 125 |
+| UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE | [null-predicates.md](null-predicates.md) | 97 |
+| query-level nullable syntax adapters, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 43 |
+| NUMERIC representation, precision/scale, division, rounding, AVG states | [numeric-primitives.md](numeric-primitives.md) | 81 |
+| INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow | [numeric-derived.md](numeric-derived.md) | 127 |
 | integer bit operations, shifts, BIT_AND/BIT_OR aggregate laws | [bitwise.md](bitwise.md) | 43 |
 | CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ | [string-temporal.md](string-temporal.md) | 69 |
-| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 115 |
-| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 38 |
-| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 136 |
-| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/formula goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 31 |
-| typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 62 |
-| row-count bounds, functional joins, filters, groups, finite images | [cardinality-composition.md](cardinality-composition.md) | 88 |
-| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 51 |
+| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 184 |
+| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 45 |
+| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 166 |
+| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/formula goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 53 |
+| typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 64 |
+| row-count bounds, functional joins, filters, groups, finite images | [cardinality-composition.md](cardinality-composition.md) | 101 |
+| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 52 |
 
 ## Bounded ranked search
 

@@ -4,12 +4,15 @@
 
 Set Implicit Arguments.
 
-From Stdlib Require Import Lia List NArith QArith Qcanon Sorting.Permutation
-  ZArith.
-From SQLFS Require Import FiniteBag FiniteCollection FiniteSet FTuples
-  OrderedSet SqlBagAbstraction SqlQuerySemantics Values ValueNumeric.
-From Logos.FormalSQL Require Import NumericDerivedFacts NumericFacts
-  RelationalAlgebraFacts.
+From Stdlib Require Import Lia List NArith QArith Qcanon SetoidList
+  Sorting.Permutation ZArith.
+From SQLFS Require Import ATerms Bool3 Env FiniteBag FiniteCollection FiniteSet
+  FlatData FTerms FTuples GenericInstance ListPermut ListSort OrderedSet Partition
+  SqlBagAbstraction SqlErrorSemantics SqlOutcome SqlQueryFacts
+  SqlQuerySemantics Values ValueNumeric.
+From Logos.FormalSQL Require Import AggregateRuntimeFacts
+  GroupedFilterOutcomeFacts GroupingRewriteFacts NumericDerivedFacts
+  NumericFacts RelationalAlgebraFacts TNullSyntax.
 
 Import ListNotations.
 Import NullValues.
@@ -68,6 +71,77 @@ Definition numeric_sum_option_add
   | None => Some next
   | Some total => Some (numeric_add total next)
   end.
+
+(** SUM of the nonempty per-group SUM results is exactly SUM of the flattened
+    numeric inputs.  Empty groups contribute [None] and are omitted, matching
+    SQL SUM's treatment of NULL subtotals.  The result covers finite values,
+    NaN, and infinities because it relies only on exact [numeric_add]
+    associativity. *)
+Theorem numeric_sum_option_regroup : forall groups,
+  fold_left numeric_sum_option_add
+    (flat_map
+      (fun group =>
+        match fold_left numeric_sum_option_add group None with
+        | Some total => [total]
+        | None => []
+        end)
+      groups)
+    None =
+  fold_left numeric_sum_option_add (concat groups) None.
+Proof.
+assert (Hsome : forall numbers total,
+  fold_left numeric_sum_option_add numbers (Some total) =
+  match fold_left numeric_sum_option_add numbers None with
+  | Some subtotal => Some (numeric_add total subtotal)
+  | None => Some total
+  end).
+{
+  induction numbers as [|number numbers IH]; intro total; cbn.
+  - reflexivity.
+  - rewrite IH, (IH number).
+    destruct (fold_left numeric_sum_option_add numbers None)
+      as [subtotal |] eqn:Hfold; cbn.
+    + f_equal; apply numeric_add_associative.
+    + reflexivity.
+}
+assert (Haccumulator : forall numbers current,
+  fold_left numeric_sum_option_add numbers current =
+  match fold_left numeric_sum_option_add numbers None with
+  | Some subtotal => numeric_sum_option_add current subtotal
+  | None => current
+  end).
+{
+  intros numbers [total |].
+  - rewrite Hsome.
+    destruct (fold_left numeric_sum_option_add numbers None); reflexivity.
+  - remember (fold_left numeric_sum_option_add numbers None)
+      as result eqn:Hresult.
+    destruct result; reflexivity.
+}
+assert (Hregroup : forall groups current,
+  fold_left numeric_sum_option_add
+    (flat_map
+      (fun group =>
+        match fold_left numeric_sum_option_add group None with
+        | Some total => [total]
+        | None => []
+        end)
+      groups)
+    current =
+  fold_left numeric_sum_option_add (concat groups) current).
+{
+  induction groups as [|group groups IH]; intro current; cbn.
+  - reflexivity.
+  - rewrite !fold_left_app.
+    destruct (fold_left numeric_sum_option_add group None)
+      as [subtotal |] eqn:Hgroup; cbn.
+    + rewrite (Haccumulator group current), Hgroup; cbn.
+      apply IH.
+    + rewrite (Haccumulator group current), Hgroup; cbn.
+      apply IH.
+}
+intro groups; apply Hregroup.
+Qed.
 
 Lemma numeric_sum_from_state_transition : forall state next,
   numeric_sum_state_reachable_invariant state ->
@@ -142,6 +216,657 @@ Proof.
 intros observations Hnumeric.
 unfold interp_sum_numeric; rewrite Hnumeric, numeric_sum_fold_from_initial.
 reflexivity.
+Qed.
+
+(** A singleton nullable NUMERIC SUM returns its sole observation exactly,
+    including SQL NULL, NaN, and infinities. *)
+Lemma interp_sum_numeric_singleton : forall number,
+  interp_sum_numeric [Value_numeric number] = Value_numeric number.
+Proof.
+intros [number |]; [|reflexivity].
+change
+  (Value_numeric
+    (numeric_sum_from_state
+      (numeric_sum_transition numeric_sum_initial number)) =
+   Value_numeric (Some number)).
+rewrite numeric_sum_from_state_transition.
+- reflexivity.
+- apply numeric_sum_initial_reachable_invariant.
+Qed.
+
+(** The corresponding singleton runtime check is exact as well: a present
+    result reports precisely its numeric result error, while SQL NULL is
+    error-free. *)
+Lemma sum_numeric_runtime_error_singleton : forall number,
+  sum_numeric_runtime_error [Value_numeric number] =
+  match number with
+  | None => None
+  | Some result => numeric_result_runtime_error result
+  end.
+Proof.
+intros [number |]; [|reflexivity].
+change
+  (numeric_sum_state_runtime_error
+    (numeric_sum_transition numeric_sum_initial number) =
+   numeric_result_runtime_error number).
+unfold numeric_sum_state_runtime_error.
+rewrite numeric_sum_from_state_transition.
+- reflexivity.
+- apply numeric_sum_initial_reachable_invariant.
+Qed.
+
+Local Lemma numeric_observations_all_concat : forall groups,
+  Forall
+    (fun observations => forallb is_numeric_value observations = true)
+    groups ->
+  forallb is_numeric_value (concat groups) = true.
+Proof.
+intros groups Hall.
+induction Hall as [|observations groups Hobservations Hgroups IH];
+  cbn [concat].
+- reflexivity.
+- rewrite forallb_app, Hobservations, IH; reflexivity.
+Qed.
+
+Local Lemma numeric_values_app : forall left right,
+  numeric_values (left ++ right) = numeric_values left ++ numeric_values right.
+Proof.
+intros left right.
+induction left as [|observation left IH]; [reflexivity |].
+destruct observation; cbn; try exact IH.
+destruct o; cbn; now rewrite IH.
+Qed.
+
+Local Lemma numeric_values_concat : forall groups,
+  numeric_values (concat groups) = concat (map numeric_values groups).
+Proof.
+intro groups.
+induction groups as [|observations groups IH]; cbn [concat];
+  [reflexivity |].
+rewrite numeric_values_app, IH; reflexivity.
+Qed.
+
+(** Exact SQL-level NUMERIC regrouping.  [subtotals] may contain NULLs and
+    special numeric values; the explicit [numeric_values] premise states that
+    its present observations are exactly the nonempty per-group sums.  The
+    conclusion preserves both the aggregate value and the precise numeric
+    runtime-error category, unlike a value-only reassociation law. *)
+Theorem interp_sum_numeric_regroup_value_runtime_exact :
+  forall groups subtotals,
+    Forall
+      (fun observations => forallb is_numeric_value observations = true)
+      groups ->
+    forallb is_numeric_value subtotals = true ->
+    numeric_values subtotals =
+      flat_map
+        (fun numbers =>
+          match fold_left numeric_sum_option_add numbers None with
+          | Some total => [total]
+          | None => []
+          end)
+        (map numeric_values groups) ->
+    interp_sum_numeric subtotals = interp_sum_numeric (concat groups) /\
+    sum_numeric_runtime_error subtotals =
+      sum_numeric_runtime_error (concat groups).
+Proof.
+intros groups subtotals Hgroups Hsubtotals Hnumeric_values.
+pose proof (@numeric_observations_all_concat groups Hgroups) as Hconcat.
+assert (Hfold :
+  fold_left numeric_sum_option_add (numeric_values subtotals) None =
+  fold_left numeric_sum_option_add (numeric_values (concat groups)) None).
+{
+  rewrite Hnumeric_values, numeric_values_concat.
+  apply numeric_sum_option_regroup.
+}
+assert (Hstate :
+  numeric_sum_from_state
+    (fold_left numeric_sum_transition
+      (numeric_values subtotals) numeric_sum_initial) =
+  numeric_sum_from_state
+    (fold_left numeric_sum_transition
+      (numeric_values (concat groups)) numeric_sum_initial)).
+{
+  rewrite !numeric_sum_fold_from_initial.
+  exact Hfold.
+}
+split.
+- unfold interp_sum_numeric.
+  rewrite Hsubtotals, Hconcat.
+  now rewrite Hstate.
+- unfold sum_numeric_runtime_error.
+  rewrite Hsubtotals, Hconcat.
+  unfold numeric_sum_state_runtime_error.
+  now rewrite Hstate.
+Qed.
+
+(** The exact aggregate term covered by the evaluator-to-group bridge below.
+    This is an operator-family description: neither a concrete column name nor
+    a surrounding SELECT or query shape is fixed here. *)
+Definition tnull_sum_numeric_dot_term (attribute : attribute TNull) :=
+  AAggregate AggregateSumNumeric AggregateAll (Dot attribute).
+
+(** The exact argument environments selected for one closed group.  Here
+    [closed] means that the group environment has no correlated outer tail. *)
+Definition tnull_closed_group_sum_numeric_dot_argument_envs
+    (group_terms : list (@aggterm TNull))
+    (group : list (tuple TNull))
+    (attribute : attribute TNull) :=
+  let group_env :=
+    Env.env_g TNull nil (@Env.Group_By TNull group_terms) group in
+  let aggregate_term := tnull_sum_numeric_dot_term attribute in
+  let function_term := Dot attribute in
+  let selected_env :=
+    if Fset.is_empty (A TNull) (FTerms.variables_ft TNull function_term)
+    then Some group_env
+    else Interp.find_eval_env TNull group_env aggregate_term in
+  match selected_env with
+  | None | Some nil => nil
+  | Some (slice :: outer_env) =>
+      map (fun inner_slice => inner_slice :: outer_env)
+        (Interp.unfold_env_slice TNull slice)
+  end.
+
+(** The observations passed by [eval_aggterm_aggregate_runtime_error] to the
+    concrete NUMERIC SUM callback.  Keeping this definition definitionally
+    aligned with the evaluator prevents clients from rebuilding its
+    [find_eval_env]/[unfold_env_slice] schedule. *)
+Definition tnull_closed_group_sum_numeric_dot_argument_observations
+    (group_terms : list (@aggterm TNull))
+    (group : list (tuple TNull))
+    (attribute : attribute TNull) :=
+  map
+    (fun argument_env =>
+      (@eval_funterm_runtime_error TNull
+        NullValues.interp_scalar_operator_runtime_error
+        argument_env (Dot attribute),
+       Interp.interp_funterm TNull argument_env (Dot attribute)))
+    (tnull_closed_group_sum_numeric_dot_argument_envs
+      group_terms group attribute).
+
+Definition tnull_closed_group_sum_numeric_dot_argument_values
+    (group_terms : list (@aggterm TNull))
+    (group : list (tuple TNull))
+    (attribute : attribute TNull) :=
+  map
+    (fun argument_env =>
+      Interp.interp_funterm TNull argument_env (Dot attribute))
+    (tnull_closed_group_sum_numeric_dot_argument_envs
+      group_terms group attribute).
+
+Local Lemma tnull_sum_numeric_dot_observation_values :
+  forall group_terms group attribute,
+    NullValues.observation_values
+      (tnull_closed_group_sum_numeric_dot_argument_observations
+        group_terms group attribute) =
+    tnull_closed_group_sum_numeric_dot_argument_values
+      group_terms group attribute.
+Proof.
+intros group_terms group attribute.
+unfold NullValues.observation_values,
+  tnull_closed_group_sum_numeric_dot_argument_observations,
+  tnull_closed_group_sum_numeric_dot_argument_values.
+now rewrite map_map.
+Qed.
+
+Local Lemma tnull_sum_numeric_dot_value_observations :
+  forall group_terms group attribute,
+    Interp.interp_aggterm TNull
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+    NullValues.interp_sum_numeric
+      (tnull_closed_group_sum_numeric_dot_argument_values
+        group_terms group attribute).
+Proof.
+intros group_terms group attribute.
+unfold tnull_closed_group_sum_numeric_dot_argument_values,
+  tnull_closed_group_sum_numeric_dot_argument_envs,
+  tnull_sum_numeric_dot_term, AAggregate.
+reflexivity.
+Qed.
+
+Local Lemma tnull_sum_numeric_dot_runtime_observations :
+  forall group_terms group attribute,
+    @eval_aggterm_aggregate_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+    NullValues.interp_aggregate_runtime_error
+      (AggregateCall AggregateSumNumeric AggregateAll)
+      (tnull_closed_group_sum_numeric_dot_argument_observations
+        group_terms group attribute).
+Proof.
+intros group_terms group attribute.
+unfold tnull_closed_group_sum_numeric_dot_argument_observations,
+  tnull_closed_group_sum_numeric_dot_argument_envs,
+  tnull_sum_numeric_dot_term, AAggregate.
+reflexivity.
+Qed.
+
+Local Lemma tnull_dot_variables_nonempty : forall attribute,
+  Fset.is_empty (A TNull)
+    (FTerms.variables_ft TNull (Dot attribute)) = false.
+Proof.
+intro attribute; reflexivity.
+Qed.
+
+Local Lemma tnull_sum_numeric_dot_selects_closed_group :
+  forall group_terms group attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS labels TNull row)
+      group ->
+    Interp.find_eval_env TNull
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+    Some
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group).
+Proof.
+intros group_terms group attribute Hnonempty Hpresent.
+case_eq (ListSort.quicksort (OTuple TNull) group).
+- intro Hsorted.
+  pose proof (ListSort.length_quicksort (OTuple TNull) group) as Hlength.
+  rewrite Hsorted in Hlength.
+  symmetry in Hlength.
+  apply length_zero_iff_nil in Hlength.
+  contradiction.
+- intros first rest Hsorted.
+  assert (Hfirst : attribute inS labels TNull first).
+  {
+    rewrite Forall_forall in Hpresent.
+    apply Hpresent.
+    apply (proj2 (ListSort.In_quicksort (OTuple TNull) group first)).
+    change (In first (ListSort.quicksort (OTuple TNull) group)).
+    rewrite Hsorted; now left.
+  }
+  unfold Env.env_g.
+  rewrite Hsorted.
+  assert (Hsuitable :
+    Interp.is_a_suitable_env TNull (labels TNull first) nil
+      (tnull_sum_numeric_dot_term attribute) = true).
+  {
+    unfold Interp.is_a_suitable_env, tnull_sum_numeric_dot_term,
+      AAggregate.
+    cbn [ATerms.is_built_upon_ag FTerms.is_built_upon_ft].
+    rewrite Bool.Bool.orb_true_iff; right.
+    unfold Dot.
+    cbn [FTerms.is_built_upon_ft flat_map].
+    rewrite FTerms.funterm_mem_true_iff.
+    rewrite ATerms.in_extract_funterms, app_nil_r.
+    apply
+      (in_map
+        (fun current : Tuple.attribute TNull =>
+          @ATerms.A_Expr TNull (@FTerms.F_Dot TNull current))
+        (Fset.elements (A TNull) (labels TNull first)) attribute).
+    now apply Fset.mem_in_elements.
+  }
+  unfold Interp.find_eval_env at 1; fold Interp.find_eval_env.
+  rewrite Hsuitable; reflexivity.
+Qed.
+
+Local Lemma tnull_sum_numeric_dot_singleton_observation :
+  forall stored_labels row attribute,
+    attribute inS labels TNull row ->
+    (@eval_funterm_runtime_error TNull
+       NullValues.interp_scalar_operator_runtime_error
+       [(stored_labels, @Env.Group_Fine TNull, [row])]
+       (Dot attribute),
+     Interp.interp_funterm TNull
+       [(stored_labels, @Env.Group_Fine TNull, [row])]
+       (Dot attribute)) =
+    (None, dot TNull row attribute).
+Proof.
+intros stored_labels row attribute Hpresent.
+unfold Dot, Interp.interp_funterm, Interp.interp_dot.
+cbn [eval_funterm_runtime_error].
+rewrite ListSort.quicksort_1.
+now rewrite Hpresent.
+Qed.
+
+(** For a nonempty logical group whose rows expose the referenced attribute,
+    the evaluator passes exactly one error-free observation per row to
+    [sum(numeric)], modulo its internal canonical row ordering.  This is the
+    key interface that hides [env_g], [find_eval_env], [unfold_env_slice], and
+    [quicksort] from generated proofs. *)
+Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows :
+  forall group_terms group attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS labels TNull row)
+      group ->
+    Permutation
+      (tnull_closed_group_sum_numeric_dot_argument_observations
+        group_terms group attribute)
+      (map
+        (fun row =>
+          (None, dot TNull row attribute))
+        group).
+Proof.
+intros group_terms group attribute Hnonempty Hpresent.
+pose proof
+  (@tnull_sum_numeric_dot_selects_closed_group
+    group_terms group attribute Hnonempty Hpresent) as Hselected.
+unfold tnull_closed_group_sum_numeric_dot_argument_observations,
+  tnull_closed_group_sum_numeric_dot_argument_envs.
+rewrite tnull_dot_variables_nonempty, Hselected.
+unfold Env.env_g.
+case_eq (ListSort.quicksort (OTuple TNull) group).
+- intro Hsorted.
+  pose proof (ListSort.length_quicksort (OTuple TNull) group) as Hlength.
+  rewrite Hsorted in Hlength.
+  symmetry in Hlength.
+  apply length_zero_iff_nil in Hlength; contradiction.
+- intros first rest Hsorted.
+  cbn.
+  unfold Interp.unfold_env_slice.
+  rewrite !map_map.
+  eapply Permutation_trans with
+    (l' :=
+      map
+        (fun row => (None, dot TNull row attribute))
+        (ListSort.quicksort (OTuple TNull) group)).
+  + apply Permutation_refl'.
+    apply map_ext_in; intros row Hrow.
+    apply
+      (@tnull_sum_numeric_dot_singleton_observation
+        (labels TNull first) row attribute).
+    rewrite Forall_forall in Hpresent.
+    apply Hpresent.
+    apply (proj2 (ListSort.In_quicksort (OTuple TNull) group row)).
+    exact Hrow.
+  + apply Permutation_sym, Permutation_map.
+    apply list_permut_eq_implies_Permutation.
+    apply ListSort.quick_permut_strong.
+Qed.
+
+(** Direct evaluator bridge for one closed logical group.  It covers both the
+    value interpreter and the aggregate-only runtime-error checker, so callers
+    cannot prove a value reassociation while silently dropping a NUMERIC error
+    category. *)
+Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
+  forall group_terms group attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS labels TNull row)
+      group ->
+    Interp.interp_aggterm TNull
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+      NullValues.interp_sum_numeric
+        (map (fun row => dot TNull row attribute) group) /\
+    @eval_aggterm_aggregate_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+      NullValues.sum_numeric_runtime_error
+        (map (fun row => dot TNull row attribute) group).
+Proof.
+intros group_terms group attribute Hnonempty Hpresent.
+pose proof
+  (@tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows
+    group_terms group attribute Hnonempty Hpresent) as Hobservations.
+assert (Hvalues :
+  Permutation
+    (tnull_closed_group_sum_numeric_dot_argument_values
+      group_terms group attribute)
+    (map (fun row => dot TNull row attribute) group)).
+{
+  rewrite <- tnull_sum_numeric_dot_observation_values.
+  unfold NullValues.observation_values.
+  eapply Permutation_trans with
+    (l' :=
+      map snd
+        (map
+          (fun row => (None, dot TNull row attribute))
+          group)).
+  - now apply Permutation_map.
+  - rewrite map_map; apply Permutation_refl.
+}
+assert (Hchildren :
+  NullValues.first_observation_error
+    (tnull_closed_group_sum_numeric_dot_argument_observations
+      group_terms group attribute) = None).
+{
+  apply first_observation_error_none_iff.
+  rewrite Forall_forall; intros observation Hobservation.
+  assert (Hmapped : In observation
+    (map (fun row => (None, dot TNull row attribute)) group)).
+  { eapply Permutation_in; eauto. }
+  apply in_map_iff in Hmapped.
+  destruct Hmapped as [row [Hequal _]].
+  now subst observation.
+}
+split.
+- rewrite tnull_sum_numeric_dot_value_observations.
+  exact (@NumericFacts.interp_sum_numeric_permutation _ _ Hvalues).
+- rewrite tnull_sum_numeric_dot_runtime_observations.
+  rewrite aggregate_call_safe_children_reduce_to_local.
+  + cbn [NullValues.aggregate_local_runtime_error
+      NullValues.aggregate_input_values].
+    rewrite tnull_sum_numeric_dot_observation_values.
+    exact (@NumericFacts.sum_numeric_runtime_error_permutation _ _ Hvalues).
+  + exact Hchildren.
+Qed.
+
+Local Lemma numeric_values_map_interp_sum_numeric : forall groups,
+  Forall
+    (fun observations =>
+      forallb NullValues.is_numeric_value observations = true)
+    groups ->
+  NullValues.numeric_values
+      (map NullValues.interp_sum_numeric groups) =
+    flat_map
+      (fun numbers =>
+        match fold_left numeric_sum_option_add numbers None with
+        | Some total => [total]
+        | None => []
+        end)
+      (map NullValues.numeric_values groups).
+Proof.
+intros groups Hgroups.
+induction Hgroups as [|observations groups Hobservations Hgroups IH].
+- reflexivity.
+- cbn [map flat_map].
+  rewrite (interp_sum_numeric_option_fold observations Hobservations).
+  destruct
+    (fold_left numeric_sum_option_add
+      (NullValues.numeric_values observations) None) as [total|];
+    cbn; now rewrite IH.
+Qed.
+
+Local Lemma map_interp_sum_numeric_all_numeric : forall groups,
+  forallb NullValues.is_numeric_value
+    (map NullValues.interp_sum_numeric groups) = true.
+Proof.
+induction groups as [|observations groups IH]; cbn; [reflexivity|].
+unfold NullValues.interp_sum_numeric.
+destruct (forallb NullValues.is_numeric_value observations);
+  cbn; exact IH.
+Qed.
+
+Local Lemma interp_sum_numeric_regroup_mapped_runtime_exact : forall groups,
+  Forall
+    (fun observations =>
+      forallb NullValues.is_numeric_value observations = true)
+    groups ->
+  NullValues.interp_sum_numeric
+      (map NullValues.interp_sum_numeric groups) =
+    NullValues.interp_sum_numeric (concat groups) /\
+  NullValues.sum_numeric_runtime_error
+      (map NullValues.interp_sum_numeric groups) =
+    NullValues.sum_numeric_runtime_error (concat groups).
+Proof.
+intros groups Hgroups.
+apply interp_sum_numeric_regroup_value_runtime_exact.
+- exact Hgroups.
+- apply map_interp_sum_numeric_all_numeric.
+- now apply numeric_values_map_interp_sum_numeric.
+Qed.
+
+Local Lemma query_make_groups_flatten_Permutation :
+  forall (T : Tuple.Rcd) env rows group_terms,
+    group_terms <> nil ->
+    Permutation rows
+      (concat (@query_make_groups T env rows group_terms)).
+Proof.
+intros T env rows [|term terms] Hterms; [contradiction|].
+unfold query_make_groups, FlatData.make_groups; cbn.
+assert (Hconcat : forall groups :
+  list (list (value T) * list (tuple T)),
+  concat (map snd groups) = flat_map snd groups).
+{
+  intro groups; induction groups as [|[key members] groups IH];
+    cbn; now rewrite ?IH.
+}
+rewrite Hconcat.
+apply list_permut_eq_implies_Permutation.
+apply Partition.partition_permut.
+Qed.
+
+(** Evaluate every subtotal value through the actual closed-group interpreter,
+    then regroup those values through an outer NUMERIC SUM.  The conclusion
+    compares that outer SUM's value and local runtime-error callback with the
+    corresponding callback on all input values.  It does not claim that every
+    inner group runtime check returns [None], nor does it by itself establish a
+    complete grouped-query outcome equivalence; the preceding single-group
+    theorem exposes each inner runtime result when that obligation is needed.
+
+    The only semantic premises here are column presence/type on the input rows
+    and a nonempty grouping key; no concrete schema, SELECT list, grouping
+    depth, or rewrite pattern is encoded. *)
+Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
+  forall grouping_env rows group_terms attribute,
+    group_terms <> nil ->
+    Forall
+      (fun row =>
+        attribute inS labels TNull row /\
+        NullValues.is_numeric_value (dot TNull row attribute) = true)
+      rows ->
+    let groups := @query_make_groups TNull grouping_env rows group_terms in
+    let grouped_sums :=
+      map
+        (fun group =>
+          Interp.interp_aggterm TNull
+            (Env.env_g TNull nil
+              (@Env.Group_By TNull group_terms) group)
+            (tnull_sum_numeric_dot_term attribute))
+        groups in
+    NullValues.interp_sum_numeric grouped_sums =
+      NullValues.interp_sum_numeric
+        (map (fun row => dot TNull row attribute) rows) /\
+    NullValues.sum_numeric_runtime_error grouped_sums =
+      NullValues.sum_numeric_runtime_error
+        (map (fun row => dot TNull row attribute) rows).
+Proof.
+intros grouping_env rows group_terms attribute Hterms Hnumeric.
+cbv beta zeta.
+set (groups := @query_make_groups TNull grouping_env rows group_terms).
+assert (Hflatten :
+  Permutation rows (concat groups)).
+{
+  unfold groups.
+  now apply query_make_groups_flatten_Permutation.
+}
+assert (Hconcat_numeric :
+  Forall
+    (fun row =>
+      attribute inS labels TNull row /\
+      NullValues.is_numeric_value (dot TNull row attribute) = true)
+    (concat groups)).
+{
+  rewrite Forall_forall in Hnumeric |- *.
+  intros row Hrow.
+  apply Hnumeric.
+  eapply Permutation_in.
+  - apply Permutation_sym; exact Hflatten.
+  - exact Hrow.
+}
+assert (Hgroups_numeric :
+  Forall
+    (fun observations =>
+      forallb NullValues.is_numeric_value observations = true)
+    (map
+      (map (fun row => dot TNull row attribute))
+      groups)).
+{
+  rewrite Forall_forall; intros observations Hobservations.
+  apply in_map_iff in Hobservations.
+  destruct Hobservations as [group [Hobservations Hgroup]].
+  subst observations.
+  rewrite forallb_forall; intros value Hvalue.
+  apply in_map_iff in Hvalue.
+  destruct Hvalue as [row [Hvalue Hrow]].
+  subst value.
+  rewrite Forall_forall in Hconcat_numeric.
+  exact
+    (proj2
+      (Hconcat_numeric row
+        (proj2 (in_concat groups row)
+          (ex_intro _ group (conj Hgroup Hrow))))).
+}
+assert (Hgroup_nonempty : forall group,
+  In group groups -> group <> nil).
+{
+  intros group Hgroup.
+  unfold groups, query_make_groups in Hgroup.
+  destruct group_terms as [|term terms]; [contradiction|].
+  cbn [FlatData.make_groups] in Hgroup.
+  eapply Partition.in_map_snd_partition_diff_nil
+    with (l := rows) (l1 := group).
+  exact Hgroup.
+}
+assert (Hgroup_present : forall group,
+  In group groups ->
+  Forall (fun row => attribute inS labels TNull row) group).
+{
+  intros group Hgroup.
+  rewrite Forall_forall; intros row Hrow.
+  rewrite Forall_forall in Hconcat_numeric.
+  exact
+    (proj1
+      (Hconcat_numeric row
+        (proj2 (in_concat groups row)
+          (ex_intro _ group (conj Hgroup Hrow))))).
+}
+assert (Hmapped :
+  map
+    (fun group =>
+      Interp.interp_aggterm TNull
+        (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+        (tnull_sum_numeric_dot_term attribute))
+    groups =
+  map NullValues.interp_sum_numeric
+    (map (map (fun row => dot TNull row attribute)) groups)).
+{
+  rewrite map_map.
+  apply map_ext_in; intros group Hgroup.
+  exact
+    (proj1
+      (@tnull_closed_group_sum_numeric_dot_value_runtime_exact
+        group_terms group attribute
+        (Hgroup_nonempty group Hgroup)
+        (Hgroup_present group Hgroup))).
+}
+rewrite Hmapped.
+pose proof
+  (@interp_sum_numeric_regroup_mapped_runtime_exact
+    (map (map (fun row => dot TNull row attribute)) groups)
+    Hgroups_numeric) as Hregroup.
+assert (Hvalues :
+  Permutation
+    (map (fun row => dot TNull row attribute) rows)
+    (concat
+      (map (map (fun row => dot TNull row attribute)) groups))).
+{
+  rewrite <- concat_map.
+  now apply Permutation_map.
+}
+destruct Hregroup as [Hvalue Hruntime]; split.
+- rewrite Hvalue.
+  symmetry; now apply NumericFacts.interp_sum_numeric_permutation.
+- rewrite Hruntime.
+  symmetry; now apply NumericFacts.sum_numeric_runtime_error_permutation.
 Qed.
 
 (** A finite NUMERIC observation is an exact canonical rational.  These
@@ -352,6 +1077,93 @@ Definition query_bags_disjoint (left right : bagT) : Prop :=
     Febag.nb_occ (SqlQuerySemantics.BTupleT T) row left = 0%N \/
     Febag.nb_occ (SqlQuerySemantics.BTupleT T) row right = 0%N.
 
+(** UNION ALL exposes the sum of the two input multiplicities.  Keeping this
+    as an occurrence law lets larger rewrites compose it without baking in a
+    surrounding DISTINCT, filter, projection, or query tree. *)
+Lemma query_set_union_occurrence_exact : forall left right row,
+  Febag.nb_occ (SqlQuerySemantics.BTupleT T) row
+    (query_set_bag Union left right) =
+  (Febag.nb_occ (SqlQuerySemantics.BTupleT T) row left +
+   Febag.nb_occ (SqlQuerySemantics.BTupleT T) row right)%N.
+Proof.
+intros left right row.
+unfold query_set_bag; cbn.
+apply Febag.nb_occ_union.
+Qed.
+
+(** Semantic list duplicate-freedom transfers exactly to the finite-bag
+    abstraction.  The relation is FormalSQL tuple equality, not Rocq
+    structural equality. *)
+Lemma query_bag_duplicate_free_of_rows_NoDupA : forall rows,
+  NoDupA
+    (fun first second => Oeset.compare (OTuple T) first second = Eq)
+    rows ->
+  query_bag_duplicate_free (rows_bag T rows).
+Proof.
+intros rows Hnodup row.
+unfold query_bag_duplicate_free, rows_bag.
+rewrite Febag.nb_occ_mk_bag.
+rewrite (@oeset_nb_occ_of_NoDupA
+  (tuple T) (OTuple T) rows Hnodup row).
+destruct (Oeset.mem_bool (OTuple T) row rows); cbn; lia.
+Qed.
+
+(** Duplicate-freedom is proper under semantic bag equality. *)
+Lemma query_bag_duplicate_free_transport : forall left right,
+  bag_eq T left right ->
+  query_bag_duplicate_free left ->
+  query_bag_duplicate_free right.
+Proof.
+intros left right Hbags Hleft.
+unfold query_bag_duplicate_free in Hleft |- *.
+intro row.
+specialize (Hleft row).
+pose proof
+  ((proj1 (@bag_eq_iff_occurrences T left right) Hbags) row) as Hocc.
+exact
+  (eq_ind
+    (Febag.nb_occ (Fecol.CBag (CTuple T)) row left)
+    (fun count => (count <= 1)%N)
+    Hleft
+    (Febag.nb_occ (Fecol.CBag (CTuple T)) row right)
+    Hocc).
+Qed.
+
+(** A successful global GROUP bag is duplicate-free independently of its
+    SELECT list and HAVING predicate: global grouping has one logical group,
+    so a successful group scheduler emits at most one row. *)
+Section GlobalGroupDuplicateFree.
+
+Context {relname : Type}.
+
+Variable basesort : relname -> Fset.set (A T).
+Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
+Variable unknown : Bool.b (B T).
+Variable symbol_runtime_error :
+  scalar_operator T -> list (option sql_runtime_error * value T) ->
+  option sql_runtime_error.
+Variable aggregate_runtime_error :
+  aggregate T -> list (option sql_runtime_error * value T) ->
+  option sql_runtime_error.
+Variable value_is_null : value T -> bool.
+
+Theorem eval_group_bag_global_success_duplicate_free :
+  forall env select_list having input_bag output_bag,
+    @eval_group_bag_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      env select_list [] having input_bag (SqlSuccess output_bag) ->
+    query_bag_duplicate_free output_bag.
+Proof.
+intros env select_list having input_bag output_bag Heval.
+inversion Heval; subst.
+eapply query_bag_duplicate_free_transport.
+- apply query_same_rows_as_bag_iff_bag_eq; eassumption.
+- apply query_bag_duplicate_free_of_rows_NoDupA.
+  eapply eval_groups_global_success_NoDupA; eassumption.
+Qed.
+
+End GlobalGroupDuplicateFree.
+
 Lemma query_bags_disjoint_sym : forall left right,
   query_bags_disjoint left right -> query_bags_disjoint right left.
 Proof.
@@ -418,6 +1230,64 @@ assert (N.pos count = 1%N) by lia.
 now rewrite H.
 Qed.
 
+(** DISTINCT maps every supported tuple to multiplicity one and every absent
+    tuple to zero.  This is the single-operator occurrence contract; callers
+    remain responsible for the child relation and runtime outcome. *)
+Lemma query_distinct_bag_occurrence_exact : forall bag row,
+  Febag.nb_occ (SqlQuerySemantics.BTupleT T) row
+    (query_distinct_bag bag) =
+  if Febag.mem (SqlQuerySemantics.BTupleT T) row bag then 1%N else 0%N.
+Proof.
+intros bag row.
+unfold query_distinct_bag.
+rewrite Febag.nb_occ_mk_bag.
+change
+  (Feset.nb_occ (Fecol.CSet (CTuple T)) row
+    (Feset.mk_set (Fecol.CSet (CTuple T))
+      (Febag.elements (SqlQuerySemantics.BTupleT T) bag)) =
+   if Febag.mem (SqlQuerySemantics.BTupleT T) row bag
+   then 1%N
+   else 0%N).
+rewrite Feset.nb_occ_alt, Feset.mem_mk_set.
+rewrite <- Febag.mem_unfold.
+reflexivity.
+Qed.
+
+(** Duplicate-free bags are equal once their semantic supports agree.  The
+    duplicate-free premises turn every nonzero occurrence count into exactly
+    one; no representative order or structural tuple equality is exposed. *)
+Lemma query_duplicate_free_support_bag_eq :
+  forall left right : bagT,
+    query_bag_duplicate_free left ->
+    query_bag_duplicate_free right ->
+    (forall row,
+      Febag.nb_occ (SqlQuerySemantics.BTupleT T) row left = 0%N <->
+      Febag.nb_occ (SqlQuerySemantics.BTupleT T) row right = 0%N) ->
+    bag_eq T left right.
+Proof.
+intros left right Hleft Hright Hsupport.
+apply bag_eq_iff_occurrences; intro row.
+specialize (Hleft row); specialize (Hright row); specialize (Hsupport row).
+set (left_occ :=
+  Febag.nb_occ (SqlQuerySemantics.BTupleT T) row left) in *.
+set (right_occ :=
+  Febag.nb_occ (SqlQuerySemantics.BTupleT T) row right) in *.
+change (left_occ = right_occ).
+destruct left_occ as [|left_count];
+destruct right_occ as [|right_count].
+- reflexivity.
+- exfalso.
+  pose proof (proj1 Hsupport eq_refl) as Hzero.
+  discriminate Hzero.
+- exfalso.
+  pose proof (proj2 Hsupport eq_refl) as Hzero.
+  discriminate Hzero.
+- cbn in Hleft, Hright.
+  assert (N.pos left_count = 1%N) by lia.
+  assert (N.pos right_count = 1%N) by lia.
+  congruence.
+Qed.
+
 Corollary query_distinct_union_inert : forall left right,
   query_bag_duplicate_free left ->
   query_bag_duplicate_free right ->
@@ -431,26 +1301,47 @@ apply query_distinct_bag_inert.
 now apply query_set_union_duplicate_free.
 Qed.
 
-Corollary query_distinct_three_way_union_inert :
-  forall first second third,
-    query_bag_duplicate_free first ->
-    query_bag_duplicate_free second ->
-    query_bag_duplicate_free third ->
-    query_bags_disjoint first second ->
-    query_bags_disjoint first third ->
-    query_bags_disjoint second third ->
-    bag_eq T
-      (query_distinct_bag
-        (query_set_bag Union (query_set_bag Union first second) third))
-      (query_set_bag Union (query_set_bag Union first second) third).
-Proof.
-intros first second third Hfirst Hsecond Hthird
-  Hfirst_second Hfirst_third Hsecond_third.
-apply query_distinct_bag_inert.
-apply query_set_union_duplicate_free.
-- now apply query_set_union_duplicate_free.
-- exact Hthird.
-- now apply query_set_union_disjoint_right.
-Qed.
 
 End DuplicateFreeUnion.
+
+(** Exact occurrence contract for one finite-bag filter.  The predicate must
+    respect semantic tuple equality because the bag representation is
+    quotient-facing. *)
+Lemma query_bag_filter_occurrence_exact :
+  forall (T : Tuple.Rcd) (keep : tuple T -> bool)
+      (bag : Febag.bag (SqlQuerySemantics.BTupleT T)),
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      keep first = keep second) ->
+    forall row,
+      Febag.nb_occ (Fecol.CBag (CTuple T)) row
+        (Febag.filter (Fecol.CBag (CTuple T)) keep bag) =
+      if keep row
+      then Febag.nb_occ (Fecol.CBag (CTuple T)) row bag
+      else 0%N.
+Proof.
+intros T keep bag Hproper row.
+rewrite Febag.nb_occ_filter.
+- destruct (keep row); cbn;
+    [now rewrite N.mul_1_r | now rewrite N.mul_0_r].
+- intros first second _ Hequal; now apply Hproper.
+Qed.
+
+(** Filtering a duplicate-free bag preserves duplicate-freedom.  The
+    predicate must respect semantic tuple equality because [Febag.filter]
+    operates on the quotient-facing finite-bag interface. *)
+Lemma query_bag_filter_duplicate_free :
+  forall (T : Tuple.Rcd) (keep : tuple T -> bool)
+      (bag : Febag.bag (SqlQuerySemantics.BTupleT T)),
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      keep first = keep second) ->
+    query_bag_duplicate_free bag ->
+    query_bag_duplicate_free
+      (Febag.filter (Fecol.CBag (CTuple T)) keep bag).
+Proof.
+intros T keep bag Hproper Hunique row.
+rewrite Febag.nb_occ_filter.
+- destruct (keep row); cbn; [now rewrite N.mul_1_r | now rewrite N.mul_0_r].
+- intros first second _ Hequal; now apply Hproper.
+Qed.

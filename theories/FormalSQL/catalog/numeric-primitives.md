@@ -2,7 +2,7 @@
 
 Route here for: NUMERIC representation, precision/scale, division, rounding, AVG states.
 
-This focused catalog contains 85 declarations routed at declaration granularity from `NumericFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 81 declarations routed at declaration granularity from `NumericFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `numeric_avg_scale_transition_commutes`
 
@@ -1638,145 +1638,9 @@ Lemma finite_numeric_div_by_zero :
     numeric_div_at_scales (NumericFinite value) 0 numeric_zero 0 = None.
 ```
 
-## `pg_date_lte_timestamp_runtime_error_is_children`
-
-Source: [`theories/FormalSQL/NumericFacts.v:1114`](../NumericFacts.v#L1114)
-
-Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
-
-Important premises: do not erase or identify runtime errors with NULL/empty success.
-
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
-
-Search aliases: `numeric semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma pg_date_lte_timestamp_runtime_error_is_children :
-  forall
-    (eval_query_error : Env.env TNull -> Query -> option sql_runtime_error)
-    env date timestamp,
-    @eval_formula_runtime_error TNull relname
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error
-      eval_query_error env (PgDateLteTimestamp date timestamp) =
-    first_error
-      (@eval_aggterm_runtime_error TNull
-        NullValues.interp_scalar_operator_runtime_error
-        NullValues.interp_aggregate_runtime_error env date)
-      (first_error
-        (@eval_aggterm_runtime_error TNull
-          NullValues.interp_scalar_operator_runtime_error
-          NullValues.interp_aggregate_runtime_error env timestamp)
-        None).
-```
-
-## `pg_date_lt_timestamp_runtime_error_is_children`
-
-Source: [`theories/FormalSQL/NumericFacts.v:1136`](../NumericFacts.v#L1136)
-
-Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
-
-Important premises: do not erase or identify runtime errors with NULL/empty success.
-
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
-
-Search aliases: `numeric semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma pg_date_lt_timestamp_runtime_error_is_children :
-  forall
-    (eval_query_error : Env.env TNull -> Query -> option sql_runtime_error)
-    env date timestamp,
-    @eval_formula_runtime_error TNull relname
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error
-      eval_query_error env (PgDateLtTimestamp date timestamp) =
-    first_error
-      (@eval_aggterm_runtime_error TNull
-        NullValues.interp_scalar_operator_runtime_error
-        NullValues.interp_aggregate_runtime_error env date)
-      (first_error
-        (@eval_aggterm_runtime_error TNull
-          NullValues.interp_scalar_operator_runtime_error
-          NullValues.interp_aggregate_runtime_error env timestamp)
-        None).
-```
-
-## `pg_date_gt_timestamp_runtime_error_is_children`
-
-Source: [`theories/FormalSQL/NumericFacts.v:1160`](../NumericFacts.v#L1160)
-
-Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
-
-Important premises: do not erase or identify runtime errors with NULL/empty success.
-
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
-
-Search aliases: `numeric semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma pg_date_gt_timestamp_runtime_error_is_children :
-  forall
-    (eval_query_error : Env.env TNull -> Query -> option sql_runtime_error)
-    env date timestamp,
-    @eval_formula_runtime_error TNull relname
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error
-      eval_query_error env (PgDateGtTimestamp date timestamp) =
-    first_error
-      (@eval_aggterm_runtime_error TNull
-        NullValues.interp_scalar_operator_runtime_error
-        NullValues.interp_aggregate_runtime_error env date)
-      (first_error
-        (@eval_aggterm_runtime_error TNull
-          NullValues.interp_scalar_operator_runtime_error
-          NullValues.interp_aggregate_runtime_error env timestamp)
-        None).
-```
-
-## `pg_date_gte_timestamp_runtime_error_is_children`
-
-Source: [`theories/FormalSQL/NumericFacts.v:1179`](../NumericFacts.v#L1179)
-
-Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
-
-Important premises: do not erase or identify runtime errors with NULL/empty success.
-
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
-
-Search aliases: `numeric semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma pg_date_gte_timestamp_runtime_error_is_children :
-  forall
-    (eval_query_error : Env.env TNull -> Query -> option sql_runtime_error)
-    env date timestamp,
-    @eval_formula_runtime_error TNull relname
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error
-      eval_query_error env (PgDateGteTimestamp date timestamp) =
-    first_error
-      (@eval_aggterm_runtime_error TNull
-        NullValues.interp_scalar_operator_runtime_error
-        NullValues.interp_aggregate_runtime_error env date)
-      (first_error
-        (@eval_aggterm_runtime_error TNull
-          NullValues.interp_scalar_operator_runtime_error
-          NullValues.interp_aggregate_runtime_error env timestamp)
-        None).
-```
-
 ## `numeric_to_int32_checked_result_in_range`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1198`](../NumericFacts.v#L1198)
+Source: [`theories/FormalSQL/NumericFacts.v:1110`](../NumericFacts.v#L1110)
 
 Purpose/direction: Connects the displayed range/representability premise to typed numeric semantics.
 
@@ -1797,7 +1661,7 @@ Lemma numeric_to_int32_checked_result_in_range :
 
 ## `finite_decimal_numeric_division_total`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1212`](../NumericFacts.v#L1212)
+Source: [`theories/FormalSQL/NumericFacts.v:1124`](../NumericFacts.v#L1124)
 
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
@@ -1826,7 +1690,7 @@ Lemma finite_decimal_numeric_division_total :
 
 ## `numeric_positive_is_nonzero`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1235`](../NumericFacts.v#L1235)
+Source: [`theories/FormalSQL/NumericFacts.v:1147`](../NumericFacts.v#L1147)
 
 Purpose/direction: States the numeric positive is nonzero law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -1847,7 +1711,7 @@ Lemma numeric_positive_is_nonzero :
 
 ## `finite_numeric_division_runtime_error_none`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1256`](../NumericFacts.v#L1256)
+Source: [`theories/FormalSQL/NumericFacts.v:1168`](../NumericFacts.v#L1168)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for typed numeric semantics.
 
@@ -1877,7 +1741,7 @@ Lemma finite_numeric_division_runtime_error_none :
 
 ## `numeric_positive_from_integer_lower_bound`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1278`](../NumericFacts.v#L1278)
+Source: [`theories/FormalSQL/NumericFacts.v:1190`](../NumericFacts.v#L1190)
 
 Purpose/direction: States the numeric positive from integer lower bound law for typed numeric semantics, in the exact direction displayed by the declaration.
 

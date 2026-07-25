@@ -557,7 +557,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
 ```rocq
 Lemma interp_like_prefix_true_iff :
@@ -580,7 +580,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
 ```rocq
 Lemma interp_like_prefix_false_iff :
@@ -603,7 +603,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
 ```rocq
 Lemma interp_like_percent_true_iff :
@@ -626,7 +626,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
 ```rocq
 Lemma interp_like_percent_false_iff :
@@ -1352,7 +1352,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
 ```rocq
 Lemma interp_date_lt_timestamp_true_iff : forall date timestamp,
@@ -1373,7 +1373,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
 ```rocq
 Lemma interp_date_lte_timestamp_true_iff : forall date timestamp,
@@ -1394,7 +1394,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
 ```rocq
 Lemma interp_date_gt_timestamp_true_iff : forall date timestamp,
@@ -1415,7 +1415,7 @@ Important premises: No premises beyond the quantified variables and typeclass/co
 
 Cross-index: `scalar` (rank 44)
 
-Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
 ```rocq
 Lemma interp_date_gte_timestamp_true_iff : forall date timestamp,

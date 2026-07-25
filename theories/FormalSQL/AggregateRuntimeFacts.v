@@ -1,5 +1,5 @@
 From SQLFS Require Import Bool3 FiniteBag FiniteCollection FiniteSet FTuples GenericInstance
-  OrderedSet SqlAlgebra SqlErrorSemantics SqlOutcome SqlQuerySemantics
+  OrderedSet SqlErrorSemantics SqlOutcome SqlQuerySemantics
   SqlQuerySyntax SqlSyntax Values.
 From Logos.FormalSQL Require Import NumericDerivedFacts NumericFacts TNullSyntax.
 From Stdlib Require Import Bool Lia List Sorting.Permutation String ZArith.
@@ -342,6 +342,37 @@ Proof.
   - apply distinct_values_membership.
 Qed.
 
+(** Aggregate quantifiers can discard duplicate occurrences, but they never
+    introduce a value outside the original input support.  Stating this once
+    for an arbitrary property avoids rebuilding DISTINCT-specific [Forall]
+    arguments for every aggregate function. *)
+Lemma aggregate_input_values_preserves_Forall :
+  forall quantifier (P : value -> Prop) values,
+    Forall P values ->
+    Forall P (aggregate_input_values quantifier values).
+Proof.
+  intros quantifier P values Hvalues.
+  rewrite Forall_forall in Hvalues |- *.
+  intros value Hvalue.
+  apply Hvalues.
+  exact (proj1
+    (aggregate_input_values_membership quantifier value values) Hvalue).
+Qed.
+
+(** On an entirely non-NULL input, SQL COUNT observes every occurrence. *)
+Lemma non_null_count_eq_length_of_Forall_nonnull :
+  forall values,
+    Forall (fun value => is_null_value value = false) values ->
+    non_null_count values = Z.of_nat (List.length values).
+Proof.
+  intros values Hvalues.
+  unfold non_null_count.
+  f_equal.
+  induction Hvalues as [|value values Hvalue Hvalues IH]; cbn.
+  - reflexivity.
+  - rewrite Hvalue; cbn; now rewrite IH.
+Qed.
+
 Lemma distinct_values_fixed_of_nodup : forall values,
   NoDup values -> distinct_values values = values.
 Proof.
@@ -372,6 +403,27 @@ Lemma aggregate_input_values_distinct_nodup : forall values,
   NoDup (aggregate_input_values AggregateDistinct values).
 Proof.
   intro values; apply distinct_values_nodup.
+Qed.
+
+(** DISTINCT aggregate selection is canonical only up to permutation: any
+    duplicate-free list with exactly the original support is an equally valid
+    selected input for permutation-invariant aggregate semantics. *)
+Theorem aggregate_distinct_input_Permutation_of_NoDup_support :
+  forall values selected,
+    NoDup selected ->
+    (forall value, In value selected <-> In value values) ->
+    Permutation
+      (aggregate_input_values AggregateDistinct values)
+      (aggregate_input_values AggregateAll selected).
+Proof.
+  intros values selected Hselected Hsupport.
+  cbn [aggregate_input_values].
+  apply NoDup_Permutation.
+  - apply distinct_values_nodup.
+  - exact Hselected.
+  - intro value.
+    rewrite distinct_values_membership.
+    symmetry; apply Hsupport.
 Qed.
 
 Lemma aggregate_input_values_permutation :
@@ -1187,7 +1239,6 @@ Context {T : Tuple.Rcd} {relname : Type}.
 Variable basesort : relname -> Fset.set (Tuple.A T).
 Variable instance : relname -> Febag.bag (Fecol.CBag (Tuple.CTuple T)).
 Variable unknown : Bool.b (Tuple.B T).
-Variable contains_nulls : Tuple.tuple T -> bool.
 Variable symbol_runtime_error :
   Tuple.scalar_operator T ->
   list (option sql_runtime_error * Tuple.value T) ->
@@ -1202,12 +1253,11 @@ Local Definition grouping_bag :=
   Febag.bag (Fecol.CBag (Tuple.CTuple T)).
 
 Local Abbreviation eval_group_bag :=
-  (@eval_group_bag_outcome T relname basesort instance unknown contains_nulls
+  (@eval_group_bag_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
 
 Local Abbreviation eval_grouping_sets_bag :=
-  (@eval_grouping_sets_bag_outcome T relname basesort instance unknown
-    contains_nulls symbol_runtime_error aggregate_runtime_error value_is_null).
+  (@eval_grouping_sets_bag_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null).
 
 Lemma eval_grouping_sets_nil_outcome_iff : forall env input_bag outcome,
   eval_grouping_sets_bag env [] input_bag outcome <->
@@ -1254,6 +1304,178 @@ Proof.
   - intros [Hhead | [head_bag [Hhead Htail]]].
     + now apply EGroupingSets_HeadError.
     + eapply EGroupingSets_TailError; eassumption.
+Qed.
+
+(** One grouping-set branch observed at an exact successful bag. *)
+Definition grouping_set_success_at
+    (env : Env.env T) (input_bag : grouping_bag)
+    (spec : @query_grouping_set T)
+    (output_bag : grouping_bag) : Prop :=
+  let '(select_list, group_terms) := spec in
+  eval_group_bag env select_list group_terms FExpr_True input_bag
+    (SqlSuccess output_bag).
+
+(** One grouping-set branch observed at an exact runtime-error category. *)
+Definition grouping_set_error_at
+    (env : Env.env T) (input_bag : grouping_bag)
+    (spec : @query_grouping_set T)
+    (error : sql_runtime_error) : Prop :=
+  let '(select_list, group_terms) := spec in
+  eval_group_bag env select_list group_terms FExpr_True input_bag
+    (SqlError error).
+
+(** Exact branch outcome agreement.  Keeping the output bag literal here is
+    what lets the scheduler congruence preserve both UNION ALL multiplicities
+    and the original left-to-right error schedule. *)
+Definition grouping_set_exact_outcome_at
+    (env : Env.env T) (input_bag : grouping_bag)
+    (left right : @query_grouping_set T) : Prop :=
+  forall outcome,
+    let '(left_select, left_terms) := left in
+    let '(right_select, right_terms) := right in
+    (eval_group_bag env left_select left_terms FExpr_True input_bag outcome <->
+     eval_group_bag env right_select right_terms FExpr_True input_bag outcome).
+
+(** Branchwise exact agreement lifts through an arbitrary grouping-set list.
+    The [Forall2] order is significant: the proof never permutes branches and
+    hence cannot move an error past an earlier successful or failing branch. *)
+Theorem eval_grouping_sets_outcome_Forall2_congr :
+  forall env input_bag left_sets right_sets,
+    Forall2 (grouping_set_exact_outcome_at env input_bag)
+      left_sets right_sets ->
+    forall outcome,
+      eval_grouping_sets_bag env left_sets input_bag outcome <->
+      eval_grouping_sets_bag env right_sets input_bag outcome.
+Proof.
+  intros env input_bag left_sets right_sets Hsets.
+  induction Hsets as
+    [|[left_select left_terms] [right_select right_terms]
+       left_sets right_sets Hhead Htail IH]; intro outcome.
+  - reflexivity.
+  - destruct outcome as [output_bag|error].
+    + rewrite !eval_grouping_sets_cons_success_iff.
+      split.
+      * intros [head_bag [tail_bag [Hhead_success [Htail_success Houtput]]]].
+        exists head_bag, tail_bag; repeat split; try exact Houtput.
+        -- exact (proj1 (Hhead (SqlSuccess head_bag)) Hhead_success).
+        -- exact (proj1 (IH (SqlSuccess tail_bag)) Htail_success).
+      * intros [head_bag [tail_bag [Hhead_success [Htail_success Houtput]]]].
+        exists head_bag, tail_bag; repeat split; try exact Houtput.
+        -- exact (proj2 (Hhead (SqlSuccess head_bag)) Hhead_success).
+        -- exact (proj2 (IH (SqlSuccess tail_bag)) Htail_success).
+    + rewrite !eval_grouping_sets_cons_error_iff.
+      split.
+      * intros [Hhead_error | [head_bag [Hhead_success Htail_error]]].
+        -- left; exact (proj1 (Hhead (SqlError error)) Hhead_error).
+        -- right; exists head_bag; split.
+           ++ exact (proj1 (Hhead (SqlSuccess head_bag)) Hhead_success).
+           ++ exact (proj1 (IH (SqlError error)) Htail_error).
+      * intros [Hhead_error | [head_bag [Hhead_success Htail_error]]].
+        -- left; exact (proj2 (Hhead (SqlError error)) Hhead_error).
+        -- right; exists head_bag; split.
+           ++ exact (proj2 (Hhead (SqlSuccess head_bag)) Hhead_success).
+           ++ exact (proj2 (IH (SqlError error)) Htail_error).
+Qed.
+
+Definition grouping_sets_union_fold (bags : list grouping_bag) : grouping_bag :=
+  fold_right (query_set_bag Union)
+    (Febag.empty (Fecol.CBag (Tuple.CTuple T))) bags.
+
+(** A successful arbitrary grouping-set schedule is precisely an ordered list
+    of successful branch bags combined by UNION ALL. *)
+Theorem eval_grouping_sets_success_fold_iff :
+  forall env input_bag grouping_sets output_bag,
+    eval_grouping_sets_bag env grouping_sets input_bag
+      (SqlSuccess output_bag) <->
+    exists branch_bags,
+      Forall2 (grouping_set_success_at env input_bag)
+        grouping_sets branch_bags /\
+      output_bag = grouping_sets_union_fold branch_bags.
+Proof.
+  intros env input_bag grouping_sets.
+  induction grouping_sets as [|[select_list group_terms] grouping_sets IH];
+    intro output_bag.
+  - rewrite eval_grouping_sets_nil_outcome_iff.
+    split.
+    + intro Houtput; injection Houtput as Houtput; subst output_bag.
+      exists []; split; [constructor|reflexivity].
+    + intros [branch_bags [Hbranches Houtput]].
+      inversion Hbranches; subst branch_bags.
+      now rewrite Houtput.
+  - rewrite eval_grouping_sets_cons_success_iff.
+    split.
+    + intros [head_bag [tail_bag [Hhead [Htail Houtput]]]].
+      apply IH in Htail.
+      destruct Htail as [tail_bags [Htail_bags Htail_output]].
+      exists (head_bag :: tail_bags); split.
+      * constructor; [exact Hhead|exact Htail_bags].
+      * subst output_bag; cbn [grouping_sets_union_fold].
+        now rewrite Htail_output.
+    + intros [branch_bags [Hbranches Houtput]].
+      inversion Hbranches as
+        [|spec head_bag remaining tail_bags Hhead Htail]; subst.
+      exists head_bag, (grouping_sets_union_fold tail_bags).
+      split; [exact Hhead|].
+      split.
+      * apply (proj2 (IH (grouping_sets_union_fold tail_bags))).
+        exists tail_bags; now split.
+      * reflexivity.
+Qed.
+
+(** An error from an arbitrary grouping-set schedule occurs at one exact
+    branch after an ordered prefix of successful branches.  Later branches are
+    deliberately unconstrained because SQL never evaluates them. *)
+Theorem eval_grouping_sets_error_prefix_iff :
+  forall env input_bag grouping_sets error,
+    eval_grouping_sets_bag env grouping_sets input_bag (SqlError error) <->
+    exists (prefix : list (@query_grouping_set T))
+        (current : @query_grouping_set T)
+        (suffix : list (@query_grouping_set T))
+        (prefix_bags : list grouping_bag),
+      grouping_sets = List.app prefix (current :: suffix) /\
+      Forall2 (grouping_set_success_at env input_bag)
+        prefix prefix_bags /\
+      grouping_set_error_at env input_bag current error.
+Proof.
+  intros env input_bag grouping_sets.
+  induction grouping_sets as [|[select_list group_terms] grouping_sets IH];
+    intro error.
+  - split.
+    + intro Heval.
+      apply eval_grouping_sets_nil_outcome_iff in Heval; discriminate.
+    + intros [prefix [current [suffix [prefix_bags [Hsets _]]]]].
+      destruct prefix; discriminate.
+  - rewrite eval_grouping_sets_cons_error_iff.
+    split.
+    + intros [Hhead | [head_bag [Hhead Htail]]].
+      * exists [], (select_list, group_terms), grouping_sets, [].
+        repeat split; [constructor|exact Hhead].
+      * apply IH in Htail.
+        destruct Htail as
+          [prefix [current [suffix [prefix_bags
+            [Hsets [Hprefix Hcurrent]]]]]].
+        exists ((select_list, group_terms) :: prefix), current, suffix,
+          (head_bag :: prefix_bags).
+        split.
+        -- cbn; now rewrite <- Hsets.
+        -- split; [constructor; assumption|exact Hcurrent].
+    + intros [prefix [current [suffix [prefix_bags
+        [Hsets [Hprefix Hcurrent]]]]]].
+      destruct prefix as [|first prefix].
+      * cbn in Hsets; injection Hsets as Hcurrent_eq Hsuffix_eq.
+        subst current suffix.
+        left; exact Hcurrent.
+      * destruct prefix_bags as [|first_bag prefix_bags].
+        -- inversion Hprefix.
+        -- inversion Hprefix as
+             [|first_spec observed_bag remaining remaining_bags
+                Hfirst Hremaining]; subst.
+           cbn in Hsets; injection Hsets as Hfirst_eq Htail_eq.
+           subst first.
+           right; exists first_bag; split; [exact Hfirst|].
+           apply IH.
+           exists prefix, current, suffix, prefix_bags.
+           repeat split; assumption.
 Qed.
 
 End GroupingSetsOutcomeFacts.
@@ -1311,54 +1533,4 @@ Proof.
     cbn; intros Hleft Hright; try contradiction.
   - exact (Htrans left middle right Hleft Hright).
   - exact (eq_trans Hleft Hright).
-Qed.
-
-(** Query safety is exactly the success branch of its deterministic outcome. *)
-
-Lemma eval_query_outcome_in_state_success_iff : forall db query rows,
-  eval_query_outcome_in_state db query = SqlSuccess rows <->
-  query_succeeds db query /\ rows = eval_query_in_state db query.
-Proof.
-  intros db query rows.
-  unfold eval_query_outcome_in_state, eval_query_outcome_in_env,
-    eval_query_outcome, query_succeeds, query_runtime_error_in_state,
-    query_runtime_error_in_env, eval_query_in_state, eval_query_in_env.
-  destruct (@eval_query_runtime_error TNull relname
-    (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error nil query) as [error|] eqn:Herror;
-    cbn.
-  - split.
-    + discriminate.
-    + intros [Hnone _]; discriminate.
-  - split.
-    + intro H; inversion H; now split.
-    + intros [_ ->]; reflexivity.
-Qed.
-
-Lemma eval_query_outcome_in_state_error_iff : forall db query error,
-  eval_query_outcome_in_state db query = SqlError error <->
-  query_runtime_error_in_state db query = Some error.
-Proof.
-  intros db query error.
-  unfold eval_query_outcome_in_state, eval_query_outcome_in_env,
-    eval_query_outcome, query_runtime_error_in_state,
-    query_runtime_error_in_env.
-  destruct (@eval_query_runtime_error TNull relname
-    (@_basesort TNull db) (@_instance TNull db) unknown3 contains_nulls
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error nil query) as [observed|]
-    eqn:Herror; cbn.
-  - split; intro H; inversion H; reflexivity.
-  - split; intro H; discriminate.
-Qed.
-
-Corollary query_succeeds_iff_self_equiv : forall db query,
-  query_succeeds db query <-> query_equiv db query query.
-Proof.
-  intros db query; split.
-  - intro Hsafe; apply query_equiv_intro; [exact Hsafe|exact Hsafe|].
-    apply Febag.equal_refl.
-  - intro Hequiv; apply query_equiv_implies_success in Hequiv.
-    exact (proj1 Hequiv).
 Qed.

@@ -2,7 +2,7 @@
 
 Route here for: typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes.
 
-This focused catalog contains 62 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 64 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `project_row_length`
 
@@ -121,7 +121,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_attributes_no
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `filter` (rank 44), `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `filter` (rank 46), `schema` (rank 36), `scalar` (rank 52)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -189,7 +189,7 @@ Applicability: Use when the goal or a hypothesis matches the `unique_key_conform
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 44), `schema` (rank 24)
+Cross-index: `filter` (rank 46), `schema` (rank 24)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -291,7 +291,7 @@ Applicability: Use when the goal or a hypothesis matches the `foreign_key_confor
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 44), `schema` (rank 26)
+Cross-index: `filter` (rank 46), `schema` (rank 26)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -334,7 +334,7 @@ Applicability: Use when the goal or a hypothesis matches the `check_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 44), `schema` (rank 36)
+Cross-index: `filter` (rank 46), `schema` (rank 36)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -440,7 +440,7 @@ Applicability: Use when the goal or a hypothesis matches the `unique_index_confo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 44), `schema` (rank 24)
+Cross-index: `filter` (rank 46), `schema` (rank 24)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -494,7 +494,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_constraint_co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 42), `schema` (rank 34)
+Cross-index: `filter` (rank 44), `schema` (rank 34)
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `schema conformance`, `typing`
 
@@ -668,9 +668,33 @@ Lemma database_conforms_schema_table_constraint :
     table_constraint_conforms actual constraint.
 ```
 
-## `database_conforms_schema_not_null_member`
+## `database_conforms_schema_primary_key`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:534`](../IntegrityFacts.v#L534)
+
+Purpose/direction: Extracts a declared primary-key contract directly from database conformance and constraint membership for functional key reasoning.
+
+Applicability: Use after selecting one declared table constraint and computing its primary-key field; it avoids manually replaying the table-conformance extraction chain.
+
+Important premises: Retain database conformance, membership of the exact table constraint, and its exact `constraint_primary_key = Some key` metadata equation.
+
+Cross-index: `schema` (rank 21)
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`, `integrity constraint`, `key`
+
+```rocq
+Corollary database_conforms_schema_primary_key :
+  forall expected constraints actual constraint key,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    constraint_primary_key constraint = Some key ->
+    primary_key_conforms key
+      (instance_rows actual (constraint_relation constraint)).
+```
+
+## `database_conforms_schema_not_null_member`
+
+Source: [`theories/FormalSQL/IntegrityFacts.v:551`](../IntegrityFacts.v#L551)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
@@ -690,6 +714,40 @@ Corollary database_conforms_schema_not_null_member :
     In row (instance_rows actual (constraint_relation constraint)) ->
     In attribute (constraint_not_null constraint) ->
     NullValues.is_null_value (dot TNull row attribute) = false.
+```
+
+## `database_conforms_schema_foreign_key_nonnull_referenced`
+
+Source: [`theories/FormalSQL/IntegrityFacts.v:576`](../IntegrityFacts.v#L576)
+
+Purpose/direction: Provides the schema-side totality witness used by an outer join when every referencing foreign-key column is declared NOT NULL.
+
+Applicability: Use before analyzing an outer join's unmatched branch when the referencing row belongs to the constrained table and the declared NOT NULL set covers every foreign-key source column.
+
+Important premises: Retain exact constraint and row membership, foreign-key membership, and inclusion of all referencing columns in the NOT NULL declaration; nullable MATCH SIMPLE keys are deliberately excluded.
+
+Cross-index: `schema` (rank 25)
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`, `integrity constraint`, `key`
+
+```rocq
+Corollary database_conforms_schema_foreign_key_nonnull_referenced :
+  forall expected constraints actual constraint foreign_key row,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    In foreign_key (constraint_foreign_keys constraint) ->
+    In row (instance_rows actual (constraint_relation constraint)) ->
+    incl
+      (foreign_key_columns foreign_key)
+      (constraint_not_null constraint) ->
+    exists referenced_row,
+      In referenced_row
+        (instance_rows actual
+          (foreign_key_referenced_relation foreign_key)) /\
+      foreign_key_key_equal_true
+        (foreign_key_columns foreign_key)
+        (foreign_key_referenced_columns foreign_key)
+        row referenced_row.
 ```
 
 ## `int32_domain_size_spec`

@@ -5,10 +5,10 @@
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
   FiniteSet OrderedSet Bool3 Join FlatData Env Formula Projection SqlOutcome
-  SqlAlgebra SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
+  SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
   ListFacts ListPermut Partition ValueInteger SchemaConstraints.
 From Logos.FormalSQL Require Import
-  SchemaCardinality TNullSyntax RewriteSpec.
+  SchemaCardinality TNullSyntax.
 From Stdlib Require Import List String ZArith Lia SetoidList SetoidPermutation
   RelationClasses Morphisms Sorting.Sorted.
 
@@ -123,6 +123,31 @@ Definition tuple_predicate_proper (keep : tuple TNull -> bool) : Prop :=
     Oeset.compare (OTuple TNull) left right = Eq ->
     keep left = keep right.
 
+(** The WHERE/HAVING decision obtained by interpreting a scalar predicate on
+    row-local aggregate terms is proper for semantic tuple equality.  This is
+    the reusable boundary needed by finite-bag filters; it preserves the SQL
+    TRUE/non-TRUE decision without identifying FALSE with UNKNOWN as values. *)
+Definition tnull_predicate_keep
+    (env : Env.env TNull) (predicate : predicate TNull)
+    (arguments : list (@aggterm TNull)) (row : tuple TNull) : bool :=
+  Bool.is_true (B TNull)
+    (interp_predicate TNull predicate
+      (map (@interp_aggterm TNull (env_t TNull env row)) arguments)).
+
+Lemma tnull_predicate_keep_proper :
+  forall env predicate arguments,
+    tuple_predicate_proper
+      (tnull_predicate_keep env predicate arguments).
+Proof.
+intros env predicate arguments left right Hequal.
+unfold tnull_predicate_keep.
+f_equal; f_equal.
+apply map_ext_in.
+intros argument Hargument.
+apply Interp.interp_aggterm_eq, Env.env_t_eq_2.
+exact Hequal.
+Qed.
+
 (** Proposition-valued row facts need the same respect for [OTuple] equality
     when they cross a bag boundary. *)
 Definition tuple_property_proper (property : tuple TNull -> Prop) : Prop :=
@@ -136,6 +161,23 @@ Lemma row_attribute_present_conforms_proper :
 Proof.
 intros attribute left right Hequal.
 now apply row_attribute_present_conforms_eq.
+Qed.
+
+(** Absence is a statement about a row's observable labels, not about the
+    default value returned by [dot] outside that support. *)
+Definition row_attribute_absent
+    (attribute : attribute TNull) (row : tuple TNull) : Prop :=
+  (attribute inS? labels TNull row) = false.
+
+Lemma row_attribute_absent_proper :
+  forall attribute,
+    tuple_property_proper (row_attribute_absent attribute).
+Proof.
+intros attribute left right Hequal.
+pose proof (tuple_eq_labels TNull left right Hequal) as Hlabels.
+unfold row_attribute_absent.
+rewrite (Fset.mem_eq_2 _ _ _ Hlabels).
+tauto.
 Qed.
 
 (** Row facts crossing a bag boundary must retain presence as well as typing:
@@ -405,8 +447,139 @@ eapply related_permut_Forall_transport; [| |exact Helements].
 - now apply Oeset.permut_sym.
 Qed.
 
+(** Every stored row has exactly the labels of its table sort.  Hence a label
+    absent from that sort is absent from every observable representative of
+    the table bag.  This core statement needs only value/schema conformance of
+    the actual database; in particular, it is independent of NULL values and
+    table constraints. *)
+Theorem query_same_rows_as_table_absent_attribute :
+  forall actual relation attribute rows,
+    database_values_conform actual ->
+    (attribute inS? @_basesort TNull actual relation) = false ->
+    @query_same_rows_as_bag TNull rows
+      (@_instance TNull actual relation) ->
+    Forall (row_attribute_absent attribute) rows.
+Proof.
+intros actual relation attribute rows Hvalues Habsent Hrows.
+eapply query_same_rows_as_bag_Forall_between with
+  (first := instance_rows actual relation)
+  (bag := @_instance TNull actual relation).
+- apply row_attribute_absent_proper.
+- unfold instance_rows; apply query_elements_same_rows_as_bag.
+- exact Hrows.
+- rewrite Forall_forall; intros row Hrow.
+  specialize (Hvalues relation row Hrow) as [Hlabels _].
+  unfold row_attribute_absent.
+  rewrite (Fset.mem_eq_2 _ _ _ Hlabels).
+  exact Habsent.
+Qed.
+
+(** Schema-facing form of the absence bridge.  It accepts absence in the
+    expected schema and transports it to the actual table sort. *)
+Theorem query_same_rows_as_conforming_table_absent_attribute :
+  forall expected constraints actual relation attribute rows,
+    database_conforms_schema expected constraints actual ->
+    (attribute inS? @_basesort TNull expected relation) = false ->
+    @query_same_rows_as_bag TNull rows
+      (@_instance TNull actual relation) ->
+    Forall (row_attribute_absent attribute) rows.
+Proof.
+intros expected constraints actual relation attribute rows
+  Hschema Habsent Hrows.
+eapply query_same_rows_as_table_absent_attribute.
+- now apply
+    (database_conforms_schema_values expected constraints actual Hschema).
+- pose proof
+    (database_conforms_schema_basesort
+      expected constraints actual Hschema relation) as Hsort.
+  rewrite (Fset.mem_eq_2 _ _ _ Hsort).
+  exact Habsent.
+- exact Hrows.
+Qed.
+
+(** Successful table-leaf form of the schema-facing bridge.  The explicit
+    output-sort equality is the same admissibility evidence used by the table
+    evaluator; no assumption is made about whether present cells are NULL. *)
+Theorem query_expr_table_success_rows_absent_attribute :
+  forall expected constraints actual relation attribute outputs env rows
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    (attribute inS? @_basesort TNull expected relation) = false ->
+    @query_outputs_sort TNull outputs =S=
+      @_basesort TNull actual relation ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs relation)
+      (SqlSuccess rows) ->
+    Forall (row_attribute_absent attribute) rows.
+Proof.
+intros expected constraints actual relation attribute outputs env rows
+  unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  Hschema Habsent Hsort Hrows.
+apply eval_query_expr_table_success_iff in Hrows.
+unfold query_table_bag in Hrows.
+rewrite Hsort in Hrows.
+eapply query_same_rows_as_conforming_table_absent_attribute;
+  eassumption.
+Qed.
+
+(** A conforming schema guarantees that every declared table attribute is
+    present and has a value of the declared SQL type in every observable row.
+    This bridge is deliberately nullable-safe: it uses no table constraint and
+    makes no [NOT NULL] claim. *)
+Theorem query_same_rows_as_conforming_table_present_attribute :
+  forall expected constraints actual relation attribute rows,
+    database_conforms_schema expected constraints actual ->
+    attribute inS (@_basesort TNull expected relation) ->
+    @query_same_rows_as_bag TNull rows
+      (@_instance TNull actual relation) ->
+    Forall (row_attribute_present_conforms attribute) rows.
+Proof.
+intros expected constraints actual relation attribute rows
+  Hschema Hattribute Hrows.
+eapply query_same_rows_as_bag_Forall_between with
+  (first := instance_rows actual relation)
+  (bag := @_instance TNull actual relation).
+- apply row_attribute_present_conforms_proper.
+- unfold instance_rows; apply query_elements_same_rows_as_bag.
+- exact Hrows.
+- exact
+    (database_conforms_schema_rows_attribute_present
+      expected constraints actual relation attribute Hschema Hattribute).
+Qed.
+
+(** Lift the nullable-safe schema fact through a successful table leaf.  The
+    explicit output-sort equality is the query-level evidence that the leaf
+    denotes the actual table schema. *)
+Theorem query_expr_table_success_rows_present_conform_attribute :
+  forall expected constraints actual relation attribute outputs env rows
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    attribute inS (@_basesort TNull expected relation) ->
+    @query_outputs_sort TNull outputs =S=
+      @_basesort TNull actual relation ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs relation)
+      (SqlSuccess rows) ->
+    Forall (row_attribute_present_conforms attribute) rows.
+Proof.
+intros expected constraints actual relation attribute outputs env rows
+  unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  Hschema Hattribute Hsort Hrows.
+apply eval_query_expr_table_success_iff in Hrows.
+unfold query_table_bag in Hrows.
+rewrite Hsort in Hrows.
+eapply query_same_rows_as_conforming_table_present_attribute;
+  eassumption.
+Qed.
+
 (** A conforming table's typed NOT NULL column remains typed and non-NULL in
-    every ordered representative exposed by [QExpr_Bag].  This is the safe
+    every ordered representative of its bag.  This is the safe
     schema-to-observation bridge; it does not identify represented tuples by
     Rocq equality. *)
 Theorem query_same_rows_as_conforming_table_attribute :
@@ -454,34 +627,34 @@ eapply query_same_rows_as_bag_Forall_between with
     exact (Hrows_not_null row Hrow attribute Hnot_null).
 Qed.
 
-(** Lift the schema fact above directly through a successful [QExpr_Bag]
-    observation of a base table.  This keeps generated proofs from repeatedly
-    unpacking the bag observation and reducing the base-table evaluator. *)
-Theorem query_expr_bag_table_success_rows_conform_attribute :
+(** Lift the schema fact above directly through a successful [QExpr_Table]
+    observation.  The resolved output order must denote the table's schema;
+    this is precisely the leaf obligation imposed by query admissibility. *)
+Theorem query_expr_table_success_rows_conform_attribute :
   forall expected constraints actual constraint attribute outputs env rows
-      unknown contains_nulls symbol_runtime_error aggregate_runtime_error
-      value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
       (@_basesort TNull expected (constraint_relation constraint)) ->
     In attribute (constraint_not_null constraint) ->
+    @query_outputs_sort TNull outputs =S=
+      @_basesort TNull actual (constraint_relation constraint) ->
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
-      unknown contains_nulls symbol_runtime_error aggregate_runtime_error
+      unknown symbol_runtime_error aggregate_runtime_error
       value_is_null env
-      (@QExpr_Bag TNull relname outputs
-        (@Q_Table TNull relname (constraint_relation constraint)))
+      (@QExpr_Table TNull relname outputs
+        (constraint_relation constraint))
       (SqlSuccess rows) ->
     Forall (row_attribute_present_nonnull_conforms attribute) rows.
 Proof.
 intros expected constraints actual constraint attribute outputs env rows
-  unknown contains_nulls symbol_runtime_error aggregate_runtime_error
-  value_is_null Hschema Hconstraint Hattribute Hnot_null Hrows.
-apply eval_query_expr_bag_success_iff in Hrows.
-destruct Hrows as [bag [Hbag Hrows]].
-cbn [eval_query_outcome eval_query_runtime_error eval_query] in Hbag.
-inversion Hbag; subst bag.
+  unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  Hschema Hconstraint Hattribute Hnot_null Hsort Hrows.
+inversion Hrows; subst.
+unfold query_table_bag in *.
+rewrite Hsort in *.
 eapply query_same_rows_as_conforming_table_attribute;
   eassumption.
 Qed.
@@ -1061,6 +1234,66 @@ destruct group_terms as [|term terms].
   now rewrite Hleft_key, Hright_key.
 Qed.
 
+(** A non-aggregate GROUP BY expression observes in the grouped environment
+    exactly the value recorded for that expression in every member row's
+    [query_grouping_key].  The premise that the expression is a grouping term
+    is essential: arbitrary row expressions need not be constant on a group. *)
+Lemma query_group_env_grouping_expression_member :
+  forall env rows group_terms group row expression,
+    In group (@query_make_groups TNull env rows group_terms) ->
+    In row group ->
+    In (A_Expr TNull expression) group_terms ->
+    interp_aggterm TNull
+      (env_g TNull env (@Group_By TNull group_terms) group)
+      (A_Expr TNull expression) =
+    interp_aggterm TNull (env_t TNull env row)
+      (A_Expr TNull expression).
+Proof.
+intros env rows group_terms group row expression Hgroup Hrow Hexpression.
+case_eq (ListSort.quicksort (OTuple TNull) group).
+- intro Hsorted.
+  pose proof (ListSort.length_quicksort (OTuple TNull) group) as Hlength.
+  rewrite Hsorted in Hlength.
+  destruct group as [|first rest]; [contradiction|discriminate Hlength].
+- intros representative sorted Hsorted.
+  assert (Hrepresentative : In representative group).
+  {
+    rewrite (ListSort.In_quicksort (OTuple TNull)), Hsorted.
+    now left.
+  }
+  pose proof
+    (query_make_groups_member_homogeneous
+      env rows group_terms group representative row
+      Hgroup Hrepresentative Hrow) as Hkeys.
+  assert (Hexpression_value :
+    interp_aggterm TNull (env_t TNull env representative)
+      (A_Expr TNull expression) =
+    interp_aggterm TNull (env_t TNull env row)
+      (A_Expr TNull expression)).
+  {
+    induction group_terms as [|term terms IH] in Hkeys, Hexpression |- *.
+    - contradiction.
+    - cbn in Hkeys.
+      injection Hkeys as Hterm Hterms.
+      destruct Hexpression as [Hexpression|Hexpression].
+      + now subst term.
+      + now apply (IH Hexpression Hterms).
+  }
+  change
+    (interp_funterm TNull
+      (env_g TNull env (@Group_By TNull group_terms) group) expression =
+     interp_funterm TNull (env_t TNull env row) expression).
+  unfold env_g.
+  rewrite Hsorted.
+  etransitivity.
+  + exact
+      (Interp.interp_funterm_homogeneous_nil TNull
+        (labels TNull representative) (@Group_By TNull group_terms) group
+        (labels TNull representative) (@Group_Fine TNull)
+        representative sorted env expression Hsorted).
+  + exact Hexpression_value.
+Qed.
+
 Theorem query_distinct_group_finite_code_length_le :
   forall input distinct_rows env group_terms group
       (code : tuple TNull -> nat) domain_size,
@@ -1214,7 +1447,6 @@ Variable relname : Type.
 Variable basesort : relname -> Fset.set (A T).
 Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
 Variable unknown : Bool.b (B T).
-Variable contains_nulls : tuple T -> bool.
 Variable value_is_null : value T -> bool.
 
 Lemma if_tuple_rows_success_true :
@@ -1245,7 +1477,7 @@ Qed.
 
 Lemma filter_rows_success_length_le :
   forall env formula rows output,
-    @eval_filter_rows_outcome T relname basesort instance unknown contains_nulls
+    @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env formula rows (SqlSuccess output) ->
     (List.length output <= List.length rows)%nat.
@@ -1255,11 +1487,11 @@ induction rows as [|row rows IH]; intros output Hfilter.
 - inversion Hfilter; subst; cbn; lia.
 - inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + match goal with
-    | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _
+    | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _
         ?remaining (SqlSuccess tail_rows) |- _ =>
         pose proof (IH tail_rows Htail) as Hlength
     end.
@@ -1289,7 +1521,7 @@ Qed.
 
 Lemma filter_rows_success_Forall :
   forall env formula rows output (property : tuple T -> Prop),
-    @eval_filter_rows_outcome T relname basesort instance unknown contains_nulls
+    @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env formula rows (SqlSuccess output) ->
     Forall property rows ->
@@ -1301,13 +1533,13 @@ induction rows as [|row rows IH]; intros output property Hfilter Hrows.
 - inversion Hrows as [|? ? Hrow Hrest]; subst.
   inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + eapply filter_cons_outcome_success_Forall.
     * exact Hrow.
     * match goal with
-      | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _
+      | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _
           ?remaining (SqlSuccess tail_rows) |- _ =>
           exact (IH tail_rows property Htail Hrest)
       end.
@@ -1315,15 +1547,54 @@ induction rows as [|row rows IH]; intros output property Hfilter Hrows.
   + cbn [filter_cons_outcome] in *; discriminate.
 Qed.
 
+(** A successful filter output satisfies every row property implied by a
+    TRUE formula observation.  Unlike [filter_rows_success_Forall], the
+    property need not already hold for rejected input rows. *)
+Lemma filter_rows_success_Forall_accepted :
+  forall env formula rows output (property : tuple T -> Prop),
+    (forall row truth,
+      In row rows ->
+      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = true ->
+      property row) ->
+    @eval_filter_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      env formula rows (SqlSuccess output) ->
+    Forall property output.
+Proof.
+intros env formula rows.
+induction rows as [|row rows IH]; intros output property Hproperty Hfilter.
+- inversion Hfilter; constructor.
+- inversion Hfilter; subst.
+  match goal with
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+      destruct tail as [tail_rows|tail_error]
+  end.
+  + unfold filter_cons_outcome in *.
+    destruct (Bool.is_true (B T) truth) eqn:Hkeep.
+    * inversion H2; subst output; constructor.
+      -- eapply Hproperty; [now left|eassumption|exact Hkeep].
+      -- eapply IH.
+         ++ intros other observed Hother.
+            apply Hproperty; now right.
+         ++ eassumption.
+    * inversion H2; subst output.
+      eapply IH.
+      -- intros other observed Hother.
+         apply Hproperty; now right.
+      -- eassumption.
+  + cbn [filter_cons_outcome] in *; discriminate.
+Qed.
+
 Lemma filter_rows_success_exact_count :
   forall env formula rows output keep,
     (forall row truth,
       In row rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown
-        contains_nulls symbol_runtime_error aggregate_runtime_error
+      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
         value_is_null (env_t T env row) formula (SqlSuccess truth) ->
       Bool.is_true (B T) truth = keep row) ->
-    @eval_filter_rows_outcome T relname basesort instance unknown contains_nulls
+    @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env formula rows (SqlSuccess output) ->
     List.length output = List.length (filter keep rows).
@@ -1333,7 +1604,7 @@ induction rows as [|row rows IH]; intros output keep Hexact Hfilter.
 - inversion Hfilter; reflexivity.
 - inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + unfold filter_cons_outcome in *.
@@ -1359,13 +1630,13 @@ Qed.
 
 Lemma filter_rows_error_observable :
   forall env formula input input_rows error,
-    @eval_query_expr_outcome T relname basesort instance unknown contains_nulls
+    @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env input (SqlSuccess input_rows) ->
-    @eval_filter_rows_outcome T relname basesort instance unknown contains_nulls
+    @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env formula input_rows (SqlError error) ->
-    @eval_query_expr_outcome T relname basesort instance unknown contains_nulls
+    @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env (QExpr_Filter formula input) (SqlError error).
 Proof.
@@ -1377,7 +1648,7 @@ Qed.
 
 Lemma eval_groups_success_length_le :
   forall env select_list group_terms having groups output,
-    @eval_groups_outcome T relname basesort instance unknown contains_nulls
+    @eval_groups_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
       env select_list group_terms having groups (SqlSuccess output) ->
     (List.length output <= List.length groups)%nat.
@@ -1386,20 +1657,16 @@ intros env select_list group_terms having groups.
 induction groups as [|group groups IH]; intros output Heval.
 - inversion Heval; subst; cbn; lia.
 - inversion Heval; subst.
-  + match goal with
-    | Htail : eval_groups_outcome _ _ _ _ _ _ _ _ _ _ _ groups
-        (SqlSuccess output) |- _ =>
-        pose proof (IH output Htail) as Hlength
-    end.
+  + assert (Hlength :
+      (List.length output <= List.length groups)%nat).
+    { eapply IH; eassumption. }
     cbn; lia.
   + destruct tail as [tail_rows|tail_error].
     * unfold group_cons_outcome in H1.
       injection H1 as Houtput; subst output.
-      match goal with
-      | Htail : eval_groups_outcome _ _ _ _ _ _ _ _ _ _ _ groups
-          (SqlSuccess tail_rows) |- _ =>
-          pose proof (IH tail_rows Htail) as Hlength
-      end.
+      assert (Hlength :
+        (List.length tail_rows <= List.length groups)%nat).
+      { eapply IH; eassumption. }
       cbn; lia.
     * unfold group_cons_outcome in H1; discriminate.
 Qed.

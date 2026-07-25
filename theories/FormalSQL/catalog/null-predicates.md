@@ -2,7 +2,7 @@
 
 Route here for: UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE.
 
-This focused catalog contains 100 declarations routed at declaration granularity from `ScalarPredicateFacts.v`, `TNullSyntax.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 97 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `andb3_unknown_iff`
 
@@ -902,9 +902,32 @@ Lemma interp_predicate_is_not_null_never_unknown : forall value,
   NullValues.interp_predicate PredicateIsNotNull [value] <> unknown3.
 ```
 
+## `interp_predicate_eq_true_is_true_acceptance`
+
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:624`](../ScalarPredicateFacts.v#L624)
+
+Purpose/direction: States the interp predicate equality true is true acceptance law for scalar-predicate semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `interp_predicate_eq_true_is_true_acceptance` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `filter` (rank 2), `scalar` (rank 0)
+
+Search aliases: `scalar predicate semantics`, `filter`, `WHERE`, `predicate`, `Bool3`
+
+```rocq
+Lemma interp_predicate_eq_true_is_true_acceptance : forall value,
+  Bool.is_true Bool3
+    (NullValues.interp_predicate PredicateEq
+      [value; Value_bool (Some true)]) =
+  Bool.is_true Bool3
+    (NullValues.interp_predicate PredicateIsTrue [value]).
+```
+
 ## `interp_predicate_is_true_bool3`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:620`](../ScalarPredicateFacts.v#L620)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:643`](../ScalarPredicateFacts.v#L643)
 
 Purpose/direction: States the interp predicate is true bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -924,7 +947,7 @@ Lemma interp_predicate_is_true_bool3 : forall value,
 
 ## `interp_predicate_is_not_true_bool3`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:627`](../ScalarPredicateFacts.v#L627)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:650`](../ScalarPredicateFacts.v#L650)
 
 Purpose/direction: States the interp predicate is not true bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -944,7 +967,7 @@ Lemma interp_predicate_is_not_true_bool3 : forall value,
 
 ## `interp_predicate_is_false_bool3`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:634`](../ScalarPredicateFacts.v#L634)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:657`](../ScalarPredicateFacts.v#L657)
 
 Purpose/direction: States the interp predicate is false bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -964,7 +987,7 @@ Lemma interp_predicate_is_false_bool3 : forall value,
 
 ## `interp_predicate_is_not_false_bool3`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:641`](../ScalarPredicateFacts.v#L641)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:664`](../ScalarPredicateFacts.v#L664)
 
 Purpose/direction: States the interp predicate is not false bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -984,7 +1007,7 @@ Lemma interp_predicate_is_not_false_bool3 : forall value,
 
 ## `interp_predicate_is_true_true_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:648`](../ScalarPredicateFacts.v#L648)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:671`](../ScalarPredicateFacts.v#L671)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1004,7 +1027,7 @@ Lemma interp_predicate_is_true_true_iff : forall value,
 
 ## `interp_predicate_is_not_true_true_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:656`](../ScalarPredicateFacts.v#L656)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:679`](../ScalarPredicateFacts.v#L679)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1024,7 +1047,7 @@ Lemma interp_predicate_is_not_true_true_iff : forall value,
 
 ## `interp_predicate_is_false_true_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:664`](../ScalarPredicateFacts.v#L664)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:687`](../ScalarPredicateFacts.v#L687)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1044,7 +1067,7 @@ Lemma interp_predicate_is_false_true_iff : forall value,
 
 ## `interp_predicate_is_not_false_true_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:672`](../ScalarPredicateFacts.v#L672)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:695`](../ScalarPredicateFacts.v#L695)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1064,7 +1087,7 @@ Lemma interp_predicate_is_not_false_true_iff : forall value,
 
 ## `interp_predicate_is_not_true_dual`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:680`](../ScalarPredicateFacts.v#L680)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:703`](../ScalarPredicateFacts.v#L703)
 
 Purpose/direction: States the interp predicate is not true dual law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1085,7 +1108,7 @@ Lemma interp_predicate_is_not_true_dual : forall value,
 
 ## `interp_predicate_is_not_false_dual`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:690`](../ScalarPredicateFacts.v#L690)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:713`](../ScalarPredicateFacts.v#L713)
 
 Purpose/direction: States the interp predicate is not false dual law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1106,7 +1129,7 @@ Lemma interp_predicate_is_not_false_dual : forall value,
 
 ## `interp_is_not_distinct_from_both_null`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:700`](../ScalarPredicateFacts.v#L700)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:723`](../ScalarPredicateFacts.v#L723)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -1127,7 +1150,7 @@ Lemma interp_is_not_distinct_from_both_null : forall left right,
 
 ## `interp_is_not_distinct_from_exactly_one_null`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:710`](../ScalarPredicateFacts.v#L710)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:733`](../ScalarPredicateFacts.v#L733)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -1148,7 +1171,7 @@ Lemma interp_is_not_distinct_from_exactly_one_null : forall left right,
 
 ## `interp_is_not_distinct_from_never_unknown`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:720`](../ScalarPredicateFacts.v#L720)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:743`](../ScalarPredicateFacts.v#L743)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -1168,7 +1191,7 @@ Lemma interp_is_not_distinct_from_never_unknown : forall left right,
 
 ## `interp_is_not_distinct_from_true_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:731`](../ScalarPredicateFacts.v#L731)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:754`](../ScalarPredicateFacts.v#L754)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1191,7 +1214,7 @@ Lemma interp_is_not_distinct_from_true_iff : forall left right,
 
 ## `interp_is_not_distinct_from_false_iff`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:746`](../ScalarPredicateFacts.v#L746)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:769`](../ScalarPredicateFacts.v#L769)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1215,7 +1238,7 @@ Lemma interp_is_not_distinct_from_false_iff : forall left right,
 
 ## `interp_case_values_empty`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:785`](../ScalarPredicateFacts.v#L785)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:808`](../ScalarPredicateFacts.v#L808)
 
 Purpose/direction: States the exact empty-input or empty-result law for scalar-predicate semantics.
 
@@ -1234,7 +1257,7 @@ Lemma interp_case_values_empty :
 
 ## `interp_case_values_else`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:791`](../ScalarPredicateFacts.v#L791)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:814`](../ScalarPredicateFacts.v#L814)
 
 Purpose/direction: States the interp case values else law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1253,7 +1276,7 @@ Lemma interp_case_values_else : forall else_value,
 
 ## `interp_case_values_true_branch`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:797`](../ScalarPredicateFacts.v#L797)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:820`](../ScalarPredicateFacts.v#L820)
 
 Purpose/direction: States the interp case values true branch law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1273,7 +1296,7 @@ Lemma interp_case_values_true_branch : forall then_value rest,
 
 ## `interp_case_values_true_branch_if`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:804`](../ScalarPredicateFacts.v#L804)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:827`](../ScalarPredicateFacts.v#L827)
 
 Purpose/direction: States the interp case values true branch if law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1293,7 +1316,7 @@ Lemma interp_case_values_true_branch_if : forall condition then_value rest,
 
 ## `interp_case_values_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:812`](../ScalarPredicateFacts.v#L812)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:835`](../ScalarPredicateFacts.v#L835)
 
 Purpose/direction: States the interp case values skip nontrue law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1314,7 +1337,7 @@ Lemma interp_case_values_skip_nontrue : forall condition then_value rest,
 
 ## `interp_case_values_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:825`](../ScalarPredicateFacts.v#L825)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:848`](../ScalarPredicateFacts.v#L848)
 
 Purpose/direction: States the interp case values skip prefix law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1334,7 +1357,7 @@ Lemma interp_case_values_skip_prefix : forall prefix suffix,
 
 ## `interp_case_values_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:836`](../ScalarPredicateFacts.v#L836)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:859`](../ScalarPredicateFacts.v#L859)
 
 Purpose/direction: States the interp case values first true law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1357,7 +1380,7 @@ Lemma interp_case_values_first_true :
 
 ## `case_runtime_error_empty`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:848`](../ScalarPredicateFacts.v#L848)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:871`](../ScalarPredicateFacts.v#L871)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1376,7 +1399,7 @@ Lemma case_runtime_error_empty :
 
 ## `case_runtime_error_else`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:854`](../ScalarPredicateFacts.v#L854)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:877`](../ScalarPredicateFacts.v#L877)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1395,7 +1418,7 @@ Lemma case_runtime_error_else : forall else_error else_value,
 
 ## `case_runtime_error_condition_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:860`](../ScalarPredicateFacts.v#L860)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:883`](../ScalarPredicateFacts.v#L883)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1416,7 +1439,7 @@ Lemma case_runtime_error_condition_error : forall error condition then_error
 
 ## `case_runtime_error_true_branch`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:868`](../ScalarPredicateFacts.v#L868)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1437,7 +1460,7 @@ Lemma case_runtime_error_true_branch : forall condition then_error then_value re
 
 ## `case_runtime_error_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:877`](../ScalarPredicateFacts.v#L877)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:900`](../ScalarPredicateFacts.v#L900)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1459,7 +1482,7 @@ Lemma case_runtime_error_skip_nontrue : forall condition then_error then_value r
 
 ## `case_runtime_error_skipped_arm_irrelevant`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:914`](../ScalarPredicateFacts.v#L914)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1483,7 +1506,7 @@ Lemma case_runtime_error_skipped_arm_irrelevant :
 
 ## `case_runtime_error_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:905`](../ScalarPredicateFacts.v#L905)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:928`](../ScalarPredicateFacts.v#L928)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1503,7 +1526,7 @@ Lemma case_runtime_error_skip_prefix : forall prefix suffix,
 
 ## `case_runtime_error_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:916`](../ScalarPredicateFacts.v#L916)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:939`](../ScalarPredicateFacts.v#L939)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1527,7 +1550,7 @@ Lemma case_runtime_error_first_true :
 
 ## `case_runtime_error_some_member`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:929`](../ScalarPredicateFacts.v#L929)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:952`](../ScalarPredicateFacts.v#L952)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1548,7 +1571,7 @@ Lemma case_runtime_error_some_member : forall observations error,
 
 ## `case_runtime_error_none_of_all_none`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:955`](../ScalarPredicateFacts.v#L955)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:978`](../ScalarPredicateFacts.v#L978)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for scalar-predicate semantics.
 
@@ -1568,7 +1591,7 @@ Lemma case_runtime_error_none_of_all_none : forall observations,
 
 ## `interp_scalar_case_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:969`](../ScalarPredicateFacts.v#L969)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
 
 Purpose/direction: States the interp scalar case values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1587,7 +1610,7 @@ Lemma interp_scalar_case_values : forall values,
 
 ## `interp_scalar_case_runtime_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:975`](../ScalarPredicateFacts.v#L975)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:998`](../ScalarPredicateFacts.v#L998)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1607,7 +1630,7 @@ Lemma interp_scalar_case_runtime_error : forall observations,
 
 ## `interp_predicate_lt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:982`](../ScalarPredicateFacts.v#L982)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1005`](../ScalarPredicateFacts.v#L1005)
 
 Purpose/direction: States the interp predicate strict-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1628,7 +1651,7 @@ Lemma interp_predicate_lt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_lte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1015`](../ScalarPredicateFacts.v#L1015)
 
 Purpose/direction: States the interp predicate lte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1649,7 +1672,7 @@ Lemma interp_predicate_lte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1002`](../ScalarPredicateFacts.v#L1002)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1025`](../ScalarPredicateFacts.v#L1025)
 
 Purpose/direction: States the interp predicate strict-lower-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1670,7 +1693,7 @@ Lemma interp_predicate_gt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1012`](../ScalarPredicateFacts.v#L1012)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1035`](../ScalarPredicateFacts.v#L1035)
 
 Purpose/direction: States the interp predicate gte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1691,7 +1714,7 @@ Lemma interp_predicate_gte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1022`](../ScalarPredicateFacts.v#L1022)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
 
 Purpose/direction: States the interp predicate equality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1712,7 +1735,7 @@ Lemma interp_predicate_eq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_neq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1032`](../ScalarPredicateFacts.v#L1032)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
 
 Purpose/direction: States the interp predicate disequality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1733,7 +1756,7 @@ Lemma interp_predicate_neq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_neq_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1042`](../ScalarPredicateFacts.v#L1042)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
 
 Purpose/direction: States the interp predicate equality disequality dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1754,7 +1777,7 @@ Lemma interp_predicate_eq_neq_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1053`](../ScalarPredicateFacts.v#L1053)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1076`](../ScalarPredicateFacts.v#L1076)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1775,7 +1798,7 @@ Lemma interp_predicate_lt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_lte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1063`](../ScalarPredicateFacts.v#L1063)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1086`](../ScalarPredicateFacts.v#L1086)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1796,7 +1819,7 @@ Lemma interp_predicate_lte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_gt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1073`](../ScalarPredicateFacts.v#L1073)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1096`](../ScalarPredicateFacts.v#L1096)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1817,7 +1840,7 @@ Lemma interp_predicate_gt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_gte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1083`](../ScalarPredicateFacts.v#L1083)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1106`](../ScalarPredicateFacts.v#L1106)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1838,7 +1861,7 @@ Lemma interp_predicate_gte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_eq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1093`](../ScalarPredicateFacts.v#L1093)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1859,7 +1882,7 @@ Lemma interp_predicate_eq_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_neq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1103`](../ScalarPredicateFacts.v#L1103)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1880,7 +1903,7 @@ Lemma interp_predicate_neq_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_lt_gte_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1113`](../ScalarPredicateFacts.v#L1113)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
 
 Purpose/direction: States the interp predicate strict-bound gte dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1901,7 +1924,7 @@ Lemma interp_predicate_lt_gte_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lte_gt_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1124`](../ScalarPredicateFacts.v#L1124)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1147`](../ScalarPredicateFacts.v#L1147)
 
 Purpose/direction: States the interp predicate lte strict-lower-bound dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1922,7 +1945,7 @@ Lemma interp_predicate_lte_gt_dual_on_ordered_values : forall left right orderin
 
 ## `interp_ordered_comparison_congr`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1135`](../ScalarPredicateFacts.v#L1135)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1158`](../ScalarPredicateFacts.v#L1158)
 
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
@@ -1946,7 +1969,7 @@ Lemma interp_ordered_comparison_congr :
 
 ## `scalar_predicate_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1150`](../ScalarPredicateFacts.v#L1150)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1173`](../ScalarPredicateFacts.v#L1173)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1967,7 +1990,7 @@ Lemma scalar_predicate_runtime_error_is_children : forall predicate observations
 
 ## `scalar_boolean_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1160`](../ScalarPredicateFacts.v#L1160)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1183`](../ScalarPredicateFacts.v#L1183)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1983,92 +2006,4 @@ Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `runtime out
 Lemma scalar_boolean_runtime_error_is_children : forall operator observations,
   interp_scalar_operator_runtime_error (ScalarBoolean operator) observations =
   first_observation_error observations.
-```
-
-## `query_equiv_iff_success_and_bag_equality`
-
-Source: [`theories/FormalSQL/TNullSyntax.v:196`](../TNullSyntax.v#L196)
-
-Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
-
-Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
-
-Important premises: respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `bag` (rank 42), `scalar` (rank 44)
-
-Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_equiv_iff_success_and_bag_equality :
-  forall db q1 q2,
-    query_equiv db q1 q2 <->
-    query_succeeds db q1 /\
-    query_succeeds db q2 /\
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2.
-```
-
-## `query_equiv_intro`
-
-Source: [`theories/FormalSQL/TNullSyntax.v:223`](../TNullSyntax.v#L223)
-
-Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about scalar-predicate semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
-
-Cross-index: `scalar` (rank 52)
-
-Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_equiv_intro :
-  forall db q1 q2,
-    query_succeeds db q1 ->
-    query_succeeds db q2 ->
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2 ->
-    query_equiv db q1 q2.
-```
-
-## `query_equiv_implies_success`
-
-Source: [`theories/FormalSQL/TNullSyntax.v:235`](../TNullSyntax.v#L235)
-
-Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about scalar-predicate semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
-
-Cross-index: `scalar` (rank 52)
-
-Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_equiv_implies_success :
-  forall db q1 q2,
-    query_equiv db q1 q2 ->
-    query_succeeds db q1 /\ query_succeeds db q2.
-```
-
-## `query_equiv_implies_bag_equality`
-
-Source: [`theories/FormalSQL/TNullSyntax.v:245`](../TNullSyntax.v#L245)
-
-Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about scalar-predicate semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `bag` (rank 42), `scalar` (rank 52)
-
-Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_equiv_implies_bag_equality :
-  forall db q1 q2,
-    query_equiv db q1 q2 ->
-    eval_query_in_state db q1 =BE= eval_query_in_state db q2.
 ```

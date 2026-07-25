@@ -2,7 +2,7 @@
 
 Route here for: INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow.
 
-This focused catalog contains 125 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 127 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `int32_checked_result_value`
 
@@ -56,7 +56,7 @@ Important premises: every explicit antecedent (`->`) in the declaration is requi
 
 Cross-index: `scalar` (rank 52)
 
-Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
+Search aliases: `numeric and cast semantics`, `predicate`, `Bool3`, `INTEGER`, `int32`
 
 ```rocq
 Lemma interp_int32_neq_disjunction_true_of_unequal_constants :
@@ -2214,7 +2214,7 @@ Important premises: every explicit antecedent (`->`) in the declaration is requi
 
 Cross-index: `scalar` (rank 52)
 
-Search aliases: `numeric and cast semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`
+Search aliases: `numeric and cast semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `INTEGER`, `int32`
 
 ```rocq
 Lemma eval_int32_neq_disjunction_true_of_unequal_constants :
@@ -2235,7 +2235,7 @@ Lemma eval_int32_neq_disjunction_true_of_unequal_constants :
     int32_value first <> int32_value second ->
     forall outcome,
       @eval_formula_expr_outcome TNull relname basesort instance
-        unknown3 contains_nulls
+        unknown3
         NullValues.interp_scalar_operator_runtime_error
         NullValues.interp_aggregate_runtime_error value_is_null env
         (FExpr_Conj Formula.Or_F
@@ -2248,7 +2248,7 @@ Lemma eval_int32_neq_disjunction_true_of_unequal_constants :
 
 ## `numeric_add_associative`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:20`](../NumericRegroupFacts.v#L20)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:23`](../NumericRegroupFacts.v#L23)
 
 Purpose/direction: Establishes associativity for the declared typed numeric semantics operator.
 
@@ -2268,7 +2268,7 @@ Lemma numeric_add_associative : forall first second third,
 
 ## `numeric_sum_initial_reachable_invariant`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:38`](../NumericRegroupFacts.v#L38)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:41`](../NumericRegroupFacts.v#L41)
 
 Purpose/direction: Preserves the declared typed numeric semantics result across the indicated transformation.
 
@@ -2287,7 +2287,7 @@ Lemma numeric_sum_initial_reachable_invariant :
 
 ## `numeric_sum_transition_preserves_reachable_invariant`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:46`](../NumericRegroupFacts.v#L46)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:49`](../NumericRegroupFacts.v#L49)
 
 Purpose/direction: Preserves the declared typed numeric semantics result across the indicated transformation.
 
@@ -2307,9 +2307,37 @@ Lemma numeric_sum_transition_preserves_reachable_invariant :
       (numeric_sum_transition state next).
 ```
 
+## `numeric_sum_option_regroup`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:80`](../NumericRegroupFacts.v#L80)
+
+Purpose/direction: States the numeric sum option regroup law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_sum_option_regroup` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar` (rank 50)
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Theorem numeric_sum_option_regroup : forall groups,
+  fold_left numeric_sum_option_add
+    (flat_map
+      (fun group =>
+        match fold_left numeric_sum_option_add group None with
+        | Some total => [total]
+        | None => []
+        end)
+      groups)
+    None =
+  fold_left numeric_sum_option_add (concat groups) None.
+```
+
 ## `numeric_sum_from_state_transition`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:72`](../NumericRegroupFacts.v#L72)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:146`](../NumericRegroupFacts.v#L146)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2330,7 +2358,7 @@ Lemma numeric_sum_from_state_transition : forall state next,
 
 ## `numeric_sum_fold_option_add`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:111`](../NumericRegroupFacts.v#L111)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:185`](../NumericRegroupFacts.v#L185)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2353,7 +2381,7 @@ Lemma numeric_sum_fold_option_add : forall numbers state,
 
 ## `numeric_sum_fold_from_initial`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:125`](../NumericRegroupFacts.v#L125)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:199`](../NumericRegroupFacts.v#L199)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2374,7 +2402,7 @@ Corollary numeric_sum_fold_from_initial : forall numbers,
 
 ## `interp_sum_numeric_option_fold`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:136`](../NumericRegroupFacts.v#L136)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:210`](../NumericRegroupFacts.v#L210)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2394,9 +2422,190 @@ Lemma interp_sum_numeric_option_fold : forall observations,
     (fold_left numeric_sum_option_add (numeric_values observations) None).
 ```
 
+## `interp_sum_numeric_singleton`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:223`](../NumericRegroupFacts.v#L223)
+
+Purpose/direction: States the interp sum numeric singleton law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric_singleton` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar` (rank 52)
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma interp_sum_numeric_singleton : forall number,
+  interp_sum_numeric [Value_numeric number] = Value_numeric number.
+```
+
+## `sum_numeric_runtime_error_singleton`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:240`](../NumericRegroupFacts.v#L240)
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma sum_numeric_runtime_error_singleton : forall number,
+  sum_numeric_runtime_error [Value_numeric number] =
+  match number with
+  | None => None
+  | Some result => numeric_result_runtime_error result
+  end.
+```
+
+## `interp_sum_numeric_regroup_value_runtime_exact`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:294`](../NumericRegroupFacts.v#L294)
+
+Purpose/direction: States the interp sum numeric regroup value runtime exact law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime` (rank 50), `scalar` (rank 38)
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem interp_sum_numeric_regroup_value_runtime_exact :
+  forall groups subtotals,
+    Forall
+      (fun observations => forallb is_numeric_value observations = true)
+      groups ->
+    forallb is_numeric_value subtotals = true ->
+    numeric_values subtotals =
+      flat_map
+        (fun numbers =>
+          match fold_left numeric_sum_option_add numbers None with
+          | Some total => [total]
+          | None => []
+          end)
+        (map numeric_values groups) ->
+    interp_sum_numeric subtotals = interp_sum_numeric (concat groups) /\
+    sum_numeric_runtime_error subtotals =
+      sum_numeric_runtime_error (concat groups).
+```
+
+## `tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:531`](../NumericRegroupFacts.v#L531)
+
+Purpose/direction: Shows that the declared typed numeric semantics result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about typed numeric semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping` (rank 0), `bag` (rank 42), `scalar` (rank 50)
+
+Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows :
+  forall group_terms group attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS labels TNull row)
+      group ->
+    Permutation
+      (tnull_closed_group_sum_numeric_dot_argument_observations
+        group_terms group attribute)
+      (map
+        (fun row =>
+          (None, dot TNull row attribute))
+        group).
+```
+
+## `tnull_closed_group_sum_numeric_dot_value_runtime_exact`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:586`](../NumericRegroupFacts.v#L586)
+
+Purpose/direction: Establishes the displayed closure property for typed numeric semantics.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping` (rank 2), `runtime` (rank 8), `scalar` (rank 38)
+
+Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
+  forall group_terms group attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS labels TNull row)
+      group ->
+    Interp.interp_aggterm TNull
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+      NullValues.interp_sum_numeric
+        (map (fun row => dot TNull row attribute) group) /\
+    @eval_aggterm_aggregate_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
+      (tnull_sum_numeric_dot_term attribute) =
+      NullValues.sum_numeric_runtime_error
+        (map (fun row => dot TNull row attribute) group).
+```
+
+## `query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:738`](../NumericRegroupFacts.v#L738)
+
+Purpose/direction: Regroups closed-group SUM(NUMERIC column) values while preserving only the outer SUM value and its local runtime callback.
+
+Applicability: Use only for the displayed closed-group SUM(NUMERIC Dot) family. The conclusion covers the outer SUM value/local callback; it does not prove inner aggregate safety or a complete grouped-query outcome.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping` (rank 14), `runtime` (rank 18), `scalar` (rank 38)
+
+Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
+  forall grouping_env rows group_terms attribute,
+    group_terms <> nil ->
+    Forall
+      (fun row =>
+        attribute inS labels TNull row /\
+        NullValues.is_numeric_value (dot TNull row attribute) = true)
+      rows ->
+    let groups := @query_make_groups TNull grouping_env rows group_terms in
+    let grouped_sums :=
+      map
+        (fun group =>
+          Interp.interp_aggterm TNull
+            (Env.env_g TNull nil
+              (@Env.Group_By TNull group_terms) group)
+            (tnull_sum_numeric_dot_term attribute))
+        groups in
+    NullValues.interp_sum_numeric grouped_sums =
+      NullValues.interp_sum_numeric
+        (map (fun row => dot TNull row attribute) rows) /\
+    NullValues.sum_numeric_runtime_error grouped_sums =
+      NullValues.sum_numeric_runtime_error
+        (map (fun row => dot TNull row attribute) rows).
+```
+
 ## `numeric_values_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:165`](../NumericRegroupFacts.v#L165)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:890`](../NumericRegroupFacts.v#L890)
 
 Purpose/direction: States the numeric values finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2416,7 +2625,7 @@ Lemma numeric_values_finite_observations : forall numbers,
 
 ## `finite_observations_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:172`](../NumericRegroupFacts.v#L172)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:897`](../NumericRegroupFacts.v#L897)
 
 Purpose/direction: States the finite observations all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2435,7 +2644,7 @@ Lemma finite_observations_all_numeric : forall numbers,
 
 ## `numeric_sum_finite_fold_state`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:178`](../NumericRegroupFacts.v#L178)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:903`](../NumericRegroupFacts.v#L903)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2461,7 +2670,7 @@ Lemma numeric_sum_finite_fold_state :
 
 ## `interp_sum_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:194`](../NumericRegroupFacts.v#L194)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:919`](../NumericRegroupFacts.v#L919)
 
 Purpose/direction: States the interp sum finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2484,7 +2693,7 @@ Lemma interp_sum_finite_observations : forall numbers,
 
 ## `interp_sum_numeric_values_extensional`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:217`](../NumericRegroupFacts.v#L217)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:942`](../NumericRegroupFacts.v#L942)
 
 Purpose/direction: States the interp sum numeric values extensional law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2506,7 +2715,7 @@ Lemma interp_sum_numeric_values_extensional : forall left right,
 
 ## `finite_numeric_total_from_accumulator`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:227`](../NumericRegroupFacts.v#L227)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:952`](../NumericRegroupFacts.v#L952)
 
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
@@ -2526,7 +2735,7 @@ Lemma finite_numeric_total_from_accumulator : forall numbers accumulator,
 
 ## `nonempty_group_totals_flatten`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:239`](../NumericRegroupFacts.v#L239)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:964`](../NumericRegroupFacts.v#L964)
 
 Purpose/direction: States the exact empty-input or empty-result law for typed numeric semantics.
 
@@ -2546,7 +2755,7 @@ Lemma nonempty_group_totals_flatten : forall groups,
 
 ## `grouped_finite_sums_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:261`](../NumericRegroupFacts.v#L261)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:986`](../NumericRegroupFacts.v#L986)
 
 Purpose/direction: States the grouped finite sums all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2569,7 +2778,7 @@ Lemma grouped_finite_sums_all_numeric : forall groups,
 
 ## `numeric_values_grouped_finite_sums`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:273`](../NumericRegroupFacts.v#L273)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:998`](../NumericRegroupFacts.v#L998)
 
 Purpose/direction: States the numeric values grouped finite sums law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2593,7 +2802,7 @@ Lemma numeric_values_grouped_finite_sums : forall groups,
 
 ## `nonempty_group_totals_nil_iff`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:286`](../NumericRegroupFacts.v#L286)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1011`](../NumericRegroupFacts.v#L1011)
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -2612,7 +2821,7 @@ Lemma nonempty_group_totals_nil_iff : forall groups,
 
 ## `interp_sum_numeric_finite_regroup`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:304`](../NumericRegroupFacts.v#L304)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1029`](../NumericRegroupFacts.v#L1029)
 
 Purpose/direction: States the interp sum numeric finite regroup law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2635,137 +2844,25 @@ Theorem interp_sum_numeric_finite_regroup : forall groups,
     (map finite_numeric_observation (concat groups)).
 ```
 
-## `query_bags_disjoint_sym`
+## `eval_group_bag_global_success_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:355`](../NumericRegroupFacts.v#L355)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1150`](../NumericRegroupFacts.v#L1150)
 
-Purpose/direction: Reverses a proved typed numeric semantics relation.
-
-Applicability: Use to orient, transport, or compose a semantic relation about typed numeric semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `bag` (rank 52), `scalar` (rank 52)
-
-Search aliases: `numeric and cast semantics`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_bags_disjoint_sym : forall left right,
-  query_bags_disjoint left right -> query_bags_disjoint right left.
-```
-
-## `query_set_union_duplicate_free`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:362`](../NumericRegroupFacts.v#L362)
-
-Purpose/direction: States the query set union duplicate free law for SQL bag/set operations, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_set_union_duplicate_free` direction for SQL bag/set operations; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `scalar` (rank 52)
-
-Search aliases: `numeric and cast semantics`, `set operation`, `UNION`, `INTERSECT`, `EXCEPT`
-
-```rocq
-Lemma query_set_union_duplicate_free : forall left right,
-  query_bag_duplicate_free left ->
-  query_bag_duplicate_free right ->
-  query_bags_disjoint left right ->
-  query_bag_duplicate_free (query_set_bag Union left right).
-```
-
-## `query_set_union_disjoint_right`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:381`](../NumericRegroupFacts.v#L381)
-
-Purpose/direction: States the query set union disjoint right law for SQL bag/set operations, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_set_union_disjoint_right` direction for SQL bag/set operations; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `scalar` (rank 52)
-
-Search aliases: `numeric and cast semantics`, `set operation`, `UNION`, `INTERSECT`, `EXCEPT`
-
-```rocq
-Lemma query_set_union_disjoint_right : forall first second third,
-  query_bags_disjoint first third ->
-  query_bags_disjoint second third ->
-  query_bags_disjoint (query_set_bag Union first second) third.
-```
-
-## `query_distinct_bag_inert`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:399`](../NumericRegroupFacts.v#L399)
-
-Purpose/direction: States the query distinct bag inert law for typed numeric semantics, in the exact direction displayed by the declaration.
+Purpose/direction: Inverts or constructs the successful evaluation branch for typed numeric semantics.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about typed numeric semantics.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 52), `scalar` (rank 52)
+Cross-index: `outcome` (rank 50), `grouping` (rank 12), `runtime` (rank 50), `bag` (rank 14), `scalar` (rank 50)
 
-Search aliases: `numeric and cast semantics`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma query_distinct_bag_inert : forall bag,
-  query_bag_duplicate_free bag ->
-  bag_eq T (query_distinct_bag bag) bag.
-```
-
-## `query_distinct_union_inert`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:421`](../NumericRegroupFacts.v#L421)
-
-Purpose/direction: States the query distinct union inert law for typed numeric semantics, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about typed numeric semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `bag` (rank 51), `scalar` (rank 51)
-
-Search aliases: `numeric and cast semantics`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `numeric and cast semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
-Corollary query_distinct_union_inert : forall left right,
-  query_bag_duplicate_free left ->
-  query_bag_duplicate_free right ->
-  query_bags_disjoint left right ->
-  bag_eq T
-    (query_distinct_bag (query_set_bag Union left right))
-    (query_set_bag Union left right).
-```
-
-## `query_distinct_three_way_union_inert`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:434`](../NumericRegroupFacts.v#L434)
-
-Purpose/direction: States the query distinct three way union inert law for typed numeric semantics, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about typed numeric semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `bag` (rank 51), `scalar` (rank 51)
-
-Search aliases: `numeric and cast semantics`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Corollary query_distinct_three_way_union_inert :
-  forall first second third,
-    query_bag_duplicate_free first ->
-    query_bag_duplicate_free second ->
-    query_bag_duplicate_free third ->
-    query_bags_disjoint first second ->
-    query_bags_disjoint first third ->
-    query_bags_disjoint second third ->
-    bag_eq T
-      (query_distinct_bag
-        (query_set_bag Union (query_set_bag Union first second) third))
-      (query_set_bag Union (query_set_bag Union first second) third).
+Theorem eval_group_bag_global_success_duplicate_free :
+  forall env select_list having input_bag output_bag,
+    @eval_group_bag_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      env select_list [] having input_bag (SqlSuccess output_bag) ->
+    query_bag_duplicate_free output_bag.
 ```

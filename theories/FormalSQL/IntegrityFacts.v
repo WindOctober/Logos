@@ -529,6 +529,23 @@ pose proof
 eapply schema_constraints_conform_member; eassumption.
 Qed.
 
+(** End-to-end extraction of a declared primary-key contract from a conforming
+    database snapshot. *)
+Corollary database_conforms_schema_primary_key :
+  forall expected constraints actual constraint key,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    constraint_primary_key constraint = Some key ->
+    primary_key_conforms key
+      (instance_rows actual (constraint_relation constraint)).
+Proof.
+intros expected constraints actual constraint key
+  Hdatabase Hconstraint Hkey.
+eapply table_constraint_conforms_primary_key.
+- eapply database_conforms_schema_table_constraint; eassumption.
+- exact Hkey.
+Qed.
+
 (** End-to-end database conformance makes every declared NOT NULL member
     non-NULL in every stored row occurrence of the constrained table. *)
 Corollary database_conforms_schema_not_null_member :
@@ -549,4 +566,47 @@ pose proof
   (table_constraint_conforms_not_null actual constraint Htable)
   as Hnot_null.
 exact (Hnot_null row Hrow attribute Hattribute).
+Qed.
+
+(** End-to-end foreign-key totality for rows whose complete referencing key is
+    covered by the table's NOT NULL declaration.  This composes only the
+    authoritative schema contracts: nullable MATCH SIMPLE keys remain outside
+    the conclusion, and the referenced witness still carries exact SQL key
+    equality. *)
+Corollary database_conforms_schema_foreign_key_nonnull_referenced :
+  forall expected constraints actual constraint foreign_key row,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    In foreign_key (constraint_foreign_keys constraint) ->
+    In row (instance_rows actual (constraint_relation constraint)) ->
+    incl
+      (foreign_key_columns foreign_key)
+      (constraint_not_null constraint) ->
+    exists referenced_row,
+      In referenced_row
+        (instance_rows actual
+          (foreign_key_referenced_relation foreign_key)) /\
+      foreign_key_key_equal_true
+        (foreign_key_columns foreign_key)
+        (foreign_key_referenced_columns foreign_key)
+        row referenced_row.
+Proof.
+intros expected constraints actual constraint foreign_key row
+  Hdatabase Hconstraint Hforeign_key Hrow Hincluded.
+pose proof
+  (database_conforms_schema_table_constraint
+    expected constraints actual constraint Hdatabase Hconstraint)
+  as Htable.
+pose proof
+  (table_constraint_conforms_foreign_key
+    actual constraint foreign_key Htable Hforeign_key)
+  as Hforeign.
+eapply foreign_key_conforms_nonnull_row_referenced.
+- exact Hforeign.
+- exact Hrow.
+- pose proof (table_constraint_conforms_not_null actual constraint Htable)
+    as Hnot_null.
+  intros attribute Hattribute.
+  eapply Hnot_null; [exact Hrow|].
+  now apply Hincluded.
 Qed.

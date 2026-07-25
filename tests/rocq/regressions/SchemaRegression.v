@@ -1,14 +1,20 @@
 From Stdlib Require Import Lia List SetoidList String ZArith.
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
-  FiniteSet OrderedSet ValueInteger Bool3 SqlErrorSemantics SchemaConstraints.
+  FiniteSet OrderedSet ValueInteger Bool3 Formula SqlErrorSemantics
+  SchemaConstraints.
 From Logos.FormalSQL Require Import
-  TNullSyntax SchemaCardinality.
+  TNullSyntax SchemaCardinality IntegrityFacts.
 
 Import ListNotations.
 Import Tuple.
 Open Scope string_scope.
 Open Scope Z_scope.
+
+Definition ConstraintPred
+    (predicate : ValueCore.predicate) (args : list AggTerm) :
+    constraint_formula :=
+  @Sql_Pred TNull constraint_query predicate args.
 
 Definition regression_key : attribute TNull := Attr_Z "key".
 Definition regression_payload : attribute TNull := Attr_Z "payload".
@@ -309,8 +315,8 @@ eapply foreign_key_match_simple_referenced_row with
   + exact I.
 Qed.
 
-Definition regression_positive_payload_formula : Formula :=
-  Pred PredicateGt
+Definition regression_positive_payload_formula : constraint_formula :=
+  ConstraintPred PredicateGt
     [AExpr (Dot regression_payload);
      AExpr (Constant (Value_Z (Some 0)))].
 
@@ -347,8 +353,8 @@ Proof.
 refine (Int32 0 _); unfold int32_min, int32_max; lia.
 Defined.
 
-Definition regression_division_by_zero_formula : Formula :=
-  Pred PredicateEq
+Definition regression_division_by_zero_formula : constraint_formula :=
+  ConstraintPred PredicateEq
     [AScalarCall (ScalarDivide ScalarInt32)
        [AExpr
           (Constant
@@ -522,7 +528,7 @@ Qed.
 Definition regression_is_null_index : unique_index_constraint :=
   UniqueIndexConstraint
     [regression_key_index_term]
-    (Some (Pred PredicateIsNull [AExpr (Dot regression_key)])).
+    (Some (ConstraintPred PredicateIsNull [AExpr (Dot regression_key)])).
 
 Example is_null_partial_index_participates_only_on_true :
   unique_index_row_participates
@@ -581,4 +587,38 @@ Example complete_int32_primary_key_has_finite_bound :
     (List.length rows <= int32_domain_size)%nat.
 Proof.
 exact int32_singleton_primary_key_length.
+Qed.
+
+Example conforming_database_exposes_declared_primary_key :
+  forall expected constraints actual constraint key,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    constraint_primary_key constraint = Some key ->
+    primary_key_conforms key
+      (instance_rows actual (constraint_relation constraint)).
+Proof.
+exact database_conforms_schema_primary_key.
+Qed.
+
+(** A complete declared NOT NULL covering set rules out the nullable MATCH
+    SIMPLE branch and exposes an actual referenced row. *)
+Example conforming_nonnull_foreign_key_has_referenced_row :
+  forall expected constraints actual constraint foreign_key row,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    In foreign_key (constraint_foreign_keys constraint) ->
+    In row (instance_rows actual (constraint_relation constraint)) ->
+    incl
+      (foreign_key_columns foreign_key)
+      (constraint_not_null constraint) ->
+    exists referenced_row,
+      In referenced_row
+        (instance_rows actual
+          (foreign_key_referenced_relation foreign_key)) /\
+      foreign_key_key_equal_true
+        (foreign_key_columns foreign_key)
+        (foreign_key_referenced_columns foreign_key)
+        row referenced_row.
+Proof.
+exact database_conforms_schema_foreign_key_nonnull_referenced.
 Qed.

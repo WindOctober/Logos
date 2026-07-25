@@ -1471,7 +1471,7 @@ Lemma eval_int32_neq_disjunction_true_of_unequal_constants :
     int32_value first <> int32_value second ->
     forall outcome,
       @eval_formula_expr_outcome TNull relname basesort instance
-        unknown3 contains_nulls
+        unknown3
         NullValues.interp_scalar_operator_runtime_error
         NullValues.interp_aggregate_runtime_error value_is_null env
         (FExpr_Conj Formula.Or_F
@@ -1502,20 +1502,20 @@ split.
 - intro Heval.
   inversion Heval; subst.
   + match goal with
-    | Hpred : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _ _
+    | Hpred : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _
         (FExpr_Pred _ _) (SqlError _) |- _ => inversion Hpred; subst
     end; congruence.
   + match goal with
-    | Hpred : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _ _
+    | Hpred : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _
         (FExpr_Pred _ _) (SqlError _) |- _ => inversion Hpred; subst
     end; congruence.
   + match goal with
-    | Hleft : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _ _
+    | Hleft : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _
         (FExpr_Pred _ _) (SqlSuccess _) |- _ =>
         inversion Hleft; subst; clear Hleft
     end.
     match goal with
-    | Hright : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _ _
+    | Hright : @eval_formula_expr_outcome _ _ _ _ _ _ _ _ _
         (FExpr_Pred _ _) (SqlSuccess _) |- _ =>
         inversion Hright; subst; clear Hright
     end.
@@ -1525,7 +1525,7 @@ split.
 - intro Houtcome; subst outcome.
   assert (Heval :
     @eval_formula_expr_outcome TNull relname basesort instance
-      unknown3 contains_nulls
+      unknown3
       NullValues.interp_scalar_operator_runtime_error
       NullValues.interp_aggregate_runtime_error value_is_null env
       (FExpr_Conj Formula.Or_F

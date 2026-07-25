@@ -4,8 +4,9 @@
     reasoning is used only through abstraction for order-insensitive proof
     regions; it is not a second query semantics. *)
 From Stdlib Require Import List ZArith.
-From SQLFS Require Import SqlSyntax GenericInstance Values Bool3 Env FiniteSet FlatData
-  Formula SchemaConstraints SqlAlgebra SqlOutcome SqlQuerySyntax SqlQuerySemantics
+From SQLFS Require Import SqlSyntax GenericInstance Values Bool3 Env OrderedSet FiniteSet
+  FiniteBag FiniteCollection FlatData
+  Formula SchemaConstraints SqlOutcome SqlQuerySyntax SqlQuerySemantics
   SqlQueryWellFormed SqlOrder.
 From Logos Require Export FormalSQL.TNullSyntax.
 
@@ -299,7 +300,6 @@ Definition eval_query_expr_outcome_in_env
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
-    contains_nulls
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error
     NullValues.is_null_value
@@ -328,7 +328,6 @@ Definition query_expr_equiv_in_env
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
-    contains_nulls
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error
     NullValues.is_null_value
@@ -349,7 +348,6 @@ Definition query_expr_outcome_equiv_in_env
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
-    contains_nulls
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error
     NullValues.is_null_value
@@ -370,7 +368,6 @@ Definition query_program_equiv_in_env
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
-    contains_nulls
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error
     NullValues.is_null_value
@@ -391,7 +388,6 @@ Definition query_program_outcome_equiv_in_env
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
-    contains_nulls
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error
     NullValues.is_null_value
@@ -415,122 +411,8 @@ Variables first_basesort second_basesort :
 Hypothesis Hbasesort :
   forall relation, first_basesort relation =S= second_basesort relation.
 
-Lemma query_sort_basesort_extensional :
-  forall query,
-    @sort T generic_relname first_basesort query =S=
-    @sort T generic_relname second_basesort query.
-Proof.
-  intro query; induction query; cbn [sort].
-  - apply Fset.equal_refl.
-  - apply Fset.equal_refl.
-  - apply Hbasesort.
-  - exact IHquery1.
-  - now apply Fset.union_eq.
-  - apply Fset.equal_refl.
-  - exact IHquery.
-  - apply Fset.equal_refl.
-Qed.
-
-Lemma query_output_sorts_disjoint_basesort_extensional :
-  forall left_first right_first left_second right_second,
-    left_first =S= left_second ->
-    right_first =S= right_second ->
-    @query_output_sorts_disjoint T left_first right_first ->
-    @query_output_sorts_disjoint T left_second right_second.
-Proof.
-  intros left_first right_first left_second right_second
-    Hleft Hright Hdisjoint.
-  unfold query_output_sorts_disjoint in *.
-  rewrite <-
-    (Fset.equal_eq_1 _ _ _ _ (Fset.inter_eq _ _ _ _ _ Hleft Hright)).
-  exact Hdisjoint.
-Qed.
-
-Scheme bag_query_admissible_induction :=
-  Induction for bag_query_admissible Sort Prop
-with bag_formula_admissible_induction :=
-  Induction for bag_formula_admissible Sort Prop.
-
-Combined Scheme bag_query_formula_admissible_mutind
-  from bag_query_admissible_induction, bag_formula_admissible_induction.
-
-Lemma bag_query_formula_admissible_basesort_extensional :
-  (forall query,
-    @bag_query_admissible T generic_relname first_basesort query ->
-    @bag_query_admissible T generic_relname second_basesort query) /\
-  (forall formula,
-    @bag_formula_admissible T generic_relname first_basesort formula ->
-    @bag_formula_admissible T generic_relname second_basesort formula).
-Proof.
-  apply bag_query_formula_admissible_mutind; intros.
-  - constructor.
-  - constructor.
-  - constructor.
-  - econstructor; [assumption | assumption |].
-    match goal with
-    | H : @sort T generic_relname first_basesort ?left =S=
-          @sort T generic_relname first_basesort ?right
-      |- @sort T generic_relname second_basesort ?left =S=
-          @sort T generic_relname second_basesort ?right =>
-        rewrite Fset.equal_spec in H |- *;
-        intro attribute;
-        let Hleft := fresh "Hleft" in
-        let Hright := fresh "Hright" in
-        pose proof (query_sort_basesort_extensional left) as Hleft;
-        pose proof (query_sort_basesort_extensional right) as Hright;
-        rewrite Fset.equal_spec in Hleft, Hright;
-        rewrite <- (Hleft attribute), <- (Hright attribute);
-        exact (H attribute)
-    end.
-  - econstructor; [assumption | assumption |].
-    eapply query_output_sorts_disjoint_basesort_extensional.
-    + apply query_sort_basesort_extensional.
-    + apply query_sort_basesort_extensional.
-    + assumption.
-  - econstructor; eassumption.
-  - econstructor; eassumption.
-  - econstructor; eassumption.
-  - econstructor; eassumption.
-  - econstructor; eassumption.
-  - constructor.
-  - econstructor; eassumption.
-  - econstructor; [assumption | assumption | |].
-    + rewrite <-
-        (Fset.elements_spec1 _ _ _
-          (query_sort_basesort_extensional subquery));
-      assumption.
-    + rewrite <-
-        (Fset.elements_spec1 _ _ _
-          (query_sort_basesort_extensional subquery));
-      assumption.
-  - econstructor; [assumption | assumption | |].
-    + rewrite <-
-        (Fset.elements_spec1 _ _ _
-          (query_sort_basesort_extensional subquery));
-      assumption.
-    + rewrite <-
-        (Fset.elements_spec1 _ _ _
-          (query_sort_basesort_extensional subquery));
-      assumption.
-  - now constructor.
-Qed.
-
-Lemma bag_query_admissible_basesort_extensional :
-  forall query,
-    @bag_query_admissible T generic_relname first_basesort query ->
-    @bag_query_admissible T generic_relname second_basesort query.
-Proof.
-  exact (proj1 bag_query_formula_admissible_basesort_extensional).
-Qed.
-
-Lemma bag_formula_admissible_basesort_extensional :
-  forall formula,
-    @bag_formula_admissible T generic_relname first_basesort formula ->
-    @bag_formula_admissible T generic_relname second_basesort formula.
-Proof.
-  exact (proj2 bag_query_formula_admissible_basesort_extensional).
-Qed.
-
+(** Exact-query base-sort transport only needs to move the table-scan schema
+    equality; all other constructors compose their induction hypotheses. *)
 Scheme query_expr_admissibility_induction := Induction for query_expr Sort Prop
 with formula_expr_admissibility_induction :=
   Induction for formula_expr Sort Prop.
@@ -548,14 +430,18 @@ Lemma query_formula_expr_admissible_basesort_extensional :
     @formula_expr_admissible T generic_relname second_basesort formula).
 Proof.
   apply query_formula_expr_admissibility_mutind; intros; cbn in *; try tauto.
-  destruct H as [Houtputs [Hquery Hsort]].
-  repeat split; try assumption.
-  - now apply bag_query_admissible_basesort_extensional.
-  - pose proof (query_sort_basesort_extensional q) as Hquery_sort.
-    rewrite Fset.equal_spec in Hquery_sort, Hsort |- *.
-    intro attribute.
-    rewrite <- (Hquery_sort attribute).
-    exact (Hsort attribute).
+  all: repeat match goal with H : _ /\ _ |- _ => destruct H end.
+  all: repeat split; try assumption.
+  all: match goal with
+  | Hsort : ?left =S= first_basesort ?table
+      |- ?left =S= second_basesort ?table =>
+      let Htable := fresh "Htable" in
+      pose proof (Hbasesort table) as Htable;
+      rewrite Fset.equal_spec in Hsort, Htable |- *;
+      intro attribute;
+      rewrite <- (Htable attribute);
+      exact (Hsort attribute)
+  end.
 Qed.
 
 Theorem query_expr_admissible_basesort_extensional :
@@ -575,186 +461,6 @@ Proof.
 Qed.
 
 End AdmissibilityBaseSortTransport.
-
-(** A typed lowering can expose the expected output sort of each compact bag
-    node.  Pairing that small certificate with admissibility lets generated
-    proofs compose without repeatedly reducing a whole nested query against a
-    generated database schema. *)
-Section CompositionalBagAdmissibility.
-
-Context {T : Tuple.Rcd} {generic_relname : Type}.
-Variable basesort : generic_relname -> Fset.set (A T).
-
-Definition bag_query_admissible_with_sort
-    (query : @query T generic_relname) (expected_sort : Fset.set (A T)) : Prop :=
-  @bag_query_admissible T generic_relname basesort query /\
-  @sort T generic_relname basesort query =S= expected_sort.
-
-Lemma query_sort_equal_symmetry :
-  forall left right : Fset.set (A T), left =S= right -> right =S= left.
-Proof.
-  intros left right Hequal.
-  rewrite Fset.equal_spec in Hequal |- *.
-  intro attribute; symmetry; apply Hequal.
-Qed.
-
-Lemma query_sort_equal_transitivity :
-  forall first second third : Fset.set (A T),
-    first =S= second -> second =S= third -> first =S= third.
-Proof.
-  intros first second third Hfirst Hsecond.
-  rewrite Fset.equal_spec in Hfirst, Hsecond |- *.
-  intro attribute; now rewrite Hfirst, Hsecond.
-Qed.
-
-Lemma bag_query_admissible_with_sort_empty_tuple :
-  bag_query_admissible_with_sort
-    (@Q_Empty_Tuple T generic_relname) (Fset.empty (A T)).
-Proof.
-  split; [constructor | apply Fset.equal_refl].
-Qed.
-
-Lemma bag_query_admissible_with_sort_empty_relation :
-  forall expected_sort,
-    bag_query_admissible_with_sort
-      (@Q_Empty_Relation T generic_relname expected_sort) expected_sort.
-Proof.
-  intro expected_sort; split; [constructor | apply Fset.equal_refl].
-Qed.
-
-Lemma bag_query_admissible_with_sort_table :
-  forall table expected_sort,
-    basesort table =S= expected_sort ->
-    bag_query_admissible_with_sort
-      (@Q_Table T generic_relname table) expected_sort.
-Proof.
-  intros table expected_sort Hsort.
-  split; [constructor | exact Hsort].
-Qed.
-
-Lemma bag_query_admissible_with_sort_set :
-  forall operation left right left_sort right_sort,
-    bag_query_admissible_with_sort left left_sort ->
-    bag_query_admissible_with_sort right right_sort ->
-    left_sort =S= right_sort ->
-    bag_query_admissible_with_sort
-      (@Q_Set T generic_relname operation left right) left_sort.
-Proof.
-  intros operation left right left_sort right_sort
-    [Hleft Hleft_sort] [Hright Hright_sort] Hsorts.
-  split.
-  - econstructor; try eassumption.
-    eapply query_sort_equal_transitivity; [exact Hleft_sort |].
-    eapply query_sort_equal_transitivity; [exact Hsorts |].
-    now apply query_sort_equal_symmetry.
-  - exact Hleft_sort.
-Qed.
-
-Lemma bag_query_admissible_with_sort_cross_join :
-  forall left right left_sort right_sort,
-    bag_query_admissible_with_sort left left_sort ->
-    bag_query_admissible_with_sort right right_sort ->
-    @query_output_sorts_disjoint T left_sort right_sort ->
-    bag_query_admissible_with_sort
-      (@Q_CrossJoin T generic_relname left right)
-      (Fset.union (A T) left_sort right_sort).
-Proof.
-  intros left right left_sort right_sort
-    [Hleft Hleft_sort] [Hright Hright_sort] Hdisjoint.
-  split.
-  - econstructor; try eassumption.
-    eapply (query_output_sorts_disjoint_basesort_extensional
-      left_sort right_sort
-      (@sort T generic_relname basesort left)
-      (@sort T generic_relname basesort right)).
-    + now apply query_sort_equal_symmetry.
-    + now apply query_sort_equal_symmetry.
-    + exact Hdisjoint.
-  - cbn [sort]; now apply Fset.union_eq.
-Qed.
-
-Lemma bag_query_admissible_with_sort_project :
-  forall select_list input input_sort,
-    bag_query_admissible_with_sort input input_sort ->
-    query_select_list_outputs_unique select_list ->
-    bag_query_admissible_with_sort
-      (@Q_Pi T generic_relname select_list input)
-      (select_list_sort select_list).
-Proof.
-  intros select_list input input_sort [Hinput _] Hunique.
-  split; [now constructor | apply Fset.equal_refl].
-Qed.
-
-Lemma bag_query_admissible_with_sort_filter :
-  forall formula input input_sort,
-    @bag_formula_admissible T generic_relname basesort formula ->
-    bag_query_admissible_with_sort input input_sort ->
-    bag_query_admissible_with_sort
-      (@Q_Sigma T generic_relname formula input) input_sort.
-Proof.
-  intros formula input input_sort Hformula [Hinput Hsort].
-  split; [now constructor | exact Hsort].
-Qed.
-
-Lemma bag_query_admissible_with_sort_aggregate :
-  forall select_list group_terms having input input_sort,
-    group_terms <> nil ->
-    @bag_formula_admissible T generic_relname basesort having ->
-    bag_query_admissible_with_sort input input_sort ->
-    query_select_list_outputs_unique select_list ->
-    bag_query_admissible_with_sort
-      (@Q_Gamma T generic_relname select_list group_terms having input)
-      (select_list_sort select_list).
-Proof.
-  intros select_list group_terms having input input_sort
-    Hgroups Hhaving [Hinput _] Hunique.
-  split; [now constructor | apply Fset.equal_refl].
-Qed.
-
-Lemma bag_formula_in_admissible_from_sort :
-  forall (select_items : list (@select T)) subquery expected_sort,
-    bag_query_admissible_with_sort subquery expected_sort ->
-    length select_items = 1%nat ->
-    length (Fset.elements (A T) expected_sort) = 1%nat ->
-    query_in_positionally_aligned (@_Select_List T select_items)
-      (Fset.elements (A T) expected_sort) ->
-    @bag_formula_admissible T generic_relname basesort
-      (@Sql_In T (@query T generic_relname) select_items subquery).
-Proof.
-  intros select_items subquery expected_sort [Hquery Hsort]
-    Hselect Hlength Haligned.
-  econstructor; try eassumption.
-  - now rewrite (Fset.elements_spec1 _ _ _ Hsort).
-  - now rewrite (Fset.elements_spec1 _ _ _ Hsort).
-Qed.
-
-Lemma bag_formula_exists_admissible_from_sort :
-  forall subquery expected_sort,
-    bag_query_admissible_with_sort subquery expected_sort ->
-    @bag_formula_admissible T generic_relname basesort
-      (@Sql_Exists T (@query T generic_relname) subquery).
-Proof.
-  intros subquery expected_sort [Hquery _].
-  now constructor.
-Qed.
-
-Lemma query_expr_bag_admissible_from_sort :
-  forall (outputs : list (attribute T))
-      (query : @query T generic_relname) (expected_sort : Fset.set (A T)),
-    @query_output_attributes_unique T outputs ->
-    bag_query_admissible_with_sort query expected_sort ->
-    @query_outputs_sort T outputs =S= expected_sort ->
-    @query_expr_admissible T generic_relname basesort
-      (QExpr_Bag outputs query).
-Proof.
-  intros outputs query expected_sort Houtputs [Hquery Hquery_sort] Hsort.
-  cbn [query_expr_admissible].
-  repeat split; try assumption.
-  eapply query_sort_equal_transitivity; [exact Hsort |].
-  now apply query_sort_equal_symmetry.
-Qed.
-
-End CompositionalBagAdmissibility.
 
 (** Exact-query certificates carry the authoritative ordered output witness in
     addition to admissibility.  Generated proofs can therefore discharge
@@ -838,21 +544,44 @@ Proof.
   intros outputs rows Houtputs Hrows; split; cbn; intuition.
 Qed.
 
-Lemma query_expr_admissible_with_outputs_bag :
-  forall (outputs : list (attribute T)) query expected_sort,
-    @query_output_attributes_unique T outputs ->
-    @bag_query_admissible_with_sort T generic_relname basesort
-      query expected_sort ->
-    @query_outputs_sort T outputs =S= expected_sort ->
-    query_expr_admissible_with_outputs
-      (@QExpr_Bag T generic_relname outputs query) outputs.
+(** The SQL unit relation has one zero-column row.  Proving this once avoids
+    asking every generated module to normalize the concrete finite-bag
+    implementation merely to establish that the empty tuple has no labels. *)
+Lemma query_expr_admissible_with_outputs_empty_tuple :
+  query_expr_admissible_with_outputs
+    (@QExpr_Values T generic_relname nil
+      (Febag.singleton (Fecol.CBag (CTuple T)) (empty_tuple T))) nil.
 Proof.
-  intros outputs query expected_sort Houtputs Hquery Hsort.
   split.
-  - exact
-      (@query_expr_bag_admissible_from_sort T generic_relname basesort
-        outputs query expected_sort Houtputs Hquery Hsort).
+  - cbn [query_expr_admissible].
+    split.
+    + apply query_output_attributes_unique_from_all_diff; constructor.
+    + unfold query_values_well_sorted.
+      intros row Hrow.
+      rewrite Febag.mem_nb_occ, Febag.nb_occ_singleton in Hrow.
+      unfold Oeset.eq_bool in Hrow.
+      destruct (Oeset.compare (OTuple T) row (empty_tuple T))
+        eqn:Hcompare; cbn in Hrow; try discriminate.
+      rewrite Fset.equal_spec.
+      intro attribute.
+      pose proof (@tuple_eq_labels T row (empty_tuple T) Hcompare) as Hlabels.
+      pose proof (@labels_empty_tuple T) as Hempty.
+      rewrite Fset.equal_spec in Hlabels, Hempty.
+      rewrite Hlabels, Hempty.
+      unfold query_outputs_sort.
+      rewrite Fset.mem_mk_set, Fset.empty_spec.
+      reflexivity.
   - reflexivity.
+Qed.
+
+Lemma query_expr_admissible_with_outputs_table :
+  forall (outputs : list (attribute T)) table,
+    @query_output_attributes_unique T outputs ->
+    @query_outputs_sort T outputs =S= basesort table ->
+    query_expr_admissible_with_outputs
+      (@QExpr_Table T generic_relname outputs table) outputs.
+Proof.
+  intros outputs table Houtputs Hsort; split; cbn; intuition.
 Qed.
 
 Lemma query_expr_admissible_with_outputs_set :
@@ -1061,6 +790,16 @@ Proof.
   split; cbn [query_expr_admissible query_expr_outputs]; assumption.
 Qed.
 
+Lemma query_expr_admissible_with_outputs_unordered :
+  forall input input_outputs,
+    query_expr_admissible_with_outputs input input_outputs ->
+    query_expr_admissible_with_outputs
+      (@QExpr_Unordered T generic_relname input) input_outputs.
+Proof.
+  intros input input_outputs [Hinput Hinput_outputs].
+  split; cbn [query_expr_admissible query_expr_outputs]; assumption.
+Qed.
+
 Lemma query_expr_admissible_with_outputs_order_by :
   forall keys input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
@@ -1093,6 +832,17 @@ Lemma query_expr_admissible_with_outputs_fetch :
 Proof.
   intros count input input_outputs [Hinput Hinput_outputs].
   split; cbn [query_expr_admissible query_expr_outputs]; assumption.
+Qed.
+
+Lemma formula_expr_not_admissible :
+  forall formula,
+    @formula_expr_admissible T generic_relname basesort formula ->
+    @formula_expr_admissible T generic_relname basesort
+      (@FExpr_Not T generic_relname formula).
+Proof.
+  intros formula Hformula.
+  cbn [formula_expr_admissible].
+  exact Hformula.
 Qed.
 
 Lemma formula_expr_quant_admissible_from_outputs :
