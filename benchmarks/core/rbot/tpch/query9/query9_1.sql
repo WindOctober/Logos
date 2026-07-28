@@ -1,37 +1,11 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	nation,
-	o_year,
-	sum(amount) as sum_profit
-from
-	(
-		select
-			n_name as nation,
-			extract(year from o_orderdate) as o_year,
-			l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
-		from
-			part,
-			supplier,
-			lineitem,
-			partsupp,
-			orders,
-			nation
-		where
-			s_suppkey = l_suppkey
-			and ps_suppkey = l_suppkey
-			and ps_partkey = l_partkey
-			and p_partkey = l_partkey
-			and o_orderkey = l_orderkey
-			and s_nationkey = n_nationkey
-			and p_name like '%chiffon%'
-	) as profit
-group by
-	nation,
-	o_year
-order by
-	nation,
-	o_year desc
-limit 1;
+SELECT "nation"."n_name" AS "nation", EXTRACT(YEAR FROM "orders"."o_orderdate") AS "o_year", COALESCE(SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount") - "partsupp"."ps_supplycost" * "lineitem"."l_quantity"), 0) AS "sum_profit"
+FROM "part",
+    "supplier",
+    "lineitem",
+    "partsupp",
+    "orders",
+    "nation"
+WHERE "supplier"."s_suppkey" = "lineitem"."l_suppkey" AND ("partsupp"."ps_suppkey" = "lineitem"."l_suppkey" AND "partsupp"."ps_partkey" = "lineitem"."l_partkey") AND ("part"."p_partkey" = "lineitem"."l_partkey" AND "orders"."o_orderkey" = "lineitem"."l_orderkey" AND ("supplier"."s_nationkey" = "nation"."n_nationkey" AND "part"."p_name" LIKE '%cyan%'))
+GROUP BY "nation"."n_name", EXTRACT(YEAR FROM "orders"."o_orderdate")
+ORDER BY "nation"."n_name", 2 DESC
+FETCH NEXT 1 ROWS ONLY;

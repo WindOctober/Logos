@@ -1,32 +1,11 @@
-
-select  i_item_id,
-        ca_country,
-        ca_state,
-        ca_county,
-        avg( cast(cs_quantity as decimal(12,2))) agg1,
-        avg( cast(cs_list_price as decimal(12,2))) agg2,
-        avg( cast(cs_coupon_amt as decimal(12,2))) agg3,
-        avg( cast(cs_sales_price as decimal(12,2))) agg4,
-        avg( cast(cs_net_profit as decimal(12,2))) agg5,
-        avg( cast(c_birth_year as decimal(12,2))) agg6
-from catalog_sales, customer_demographics, customer, customer_address, date_dim, item
-where cs_sold_date_sk = d_date_sk and
-      cs_item_sk = i_item_sk and
-      cs_bill_cdemo_sk = cd_demo_sk and
-      cs_bill_customer_sk = c_customer_sk and
-      cd_gender = 'F' and
-      cd_education_status = 'Advanced Degree' and
-      c_current_addr_sk = ca_address_sk and
-      d_year = 2002 and
-      c_birth_month = 11 and
-      ca_state in ('CO', 'GA', 'TN')
-      and cs_wholesale_cost BETWEEN 43 AND 48
-      AND i_category = 'Sports'
- group by rollup (i_item_id, ca_country, ca_state, ca_county)
- order by ca_country,
-        ca_state,
-        ca_county,
-	i_item_id
- limit 100;
-
-
+SELECT "item"."i_item_id", "customer_address"."ca_country", "customer_address"."ca_state", "customer_address"."ca_county", CAST(CAST(CASE WHEN COUNT(CAST("catalog_sales"."cs_quantity" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("catalog_sales"."cs_quantity" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("catalog_sales"."cs_quantity" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg1", CAST(CAST(CASE WHEN COUNT(CAST("catalog_sales"."cs_list_price" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("catalog_sales"."cs_list_price" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("catalog_sales"."cs_list_price" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg2", CAST(CAST(CASE WHEN COUNT(CAST("catalog_sales"."cs_coupon_amt" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("catalog_sales"."cs_coupon_amt" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("catalog_sales"."cs_coupon_amt" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg3", CAST(CAST(CASE WHEN COUNT(CAST("catalog_sales"."cs_sales_price" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("catalog_sales"."cs_sales_price" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("catalog_sales"."cs_sales_price" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg4", CAST(CAST(CASE WHEN COUNT(CAST("catalog_sales"."cs_net_profit" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("catalog_sales"."cs_net_profit" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("catalog_sales"."cs_net_profit" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg5", CAST(CAST(CASE WHEN COUNT(CAST("customer"."c_birth_year" AS DECIMAL(12, 2))) = 0 THEN NULL ELSE COALESCE(SUM(CAST("customer"."c_birth_year" AS DECIMAL(12, 2))), 0) END AS DECIMAL(12, 2)) / COUNT(CAST("customer"."c_birth_year" AS DECIMAL(12, 2))) AS DECIMAL(12, 2)) AS "agg6"
+FROM "catalog_sales",
+    "customer_demographics",
+    "customer",
+    "customer_address",
+    "date_dim",
+    "item"
+WHERE "catalog_sales"."cs_sold_date_sk" = "date_dim"."d_date_sk" AND ("catalog_sales"."cs_item_sk" = "item"."i_item_sk" AND "catalog_sales"."cs_bill_cdemo_sk" = "customer_demographics"."cd_demo_sk") AND ("catalog_sales"."cs_bill_customer_sk" = "customer"."c_customer_sk" AND ("customer_demographics"."cd_gender" = 'F' AND "customer_demographics"."cd_education_status" = '2 yr Degree')) AND ("customer"."c_current_addr_sk" = "customer_address"."ca_address_sk" AND ("date_dim"."d_year" = 2000 AND "customer"."c_birth_month" = 3) AND (("customer_address"."ca_state" = 'GA' OR "customer_address"."ca_state" = 'ME' OR "customer_address"."ca_state" = 'NC') AND "catalog_sales"."cs_wholesale_cost" >= 84 AND ("catalog_sales"."cs_wholesale_cost" <= 89 AND "item"."i_category" = 'Books')))
+GROUP BY ROLLUP("item"."i_item_id", "customer_address"."ca_country", "customer_address"."ca_state", "customer_address"."ca_county")
+ORDER BY "customer_address"."ca_country", "customer_address"."ca_state", "customer_address"."ca_county", "item"."i_item_id"
+FETCH NEXT 100 ROWS ONLY;

@@ -1,34 +1,10 @@
-
-select 
-   sum(ws_ext_discount_amt)  as "Excess Discount Amount"
-from
-    web_sales
-   ,item
-   ,date_dim
-where
-(i_manufact_id BETWEEN 761 and 960
-or i_category IN ('Books', 'Children', 'Home'))
-and i_item_sk = ws_item_sk
-and d_date between '1998-02-08' and
-        cast('1998-02-08' as date) + interval '90' day
-and d_date_sk = ws_sold_date_sk
-and ws_wholesale_cost BETWEEN 61 AND 81
-and ws_ext_discount_amt
-     > (
-         SELECT
-            1.3 * avg(ws_ext_discount_amt)
-         FROM
-            web_sales
-           ,date_dim
-         WHERE
-              ws_item_sk = i_item_sk
-          and d_date between '1998-02-08' and
-                             cast('1998-02-08' as date) + interval '90' day
-          and d_date_sk = ws_sold_date_sk
-          and ws_wholesale_cost BETWEEN 61 AND 81
-          and ws_sales_price / ws_list_price BETWEEN 43 * 0.01 AND 58 * 0.01
-  )
-order by sum(ws_ext_discount_amt)
-limit 100;
-
-
+SELECT SUM("web_sales"."ws_ext_discount_amt") AS "Excess Discount Amount"
+FROM "web_sales",
+    "item",
+    "date_dim"
+WHERE ("item"."i_manufact_id" >= 517 AND "item"."i_manufact_id" <= 716 OR "item"."i_category" = 'Books' OR "item"."i_category" = 'Jewelry' OR "item"."i_category" = 'Shoes') AND "item"."i_item_sk" = "web_sales"."ws_item_sk" AND ("date_dim"."d_date" >= '2002-01-25' AND "date_dim"."d_date" <= (CAST('2002-01-25' AS DATE) + INTERVAL '90' DAY)) AND ("date_dim"."d_date_sk" = "web_sales"."ws_sold_date_sk" AND "web_sales"."ws_wholesale_cost" >= 71 AND ("web_sales"."ws_wholesale_cost" <= 91 AND "web_sales"."ws_ext_discount_amt" > (((SELECT 1.3 * AVG("web_sales0"."ws_ext_discount_amt0")
+                                    FROM "web_sales" AS "web_sales0" ("ws_sold_date_sk0", "ws_sold_time_sk0", "ws_ship_date_sk0", "ws_item_sk0", "ws_bill_customer_sk0", "ws_bill_cdemo_sk0", "ws_bill_hdemo_sk0", "ws_bill_addr_sk0", "ws_ship_customer_sk0", "ws_ship_cdemo_sk0", "ws_ship_hdemo_sk0", "ws_ship_addr_sk0", "ws_web_page_sk0", "ws_web_site_sk0", "ws_ship_mode_sk0", "ws_warehouse_sk0", "ws_promo_sk0", "ws_order_number0", "ws_quantity0", "ws_wholesale_cost0", "ws_list_price0", "ws_sales_price0", "ws_ext_discount_amt0", "ws_ext_sales_price0", "ws_ext_wholesale_cost0", "ws_ext_list_price0", "ws_ext_tax0", "ws_coupon_amt0", "ws_ext_ship_cost0", "ws_net_paid0", "ws_net_paid_inc_tax0", "ws_net_paid_inc_ship0", "ws_net_paid_inc_ship_tax0", "ws_net_profit0"),
+                                        "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+                                    WHERE "web_sales0"."ws_item_sk0" = "item"."i_item_sk" AND "date_dim0"."d_date0" >= '2002-01-25' AND ("date_dim0"."d_date0" <= (CAST('2002-01-25' AS DATE) + INTERVAL '90' DAY) AND "date_dim0"."d_date_sk0" = "web_sales0"."ws_sold_date_sk0") AND ("web_sales0"."ws_wholesale_cost0" >= 71 AND "web_sales0"."ws_wholesale_cost0" <= 91 AND ("web_sales0"."ws_sales_price0" / "web_sales0"."ws_list_price0" >= 73 * 0.01 AND "web_sales0"."ws_sales_price0" / "web_sales0"."ws_list_price0" <= 88 * 0.01)))))))
+ORDER BY 1
+FETCH NEXT 100 ROWS ONLY;

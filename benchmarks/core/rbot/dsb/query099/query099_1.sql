@@ -1,39 +1,10 @@
-
-select 
-   substring(w_warehouse_name,1,20)
-  ,sm_type
-  ,cc_name
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk <= 30 ) then 1 else 0 end)  as "30 days"
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 30) and
-                 (cs_ship_date_sk - cs_sold_date_sk <= 60) then 1 else 0 end )  as "31-60 days"
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 60) and
-                 (cs_ship_date_sk - cs_sold_date_sk <= 90) then 1 else 0 end)  as "61-90 days"
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 90) and
-                 (cs_ship_date_sk - cs_sold_date_sk <= 120) then 1 else 0 end)  as "91-120 days"
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk  > 120) then 1 else 0 end)  as ">120 days"
-from
-   catalog_sales
-  ,warehouse
-  ,ship_mode
-  ,call_center
-  ,date_dim
-where
-d_month_seq between 1212 and 1212 + 23
-and cs_ship_date_sk   = d_date_sk
-and cs_warehouse_sk   = w_warehouse_sk
-and cs_ship_mode_sk   = sm_ship_mode_sk
-and cs_call_center_sk = cc_call_center_sk
-and cs_list_price between 13 and 42
-and sm_type = 'EXPRESS'
-and cc_class = 'small'
-and w_gmt_offset = -5
-group by
-   substring(w_warehouse_name,1,20)
-  ,sm_type
-  ,cc_name
-order by substring(w_warehouse_name,1,20)
-        ,sm_type
-        ,cc_name
-limit 100;
-
-
+SELECT SUBSTRING("warehouse"."w_warehouse_name", 1, 20), "ship_mode"."sm_type", "call_center"."cc_name", COALESCE(SUM(CASE WHEN "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" <= 30 THEN 1 ELSE 0 END), 0) AS "30 days", COALESCE(SUM(CASE WHEN "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" > 30 AND "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" <= 60 THEN 1 ELSE 0 END), 0) AS "31-60 days", COALESCE(SUM(CASE WHEN "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" > 60 AND "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" <= 90 THEN 1 ELSE 0 END), 0) AS "61-90 days", COALESCE(SUM(CASE WHEN "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" > 90 AND "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" <= 120 THEN 1 ELSE 0 END), 0) AS "91-120 days", COALESCE(SUM(CASE WHEN "catalog_sales"."cs_ship_date_sk" - "catalog_sales"."cs_sold_date_sk" > 120 THEN 1 ELSE 0 END), 0) AS ">120 days"
+FROM "catalog_sales",
+    "warehouse",
+    "ship_mode",
+    "call_center",
+    "date_dim"
+WHERE "date_dim"."d_month_seq" >= 1201 AND "date_dim"."d_month_seq" <= 1201 + 23 AND ("catalog_sales"."cs_ship_date_sk" = "date_dim"."d_date_sk" AND ("catalog_sales"."cs_warehouse_sk" = "warehouse"."w_warehouse_sk" AND "catalog_sales"."cs_ship_mode_sk" = "ship_mode"."sm_ship_mode_sk")) AND ("catalog_sales"."cs_call_center_sk" = "call_center"."cc_call_center_sk" AND ("catalog_sales"."cs_list_price" >= 248 AND "catalog_sales"."cs_list_price" <= 277) AND ("ship_mode"."sm_type" = 'LIBRARY' AND ("call_center"."cc_class" = 'small' AND CAST("warehouse"."w_gmt_offset" AS DECIMAL(12, 2)) = -5)))
+GROUP BY SUBSTRING("warehouse"."w_warehouse_name", 1, 20), "ship_mode"."sm_type", "call_center"."cc_name"
+ORDER BY 1, "ship_mode"."sm_type", "call_center"."cc_name"
+FETCH NEXT 100 ROWS ONLY;

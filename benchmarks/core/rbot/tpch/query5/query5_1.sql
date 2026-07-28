@@ -1,29 +1,11 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	n_name,
-	sum(l_extendedprice * (1 - l_discount)) as revenue
-from
-	customer,
-	orders,
-	lineitem,
-	supplier,
-	nation,
-	region
-where
-	c_custkey = o_custkey
-	and l_orderkey = o_orderkey
-	and l_suppkey = s_suppkey
-	and c_nationkey = s_nationkey
-	and s_nationkey = n_nationkey
-	and n_regionkey = r_regionkey
-	and r_name = 'AFRICA'
-	and o_orderdate >= date '1995-01-01'
-	and o_orderdate < date '1995-01-01' + interval '1' year
-group by
-	n_name
-order by
-	revenue desc
-limit 1;
+SELECT "nation"."n_name", COALESCE(SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")), 0) AS "revenue"
+FROM "customer",
+    "orders",
+    "lineitem",
+    "supplier",
+    "nation",
+    "region"
+WHERE "customer"."c_custkey" = "orders"."o_custkey" AND "lineitem"."l_orderkey" = "orders"."o_orderkey" AND ("lineitem"."l_suppkey" = "supplier"."s_suppkey" AND "customer"."c_nationkey" = "supplier"."s_nationkey") AND ("supplier"."s_nationkey" = "nation"."n_nationkey" AND "nation"."n_regionkey" = "region"."r_regionkey" AND ("region"."r_name" = 'EUROPE' AND ("orders"."o_orderdate" >= DATE '1994-01-01' AND "orders"."o_orderdate" < (DATE '1994-01-01' + INTERVAL '1' YEAR))))
+GROUP BY "nation"."n_name"
+ORDER BY 2 DESC
+FETCH NEXT 1 ROWS ONLY;

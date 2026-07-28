@@ -1,114 +1,34 @@
-
-with ssr as
- (select  s_store_id as store_id,
-          sum(ss_ext_sales_price) as sales,
-          sum(coalesce(sr_return_amt, 0)) as "returns",
-          sum(ss_net_profit - coalesce(sr_net_loss, 0)) as profit
-  from store_sales left outer join store_returns on
-         (ss_item_sk = sr_item_sk and ss_ticket_number = sr_ticket_number),
-     date_dim,
-     store,
-     item,
-     promotion
- where ss_sold_date_sk = d_date_sk
-       and d_date between cast('1999-09-30' as date)
-                  and cast('1999-09-30' as date) + interval '30' day
-       and ss_store_sk = s_store_sk
-       and ss_item_sk = i_item_sk
-       and i_current_price > 50
-       and ss_promo_sk = p_promo_sk
-       and p_channel_email = 'Y'
-       and p_channel_tv = 'Y'
-       and p_channel_radio = 'N'
-       and p_channel_press = 'Y'
-       and p_channel_event = 'Y'
-       and ss_wholesale_cost BETWEEN 74 AND 89
-       and i_category IN ('Books', 'Electronics')
- group by s_store_id)
- ,
- csr as
- (select  cp_catalog_page_id as catalog_page_id,
-          sum(cs_ext_sales_price) as sales,
-          sum(coalesce(cr_return_amount, 0)) as "returns",
-          sum(cs_net_profit - coalesce(cr_net_loss, 0)) as profit
-  from catalog_sales left outer join catalog_returns on
-         (cs_item_sk = cr_item_sk and cs_order_number = cr_order_number),
-     date_dim,
-     catalog_page,
-     item,
-     promotion
- where cs_sold_date_sk = d_date_sk
-       and d_date between cast('1999-09-30' as date)
-                  and cast('1999-09-30' as date) + interval '30' day
-        and cs_catalog_page_sk = cp_catalog_page_sk
-       and cs_item_sk = i_item_sk
-       and i_current_price > 50
-       and cs_promo_sk = p_promo_sk
-       and p_channel_email = 'Y'
-       and p_channel_tv = 'Y'
-       and p_channel_radio = 'N'
-       and p_channel_press = 'Y'
-       and p_channel_event = 'Y'
-       and cs_wholesale_cost BETWEEN 74 AND 89
-       and i_category IN ('Books', 'Electronics')
-group by cp_catalog_page_id)
- ,
- wsr as
- (select  web_site_id,
-          sum(ws_ext_sales_price) as sales,
-          sum(coalesce(wr_return_amt, 0)) as "returns",
-          sum(ws_net_profit - coalesce(wr_net_loss, 0)) as profit
-  from web_sales left outer join web_returns on
-         (ws_item_sk = wr_item_sk and ws_order_number = wr_order_number),
-     date_dim,
-     web_site,
-     item,
-     promotion
- where ws_sold_date_sk = d_date_sk
-       and d_date between cast('1999-09-30' as date)
-                  and cast('1999-09-30' as date) + interval '30' day
-        and ws_web_site_sk = web_site_sk
-       and ws_item_sk = i_item_sk
-       and i_current_price > 50
-       and ws_promo_sk = p_promo_sk
-       and p_channel_email = 'Y'
-       and p_channel_tv = 'Y'
-       and p_channel_radio = 'N'
-       and p_channel_press = 'Y'
-       and p_channel_event = 'Y'
-       and ws_wholesale_cost BETWEEN 74 AND 89
-       and i_category IN ('Books', 'Electronics')
-group by web_site_id)
-  select  channel
-        , id
-        , sum(sales) as sales
-        , sum("returns") as "returns"
-        , sum(profit) as profit
- from
- (select 'store channel' as channel
-        , 'store' || store_id as id
-        , sales
-        , "returns"
-        , profit
- from   ssr
- union all
- select 'catalog channel' as channel
-        , 'catalog_page' || catalog_page_id as id
-        , sales
-        , "returns"
-        , profit
- from  csr
- union all
- select 'web channel' as channel
-        , 'web_site' || web_site_id as id
-        , sales
-        , "returns"
-        , profit
- from   wsr
- ) x
- group by rollup (channel, id)
- order by channel
-         ,id
- limit 100;
-
-
+SELECT "channel", "id", CASE WHEN COUNT("sales") = 0 THEN NULL ELSE COALESCE(SUM("sales"), 0) END AS "sales1", COALESCE(SUM("returns"), 0) AS "returns", CASE WHEN COUNT("profit") = 0 THEN NULL ELSE COALESCE(SUM("profit"), 0) END AS "profit1"
+FROM (SELECT *
+            FROM (SELECT 'store channel' AS "channel", 'store' || "store"."s_store_id" AS "id", CASE WHEN COUNT("store_sales"."ss_ext_sales_price") = 0 THEN NULL ELSE COALESCE(SUM("store_sales"."ss_ext_sales_price"), 0) END AS "sales", COALESCE(SUM(CASE WHEN "store_returns"."sr_return_amt" IS NOT NULL THEN CAST("store_returns"."sr_return_amt" AS DECIMAL(12, 2)) ELSE 0 END), 0) AS "returns", CASE WHEN COUNT("store_sales"."ss_net_profit" - CASE WHEN "store_returns"."sr_net_loss" IS NOT NULL THEN CAST("store_returns"."sr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END) = 0 THEN NULL ELSE COALESCE(SUM("store_sales"."ss_net_profit" - CASE WHEN "store_returns"."sr_net_loss" IS NOT NULL THEN CAST("store_returns"."sr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END), 0) END AS "profit"
+                        FROM "store_sales"
+                            LEFT JOIN "store_returns" ON "store_sales"."ss_item_sk" = "store_returns"."sr_item_sk" AND "store_sales"."ss_ticket_number" = "store_returns"."sr_ticket_number"
+                            CROSS JOIN "date_dim"
+                            CROSS JOIN "store"
+                            CROSS JOIN "item"
+                            CROSS JOIN "promotion"
+                        WHERE "store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND ("date_dim"."d_date" >= '2000-06-06' AND "date_dim"."d_date" <= (CAST('2000-06-06' AS DATE) + INTERVAL '30' DAY)) AND ("store_sales"."ss_store_sk" = "store"."s_store_sk" AND "store_sales"."ss_item_sk" = "item"."i_item_sk" AND ("item"."i_current_price" > 50 AND "store_sales"."ss_promo_sk" = "promotion"."p_promo_sk")) AND ("promotion"."p_channel_email" = 'Y' AND "promotion"."p_channel_tv" = 'Y' AND ("promotion"."p_channel_radio" = 'Y' AND "promotion"."p_channel_press" = 'N') AND ("promotion"."p_channel_event" = 'N' AND "store_sales"."ss_wholesale_cost" >= 85 AND ("store_sales"."ss_wholesale_cost" <= 100 AND ("item"."i_category" = 'Books' OR "item"."i_category" = 'Jewelry'))))
+                        GROUP BY "store"."s_store_id"
+                        UNION ALL
+                        SELECT 'catalog channel' AS "channel", 'catalog_page' || "catalog_page"."cp_catalog_page_id" AS "id", CASE WHEN COUNT("catalog_sales"."cs_ext_sales_price") = 0 THEN NULL ELSE COALESCE(SUM("catalog_sales"."cs_ext_sales_price"), 0) END AS "sales", COALESCE(SUM(CASE WHEN "catalog_returns"."cr_return_amount" IS NOT NULL THEN CAST("catalog_returns"."cr_return_amount" AS DECIMAL(12, 2)) ELSE 0 END), 0) AS "returns", CASE WHEN COUNT("catalog_sales"."cs_net_profit" - CASE WHEN "catalog_returns"."cr_net_loss" IS NOT NULL THEN CAST("catalog_returns"."cr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END) = 0 THEN NULL ELSE COALESCE(SUM("catalog_sales"."cs_net_profit" - CASE WHEN "catalog_returns"."cr_net_loss" IS NOT NULL THEN CAST("catalog_returns"."cr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END), 0) END AS "profit"
+                        FROM "catalog_sales"
+                            LEFT JOIN "catalog_returns" ON "catalog_sales"."cs_item_sk" = "catalog_returns"."cr_item_sk" AND "catalog_sales"."cs_order_number" = "catalog_returns"."cr_order_number"
+                            CROSS JOIN "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+                            CROSS JOIN "catalog_page"
+                            CROSS JOIN "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0")
+                            CROSS JOIN "promotion" AS "promotion0" ("p_promo_sk0", "p_promo_id0", "p_start_date_sk0", "p_end_date_sk0", "p_item_sk0", "p_cost0", "p_response_target0", "p_promo_name0", "p_channel_dmail0", "p_channel_email0", "p_channel_catalog0", "p_channel_tv0", "p_channel_radio0", "p_channel_press0", "p_channel_event0", "p_channel_demo0", "p_channel_details0", "p_purpose0", "p_discount_active0")
+                        WHERE "catalog_sales"."cs_sold_date_sk" = "date_dim0"."d_date_sk0" AND ("date_dim0"."d_date0" >= '2000-06-06' AND "date_dim0"."d_date0" <= (CAST('2000-06-06' AS DATE) + INTERVAL '30' DAY)) AND ("catalog_sales"."cs_catalog_page_sk" = "catalog_page"."cp_catalog_page_sk" AND "catalog_sales"."cs_item_sk" = "item0"."i_item_sk0" AND ("item0"."i_current_price0" > 50 AND "catalog_sales"."cs_promo_sk" = "promotion0"."p_promo_sk0")) AND ("promotion0"."p_channel_email0" = 'Y' AND "promotion0"."p_channel_tv0" = 'Y' AND ("promotion0"."p_channel_radio0" = 'Y' AND "promotion0"."p_channel_press0" = 'N') AND ("promotion0"."p_channel_event0" = 'N' AND "catalog_sales"."cs_wholesale_cost" >= 85 AND ("catalog_sales"."cs_wholesale_cost" <= 100 AND ("item0"."i_category0" = 'Books' OR "item0"."i_category0" = 'Jewelry'))))
+                        GROUP BY "catalog_page"."cp_catalog_page_id") AS "t"
+            UNION ALL
+            SELECT 'web channel' AS "channel0", 'web_site' || "web_site"."web_site_id" AS "id0", CASE WHEN COUNT("web_sales"."ws_ext_sales_price") = 0 THEN NULL ELSE COALESCE(SUM("web_sales"."ws_ext_sales_price"), 0) END AS "sales0", COALESCE(SUM(CASE WHEN "web_returns"."wr_return_amt" IS NOT NULL THEN CAST("web_returns"."wr_return_amt" AS DECIMAL(12, 2)) ELSE 0 END), 0) AS "returns", CASE WHEN COUNT("web_sales"."ws_net_profit" - CASE WHEN "web_returns"."wr_net_loss" IS NOT NULL THEN CAST("web_returns"."wr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END) = 0 THEN NULL ELSE COALESCE(SUM("web_sales"."ws_net_profit" - CASE WHEN "web_returns"."wr_net_loss" IS NOT NULL THEN CAST("web_returns"."wr_net_loss" AS DECIMAL(12, 2)) ELSE 0 END), 0) END AS "profit0"
+            FROM "web_sales"
+                LEFT JOIN "web_returns" ON "web_sales"."ws_item_sk" = "web_returns"."wr_item_sk" AND "web_sales"."ws_order_number" = "web_returns"."wr_order_number"
+                CROSS JOIN "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1")
+                CROSS JOIN "web_site"
+                CROSS JOIN "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1")
+                CROSS JOIN "promotion" AS "promotion1" ("p_promo_sk1", "p_promo_id1", "p_start_date_sk1", "p_end_date_sk1", "p_item_sk1", "p_cost1", "p_response_target1", "p_promo_name1", "p_channel_dmail1", "p_channel_email1", "p_channel_catalog1", "p_channel_tv1", "p_channel_radio1", "p_channel_press1", "p_channel_event1", "p_channel_demo1", "p_channel_details1", "p_purpose1", "p_discount_active1")
+            WHERE "web_sales"."ws_sold_date_sk" = "date_dim1"."d_date_sk1" AND ("date_dim1"."d_date1" >= '2000-06-06' AND "date_dim1"."d_date1" <= (CAST('2000-06-06' AS DATE) + INTERVAL '30' DAY)) AND ("web_sales"."ws_web_site_sk" = "web_site"."web_site_sk" AND "web_sales"."ws_item_sk" = "item1"."i_item_sk1" AND ("item1"."i_current_price1" > 50 AND "web_sales"."ws_promo_sk" = "promotion1"."p_promo_sk1")) AND ("promotion1"."p_channel_email1" = 'Y' AND "promotion1"."p_channel_tv1" = 'Y' AND ("promotion1"."p_channel_radio1" = 'Y' AND "promotion1"."p_channel_press1" = 'N') AND ("promotion1"."p_channel_event1" = 'N' AND "web_sales"."ws_wholesale_cost" >= 85 AND ("web_sales"."ws_wholesale_cost" <= 100 AND ("item1"."i_category1" = 'Books' OR "item1"."i_category1" = 'Jewelry'))))
+            GROUP BY "web_site"."web_site_id") AS "t15"
+GROUP BY ROLLUP("channel", "id")
+ORDER BY "channel", "id"
+FETCH NEXT 100 ROWS ONLY;

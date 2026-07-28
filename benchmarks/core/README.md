@@ -125,7 +125,8 @@ rbot/tpch/
 rbot/dsb/
 ```
 
-These are workload-level benchmark directories. Each workload has one shared schema file and multiple before/after query files:
+These are workload-level benchmark directories. Each workload has one shared
+schema file and multiple source/rewrite query files:
 
 ```text
 rbot/tpch/create_tables.sql
@@ -140,9 +141,38 @@ rbot/dsb/query*/query*_1.sql
 The pairing rule is:
 
 ```text
-query*_0.sql -> before query
-query*_1.sql -> after query
+query*_0.sql -> one upstream workload input
+query*_1.sql -> a fresh rewrite of that exact input
 create_tables.sql -> shared schema for every pair in the workload
+```
+
+The upstream R-Bot repository treats its original `_0` and `_1` files as two
+independent parameterized workload inputs; they are not an author-declared
+rewrite pair. This corpus fixes that ambiguity by selecting `_0` before seeing
+any solver result and replacing the old independent `_1` input with SQL emitted
+by the pinned R-Bot Calcite rewrite engine at commit
+`c9c90e5d7867888c3aaba86e4fc9e6d48f53b375`. The deterministic generation
+profile tries applicable rules in lexical rule-name order and selects the first
+single-rule, non-identity output that round-trips through that same pinned
+R-Bot parser/serializer. This generation-integrity test is independent of
+Logos, QED, Cosette, and SQLSolver results. Every generated target is nonempty
+single-statement SQL, and the exact matched/tried/applied rules and file hashes
+are recorded in `rbot/rewrite-pairs.manifest.json`.
+
+The paper's per-query LLM responses and output SQL were not published. These
+are therefore fresh, reproducible R-Bot-engine rewrites rather than a claim to
+recover the paper run's stochastic RAG-selected, cost-best outputs. DSB
+`query039_0.sql` is the only upstream file containing two executable queries;
+the predeclared case-unit policy selects its first statement so all 59 cases
+remain one-query pairs.
+
+Regenerate the corpus from a clean pinned checkout with the local isolated
+`JPype1==1.7.1` environment:
+
+```bash
+direnv exec . PaperTools/envs/rbot/bin/python \
+  Logos/benchmarks/scripts/generate-rbot-pairs \
+  --rbot-root PaperTools/R-Bot
 ```
 
 So R-Bot is **workload-level schema**:
@@ -152,7 +182,10 @@ TPC-H schema -> 22 query pairs
 DSB schema  -> 37 query pairs
 ```
 
-These pairs come from the R-Bot query rewrite benchmark and are intended to represent optimizer-style rewrites over decision-support workloads.
+The sources and schemas come from the R-Bot query workload; the targets and
+their provenance are generated as described above. They represent
+optimizer-style rewrites over decision-support workloads without assuming that
+every generated pair is semantically equivalent.
 
 ### TPC-DS Query Variants
 

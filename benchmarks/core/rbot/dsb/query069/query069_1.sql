@@ -1,55 +1,17 @@
-
-select 
-  cd_gender,
-  cd_marital_status,
-  cd_education_status,
-  count(*) cnt1,
-  cd_purchase_estimate,
-  count(*) cnt2,
-  cd_credit_rating,
-  count(*) cnt3
- from
-  customer c,customer_address ca,customer_demographics
- where
-  c.c_current_addr_sk = ca.ca_address_sk and
-  ca_state in ('IN','TN','WI') and
-  cd_demo_sk = c.c_current_cdemo_sk
-  and cd_marital_status in ('D', 'W', 'S')
-  and cd_education_status in ('Unknown', 'Advanced Degree') and
-  exists (select *
-          from store_sales,date_dim
-          where c.c_customer_sk = ss_customer_sk and
-                ss_sold_date_sk = d_date_sk and
-                d_year = 2002 and
-                d_moy between 6 and 6+2
-                and ss_list_price between 77 and 166
-          ) and
-   (not exists (select *
-            from web_sales,date_dim
-            where c.c_customer_sk = ws_bill_customer_sk and
-                  ws_sold_date_sk = d_date_sk and
-                  d_year = 2002 and
-                  d_moy between 6 and 6+2
-                  and ws_list_price between 77 and 166
-            ) and
-    not exists (select *
-            from catalog_sales,date_dim
-            where c.c_customer_sk = cs_ship_customer_sk and
-                  cs_sold_date_sk = d_date_sk and
-                  d_year = 2002 and
-                  d_moy between 6 and 6+2
-                  and cs_list_price between 77 and 166)
-            )
- group by cd_gender,
-          cd_marital_status,
-          cd_education_status,
-          cd_purchase_estimate,
-          cd_credit_rating
- order by cd_gender,
-          cd_marital_status,
-          cd_education_status,
-          cd_purchase_estimate,
-          cd_credit_rating
- limit 100;
-
-
+SELECT "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", COUNT(*) AS "cnt1", "customer_demographics"."cd_purchase_estimate", COUNT(*) AS "cnt2", "customer_demographics"."cd_credit_rating", COUNT(*) AS "cnt3"
+FROM "customer",
+    "customer_address",
+    "customer_demographics"
+WHERE "customer"."c_current_addr_sk" = "customer_address"."ca_address_sk" AND ("customer_address"."ca_state" = 'KS' OR "customer_address"."ca_state" = 'LA' OR "customer_address"."ca_state" = 'OK') AND ("customer_demographics"."cd_demo_sk" = "customer"."c_current_cdemo_sk" AND ("customer_demographics"."cd_marital_status" = 'W' OR "customer_demographics"."cd_marital_status" = 'S')) AND (("customer_demographics"."cd_education_status" = 'Unknown' OR "customer_demographics"."cd_education_status" = '4 yr Degree') AND EXISTS (SELECT *
+                    FROM "store_sales",
+                        "date_dim"
+                    WHERE "customer"."c_customer_sk" = "store_sales"."ss_customer_sk" AND ("store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND "date_dim"."d_year" = 1999) AND ("date_dim"."d_moy" >= 7 AND "date_dim"."d_moy" <= 7 + 2 AND ("store_sales"."ss_list_price" >= 139 AND "store_sales"."ss_list_price" <= 228))) AND (NOT EXISTS (SELECT *
+                        FROM "web_sales",
+                            "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+                        WHERE "customer"."c_customer_sk" = "web_sales"."ws_bill_customer_sk" AND ("web_sales"."ws_sold_date_sk" = "date_dim0"."d_date_sk0" AND "date_dim0"."d_year0" = 1999) AND ("date_dim0"."d_moy0" >= 7 AND "date_dim0"."d_moy0" <= 7 + 2 AND ("web_sales"."ws_list_price" >= 139 AND "web_sales"."ws_list_price" <= 228))) AND NOT EXISTS (SELECT *
+                        FROM "catalog_sales",
+                            "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1")
+                        WHERE "customer"."c_customer_sk" = "catalog_sales"."cs_ship_customer_sk" AND ("catalog_sales"."cs_sold_date_sk" = "date_dim1"."d_date_sk1" AND "date_dim1"."d_year1" = 1999) AND ("date_dim1"."d_moy1" >= 7 AND "date_dim1"."d_moy1" <= 7 + 2 AND ("catalog_sales"."cs_list_price" >= 139 AND "catalog_sales"."cs_list_price" <= 228)))))
+GROUP BY "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", "customer_demographics"."cd_purchase_estimate", "customer_demographics"."cd_credit_rating"
+ORDER BY "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", "customer_demographics"."cd_purchase_estimate", "customer_demographics"."cd_credit_rating"
+FETCH NEXT 100 ROWS ONLY;

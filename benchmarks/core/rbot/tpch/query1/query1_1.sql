@@ -1,26 +1,6 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	l_returnflag,
-	l_linestatus,
-	sum(l_quantity) as sum_qty,
-	sum(l_extendedprice) as sum_base_price,
-	sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
-	sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
-	avg(l_quantity) as avg_qty,
-	avg(l_extendedprice) as avg_price,
-	avg(l_discount) as avg_disc,
-	count(*) as count_order
-from
-	lineitem
-where
-	l_shipdate <= date '1998-12-01' - interval '87' day
-group by
-	l_returnflag,
-	l_linestatus
-order by
-	l_returnflag,
-	l_linestatus
-limit 1;
+SELECT "l_returnflag", "l_linestatus", COALESCE(SUM("l_quantity"), 0) AS "sum_qty", COALESCE(SUM("l_extendedprice"), 0) AS "sum_base_price", COALESCE(SUM("l_extendedprice" * (1 - "l_discount")), 0) AS "sum_disc_price", COALESCE(SUM("l_extendedprice" * (1 - "l_discount") * (1 + "l_tax")), 0) AS "sum_charge", CAST(CAST(COALESCE(SUM("l_quantity"), 0) AS DECIMAL(15, 2)) / COUNT(*) AS DECIMAL(15, 2)) AS "avg_qty", CAST(CAST(COALESCE(SUM("l_extendedprice"), 0) AS DECIMAL(15, 2)) / COUNT(*) AS DECIMAL(15, 2)) AS "avg_price", CAST(CAST(COALESCE(SUM("l_discount"), 0) AS DECIMAL(15, 2)) / COUNT(*) AS DECIMAL(15, 2)) AS "avg_disc", COUNT(*) AS "count_order"
+FROM "lineitem"
+WHERE "l_shipdate" <= (DATE '1998-12-01' - INTERVAL '79' DAY)
+GROUP BY "l_returnflag", "l_linestatus"
+ORDER BY "l_returnflag", "l_linestatus"
+FETCH NEXT 1 ROWS ONLY;

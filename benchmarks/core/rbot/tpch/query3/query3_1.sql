@@ -1,27 +1,8 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	l_orderkey,
-	sum(l_extendedprice * (1 - l_discount)) as revenue,
-	o_orderdate,
-	o_shippriority
-from
-	customer,
-	orders,
-	lineitem
-where
-	c_mktsegment = 'MACHINERY'
-	and c_custkey = o_custkey
-	and l_orderkey = o_orderkey
-	and o_orderdate < date '1995-03-13'
-	and l_shipdate > date '1995-03-13'
-group by
-	l_orderkey,
-	o_orderdate,
-	o_shippriority
-order by
-	revenue desc,
-	o_orderdate
-limit 10;
+SELECT "lineitem"."l_orderkey", COALESCE(SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")), 0) AS "revenue", "orders"."o_orderdate", "orders"."o_shippriority"
+FROM "customer",
+    "orders",
+    "lineitem"
+WHERE "customer"."c_mktsegment" = 'FURNITURE' AND "customer"."c_custkey" = "orders"."o_custkey" AND "lineitem"."l_orderkey" = "orders"."o_orderkey" AND "orders"."o_orderdate" < DATE '1995-03-28' AND "lineitem"."l_shipdate" > DATE '1995-03-28'
+GROUP BY "lineitem"."l_orderkey", "orders"."o_orderdate", "orders"."o_shippriority"
+ORDER BY 2 DESC, "orders"."o_orderdate"
+FETCH NEXT 10 ROWS ONLY;

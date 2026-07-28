@@ -1,58 +1,45 @@
-
-with frequent_ss_items as
- (select substring(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
-  from store_sales
-      ,date_dim
-      ,item
-  where ss_sold_date_sk = d_date_sk
-    and ss_item_sk = i_item_sk
-    and d_year = 1999
-    and i_manager_id BETWEEN 40 and 59
-     AND i_category IN ('Books', 'Children', 'Home')
-  group by substring(i_item_desc,1,30),i_item_sk,d_date
-  having count(*) >4),
- max_store_sales as
- (select max(csales) tpcds_cmax
-  from (select c_customer_sk,sum(ss_quantity*ss_sales_price) csales
-        from store_sales
-            ,customer
-            ,date_dim
-        where ss_customer_sk = c_customer_sk
-         and ss_sold_date_sk = d_date_sk
-         and d_year = 1999
-         and ss_wholesale_cost BETWEEN 23 AND 33
-        group by c_customer_sk) tmp1),
- best_ss_customer as
- (select c_customer_sk,sum(ss_quantity*ss_sales_price) ssales
-  from store_sales
-      ,customer
-  where ss_customer_sk = c_customer_sk
-  and c_birth_year BETWEEN 1980 AND 1986
-  group by c_customer_sk
-  having sum(ss_quantity*ss_sales_price) > (95/100.0) * (select
-  *
-from
- max_store_sales))
-  select  sum(sales)
- from (select cs_quantity*cs_list_price sales
-       from catalog_sales
-           ,date_dim
-       where d_year = 1999
-         and d_moy = 8
-         and cs_sold_date_sk = d_date_sk
-         and cs_item_sk in (select item_sk from frequent_ss_items)
-         and cs_bill_customer_sk in (select c_customer_sk from best_ss_customer)
-         and cs_wholesale_cost BETWEEN 23 AND 33
-      union all
-      select ws_quantity*ws_list_price sales
-       from web_sales
-           ,date_dim
-       where d_year = 1999
-         and d_moy = 8
-         and ws_sold_date_sk = d_date_sk
-         and ws_item_sk in (select item_sk from frequent_ss_items)
-         and ws_bill_customer_sk in (select c_customer_sk from best_ss_customer)
-         and ws_wholesale_cost BETWEEN 23 AND 33) tmp2
- limit 100;
-
-
+SELECT CASE WHEN COUNT("sales") = 0 THEN NULL ELSE COALESCE(SUM("sales"), 0) END
+FROM (SELECT "catalog_sales"."cs_quantity" * "catalog_sales"."cs_list_price" AS "sales"
+            FROM "catalog_sales",
+                "date_dim"
+            WHERE "date_dim"."d_year" = 1999 AND ("date_dim"."d_moy" = 3 AND "catalog_sales"."cs_sold_date_sk" = "date_dim"."d_date_sk") AND ("catalog_sales"."cs_item_sk" IN (SELECT "item"."i_item_sk"
+                                    FROM "store_sales",
+                                        "date_dim" AS "date_dim0" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1"),
+                                        "item"
+                                    WHERE "store_sales"."ss_sold_date_sk" = "date_dim0"."d_date_sk1" AND ("store_sales"."ss_item_sk" = "item"."i_item_sk" AND "date_dim0"."d_year1" = 1999) AND ("item"."i_manager_id" >= 7 AND ("item"."i_manager_id" <= 26 AND ("item"."i_category" = 'Books' OR "item"."i_category" = 'Jewelry' OR "item"."i_category" = 'Shoes')))
+                                    GROUP BY SUBSTRING("item"."i_item_desc", 1, 30), "item"."i_item_sk", "date_dim0"."d_date1"
+                                    HAVING COUNT(*) > 4) AND "catalog_sales"."cs_bill_customer_sk" IN (SELECT "customer"."c_customer_sk"
+                                    FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0"),
+                                        "customer"
+                                    WHERE "store_sales0"."ss_customer_sk0" = "customer"."c_customer_sk" AND "customer"."c_birth_year" >= 1932 AND "customer"."c_birth_year" <= 1938
+                                    GROUP BY "customer"."c_customer_sk"
+                                    HAVING SUM("store_sales0"."ss_quantity0" * "store_sales0"."ss_sales_price0") > 95 / 100.0 * (((SELECT MAX("t10"."csales") AS "tpcds_cmax"
+                                                        FROM (SELECT SUM("store_sales1"."ss_quantity1" * "store_sales1"."ss_sales_price1") AS "csales"
+                                                                FROM "store_sales" AS "store_sales1" ("ss_sold_date_sk1", "ss_sold_time_sk1", "ss_item_sk1", "ss_customer_sk1", "ss_cdemo_sk1", "ss_hdemo_sk1", "ss_addr_sk1", "ss_store_sk1", "ss_promo_sk1", "ss_ticket_number1", "ss_quantity1", "ss_wholesale_cost1", "ss_list_price1", "ss_sales_price1", "ss_ext_discount_amt1", "ss_ext_sales_price1", "ss_ext_wholesale_cost1", "ss_ext_list_price1", "ss_ext_tax1", "ss_coupon_amt1", "ss_net_paid1", "ss_net_paid_inc_tax1", "ss_net_profit1"),
+                                                                    "customer" AS "customer0" ("c_customer_sk0", "c_customer_id0", "c_current_cdemo_sk0", "c_current_hdemo_sk0", "c_current_addr_sk0", "c_first_shipto_date_sk0", "c_first_sales_date_sk0", "c_salutation0", "c_first_name0", "c_last_name0", "c_preferred_cust_flag0", "c_birth_day0", "c_birth_month0", "c_birth_year0", "c_birth_country0", "c_login0", "c_email_address0", "c_last_review_date_sk0"),
+                                                                    "date_dim" AS "date_dim1" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2")
+                                                                WHERE "store_sales1"."ss_customer_sk1" = "customer0"."c_customer_sk0" AND "store_sales1"."ss_sold_date_sk1" = "date_dim1"."d_date_sk2" AND "date_dim1"."d_year2" = 1999 AND "store_sales1"."ss_wholesale_cost1" >= 77 AND "store_sales1"."ss_wholesale_cost1" <= 87
+                                                                GROUP BY "customer0"."c_customer_sk0") AS "t10")))) AND ("catalog_sales"."cs_wholesale_cost" >= 77 AND "catalog_sales"."cs_wholesale_cost" <= 87))
+            UNION ALL
+            SELECT "web_sales"."ws_quantity" * "web_sales"."ws_list_price" AS "sales"
+            FROM "web_sales",
+                "date_dim" AS "date_dim2" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+            WHERE "date_dim2"."d_year0" = 1999 AND ("date_dim2"."d_moy0" = 3 AND "web_sales"."ws_sold_date_sk" = "date_dim2"."d_date_sk0") AND ("web_sales"."ws_item_sk" IN (SELECT "item0"."i_item_sk0"
+                                    FROM "store_sales" AS "store_sales2" ("ss_sold_date_sk2", "ss_sold_time_sk2", "ss_item_sk2", "ss_customer_sk2", "ss_cdemo_sk2", "ss_hdemo_sk2", "ss_addr_sk2", "ss_store_sk2", "ss_promo_sk2", "ss_ticket_number2", "ss_quantity2", "ss_wholesale_cost2", "ss_list_price2", "ss_sales_price2", "ss_ext_discount_amt2", "ss_ext_sales_price2", "ss_ext_wholesale_cost2", "ss_ext_list_price2", "ss_ext_tax2", "ss_coupon_amt2", "ss_net_paid2", "ss_net_paid_inc_tax2", "ss_net_profit2"),
+                                        "date_dim" AS "date_dim3" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3"),
+                                        "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0")
+                                    WHERE "store_sales2"."ss_sold_date_sk2" = "date_dim3"."d_date_sk3" AND ("store_sales2"."ss_item_sk2" = "item0"."i_item_sk0" AND "date_dim3"."d_year3" = 1999) AND ("item0"."i_manager_id0" >= 7 AND ("item0"."i_manager_id0" <= 26 AND ("item0"."i_category0" = 'Books' OR "item0"."i_category0" = 'Jewelry' OR "item0"."i_category0" = 'Shoes')))
+                                    GROUP BY SUBSTRING("item0"."i_item_desc0", 1, 30), "item0"."i_item_sk0", "date_dim3"."d_date3"
+                                    HAVING COUNT(*) > 4) AND "web_sales"."ws_bill_customer_sk" IN (SELECT "customer1"."c_customer_sk1"
+                                    FROM "store_sales" AS "store_sales3" ("ss_sold_date_sk3", "ss_sold_time_sk3", "ss_item_sk3", "ss_customer_sk3", "ss_cdemo_sk3", "ss_hdemo_sk3", "ss_addr_sk3", "ss_store_sk3", "ss_promo_sk3", "ss_ticket_number3", "ss_quantity3", "ss_wholesale_cost3", "ss_list_price3", "ss_sales_price3", "ss_ext_discount_amt3", "ss_ext_sales_price3", "ss_ext_wholesale_cost3", "ss_ext_list_price3", "ss_ext_tax3", "ss_coupon_amt3", "ss_net_paid3", "ss_net_paid_inc_tax3", "ss_net_profit3"),
+                                        "customer" AS "customer1" ("c_customer_sk1", "c_customer_id1", "c_current_cdemo_sk1", "c_current_hdemo_sk1", "c_current_addr_sk1", "c_first_shipto_date_sk1", "c_first_sales_date_sk1", "c_salutation1", "c_first_name1", "c_last_name1", "c_preferred_cust_flag1", "c_birth_day1", "c_birth_month1", "c_birth_year1", "c_birth_country1", "c_login1", "c_email_address1", "c_last_review_date_sk1")
+                                    WHERE "store_sales3"."ss_customer_sk3" = "customer1"."c_customer_sk1" AND "customer1"."c_birth_year1" >= 1932 AND "customer1"."c_birth_year1" <= 1938
+                                    GROUP BY "customer1"."c_customer_sk1"
+                                    HAVING SUM("store_sales3"."ss_quantity3" * "store_sales3"."ss_sales_price3") > 95 / 100.0 * (((SELECT MAX("t28"."csales") AS "tpcds_cmax"
+                                                        FROM (SELECT SUM("store_sales4"."ss_quantity4" * "store_sales4"."ss_sales_price4") AS "csales"
+                                                                FROM "store_sales" AS "store_sales4" ("ss_sold_date_sk4", "ss_sold_time_sk4", "ss_item_sk4", "ss_customer_sk4", "ss_cdemo_sk4", "ss_hdemo_sk4", "ss_addr_sk4", "ss_store_sk4", "ss_promo_sk4", "ss_ticket_number4", "ss_quantity4", "ss_wholesale_cost4", "ss_list_price4", "ss_sales_price4", "ss_ext_discount_amt4", "ss_ext_sales_price4", "ss_ext_wholesale_cost4", "ss_ext_list_price4", "ss_ext_tax4", "ss_coupon_amt4", "ss_net_paid4", "ss_net_paid_inc_tax4", "ss_net_profit4"),
+                                                                    "customer" AS "customer2" ("c_customer_sk2", "c_customer_id2", "c_current_cdemo_sk2", "c_current_hdemo_sk2", "c_current_addr_sk2", "c_first_shipto_date_sk2", "c_first_sales_date_sk2", "c_salutation2", "c_first_name2", "c_last_name2", "c_preferred_cust_flag2", "c_birth_day2", "c_birth_month2", "c_birth_year2", "c_birth_country2", "c_login2", "c_email_address2", "c_last_review_date_sk2"),
+                                                                    "date_dim" AS "date_dim4" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4")
+                                                                WHERE "store_sales4"."ss_customer_sk4" = "customer2"."c_customer_sk2" AND "store_sales4"."ss_sold_date_sk4" = "date_dim4"."d_date_sk4" AND "date_dim4"."d_year4" = 1999 AND "store_sales4"."ss_wholesale_cost4" >= 77 AND "store_sales4"."ss_wholesale_cost4" <= 87
+                                                                GROUP BY "customer2"."c_customer_sk2") AS "t28")))) AND ("web_sales"."ws_wholesale_cost" >= 77 AND "web_sales"."ws_wholesale_cost" <= 87))) AS "t35"
+FETCH NEXT 100 ROWS ONLY;

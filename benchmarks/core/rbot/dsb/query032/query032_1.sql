@@ -1,32 +1,10 @@
-
-select  sum(cs_ext_discount_amt)  as "excess discount amount"
-from
-   catalog_sales
-   ,item
-   ,date_dim
-where
-(i_manufact_id in (15, 261, 343, 512, 683)
-or i_manager_id BETWEEN 25 and 54)
-and i_item_sk = cs_item_sk
-and d_date between '2001-02-05' and
-        cast('2001-02-05' as date) + interval '90' day
-and d_date_sk = cs_sold_date_sk
-and cs_ext_discount_amt
-     > (
-         select
-            1.3 * avg(cs_ext_discount_amt)
-         from
-            catalog_sales
-           ,date_dim
-         where
-              cs_item_sk = i_item_sk
-          and d_date between '2001-02-05' and
-                             cast('2001-02-05' as date) + interval '90' day
-          and d_date_sk = cs_sold_date_sk
-          and cs_list_price between 259 and 288
-          and cs_sales_price / cs_list_price BETWEEN 17 * 0.01 AND 37 * 0.01
-      )
-order by sum(cs_ext_discount_amt)
-limit 100;
-
-
+SELECT SUM("catalog_sales"."cs_ext_discount_amt") AS "excess discount amount"
+FROM "catalog_sales",
+    "item",
+    "date_dim"
+WHERE ("item"."i_manufact_id" = 214 OR ("item"."i_manufact_id" = 376 OR "item"."i_manufact_id" = 518) OR ("item"."i_manufact_id" = 755 OR ("item"."i_manufact_id" = 996 OR "item"."i_manager_id" >= 71 AND "item"."i_manager_id" <= 100))) AND ("item"."i_item_sk" = "catalog_sales"."cs_item_sk" AND "date_dim"."d_date" >= '2000-03-06') AND ("date_dim"."d_date" <= (CAST('2000-03-06' AS DATE) + INTERVAL '90' DAY) AND ("date_dim"."d_date_sk" = "catalog_sales"."cs_sold_date_sk" AND "catalog_sales"."cs_ext_discount_amt" > (((SELECT 1.3 * AVG("catalog_sales0"."cs_ext_discount_amt0")
+                                    FROM "catalog_sales" AS "catalog_sales0" ("cs_sold_date_sk0", "cs_sold_time_sk0", "cs_ship_date_sk0", "cs_bill_customer_sk0", "cs_bill_cdemo_sk0", "cs_bill_hdemo_sk0", "cs_bill_addr_sk0", "cs_ship_customer_sk0", "cs_ship_cdemo_sk0", "cs_ship_hdemo_sk0", "cs_ship_addr_sk0", "cs_call_center_sk0", "cs_catalog_page_sk0", "cs_ship_mode_sk0", "cs_warehouse_sk0", "cs_item_sk0", "cs_promo_sk0", "cs_order_number0", "cs_quantity0", "cs_wholesale_cost0", "cs_list_price0", "cs_sales_price0", "cs_ext_discount_amt0", "cs_ext_sales_price0", "cs_ext_wholesale_cost0", "cs_ext_list_price0", "cs_ext_tax0", "cs_coupon_amt0", "cs_ext_ship_cost0", "cs_net_paid0", "cs_net_paid_inc_tax0", "cs_net_paid_inc_ship0", "cs_net_paid_inc_ship_tax0", "cs_net_profit0"),
+                                        "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+                                    WHERE "catalog_sales0"."cs_item_sk0" = "item"."i_item_sk" AND "date_dim0"."d_date0" >= '2000-03-06' AND ("date_dim0"."d_date0" <= (CAST('2000-03-06' AS DATE) + INTERVAL '90' DAY) AND "date_dim0"."d_date_sk0" = "catalog_sales0"."cs_sold_date_sk0") AND ("catalog_sales0"."cs_list_price0" >= 80 AND "catalog_sales0"."cs_list_price0" <= 109 AND ("catalog_sales0"."cs_sales_price0" / "catalog_sales0"."cs_list_price0" >= 80 * 0.01 AND "catalog_sales0"."cs_sales_price0" / "catalog_sales0"."cs_list_price0" <= 100 * 0.01)))))))
+ORDER BY 1
+FETCH NEXT 100 ROWS ONLY;

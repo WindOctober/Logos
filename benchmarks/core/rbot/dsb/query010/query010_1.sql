@@ -1,78 +1,20 @@
-
-select 
-  cd_gender,
-  cd_marital_status,
-  cd_education_status,
-  count(*) cnt1,
-  cd_purchase_estimate,
-  count(*) cnt2,
-  cd_credit_rating,
-  count(*) cnt3,
-  cd_dep_count,
-  count(*) cnt4,
-  cd_dep_employed_count,
-  count(*) cnt5,
-  cd_dep_college_count,
-  count(*) cnt6
- from
-  customer c,customer_address ca,customer_demographics
- where
-  c.c_current_addr_sk = ca.ca_address_sk and
-  ca_county in ('Caledonia County','Cleveland County','Montezuma County','Pearl River County','Pinal County') and
-  c.c_birth_month in (4, 5) and
-  cd_demo_sk = c.c_current_cdemo_sk
-  and cd_marital_status in ('D', 'S', 'M')
-  and cd_education_status in ('4 yr Degree', 'Unknown', '2 yr Degree')
-  and cd_gender = 'F' and
-  exists (select *
-          from store_sales,date_dim, item
-          where c.c_customer_sk = ss_customer_sk and
-                ss_sold_date_sk = d_date_sk and
-                d_year = 2001 and
-                d_moy between 9 and 9+3 and
-                ss_item_sk = i_item_sk and
-                i_category in ('Home', 'Jewelry', 'Shoes')
-                and ss_sales_price / ss_list_price BETWEEN 53 * 0.01 AND 63 * 0.01
-                and i_manager_id BETWEEN 28 and 37
-                ) and
-   (exists (select *
-            from web_sales,date_dim, item
-            where c.c_customer_sk = ws_bill_customer_sk and
-                  ws_sold_date_sk = d_date_sk and
-                  d_year = 2001 and
-                  d_moy between 9 ANd 9+3 and
-                  ws_item_sk = i_item_sk and
-                  i_category in ('Home', 'Jewelry', 'Shoes')
-                  and i_manager_id BETWEEN 28 and 37
-                  and ws_sales_price / ws_list_price BETWEEN 53 * 0.01 AND 63 * 0.01
-                  ) or
-    exists (select *
-            from catalog_sales,date_dim, item
-            where c.c_customer_sk = cs_ship_customer_sk and
-                  cs_sold_date_sk = d_date_sk and
-                  d_year = 2001 and
-                  d_moy between 9 and 9+3 and
-                  cs_item_sk = i_item_sk and
-                  i_category in ('Home', 'Jewelry', 'Shoes')
-                  and i_manager_id BETWEEN 28 and 37
-                  and cs_sales_price / cs_list_price BETWEEN 53 * 0.01 AND 63 * 0.01
-                  ))
- group by cd_gender,
-          cd_marital_status,
-          cd_education_status,
-          cd_purchase_estimate,
-          cd_credit_rating,
-          cd_dep_count,
-          cd_dep_employed_count,
-          cd_dep_college_count
- order by cd_gender,
-          cd_marital_status,
-          cd_education_status,
-          cd_purchase_estimate,
-          cd_credit_rating,
-          cd_dep_count,
-          cd_dep_employed_count,
-          cd_dep_college_count
-limit 100;
-
-
+SELECT "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", COUNT(*) AS "cnt1", "customer_demographics"."cd_purchase_estimate", COUNT(*) AS "cnt2", "customer_demographics"."cd_credit_rating", COUNT(*) AS "cnt3", "customer_demographics"."cd_dep_count", COUNT(*) AS "cnt4", "customer_demographics"."cd_dep_employed_count", COUNT(*) AS "cnt5", "customer_demographics"."cd_dep_college_count", COUNT(*) AS "cnt6"
+FROM "customer",
+    "customer_address",
+    "customer_demographics"
+WHERE "customer"."c_current_addr_sk" = "customer_address"."ca_address_sk" AND ("customer_address"."ca_county" = 'Northampton County' OR "customer_address"."ca_county" = 'Pendleton County' OR "customer_address"."ca_county" = 'Perry County' OR "customer_address"."ca_county" = 'Randolph County' OR "customer_address"."ca_county" = 'Woods County') AND (("customer"."c_birth_month" = 7 OR "customer"."c_birth_month" = 11) AND "customer_demographics"."cd_demo_sk" = "customer"."c_current_cdemo_sk") AND (("customer_demographics"."cd_marital_status" = 'S' OR "customer_demographics"."cd_marital_status" = 'M') AND ("customer_demographics"."cd_education_status" = '4 yr Degree' OR "customer_demographics"."cd_education_status" = 'Unknown') AND ("customer_demographics"."cd_gender" = 'F' AND (EXISTS (SELECT *
+                                FROM "store_sales",
+                                    "date_dim",
+                                    "item"
+                                WHERE "customer"."c_customer_sk" = "store_sales"."ss_customer_sk" AND "store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND ("date_dim"."d_year" = 2002 AND ("date_dim"."d_moy" >= 4 AND "date_dim"."d_moy" <= 4 + 3)) AND ("store_sales"."ss_item_sk" = "item"."i_item_sk" AND (("item"."i_category" = 'Books' OR "item"."i_category" = 'Electronics' OR "item"."i_category" = 'Sports') AND "store_sales"."ss_sales_price" / "store_sales"."ss_list_price" >= 77 * 0.01) AND ("store_sales"."ss_sales_price" / "store_sales"."ss_list_price" <= 87 * 0.01 AND ("item"."i_manager_id" >= 91 AND "item"."i_manager_id" <= 100)))) AND (EXISTS (SELECT *
+                                        FROM "web_sales",
+                                            "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0"),
+                                            "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0")
+                                        WHERE "customer"."c_customer_sk" = "web_sales"."ws_bill_customer_sk" AND "web_sales"."ws_sold_date_sk" = "date_dim0"."d_date_sk0" AND ("date_dim0"."d_year0" = 2002 AND ("date_dim0"."d_moy0" >= 4 AND "date_dim0"."d_moy0" <= 4 + 3)) AND ("web_sales"."ws_item_sk" = "item0"."i_item_sk0" AND (("item0"."i_category0" = 'Books' OR "item0"."i_category0" = 'Electronics' OR "item0"."i_category0" = 'Sports') AND "item0"."i_manager_id0" >= 91) AND ("item0"."i_manager_id0" <= 100 AND ("web_sales"."ws_sales_price" / "web_sales"."ws_list_price" >= 77 * 0.01 AND "web_sales"."ws_sales_price" / "web_sales"."ws_list_price" <= 87 * 0.01)))) OR EXISTS (SELECT *
+                                        FROM "catalog_sales",
+                                            "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1"),
+                                            "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1")
+                                        WHERE "customer"."c_customer_sk" = "catalog_sales"."cs_ship_customer_sk" AND "catalog_sales"."cs_sold_date_sk" = "date_dim1"."d_date_sk1" AND ("date_dim1"."d_year1" = 2002 AND ("date_dim1"."d_moy1" >= 4 AND "date_dim1"."d_moy1" <= 4 + 3)) AND ("catalog_sales"."cs_item_sk" = "item1"."i_item_sk1" AND (("item1"."i_category1" = 'Books' OR "item1"."i_category1" = 'Electronics' OR "item1"."i_category1" = 'Sports') AND "item1"."i_manager_id1" >= 91) AND ("item1"."i_manager_id1" <= 100 AND ("catalog_sales"."cs_sales_price" / "catalog_sales"."cs_list_price" >= 77 * 0.01 AND "catalog_sales"."cs_sales_price" / "catalog_sales"."cs_list_price" <= 87 * 0.01))))))))
+GROUP BY "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", "customer_demographics"."cd_purchase_estimate", "customer_demographics"."cd_credit_rating", "customer_demographics"."cd_dep_count", "customer_demographics"."cd_dep_employed_count", "customer_demographics"."cd_dep_college_count"
+ORDER BY "customer_demographics"."cd_gender", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status", "customer_demographics"."cd_purchase_estimate", "customer_demographics"."cd_credit_rating", "customer_demographics"."cd_dep_count", "customer_demographics"."cd_dep_employed_count", "customer_demographics"."cd_dep_college_count"
+FETCH NEXT 100 ROWS ONLY;

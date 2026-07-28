@@ -1,35 +1,11 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	p_brand,
-	p_type,
-	p_size,
-	count(distinct ps_suppkey) as supplier_cnt
-from
-	partsupp,
-	part
-where
-	p_partkey = ps_partkey
-	and p_brand <> 'Brand#22'
-	and p_type not like 'ECONOMY BRUSHED%'
-	and p_size in (47, 16, 48, 39, 37, 28, 7, 50)
-	and ps_suppkey not in (
-		select
-			s_suppkey
-		from
-			supplier
-		where
-			s_comment like '%Customer%Complaints%'
-	)
-group by
-	p_brand,
-	p_type,
-	p_size
-order by
-	supplier_cnt desc,
-	p_brand,
-	p_type,
-	p_size
-limit 1;
+SELECT "t3"."p_brand", "t3"."p_type", "t3"."p_size", COUNT("t3"."ps_suppkey") AS "supplier_cnt"
+FROM (SELECT "part"."p_brand", "part"."p_type", "part"."p_size", "partsupp"."ps_suppkey"
+        FROM "partsupp",
+            "part"
+        WHERE "part"."p_partkey" = "partsupp"."ps_partkey" AND "part"."p_brand" <> 'Brand#42' AND "part"."p_type" NOT LIKE 'MEDIUM PLATED%' AND ("part"."p_size" = 43 OR "part"."p_size" = 45 OR ("part"."p_size" = 15 OR "part"."p_size" = 11) OR ("part"."p_size" = 40 OR "part"."p_size" = 35 OR ("part"."p_size" = 28 OR "part"."p_size" = 46))) AND "partsupp"."ps_suppkey" NOT IN (SELECT "s_suppkey"
+                    FROM "supplier"
+                    WHERE "s_comment" LIKE '%Customer%Complaints%')
+        GROUP BY "part"."p_brand", "part"."p_type", "part"."p_size", "partsupp"."ps_suppkey") AS "t3"
+GROUP BY "t3"."p_brand", "t3"."p_type", "t3"."p_size"
+ORDER BY 4 DESC, "t3"."p_brand", "t3"."p_type", "t3"."p_size"
+FETCH NEXT 1 ROWS ONLY;

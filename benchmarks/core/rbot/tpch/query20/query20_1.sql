@@ -1,42 +1,15 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	s_name,
-	s_address
-from
-	supplier,
-	nation
-where
-	s_suppkey in (
-		select
-			ps_suppkey
-		from
-			partsupp
-		where
-			ps_partkey in (
-				select
-					p_partkey
-				from
-					part
-				where
-					p_name like 'floral%'
-			)
-			and ps_availqty > (
-				select
-					0.5 * sum(l_quantity)
-				from
-					lineitem
-				where
-					l_partkey = ps_partkey
-					and l_suppkey = ps_suppkey
-					and l_shipdate >= date '1997-01-01'
-					and l_shipdate < date '1997-01-01' + interval '1' year
-			)
-	)
-	and s_nationkey = n_nationkey
-	and n_name = 'CHINA'
-order by
-	s_name
-limit 1;
+SELECT "t7"."s_name", "t7"."s_address"
+FROM (SELECT *
+        FROM "supplier"
+        WHERE "s_suppkey" IN (SELECT "ps_suppkey"
+                    FROM "partsupp"
+                    WHERE "ps_partkey" IN (SELECT "p_partkey"
+                                FROM "part"
+                                WHERE "p_name" LIKE 'snow%') AND "ps_availqty" > (((SELECT 0.5 * SUM("l_quantity")
+                                        FROM "lineitem"
+                                        WHERE "l_partkey" = "partsupp"."ps_partkey" AND "l_suppkey" = "partsupp"."ps_suppkey" AND "l_shipdate" >= DATE '1994-01-01' AND "l_shipdate" < (DATE '1994-01-01' + INTERVAL '1' YEAR)))))) AS "t7"
+    INNER JOIN (SELECT *
+        FROM "nation"
+        WHERE "n_name" = 'EGYPT') AS "t8" ON "t7"."s_nationkey" = "t8"."n_nationkey"
+ORDER BY "t7"."s_name"
+FETCH NEXT 1 ROWS ONLY;

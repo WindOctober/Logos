@@ -1,34 +1,13 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-with revenue0 (supplier_no, total_revenue) as
-	(select
-		l_suppkey,
-		sum(l_extendedprice * (1 - l_discount))
-	from
-		lineitem
-	where
-		l_shipdate >= date '1995-12-01'
-		and l_shipdate < date '1995-12-01' + interval '3' month
-	group by
-		l_suppkey)
-select
-	s_suppkey,
-	s_name,
-	s_address,
-	s_phone,
-	total_revenue
-from
-	supplier,
-	revenue0
-where
-	s_suppkey = supplier_no
-	and total_revenue = (
-		select
-			max(total_revenue)
-		from
-			revenue0
-	)
-order by
-	s_suppkey
-limit 1;
+SELECT "supplier"."s_suppkey", "supplier"."s_name", "supplier"."s_address", "supplier"."s_phone", "t1"."EXPR$1" AS "total_revenue"
+FROM "supplier",
+        (SELECT "l_suppkey", COALESCE(SUM("l_extendedprice" * (1 - "l_discount")), 0) AS "EXPR$1"
+        FROM "lineitem"
+        WHERE "l_shipdate" >= DATE '1993-05-01' AND "l_shipdate" < (DATE '1993-05-01' + INTERVAL '3' MONTH)
+        GROUP BY "l_suppkey") AS "t1"
+WHERE "supplier"."s_suppkey" = "t1"."l_suppkey" AND "t1"."EXPR$1" = (((SELECT MAX("EXPR$1")
+                    FROM (SELECT SUM("l_extendedprice0" * (1 - "l_discount0")) AS "EXPR$1"
+                            FROM "lineitem" AS "lineitem0" ("l_orderkey0", "l_partkey0", "l_suppkey0", "l_linenumber0", "l_quantity0", "l_extendedprice0", "l_discount0", "l_tax0", "l_returnflag0", "l_linestatus0", "l_shipdate0", "l_commitdate0", "l_receiptdate0", "l_shipinstruct0", "l_shipmode0", "l_comment0")
+                            WHERE "l_shipdate0" >= DATE '1993-05-01' AND "l_shipdate0" < (DATE '1993-05-01' + INTERVAL '3' MONTH)
+                            GROUP BY "l_suppkey0") AS "t5")))
+ORDER BY "supplier"."s_suppkey"
+FETCH NEXT 1 ROWS ONLY;

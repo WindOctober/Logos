@@ -1,31 +1,11 @@
-
-select  
-        cc_call_center_id Call_Center,
-        cc_name Call_Center_Name,
-        cc_manager Manager,
-        sum(cr_net_loss) Returns_Loss
-from
-        call_center,
-        catalog_returns,
-        date_dim,
-        customer,
-        customer_address,
-        customer_demographics,
-        household_demographics
-where
-        cr_call_center_sk       = cc_call_center_sk
-and     cr_returned_date_sk     = d_date_sk
-and     cr_returning_customer_sk= c_customer_sk
-and     cd_demo_sk              = c_current_cdemo_sk
-and     hd_demo_sk              = c_current_hdemo_sk
-and     ca_address_sk           = c_current_addr_sk
-and     d_year                  = 2002 
-and     d_moy                   = 3
-and     ( (cd_marital_status       = 'M' and cd_education_status     = 'Unknown')
-        or(cd_marital_status       = 'W' and cd_education_status     = 'Advanced Degree'))
-and     hd_buy_potential like '1001-5000%'
-and     ca_gmt_offset           = -7
-group by cc_call_center_id,cc_name,cc_manager,cd_marital_status,cd_education_status
-order by sum(cr_net_loss) desc;
-
-
+SELECT "call_center"."cc_call_center_id" AS "call_center", "call_center"."cc_name" AS "call_center_name", "call_center"."cc_manager" AS "manager", SUM("catalog_returns"."cr_net_loss") AS "returns_loss"
+FROM "call_center",
+    "catalog_returns",
+    "date_dim",
+    "customer",
+    "customer_address",
+    "customer_demographics",
+    "household_demographics"
+WHERE "catalog_returns"."cr_call_center_sk" = "call_center"."cc_call_center_sk" AND "catalog_returns"."cr_returned_date_sk" = "date_dim"."d_date_sk" AND ("catalog_returns"."cr_returning_customer_sk" = "customer"."c_customer_sk" AND ("customer_demographics"."cd_demo_sk" = "customer"."c_current_cdemo_sk" AND "household_demographics"."hd_demo_sk" = "customer"."c_current_hdemo_sk")) AND ("customer_address"."ca_address_sk" = "customer"."c_current_addr_sk" AND ("date_dim"."d_year" = 2000 AND "date_dim"."d_moy" = 3) AND (("customer_demographics"."cd_marital_status" = 'M' AND "customer_demographics"."cd_education_status" = 'Unknown' OR "customer_demographics"."cd_marital_status" = 'W' AND "customer_demographics"."cd_education_status" = 'Advanced Degree') AND ("household_demographics"."hd_buy_potential" LIKE '501-1000%' AND CAST("customer_address"."ca_gmt_offset" AS DECIMAL(12, 2)) = -7)))
+GROUP BY "call_center"."cc_call_center_id", "call_center"."cc_name", "call_center"."cc_manager", "customer_demographics"."cd_marital_status", "customer_demographics"."cd_education_status"
+ORDER BY 4 DESC;

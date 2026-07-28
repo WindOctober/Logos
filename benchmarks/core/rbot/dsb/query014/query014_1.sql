@@ -1,127 +1,94 @@
-
-with  cross_items as
- (select i_item_sk ss_item_sk
- from item,
- (select iss.i_brand_id brand_id
-     ,iss.i_class_id class_id
-     ,iss.i_category_id category_id
- from store_sales
-     ,item iss
-     ,date_dim d1
- where ss_item_sk = iss.i_item_sk
-   and ss_sold_date_sk = d1.d_date_sk
-   and d1.d_year between 1999 AND 1999 + 2
-   and i_category IN ('Books', 'Children', 'Home')
-   and i_manager_id BETWEEN 7 and 16
-   and ss_wholesale_cost BETWEEN 43 AND 63
-intersect
- select ics.i_brand_id
-     ,ics.i_class_id
-     ,ics.i_category_id
- from catalog_sales
-     ,item ics
-     ,date_dim d2
- where cs_item_sk = ics.i_item_sk
-   and cs_sold_date_sk = d2.d_date_sk
-   and d2.d_year between 1999 AND 1999 + 2
-   and i_category IN ('Books', 'Children', 'Home')
-   and i_manager_id BETWEEN 7 and 16
-   and cs_wholesale_cost BETWEEN 43 AND 63
-intersect
- select iws.i_brand_id
-     ,iws.i_class_id
-     ,iws.i_category_id
- from web_sales
-     ,item iws
-     ,date_dim d3
- where ws_item_sk = iws.i_item_sk
-   and ws_sold_date_sk = d3.d_date_sk
-   and ws_wholesale_cost BETWEEN 43 AND 63
-   and d3.d_year between 1999 AND 1999 + 2) x
- where i_brand_id = brand_id
-      and i_class_id = class_id
-      and i_category_id = category_id
-      and i_category IN ('Books', 'Children', 'Home')
-      and i_manager_id BETWEEN 7 and 16
-),
- avg_sales as
-(select avg(quantity*list_price) average_sales
-  from (select ss_quantity quantity
-             ,ss_list_price list_price
-       from store_sales
-           ,date_dim
-       where ss_sold_date_sk = d_date_sk
-         and d_year between 1999 and 1999 + 2
-         and ss_wholesale_cost BETWEEN 43 AND 63
-       union all
-       select cs_quantity quantity
-             ,cs_list_price list_price
-       from catalog_sales
-           ,date_dim
-       where cs_sold_date_sk = d_date_sk
-         and d_year between 1999 and 1999 + 2
-         and cs_wholesale_cost BETWEEN 43 AND 63
-       union all
-       select ws_quantity quantity
-             ,ws_list_price list_price
-       from web_sales
-           ,date_dim
-       where ws_sold_date_sk = d_date_sk
-        and ws_wholesale_cost BETWEEN 43 AND 63
-         and d_year between 1999 and 1999 + 2) x)
-  select  this_year.channel ty_channel
-                           ,this_year.i_brand_id ty_brand
-                           ,this_year.i_class_id ty_class
-                           ,this_year.i_category_id ty_category
-                           ,this_year.sales ty_sales
-                           ,this_year.number_sales ty_number_sales
-                           ,last_year.channel ly_channel
-                           ,last_year.i_brand_id ly_brand
-                           ,last_year.i_class_id ly_class
-                           ,last_year.i_category_id ly_category
-                           ,last_year.sales ly_sales
-                           ,last_year.number_sales ly_number_sales
- from
- (select 'store' channel, i_brand_id,i_class_id,i_category_id
-        ,sum(ss_quantity*ss_list_price) sales, count(*) number_sales
- from store_sales
-     ,item
-     ,date_dim
- where ss_item_sk in (select ss_item_sk from cross_items)
-   and ss_item_sk = i_item_sk
-   and ss_sold_date_sk = d_date_sk
-   and d_week_seq = (select d_week_seq
-                     from date_dim
-                     where d_year = 1999 + 1
-                       and d_moy = 12
-                       and d_dom = 24)
-   and i_category IN ('Books', 'Children', 'Home')
-   and i_manager_id BETWEEN 7 and 16
-   and ss_wholesale_cost BETWEEN 43 AND 63
- group by i_brand_id,i_class_id,i_category_id
- having sum(ss_quantity*ss_list_price) > (select average_sales from avg_sales)) this_year,
- (select 'store' channel, i_brand_id,i_class_id
-        ,i_category_id, sum(ss_quantity*ss_list_price) sales, count(*) number_sales
- from store_sales
-     ,item
-     ,date_dim
- where ss_item_sk in (select ss_item_sk from cross_items)
-   and ss_item_sk = i_item_sk
-   and ss_sold_date_sk = d_date_sk
-   and d_week_seq = (select d_week_seq
-                     from date_dim
-                     where d_year = 1999
-                       and d_moy = 12
-                       and d_dom = 24)
-   and i_category IN ('Books', 'Children', 'Home')
-   and ss_wholesale_cost BETWEEN 43 AND 63
-   and i_manager_id BETWEEN 7 and 16
-group by i_brand_id,i_class_id,i_category_id
- having sum(ss_quantity*ss_list_price) > (select average_sales from avg_sales)) last_year
- where this_year.i_brand_id= last_year.i_brand_id
-   and this_year.i_class_id = last_year.i_class_id
-   and this_year.i_category_id = last_year.i_category_id
- order by this_year.channel, this_year.i_brand_id, this_year.i_class_id, this_year.i_category_id
- limit 100;
-
-
+SELECT *
+FROM (SELECT 'store' AS "channel", "i_brand_id", "i_class_id", "i_category_id", "sales", "number_sales"
+        FROM (SELECT "item"."i_brand_id", "item"."i_class_id", "item"."i_category_id", CASE WHEN COUNT("store_sales"."ss_quantity" * "store_sales"."ss_list_price") = 0 THEN NULL ELSE COALESCE(SUM("store_sales"."ss_quantity" * "store_sales"."ss_list_price"), 0) END AS "sales", COUNT(*) AS "number_sales"
+                FROM "store_sales",
+                    "item",
+                    "date_dim"
+                WHERE "store_sales"."ss_item_sk" IN (SELECT "item0"."i_item_sk1"
+                            FROM "item" AS "item0" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1"),
+                                    (SELECT *
+                                        FROM (SELECT "item1"."i_brand_id2", "item1"."i_class_id2", "item1"."i_category_id2"
+                                                    FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk1", "ss_sold_time_sk1", "ss_item_sk1", "ss_customer_sk1", "ss_cdemo_sk1", "ss_hdemo_sk1", "ss_addr_sk1", "ss_store_sk1", "ss_promo_sk1", "ss_ticket_number1", "ss_quantity1", "ss_wholesale_cost1", "ss_list_price1", "ss_sales_price1", "ss_ext_discount_amt1", "ss_ext_sales_price1", "ss_ext_wholesale_cost1", "ss_ext_list_price1", "ss_ext_tax1", "ss_coupon_amt1", "ss_net_paid1", "ss_net_paid_inc_tax1", "ss_net_profit1"),
+                                                        "item" AS "item1" ("i_item_sk2", "i_item_id2", "i_rec_start_date2", "i_rec_end_date2", "i_item_desc2", "i_current_price2", "i_wholesale_cost2", "i_brand_id2", "i_brand2", "i_class_id2", "i_class2", "i_category_id2", "i_category2", "i_manufact_id2", "i_manufact2", "i_size2", "i_formulation2", "i_color2", "i_units2", "i_container2", "i_manager_id2", "i_product_name2"),
+                                                        "date_dim" AS "date_dim0" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1")
+                                                    WHERE "store_sales0"."ss_item_sk1" = "item1"."i_item_sk2" AND "store_sales0"."ss_sold_date_sk1" = "date_dim0"."d_date_sk1" AND ("date_dim0"."d_year1" >= 1998 AND "date_dim0"."d_year1" <= 1998 + 2) AND (("item1"."i_category2" = 'Books' OR "item1"."i_category2" = 'Jewelry' OR "item1"."i_category2" = 'Shoes') AND "item1"."i_manager_id2" >= 91 AND ("item1"."i_manager_id2" <= 100 AND ("store_sales0"."ss_wholesale_cost1" >= 73 AND "store_sales0"."ss_wholesale_cost1" <= 93)))
+                                                    INTERSECT
+                                                    SELECT "item2"."i_brand_id3", "item2"."i_class_id3", "item2"."i_category_id3"
+                                                    FROM "catalog_sales",
+                                                        "item" AS "item2" ("i_item_sk3", "i_item_id3", "i_rec_start_date3", "i_rec_end_date3", "i_item_desc3", "i_current_price3", "i_wholesale_cost3", "i_brand_id3", "i_brand3", "i_class_id3", "i_class3", "i_category_id3", "i_category3", "i_manufact_id3", "i_manufact3", "i_size3", "i_formulation3", "i_color3", "i_units3", "i_container3", "i_manager_id3", "i_product_name3"),
+                                                        "date_dim" AS "date_dim1" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2")
+                                                    WHERE "catalog_sales"."cs_item_sk" = "item2"."i_item_sk3" AND "catalog_sales"."cs_sold_date_sk" = "date_dim1"."d_date_sk2" AND ("date_dim1"."d_year2" >= 1998 AND "date_dim1"."d_year2" <= 1998 + 2) AND (("item2"."i_category3" = 'Books' OR "item2"."i_category3" = 'Jewelry' OR "item2"."i_category3" = 'Shoes') AND "item2"."i_manager_id3" >= 91 AND ("item2"."i_manager_id3" <= 100 AND ("catalog_sales"."cs_wholesale_cost" >= 73 AND "catalog_sales"."cs_wholesale_cost" <= 93)))) AS "t"
+                                        INTERSECT
+                                        SELECT "item3"."i_brand_id4", "item3"."i_class_id4", "item3"."i_category_id4"
+                                        FROM "web_sales",
+                                            "item" AS "item3" ("i_item_sk4", "i_item_id4", "i_rec_start_date4", "i_rec_end_date4", "i_item_desc4", "i_current_price4", "i_wholesale_cost4", "i_brand_id4", "i_brand4", "i_class_id4", "i_class4", "i_category_id4", "i_category4", "i_manufact_id4", "i_manufact4", "i_size4", "i_formulation4", "i_color4", "i_units4", "i_container4", "i_manager_id4", "i_product_name4"),
+                                            "date_dim" AS "date_dim2" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3")
+                                        WHERE "web_sales"."ws_item_sk" = "item3"."i_item_sk4" AND ("web_sales"."ws_sold_date_sk" = "date_dim2"."d_date_sk3" AND "web_sales"."ws_wholesale_cost" >= 73) AND ("web_sales"."ws_wholesale_cost" <= 93 AND ("date_dim2"."d_year3" >= 1998 AND "date_dim2"."d_year3" <= 1998 + 2))) AS "t6"
+                            WHERE "item0"."i_brand_id1" = "t6"."i_brand_id2" AND ("item0"."i_class_id1" = "t6"."i_class_id2" AND "item0"."i_category_id1" = "t6"."i_category_id2") AND (("item0"."i_category1" = 'Books' OR "item0"."i_category1" = 'Jewelry' OR "item0"."i_category1" = 'Shoes') AND ("item0"."i_manager_id1" >= 91 AND "item0"."i_manager_id1" <= 100))) AND "store_sales"."ss_item_sk" = "item"."i_item_sk" AND ("store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND "date_dim"."d_week_seq" = (((SELECT "d_week_seq4"
+                                            FROM "date_dim" AS "date_dim3" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4")
+                                            WHERE "d_year4" = 1998 + 1 AND "d_moy4" = 12 AND "d_dom4" = 13)))) AND (("item"."i_category" = 'Books' OR "item"."i_category" = 'Jewelry' OR "item"."i_category" = 'Shoes') AND "item"."i_manager_id" >= 91 AND ("item"."i_manager_id" <= 100 AND ("store_sales"."ss_wholesale_cost" >= 73 AND "store_sales"."ss_wholesale_cost" <= 93)))
+                GROUP BY "item"."i_brand_id", "item"."i_class_id", "item"."i_category_id") AS "t14"
+        WHERE "t14"."sales" > (((SELECT AVG("ss_quantity2" * "ss_list_price2") AS "average_sales"
+                            FROM (SELECT *
+                                        FROM (SELECT "store_sales1"."ss_quantity2", "store_sales1"."ss_list_price2"
+                                                    FROM "store_sales" AS "store_sales1" ("ss_sold_date_sk2", "ss_sold_time_sk2", "ss_item_sk2", "ss_customer_sk2", "ss_cdemo_sk2", "ss_hdemo_sk2", "ss_addr_sk2", "ss_store_sk2", "ss_promo_sk2", "ss_ticket_number2", "ss_quantity2", "ss_wholesale_cost2", "ss_list_price2", "ss_sales_price2", "ss_ext_discount_amt2", "ss_ext_sales_price2", "ss_ext_wholesale_cost2", "ss_ext_list_price2", "ss_ext_tax2", "ss_coupon_amt2", "ss_net_paid2", "ss_net_paid_inc_tax2", "ss_net_profit2"),
+                                                        "date_dim" AS "date_dim4" ("d_date_sk5", "d_date_id5", "d_date5", "d_month_seq5", "d_week_seq5", "d_quarter_seq5", "d_year5", "d_dow5", "d_moy5", "d_dom5", "d_qoy5", "d_fy_year5", "d_fy_quarter_seq5", "d_fy_week_seq5", "d_day_name5", "d_quarter_name5", "d_holiday5", "d_weekend5", "d_following_holiday5", "d_first_dom5", "d_last_dom5", "d_same_day_ly5", "d_same_day_lq5", "d_current_day5", "d_current_week5", "d_current_month5", "d_current_quarter5", "d_current_year5")
+                                                    WHERE "store_sales1"."ss_sold_date_sk2" = "date_dim4"."d_date_sk5" AND "date_dim4"."d_year5" >= 1998 AND "date_dim4"."d_year5" <= 1998 + 2 AND "store_sales1"."ss_wholesale_cost2" >= 73 AND "store_sales1"."ss_wholesale_cost2" <= 93
+                                                    UNION ALL
+                                                    SELECT "catalog_sales0"."cs_quantity0", "catalog_sales0"."cs_list_price0"
+                                                    FROM "catalog_sales" AS "catalog_sales0" ("cs_sold_date_sk0", "cs_sold_time_sk0", "cs_ship_date_sk0", "cs_bill_customer_sk0", "cs_bill_cdemo_sk0", "cs_bill_hdemo_sk0", "cs_bill_addr_sk0", "cs_ship_customer_sk0", "cs_ship_cdemo_sk0", "cs_ship_hdemo_sk0", "cs_ship_addr_sk0", "cs_call_center_sk0", "cs_catalog_page_sk0", "cs_ship_mode_sk0", "cs_warehouse_sk0", "cs_item_sk0", "cs_promo_sk0", "cs_order_number0", "cs_quantity0", "cs_wholesale_cost0", "cs_list_price0", "cs_sales_price0", "cs_ext_discount_amt0", "cs_ext_sales_price0", "cs_ext_wholesale_cost0", "cs_ext_list_price0", "cs_ext_tax0", "cs_coupon_amt0", "cs_ext_ship_cost0", "cs_net_paid0", "cs_net_paid_inc_tax0", "cs_net_paid_inc_ship0", "cs_net_paid_inc_ship_tax0", "cs_net_profit0"),
+                                                        "date_dim" AS "date_dim5" ("d_date_sk6", "d_date_id6", "d_date6", "d_month_seq6", "d_week_seq6", "d_quarter_seq6", "d_year6", "d_dow6", "d_moy6", "d_dom6", "d_qoy6", "d_fy_year6", "d_fy_quarter_seq6", "d_fy_week_seq6", "d_day_name6", "d_quarter_name6", "d_holiday6", "d_weekend6", "d_following_holiday6", "d_first_dom6", "d_last_dom6", "d_same_day_ly6", "d_same_day_lq6", "d_current_day6", "d_current_week6", "d_current_month6", "d_current_quarter6", "d_current_year6")
+                                                    WHERE "catalog_sales0"."cs_sold_date_sk0" = "date_dim5"."d_date_sk6" AND "date_dim5"."d_year6" >= 1998 AND "date_dim5"."d_year6" <= 1998 + 2 AND "catalog_sales0"."cs_wholesale_cost0" >= 73 AND "catalog_sales0"."cs_wholesale_cost0" <= 93) AS "t"
+                                        UNION ALL
+                                        SELECT "web_sales0"."ws_quantity0", "web_sales0"."ws_list_price0"
+                                        FROM "web_sales" AS "web_sales0" ("ws_sold_date_sk0", "ws_sold_time_sk0", "ws_ship_date_sk0", "ws_item_sk0", "ws_bill_customer_sk0", "ws_bill_cdemo_sk0", "ws_bill_hdemo_sk0", "ws_bill_addr_sk0", "ws_ship_customer_sk0", "ws_ship_cdemo_sk0", "ws_ship_hdemo_sk0", "ws_ship_addr_sk0", "ws_web_page_sk0", "ws_web_site_sk0", "ws_ship_mode_sk0", "ws_warehouse_sk0", "ws_promo_sk0", "ws_order_number0", "ws_quantity0", "ws_wholesale_cost0", "ws_list_price0", "ws_sales_price0", "ws_ext_discount_amt0", "ws_ext_sales_price0", "ws_ext_wholesale_cost0", "ws_ext_list_price0", "ws_ext_tax0", "ws_coupon_amt0", "ws_ext_ship_cost0", "ws_net_paid0", "ws_net_paid_inc_tax0", "ws_net_paid_inc_ship0", "ws_net_paid_inc_ship_tax0", "ws_net_profit0"),
+                                            "date_dim" AS "date_dim6" ("d_date_sk7", "d_date_id7", "d_date7", "d_month_seq7", "d_week_seq7", "d_quarter_seq7", "d_year7", "d_dow7", "d_moy7", "d_dom7", "d_qoy7", "d_fy_year7", "d_fy_quarter_seq7", "d_fy_week_seq7", "d_day_name7", "d_quarter_name7", "d_holiday7", "d_weekend7", "d_following_holiday7", "d_first_dom7", "d_last_dom7", "d_same_day_ly7", "d_same_day_lq7", "d_current_day7", "d_current_week7", "d_current_month7", "d_current_quarter7", "d_current_year7")
+                                        WHERE "web_sales0"."ws_sold_date_sk0" = "date_dim6"."d_date_sk7" AND "web_sales0"."ws_wholesale_cost0" >= 73 AND "web_sales0"."ws_wholesale_cost0" <= 93 AND "date_dim6"."d_year7" >= 1998 AND "date_dim6"."d_year7" <= 1998 + 2) AS "t22")))) AS "t27",
+        (SELECT 'store' AS "channel", "i_brand_id0", "i_class_id0", "i_category_id0", "sales", "number_sales"
+        FROM (SELECT "item4"."i_brand_id0", "item4"."i_class_id0", "item4"."i_category_id0", CASE WHEN COUNT("store_sales2"."ss_quantity0" * "store_sales2"."ss_list_price0") = 0 THEN NULL ELSE COALESCE(SUM("store_sales2"."ss_quantity0" * "store_sales2"."ss_list_price0"), 0) END AS "sales", COUNT(*) AS "number_sales"
+                FROM "store_sales" AS "store_sales2" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0"),
+                    "item" AS "item4" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0"),
+                    "date_dim" AS "date_dim7" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+                WHERE "store_sales2"."ss_item_sk0" IN (SELECT "item5"."i_item_sk5"
+                            FROM "item" AS "item5" ("i_item_sk5", "i_item_id5", "i_rec_start_date5", "i_rec_end_date5", "i_item_desc5", "i_current_price5", "i_wholesale_cost5", "i_brand_id5", "i_brand5", "i_class_id5", "i_class5", "i_category_id5", "i_category5", "i_manufact_id5", "i_manufact5", "i_size5", "i_formulation5", "i_color5", "i_units5", "i_container5", "i_manager_id5", "i_product_name5"),
+                                    (SELECT *
+                                        FROM (SELECT "item6"."i_brand_id6", "item6"."i_class_id6", "item6"."i_category_id6"
+                                                    FROM "store_sales" AS "store_sales3" ("ss_sold_date_sk3", "ss_sold_time_sk3", "ss_item_sk3", "ss_customer_sk3", "ss_cdemo_sk3", "ss_hdemo_sk3", "ss_addr_sk3", "ss_store_sk3", "ss_promo_sk3", "ss_ticket_number3", "ss_quantity3", "ss_wholesale_cost3", "ss_list_price3", "ss_sales_price3", "ss_ext_discount_amt3", "ss_ext_sales_price3", "ss_ext_wholesale_cost3", "ss_ext_list_price3", "ss_ext_tax3", "ss_coupon_amt3", "ss_net_paid3", "ss_net_paid_inc_tax3", "ss_net_profit3"),
+                                                        "item" AS "item6" ("i_item_sk6", "i_item_id6", "i_rec_start_date6", "i_rec_end_date6", "i_item_desc6", "i_current_price6", "i_wholesale_cost6", "i_brand_id6", "i_brand6", "i_class_id6", "i_class6", "i_category_id6", "i_category6", "i_manufact_id6", "i_manufact6", "i_size6", "i_formulation6", "i_color6", "i_units6", "i_container6", "i_manager_id6", "i_product_name6"),
+                                                        "date_dim" AS "date_dim8" ("d_date_sk8", "d_date_id8", "d_date8", "d_month_seq8", "d_week_seq8", "d_quarter_seq8", "d_year8", "d_dow8", "d_moy8", "d_dom8", "d_qoy8", "d_fy_year8", "d_fy_quarter_seq8", "d_fy_week_seq8", "d_day_name8", "d_quarter_name8", "d_holiday8", "d_weekend8", "d_following_holiday8", "d_first_dom8", "d_last_dom8", "d_same_day_ly8", "d_same_day_lq8", "d_current_day8", "d_current_week8", "d_current_month8", "d_current_quarter8", "d_current_year8")
+                                                    WHERE "store_sales3"."ss_item_sk3" = "item6"."i_item_sk6" AND "store_sales3"."ss_sold_date_sk3" = "date_dim8"."d_date_sk8" AND ("date_dim8"."d_year8" >= 1998 AND "date_dim8"."d_year8" <= 1998 + 2) AND (("item6"."i_category6" = 'Books' OR "item6"."i_category6" = 'Jewelry' OR "item6"."i_category6" = 'Shoes') AND "item6"."i_manager_id6" >= 91 AND ("item6"."i_manager_id6" <= 100 AND ("store_sales3"."ss_wholesale_cost3" >= 73 AND "store_sales3"."ss_wholesale_cost3" <= 93)))
+                                                    INTERSECT
+                                                    SELECT "item7"."i_brand_id7", "item7"."i_class_id7", "item7"."i_category_id7"
+                                                    FROM "catalog_sales" AS "catalog_sales1" ("cs_sold_date_sk1", "cs_sold_time_sk1", "cs_ship_date_sk1", "cs_bill_customer_sk1", "cs_bill_cdemo_sk1", "cs_bill_hdemo_sk1", "cs_bill_addr_sk1", "cs_ship_customer_sk1", "cs_ship_cdemo_sk1", "cs_ship_hdemo_sk1", "cs_ship_addr_sk1", "cs_call_center_sk1", "cs_catalog_page_sk1", "cs_ship_mode_sk1", "cs_warehouse_sk1", "cs_item_sk1", "cs_promo_sk1", "cs_order_number1", "cs_quantity1", "cs_wholesale_cost1", "cs_list_price1", "cs_sales_price1", "cs_ext_discount_amt1", "cs_ext_sales_price1", "cs_ext_wholesale_cost1", "cs_ext_list_price1", "cs_ext_tax1", "cs_coupon_amt1", "cs_ext_ship_cost1", "cs_net_paid1", "cs_net_paid_inc_tax1", "cs_net_paid_inc_ship1", "cs_net_paid_inc_ship_tax1", "cs_net_profit1"),
+                                                        "item" AS "item7" ("i_item_sk7", "i_item_id7", "i_rec_start_date7", "i_rec_end_date7", "i_item_desc7", "i_current_price7", "i_wholesale_cost7", "i_brand_id7", "i_brand7", "i_class_id7", "i_class7", "i_category_id7", "i_category7", "i_manufact_id7", "i_manufact7", "i_size7", "i_formulation7", "i_color7", "i_units7", "i_container7", "i_manager_id7", "i_product_name7"),
+                                                        "date_dim" AS "date_dim9" ("d_date_sk9", "d_date_id9", "d_date9", "d_month_seq9", "d_week_seq9", "d_quarter_seq9", "d_year9", "d_dow9", "d_moy9", "d_dom9", "d_qoy9", "d_fy_year9", "d_fy_quarter_seq9", "d_fy_week_seq9", "d_day_name9", "d_quarter_name9", "d_holiday9", "d_weekend9", "d_following_holiday9", "d_first_dom9", "d_last_dom9", "d_same_day_ly9", "d_same_day_lq9", "d_current_day9", "d_current_week9", "d_current_month9", "d_current_quarter9", "d_current_year9")
+                                                    WHERE "catalog_sales1"."cs_item_sk1" = "item7"."i_item_sk7" AND "catalog_sales1"."cs_sold_date_sk1" = "date_dim9"."d_date_sk9" AND ("date_dim9"."d_year9" >= 1998 AND "date_dim9"."d_year9" <= 1998 + 2) AND (("item7"."i_category7" = 'Books' OR "item7"."i_category7" = 'Jewelry' OR "item7"."i_category7" = 'Shoes') AND "item7"."i_manager_id7" >= 91 AND ("item7"."i_manager_id7" <= 100 AND ("catalog_sales1"."cs_wholesale_cost1" >= 73 AND "catalog_sales1"."cs_wholesale_cost1" <= 93)))) AS "t"
+                                        INTERSECT
+                                        SELECT "item8"."i_brand_id8", "item8"."i_class_id8", "item8"."i_category_id8"
+                                        FROM "web_sales" AS "web_sales1" ("ws_sold_date_sk1", "ws_sold_time_sk1", "ws_ship_date_sk1", "ws_item_sk1", "ws_bill_customer_sk1", "ws_bill_cdemo_sk1", "ws_bill_hdemo_sk1", "ws_bill_addr_sk1", "ws_ship_customer_sk1", "ws_ship_cdemo_sk1", "ws_ship_hdemo_sk1", "ws_ship_addr_sk1", "ws_web_page_sk1", "ws_web_site_sk1", "ws_ship_mode_sk1", "ws_warehouse_sk1", "ws_promo_sk1", "ws_order_number1", "ws_quantity1", "ws_wholesale_cost1", "ws_list_price1", "ws_sales_price1", "ws_ext_discount_amt1", "ws_ext_sales_price1", "ws_ext_wholesale_cost1", "ws_ext_list_price1", "ws_ext_tax1", "ws_coupon_amt1", "ws_ext_ship_cost1", "ws_net_paid1", "ws_net_paid_inc_tax1", "ws_net_paid_inc_ship1", "ws_net_paid_inc_ship_tax1", "ws_net_profit1"),
+                                            "item" AS "item8" ("i_item_sk8", "i_item_id8", "i_rec_start_date8", "i_rec_end_date8", "i_item_desc8", "i_current_price8", "i_wholesale_cost8", "i_brand_id8", "i_brand8", "i_class_id8", "i_class8", "i_category_id8", "i_category8", "i_manufact_id8", "i_manufact8", "i_size8", "i_formulation8", "i_color8", "i_units8", "i_container8", "i_manager_id8", "i_product_name8"),
+                                            "date_dim" AS "date_dim10" ("d_date_sk10", "d_date_id10", "d_date10", "d_month_seq10", "d_week_seq10", "d_quarter_seq10", "d_year10", "d_dow10", "d_moy10", "d_dom10", "d_qoy10", "d_fy_year10", "d_fy_quarter_seq10", "d_fy_week_seq10", "d_day_name10", "d_quarter_name10", "d_holiday10", "d_weekend10", "d_following_holiday10", "d_first_dom10", "d_last_dom10", "d_same_day_ly10", "d_same_day_lq10", "d_current_day10", "d_current_week10", "d_current_month10", "d_current_quarter10", "d_current_year10")
+                                        WHERE "web_sales1"."ws_item_sk1" = "item8"."i_item_sk8" AND ("web_sales1"."ws_sold_date_sk1" = "date_dim10"."d_date_sk10" AND "web_sales1"."ws_wholesale_cost1" >= 73) AND ("web_sales1"."ws_wholesale_cost1" <= 93 AND ("date_dim10"."d_year10" >= 1998 AND "date_dim10"."d_year10" <= 1998 + 2))) AS "t35"
+                            WHERE "item5"."i_brand_id5" = "t35"."i_brand_id6" AND ("item5"."i_class_id5" = "t35"."i_class_id6" AND "item5"."i_category_id5" = "t35"."i_category_id6") AND (("item5"."i_category5" = 'Books' OR "item5"."i_category5" = 'Jewelry' OR "item5"."i_category5" = 'Shoes') AND ("item5"."i_manager_id5" >= 91 AND "item5"."i_manager_id5" <= 100))) AND "store_sales2"."ss_item_sk0" = "item4"."i_item_sk0" AND ("store_sales2"."ss_sold_date_sk0" = "date_dim7"."d_date_sk0" AND "date_dim7"."d_week_seq0" = (((SELECT "d_week_seq11"
+                                            FROM "date_dim" AS "date_dim11" ("d_date_sk11", "d_date_id11", "d_date11", "d_month_seq11", "d_week_seq11", "d_quarter_seq11", "d_year11", "d_dow11", "d_moy11", "d_dom11", "d_qoy11", "d_fy_year11", "d_fy_quarter_seq11", "d_fy_week_seq11", "d_day_name11", "d_quarter_name11", "d_holiday11", "d_weekend11", "d_following_holiday11", "d_first_dom11", "d_last_dom11", "d_same_day_ly11", "d_same_day_lq11", "d_current_day11", "d_current_week11", "d_current_month11", "d_current_quarter11", "d_current_year11")
+                                            WHERE "d_year11" = 1998 AND "d_moy11" = 12 AND "d_dom11" = 13)))) AND (("item4"."i_category0" = 'Books' OR "item4"."i_category0" = 'Jewelry' OR "item4"."i_category0" = 'Shoes') AND "store_sales2"."ss_wholesale_cost0" >= 73 AND ("store_sales2"."ss_wholesale_cost0" <= 93 AND ("item4"."i_manager_id0" >= 91 AND "item4"."i_manager_id0" <= 100)))
+                GROUP BY "item4"."i_brand_id0", "item4"."i_class_id0", "item4"."i_category_id0") AS "t43"
+        WHERE "t43"."sales" > (((SELECT AVG("ss_quantity4" * "ss_list_price4") AS "average_sales"
+                            FROM (SELECT *
+                                        FROM (SELECT "store_sales4"."ss_quantity4", "store_sales4"."ss_list_price4"
+                                                    FROM "store_sales" AS "store_sales4" ("ss_sold_date_sk4", "ss_sold_time_sk4", "ss_item_sk4", "ss_customer_sk4", "ss_cdemo_sk4", "ss_hdemo_sk4", "ss_addr_sk4", "ss_store_sk4", "ss_promo_sk4", "ss_ticket_number4", "ss_quantity4", "ss_wholesale_cost4", "ss_list_price4", "ss_sales_price4", "ss_ext_discount_amt4", "ss_ext_sales_price4", "ss_ext_wholesale_cost4", "ss_ext_list_price4", "ss_ext_tax4", "ss_coupon_amt4", "ss_net_paid4", "ss_net_paid_inc_tax4", "ss_net_profit4"),
+                                                        "date_dim" AS "date_dim12" ("d_date_sk12", "d_date_id12", "d_date12", "d_month_seq12", "d_week_seq12", "d_quarter_seq12", "d_year12", "d_dow12", "d_moy12", "d_dom12", "d_qoy12", "d_fy_year12", "d_fy_quarter_seq12", "d_fy_week_seq12", "d_day_name12", "d_quarter_name12", "d_holiday12", "d_weekend12", "d_following_holiday12", "d_first_dom12", "d_last_dom12", "d_same_day_ly12", "d_same_day_lq12", "d_current_day12", "d_current_week12", "d_current_month12", "d_current_quarter12", "d_current_year12")
+                                                    WHERE "store_sales4"."ss_sold_date_sk4" = "date_dim12"."d_date_sk12" AND "date_dim12"."d_year12" >= 1998 AND "date_dim12"."d_year12" <= 1998 + 2 AND "store_sales4"."ss_wholesale_cost4" >= 73 AND "store_sales4"."ss_wholesale_cost4" <= 93
+                                                    UNION ALL
+                                                    SELECT "catalog_sales2"."cs_quantity2", "catalog_sales2"."cs_list_price2"
+                                                    FROM "catalog_sales" AS "catalog_sales2" ("cs_sold_date_sk2", "cs_sold_time_sk2", "cs_ship_date_sk2", "cs_bill_customer_sk2", "cs_bill_cdemo_sk2", "cs_bill_hdemo_sk2", "cs_bill_addr_sk2", "cs_ship_customer_sk2", "cs_ship_cdemo_sk2", "cs_ship_hdemo_sk2", "cs_ship_addr_sk2", "cs_call_center_sk2", "cs_catalog_page_sk2", "cs_ship_mode_sk2", "cs_warehouse_sk2", "cs_item_sk2", "cs_promo_sk2", "cs_order_number2", "cs_quantity2", "cs_wholesale_cost2", "cs_list_price2", "cs_sales_price2", "cs_ext_discount_amt2", "cs_ext_sales_price2", "cs_ext_wholesale_cost2", "cs_ext_list_price2", "cs_ext_tax2", "cs_coupon_amt2", "cs_ext_ship_cost2", "cs_net_paid2", "cs_net_paid_inc_tax2", "cs_net_paid_inc_ship2", "cs_net_paid_inc_ship_tax2", "cs_net_profit2"),
+                                                        "date_dim" AS "date_dim13" ("d_date_sk13", "d_date_id13", "d_date13", "d_month_seq13", "d_week_seq13", "d_quarter_seq13", "d_year13", "d_dow13", "d_moy13", "d_dom13", "d_qoy13", "d_fy_year13", "d_fy_quarter_seq13", "d_fy_week_seq13", "d_day_name13", "d_quarter_name13", "d_holiday13", "d_weekend13", "d_following_holiday13", "d_first_dom13", "d_last_dom13", "d_same_day_ly13", "d_same_day_lq13", "d_current_day13", "d_current_week13", "d_current_month13", "d_current_quarter13", "d_current_year13")
+                                                    WHERE "catalog_sales2"."cs_sold_date_sk2" = "date_dim13"."d_date_sk13" AND "date_dim13"."d_year13" >= 1998 AND "date_dim13"."d_year13" <= 1998 + 2 AND "catalog_sales2"."cs_wholesale_cost2" >= 73 AND "catalog_sales2"."cs_wholesale_cost2" <= 93) AS "t"
+                                        UNION ALL
+                                        SELECT "web_sales2"."ws_quantity2", "web_sales2"."ws_list_price2"
+                                        FROM "web_sales" AS "web_sales2" ("ws_sold_date_sk2", "ws_sold_time_sk2", "ws_ship_date_sk2", "ws_item_sk2", "ws_bill_customer_sk2", "ws_bill_cdemo_sk2", "ws_bill_hdemo_sk2", "ws_bill_addr_sk2", "ws_ship_customer_sk2", "ws_ship_cdemo_sk2", "ws_ship_hdemo_sk2", "ws_ship_addr_sk2", "ws_web_page_sk2", "ws_web_site_sk2", "ws_ship_mode_sk2", "ws_warehouse_sk2", "ws_promo_sk2", "ws_order_number2", "ws_quantity2", "ws_wholesale_cost2", "ws_list_price2", "ws_sales_price2", "ws_ext_discount_amt2", "ws_ext_sales_price2", "ws_ext_wholesale_cost2", "ws_ext_list_price2", "ws_ext_tax2", "ws_coupon_amt2", "ws_ext_ship_cost2", "ws_net_paid2", "ws_net_paid_inc_tax2", "ws_net_paid_inc_ship2", "ws_net_paid_inc_ship_tax2", "ws_net_profit2"),
+                                            "date_dim" AS "date_dim14" ("d_date_sk14", "d_date_id14", "d_date14", "d_month_seq14", "d_week_seq14", "d_quarter_seq14", "d_year14", "d_dow14", "d_moy14", "d_dom14", "d_qoy14", "d_fy_year14", "d_fy_quarter_seq14", "d_fy_week_seq14", "d_day_name14", "d_quarter_name14", "d_holiday14", "d_weekend14", "d_following_holiday14", "d_first_dom14", "d_last_dom14", "d_same_day_ly14", "d_same_day_lq14", "d_current_day14", "d_current_week14", "d_current_month14", "d_current_quarter14", "d_current_year14")
+                                        WHERE "web_sales2"."ws_sold_date_sk2" = "date_dim14"."d_date_sk14" AND "web_sales2"."ws_wholesale_cost2" >= 73 AND "web_sales2"."ws_wholesale_cost2" <= 93 AND "date_dim14"."d_year14" >= 1998 AND "date_dim14"."d_year14" <= 1998 + 2) AS "t51")))) AS "t56"
+WHERE "t27"."i_brand_id" = "t56"."i_brand_id0" AND "t27"."i_class_id" = "t56"."i_class_id0" AND "t27"."i_category_id" = "t56"."i_category_id0"
+ORDER BY "t27"."channel", "t27"."i_brand_id", "t27"."i_class_id", "t27"."i_category_id"
+FETCH NEXT 100 ROWS ONLY;

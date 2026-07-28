@@ -1,130 +1,55 @@
-
-with cs_ui as
- (select cs_item_sk
-        ,sum(cs_ext_list_price) as sale,sum(cr_refunded_cash+cr_reversed_charge+cr_store_credit) as refund
-  from catalog_sales
-      ,catalog_returns
-  where cs_item_sk = cr_item_sk
-    and cs_order_number = cr_order_number
-    and cs_wholesale_cost BETWEEN 80 AND 100
-   group by cs_item_sk
-  having sum(cs_ext_list_price)>2*sum(cr_refunded_cash+cr_reversed_charge+cr_store_credit)),
-cross_sales as
- (select i_product_name product_name
-     ,i_item_sk item_sk
-     ,s_store_name store_name
-     ,s_zip store_zip
-     ,ad1.ca_street_number b_street_number
-     ,ad1.ca_street_name b_street_name
-     ,ad1.ca_city b_city
-     ,ad1.ca_zip b_zip
-     ,ad2.ca_street_number c_street_number
-     ,ad2.ca_street_name c_street_name
-     ,ad2.ca_city c_city
-     ,ad2.ca_zip c_zip
-     ,d1.d_year as syear
-     ,d2.d_year as fsyear
-     ,d3.d_year s2year
-     ,count(*) cnt
-     ,sum(ss_wholesale_cost) s1
-     ,sum(ss_list_price) s2
-     ,sum(ss_coupon_amt) s3
-  FROM   store_sales
-        ,store_returns
-        ,cs_ui
-        ,date_dim d1
-        ,date_dim d2
-        ,date_dim d3
-        ,store
-        ,customer
-        ,customer_demographics cd1
-        ,customer_demographics cd2
-        ,promotion
-        ,household_demographics hd1
-        ,household_demographics hd2
-        ,customer_address ad1
-        ,customer_address ad2
-        ,income_band ib1
-        ,income_band ib2
-        ,item
-  WHERE  ss_store_sk = s_store_sk AND
-         ss_sold_date_sk = d1.d_date_sk AND
-         ss_customer_sk = c_customer_sk AND
-         ss_cdemo_sk= cd1.cd_demo_sk AND
-         ss_hdemo_sk = hd1.hd_demo_sk AND
-         ss_addr_sk = ad1.ca_address_sk and
-         ss_item_sk = i_item_sk and
-         ss_item_sk = sr_item_sk and
-         ss_ticket_number = sr_ticket_number and
-         ss_item_sk = cs_ui.cs_item_sk and
-         c_current_cdemo_sk = cd2.cd_demo_sk AND
-         c_current_hdemo_sk = hd2.hd_demo_sk AND
-         c_current_addr_sk = ad2.ca_address_sk and
-         c_first_sales_date_sk = d2.d_date_sk and
-         c_first_shipto_date_sk = d3.d_date_sk and
-         ss_promo_sk = p_promo_sk and
-         hd1.hd_income_band_sk = ib1.ib_income_band_sk and
-         hd2.hd_income_band_sk = ib2.ib_income_band_sk and
-         cd1.cd_marital_status <> cd2.cd_marital_status and
-         i_current_price between 22 and 22 + 10
-         and p_channel_email = 'N'
-         and p_channel_tv = 'Y'
-         and p_channel_radio = 'Y'
-         and ad2.ca_state in ('PA','TN','WI')
-         and ss_wholesale_cost BETWEEN 80 AND 100
-         and cd1.cd_marital_status in ('M', 'S', 'S')
-         and cd1.cd_education_status in ('Secondary', '4 yr Degree', 'Unknown')
-         and cd2.cd_marital_status in ('M', 'S', 'S')
-         and cd2.cd_education_status in ('Secondary', '4 yr Degree', 'Unknown')
-group by i_product_name
-       ,i_item_sk
-       ,s_store_name
-       ,s_zip
-       ,ad1.ca_street_number
-       ,ad1.ca_street_name
-       ,ad1.ca_city
-       ,ad1.ca_zip
-       ,ad2.ca_street_number
-       ,ad2.ca_street_name
-       ,ad2.ca_city
-       ,ad2.ca_zip
-       ,d1.d_year
-       ,d2.d_year
-       ,d3.d_year
-)
-select cs1.product_name
-     ,cs1.store_name
-     ,cs1.store_zip
-     ,cs1.b_street_number
-     ,cs1.b_street_name
-     ,cs1.b_city
-     ,cs1.b_zip
-     ,cs1.c_street_number
-     ,cs1.c_street_name
-     ,cs1.c_city
-     ,cs1.c_zip
-     ,cs1.syear
-     ,cs1.cnt
-     ,cs1.s1 as s11
-     ,cs1.s2 as s21
-     ,cs1.s3 as s31
-     ,cs2.s1 as s12
-     ,cs2.s2 as s22
-     ,cs2.s3 as s32
-     ,cs2.syear
-     ,cs2.cnt
-from cross_sales cs1,cross_sales cs2
-where cs1.item_sk=cs2.item_sk and
-     cs1.syear = 2000 and
-     cs2.syear = 2000 + 1 and
-     cs2.cnt <= cs1.cnt and
-     cs1.store_name = cs2.store_name and
-     cs1.store_zip = cs2.store_zip
-order by cs1.product_name
-       ,cs1.store_name
-       ,cs2.cnt
-       ,cs1.s1
-       ,cs2.s1
-;
-
-
+SELECT "t5"."i_product_name", "t5"."s_store_name", "t5"."s_zip", "t5"."ca_street_number", "t5"."ca_street_name", "t5"."ca_city", "t5"."ca_zip", "t5"."ca_street_number0", "t5"."ca_street_name0", "t5"."ca_city0", "t5"."ca_zip0", "t5"."d_year", "t5"."cnt", "t5"."s1", "t5"."s2", "t5"."s3", "t12"."s1" AS "s10", "t12"."s2" AS "s20", "t12"."s3" AS "s30", "t12"."d_year2", "t12"."cnt" AS "cnt0"
+FROM (SELECT "item"."i_product_name", "item"."i_item_sk", "store"."s_store_name", "store"."s_zip", "customer_address"."ca_street_number", "customer_address"."ca_street_name", "customer_address"."ca_city", "customer_address"."ca_zip", "customer_address0"."ca_street_number0", "customer_address0"."ca_street_name0", "customer_address0"."ca_city0", "customer_address0"."ca_zip0", "date_dim"."d_year", "date_dim0"."d_year0", "date_dim1"."d_year1", COUNT(*) AS "cnt", SUM("store_sales"."ss_wholesale_cost") AS "s1", SUM("store_sales"."ss_list_price") AS "s2", SUM("store_sales"."ss_coupon_amt") AS "s3"
+        FROM "store_sales",
+            "store_returns",
+                (SELECT "catalog_sales"."cs_item_sk", SUM("catalog_sales"."cs_ext_list_price") AS "sale", SUM("catalog_returns"."cr_refunded_cash" + "catalog_returns"."cr_reversed_charge" + "catalog_returns"."cr_store_credit") AS "refund"
+                FROM "catalog_sales",
+                    "catalog_returns"
+                WHERE "catalog_sales"."cs_item_sk" = "catalog_returns"."cr_item_sk" AND "catalog_sales"."cs_order_number" = "catalog_returns"."cr_order_number" AND "catalog_sales"."cs_wholesale_cost" >= 73 AND "catalog_sales"."cs_wholesale_cost" <= 93
+                GROUP BY "catalog_sales"."cs_item_sk"
+                HAVING SUM("catalog_sales"."cs_ext_list_price") > 2 * SUM("catalog_returns"."cr_refunded_cash" + "catalog_returns"."cr_reversed_charge" + "catalog_returns"."cr_store_credit")) AS "t2",
+            "date_dim",
+            "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0"),
+            "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1"),
+            "store",
+            "customer",
+            "customer_demographics",
+            "customer_demographics" AS "customer_demographics0" ("cd_demo_sk0", "cd_gender0", "cd_marital_status0", "cd_education_status0", "cd_purchase_estimate0", "cd_credit_rating0", "cd_dep_count0", "cd_dep_employed_count0", "cd_dep_college_count0"),
+            "promotion",
+            "household_demographics",
+            "household_demographics" AS "household_demographics0" ("hd_demo_sk0", "hd_income_band_sk0", "hd_buy_potential0", "hd_dep_count0", "hd_vehicle_count0"),
+            "customer_address",
+            "customer_address" AS "customer_address0" ("ca_address_sk0", "ca_address_id0", "ca_street_number0", "ca_street_name0", "ca_street_type0", "ca_suite_number0", "ca_city0", "ca_county0", "ca_state0", "ca_zip0", "ca_country0", "ca_gmt_offset0", "ca_location_type0"),
+            "income_band",
+            "income_band" AS "income_band0" ("ib_income_band_sk0", "ib_lower_bound0", "ib_upper_bound0"),
+            "item"
+        WHERE "store_sales"."ss_store_sk" = "store"."s_store_sk" AND ("store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND "store_sales"."ss_customer_sk" = "customer"."c_customer_sk") AND ("store_sales"."ss_cdemo_sk" = "customer_demographics"."cd_demo_sk" AND "store_sales"."ss_hdemo_sk" = "household_demographics"."hd_demo_sk" AND ("store_sales"."ss_addr_sk" = "customer_address"."ca_address_sk" AND "store_sales"."ss_item_sk" = "item"."i_item_sk")) AND ("store_sales"."ss_item_sk" = "store_returns"."sr_item_sk" AND "store_sales"."ss_ticket_number" = "store_returns"."sr_ticket_number" AND ("store_sales"."ss_item_sk" = "t2"."cs_item_sk" AND "customer"."c_current_cdemo_sk" = "customer_demographics0"."cd_demo_sk0") AND ("customer"."c_current_hdemo_sk" = "household_demographics0"."hd_demo_sk0" AND "customer"."c_current_addr_sk" = "customer_address0"."ca_address_sk0" AND ("customer"."c_first_sales_date_sk" = "date_dim0"."d_date_sk0" AND "customer"."c_first_shipto_date_sk" = "date_dim1"."d_date_sk1"))) AND ("store_sales"."ss_promo_sk" = "promotion"."p_promo_sk" AND "household_demographics"."hd_income_band_sk" = "income_band"."ib_income_band_sk" AND ("household_demographics0"."hd_income_band_sk0" = "income_band0"."ib_income_band_sk0" AND "customer_demographics"."cd_marital_status" <> "customer_demographics0"."cd_marital_status0") AND ("item"."i_current_price" >= 80 AND "item"."i_current_price" <= 80 + 10 AND ("promotion"."p_channel_email" = 'Y' AND "promotion"."p_channel_tv" = 'Y')) AND ("promotion"."p_channel_radio" = 'Y' AND ("customer_address0"."ca_state0" = 'IL' OR "customer_address0"."ca_state0" = 'ME' OR "customer_address0"."ca_state0" = 'MI') AND ("store_sales"."ss_wholesale_cost" >= 73 AND "store_sales"."ss_wholesale_cost" <= 93) AND (("customer_demographics"."cd_marital_status" = 'M' OR "customer_demographics"."cd_marital_status" = 'S') AND ("customer_demographics"."cd_education_status" = 'Unknown' OR "customer_demographics"."cd_education_status" = '2 yr Degree') AND (("customer_demographics0"."cd_marital_status0" = 'M' OR "customer_demographics0"."cd_marital_status0" = 'S') AND ("customer_demographics0"."cd_education_status0" = 'Unknown' OR "customer_demographics0"."cd_education_status0" = '2 yr Degree')))))
+        GROUP BY "date_dim"."d_year", "date_dim0"."d_year0", "date_dim1"."d_year1", "store"."s_store_name", "store"."s_zip", "customer_address"."ca_street_number", "customer_address"."ca_street_name", "customer_address"."ca_city", "customer_address"."ca_zip", "customer_address0"."ca_street_number0", "customer_address0"."ca_street_name0", "customer_address0"."ca_city0", "customer_address0"."ca_zip0", "item"."i_item_sk", "item"."i_product_name") AS "t5",
+        (SELECT "item0"."i_product_name0", "item0"."i_item_sk0", "store0"."s_store_name0", "store0"."s_zip0", "customer_address1"."ca_street_number1", "customer_address1"."ca_street_name1", "customer_address1"."ca_city1", "customer_address1"."ca_zip1", "customer_address2"."ca_street_number2", "customer_address2"."ca_street_name2", "customer_address2"."ca_city2", "customer_address2"."ca_zip2", "date_dim2"."d_year2", "date_dim3"."d_year3", "date_dim4"."d_year4", COUNT(*) AS "cnt", SUM("store_sales0"."ss_wholesale_cost0") AS "s1", SUM("store_sales0"."ss_list_price0") AS "s2", SUM("store_sales0"."ss_coupon_amt0") AS "s3"
+        FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0"),
+            "store_returns" AS "store_returns0" ("sr_returned_date_sk0", "sr_return_time_sk0", "sr_item_sk0", "sr_customer_sk0", "sr_cdemo_sk0", "sr_hdemo_sk0", "sr_addr_sk0", "sr_store_sk0", "sr_reason_sk0", "sr_ticket_number0", "sr_return_quantity0", "sr_return_amt0", "sr_return_tax0", "sr_return_amt_inc_tax0", "sr_fee0", "sr_return_ship_cost0", "sr_refunded_cash0", "sr_reversed_charge0", "sr_store_credit0", "sr_net_loss0"),
+                (SELECT "catalog_sales0"."cs_item_sk0", SUM("catalog_sales0"."cs_ext_list_price0") AS "sale", SUM("catalog_returns0"."cr_refunded_cash0" + "catalog_returns0"."cr_reversed_charge0" + "catalog_returns0"."cr_store_credit0") AS "refund"
+                FROM "catalog_sales" AS "catalog_sales0" ("cs_sold_date_sk0", "cs_sold_time_sk0", "cs_ship_date_sk0", "cs_bill_customer_sk0", "cs_bill_cdemo_sk0", "cs_bill_hdemo_sk0", "cs_bill_addr_sk0", "cs_ship_customer_sk0", "cs_ship_cdemo_sk0", "cs_ship_hdemo_sk0", "cs_ship_addr_sk0", "cs_call_center_sk0", "cs_catalog_page_sk0", "cs_ship_mode_sk0", "cs_warehouse_sk0", "cs_item_sk0", "cs_promo_sk0", "cs_order_number0", "cs_quantity0", "cs_wholesale_cost0", "cs_list_price0", "cs_sales_price0", "cs_ext_discount_amt0", "cs_ext_sales_price0", "cs_ext_wholesale_cost0", "cs_ext_list_price0", "cs_ext_tax0", "cs_coupon_amt0", "cs_ext_ship_cost0", "cs_net_paid0", "cs_net_paid_inc_tax0", "cs_net_paid_inc_ship0", "cs_net_paid_inc_ship_tax0", "cs_net_profit0"),
+                    "catalog_returns" AS "catalog_returns0" ("cr_returned_date_sk0", "cr_returned_time_sk0", "cr_item_sk0", "cr_refunded_customer_sk0", "cr_refunded_cdemo_sk0", "cr_refunded_hdemo_sk0", "cr_refunded_addr_sk0", "cr_returning_customer_sk0", "cr_returning_cdemo_sk0", "cr_returning_hdemo_sk0", "cr_returning_addr_sk0", "cr_call_center_sk0", "cr_catalog_page_sk0", "cr_ship_mode_sk0", "cr_warehouse_sk0", "cr_reason_sk0", "cr_order_number0", "cr_return_quantity0", "cr_return_amount0", "cr_return_tax0", "cr_return_amt_inc_tax0", "cr_fee0", "cr_return_ship_cost0", "cr_refunded_cash0", "cr_reversed_charge0", "cr_store_credit0", "cr_net_loss0")
+                WHERE "catalog_sales0"."cs_item_sk0" = "catalog_returns0"."cr_item_sk0" AND "catalog_sales0"."cs_order_number0" = "catalog_returns0"."cr_order_number0" AND "catalog_sales0"."cs_wholesale_cost0" >= 73 AND "catalog_sales0"."cs_wholesale_cost0" <= 93
+                GROUP BY "catalog_sales0"."cs_item_sk0"
+                HAVING SUM("catalog_sales0"."cs_ext_list_price0") > 2 * SUM("catalog_returns0"."cr_refunded_cash0" + "catalog_returns0"."cr_reversed_charge0" + "catalog_returns0"."cr_store_credit0")) AS "t9",
+            "date_dim" AS "date_dim2" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2"),
+            "date_dim" AS "date_dim3" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3"),
+            "date_dim" AS "date_dim4" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4"),
+            "store" AS "store0" ("s_store_sk0", "s_store_id0", "s_rec_start_date0", "s_rec_end_date0", "s_closed_date_sk0", "s_store_name0", "s_number_employees0", "s_floor_space0", "s_hours0", "s_manager0", "s_market_id0", "s_geography_class0", "s_market_desc0", "s_market_manager0", "s_division_id0", "s_division_name0", "s_company_id0", "s_company_name0", "s_street_number0", "s_street_name0", "s_street_type0", "s_suite_number0", "s_city0", "s_county0", "s_state0", "s_zip0", "s_country0", "s_gmt_offset0", "s_tax_precentage0"),
+            "customer" AS "customer0" ("c_customer_sk0", "c_customer_id0", "c_current_cdemo_sk0", "c_current_hdemo_sk0", "c_current_addr_sk0", "c_first_shipto_date_sk0", "c_first_sales_date_sk0", "c_salutation0", "c_first_name0", "c_last_name0", "c_preferred_cust_flag0", "c_birth_day0", "c_birth_month0", "c_birth_year0", "c_birth_country0", "c_login0", "c_email_address0", "c_last_review_date_sk0"),
+            "customer_demographics" AS "customer_demographics1" ("cd_demo_sk1", "cd_gender1", "cd_marital_status1", "cd_education_status1", "cd_purchase_estimate1", "cd_credit_rating1", "cd_dep_count1", "cd_dep_employed_count1", "cd_dep_college_count1"),
+            "customer_demographics" AS "customer_demographics2" ("cd_demo_sk2", "cd_gender2", "cd_marital_status2", "cd_education_status2", "cd_purchase_estimate2", "cd_credit_rating2", "cd_dep_count2", "cd_dep_employed_count2", "cd_dep_college_count2"),
+            "promotion" AS "promotion0" ("p_promo_sk0", "p_promo_id0", "p_start_date_sk0", "p_end_date_sk0", "p_item_sk0", "p_cost0", "p_response_target0", "p_promo_name0", "p_channel_dmail0", "p_channel_email0", "p_channel_catalog0", "p_channel_tv0", "p_channel_radio0", "p_channel_press0", "p_channel_event0", "p_channel_demo0", "p_channel_details0", "p_purpose0", "p_discount_active0"),
+            "household_demographics" AS "household_demographics1" ("hd_demo_sk1", "hd_income_band_sk1", "hd_buy_potential1", "hd_dep_count1", "hd_vehicle_count1"),
+            "household_demographics" AS "household_demographics2" ("hd_demo_sk2", "hd_income_band_sk2", "hd_buy_potential2", "hd_dep_count2", "hd_vehicle_count2"),
+            "customer_address" AS "customer_address1" ("ca_address_sk1", "ca_address_id1", "ca_street_number1", "ca_street_name1", "ca_street_type1", "ca_suite_number1", "ca_city1", "ca_county1", "ca_state1", "ca_zip1", "ca_country1", "ca_gmt_offset1", "ca_location_type1"),
+            "customer_address" AS "customer_address2" ("ca_address_sk2", "ca_address_id2", "ca_street_number2", "ca_street_name2", "ca_street_type2", "ca_suite_number2", "ca_city2", "ca_county2", "ca_state2", "ca_zip2", "ca_country2", "ca_gmt_offset2", "ca_location_type2"),
+            "income_band" AS "income_band1" ("ib_income_band_sk1", "ib_lower_bound1", "ib_upper_bound1"),
+            "income_band" AS "income_band2" ("ib_income_band_sk2", "ib_lower_bound2", "ib_upper_bound2"),
+            "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0")
+        WHERE "store_sales0"."ss_store_sk0" = "store0"."s_store_sk0" AND ("store_sales0"."ss_sold_date_sk0" = "date_dim2"."d_date_sk2" AND "store_sales0"."ss_customer_sk0" = "customer0"."c_customer_sk0") AND ("store_sales0"."ss_cdemo_sk0" = "customer_demographics1"."cd_demo_sk1" AND "store_sales0"."ss_hdemo_sk0" = "household_demographics1"."hd_demo_sk1" AND ("store_sales0"."ss_addr_sk0" = "customer_address1"."ca_address_sk1" AND "store_sales0"."ss_item_sk0" = "item0"."i_item_sk0")) AND ("store_sales0"."ss_item_sk0" = "store_returns0"."sr_item_sk0" AND "store_sales0"."ss_ticket_number0" = "store_returns0"."sr_ticket_number0" AND ("store_sales0"."ss_item_sk0" = "t9"."cs_item_sk0" AND "customer0"."c_current_cdemo_sk0" = "customer_demographics2"."cd_demo_sk2") AND ("customer0"."c_current_hdemo_sk0" = "household_demographics2"."hd_demo_sk2" AND "customer0"."c_current_addr_sk0" = "customer_address2"."ca_address_sk2" AND ("customer0"."c_first_sales_date_sk0" = "date_dim3"."d_date_sk3" AND "customer0"."c_first_shipto_date_sk0" = "date_dim4"."d_date_sk4"))) AND ("store_sales0"."ss_promo_sk0" = "promotion0"."p_promo_sk0" AND "household_demographics1"."hd_income_band_sk1" = "income_band1"."ib_income_band_sk1" AND ("household_demographics2"."hd_income_band_sk2" = "income_band2"."ib_income_band_sk2" AND "customer_demographics1"."cd_marital_status1" <> "customer_demographics2"."cd_marital_status2") AND ("item0"."i_current_price0" >= 80 AND "item0"."i_current_price0" <= 80 + 10 AND ("promotion0"."p_channel_email0" = 'Y' AND "promotion0"."p_channel_tv0" = 'Y')) AND ("promotion0"."p_channel_radio0" = 'Y' AND ("customer_address2"."ca_state2" = 'IL' OR "customer_address2"."ca_state2" = 'ME' OR "customer_address2"."ca_state2" = 'MI') AND ("store_sales0"."ss_wholesale_cost0" >= 73 AND "store_sales0"."ss_wholesale_cost0" <= 93) AND (("customer_demographics1"."cd_marital_status1" = 'M' OR "customer_demographics1"."cd_marital_status1" = 'S') AND ("customer_demographics1"."cd_education_status1" = 'Unknown' OR "customer_demographics1"."cd_education_status1" = '2 yr Degree') AND (("customer_demographics2"."cd_marital_status2" = 'M' OR "customer_demographics2"."cd_marital_status2" = 'S') AND ("customer_demographics2"."cd_education_status2" = 'Unknown' OR "customer_demographics2"."cd_education_status2" = '2 yr Degree')))))
+        GROUP BY "date_dim2"."d_year2", "date_dim3"."d_year3", "date_dim4"."d_year4", "store0"."s_store_name0", "store0"."s_zip0", "customer_address1"."ca_street_number1", "customer_address1"."ca_street_name1", "customer_address1"."ca_city1", "customer_address1"."ca_zip1", "customer_address2"."ca_street_number2", "customer_address2"."ca_street_name2", "customer_address2"."ca_city2", "customer_address2"."ca_zip2", "item0"."i_item_sk0", "item0"."i_product_name0") AS "t12"
+WHERE "t5"."i_item_sk" = "t12"."i_item_sk0" AND ("t5"."d_year" = 1998 AND "t12"."d_year2" = 1998 + 1) AND ("t12"."cnt" <= "t5"."cnt" AND ("t5"."s_store_name" = "t12"."s_store_name0" AND "t5"."s_zip" = "t12"."s_zip0"))
+ORDER BY "t5"."i_product_name", "t5"."s_store_name", "t12"."cnt", "t5"."s1", "t12"."s1";

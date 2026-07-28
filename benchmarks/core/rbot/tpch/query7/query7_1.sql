@@ -1,44 +1,11 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	supp_nation,
-	cust_nation,
-	l_year,
-	sum(volume) as revenue
-from
-	(
-		select
-			n1.n_name as supp_nation,
-			n2.n_name as cust_nation,
-			extract(year from l_shipdate) as l_year,
-			l_extendedprice * (1 - l_discount) as volume
-		from
-			supplier,
-			lineitem,
-			orders,
-			customer,
-			nation n1,
-			nation n2
-		where
-			s_suppkey = l_suppkey
-			and o_orderkey = l_orderkey
-			and c_custkey = o_custkey
-			and s_nationkey = n1.n_nationkey
-			and c_nationkey = n2.n_nationkey
-			and (
-				(n1.n_name = 'FRANCE' and n2.n_name = 'SAUDI ARABIA')
-				or (n1.n_name = 'SAUDI ARABIA' and n2.n_name = 'FRANCE')
-			)
-			and l_shipdate between date '1995-01-01' and date '1996-12-31'
-	) as shipping
-group by
-	supp_nation,
-	cust_nation,
-	l_year
-order by
-	supp_nation,
-	cust_nation,
-	l_year
-limit 1;
+SELECT "nation"."n_name", "nation0"."n_name0", EXTRACT(YEAR FROM "lineitem"."l_shipdate") AS "l_year", COALESCE(SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")), 0) AS "revenue"
+FROM "supplier",
+    "lineitem",
+    "orders",
+    "customer",
+    "nation",
+    "nation" AS "nation0" ("n_nationkey0", "n_name0", "n_regionkey0", "n_comment0")
+WHERE "supplier"."s_suppkey" = "lineitem"."l_suppkey" AND "orders"."o_orderkey" = "lineitem"."l_orderkey" AND ("customer"."c_custkey" = "orders"."o_custkey" AND "supplier"."s_nationkey" = "nation"."n_nationkey") AND ("customer"."c_nationkey" = "nation0"."n_nationkey0" AND ("nation"."n_name" = 'KENYA' AND "nation0"."n_name0" = 'CANADA' OR "nation"."n_name" = 'CANADA' AND "nation0"."n_name0" = 'KENYA') AND ("lineitem"."l_shipdate" >= DATE '1995-01-01' AND "lineitem"."l_shipdate" <= DATE '1996-12-31'))
+GROUP BY "nation"."n_name", "nation0"."n_name0", EXTRACT(YEAR FROM "lineitem"."l_shipdate")
+ORDER BY "nation"."n_name", "nation0"."n_name0", 3
+FETCH NEXT 1 ROWS ONLY;

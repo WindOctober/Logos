@@ -1,0 +1,2228 @@
+{
+  "cases": [
+    {
+      "appliedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "FILTER_INTO_JOIN"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "FILTER_INTO_JOIN"
+        },
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_SUB_QUERY_TO_CORRELATE"
+          ],
+          "rule": "FILTER_SUB_QUERY_TO_CORRELATE"
+        }
+      ],
+      "case": "rbot-dsb__query001",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "selectedRule": "FILTER_SUB_QUERY_TO_CORRELATE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query001/query001_0.sql",
+      "sourceSha256": "9262f1f129bb6b357513fd4e03f45588f56b9b72494f104716bdb5b96f355d9f",
+      "target": "dsb/query001/query001_1.sql",
+      "targetSha256": "ec0b06d0f837dff1a8e726e8c6c21fc5d516ff1aa7e09f4564a6f0378fe6dae7",
+      "upstreamInput": "dsb/query001/query001_0.sql",
+      "upstreamInputSha256": "9262f1f129bb6b357513fd4e03f45588f56b9b72494f104716bdb5b96f355d9f",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query010",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query010/query010_0.sql",
+      "sourceSha256": "573246b35edf60cfafc2fa482c20f3736a61b892b86f98fa03c57503e68bebba",
+      "target": "dsb/query010/query010_1.sql",
+      "targetSha256": "8ba0bdf884fc30ce1b1349afaf56fea6590157aa1430cf1695ee2e86a0d91a84",
+      "upstreamInput": "dsb/query010/query010_0.sql",
+      "upstreamInputSha256": "573246b35edf60cfafc2fa482c20f3736a61b892b86f98fa03c57503e68bebba",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query013",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query013/query013_0.sql",
+      "sourceSha256": "63f9aa33d1b58bbf91319b9bf1a1d9ef768dca0293343de49fb721f62ff5435a",
+      "target": "dsb/query013/query013_1.sql",
+      "targetSha256": "41ddaa63d96136385b42697a5ab78d6823ccdd9cb91d3471d2161df2f20a77b7",
+      "upstreamInput": "dsb/query013/query013_0.sql",
+      "upstreamInputSha256": "63f9aa33d1b58bbf91319b9bf1a1d9ef768dca0293343de49fb721f62ff5435a",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query014",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_LEFT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_RIGHT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REDUCE_EXPRESSIONS",
+        "PROJECT_REMOVE",
+        "SORT_PROJECT_TRANSPOSE",
+        "SORT_REMOVE_CONSTANT_KEYS"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query014/query014_0.sql",
+      "sourceSha256": "5afc9a5c820dada7e8fb6d90a8bed25514dc5bc22e1021de27a5baf01ea2c1f8",
+      "target": "dsb/query014/query014_1.sql",
+      "targetSha256": "aac55d623dbbf886854cd57bdd9f502fdda0d6746edb72e3055fb03c1a3aaef9",
+      "upstreamInput": "dsb/query014/query014_0.sql",
+      "upstreamInputSha256": "5afc9a5c820dada7e8fb6d90a8bed25514dc5bc22e1021de27a5baf01ea2c1f8",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query018",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query018/query018_0.sql",
+      "sourceSha256": "484547944f831f42b60199c7d20c10a2f5f88979e6ec0c4a785408cd52fdf2fb",
+      "target": "dsb/query018/query018_1.sql",
+      "targetSha256": "3e52bddce5380944d792d5c87f9de0ce110cbb88b4e3c955d2d3ba95e5c200cc",
+      "upstreamInput": "dsb/query018/query018_0.sql",
+      "upstreamInputSha256": "484547944f831f42b60199c7d20c10a2f5f88979e6ec0c4a785408cd52fdf2fb",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query019",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query019/query019_0.sql",
+      "sourceSha256": "58e5a58cb7658e46a452979156a295769e79270a3e234a8ad3e46bc670db96d9",
+      "target": "dsb/query019/query019_1.sql",
+      "targetSha256": "97dc83198ae7c5842f1a989d0bc156a1fd23381f48af07b9743278837d045f0d",
+      "upstreamInput": "dsb/query019/query019_0.sql",
+      "upstreamInputSha256": "58e5a58cb7658e46a452979156a295769e79270a3e234a8ad3e46bc670db96d9",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query023",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "AGGREGATE_UNION_TRANSPOSE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query023/query023_0.sql",
+      "sourceSha256": "41b4e53becd7f676edd6e0b693c4eb96b37e947c12f58a90f4aa6fa4dc3adb75",
+      "target": "dsb/query023/query023_1.sql",
+      "targetSha256": "7b6396c7c86d5dcf5f390afcdccf87628577943f1b32c316888a5b989cc305ca",
+      "upstreamInput": "dsb/query023/query023_0.sql",
+      "upstreamInputSha256": "41b4e53becd7f676edd6e0b693c4eb96b37e947c12f58a90f4aa6fa4dc3adb75",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query025",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query025/query025_0.sql",
+      "sourceSha256": "cdf8fada367f24de808ff963226cf01d83acb7edc08ecfd3e96431d4fa012401",
+      "target": "dsb/query025/query025_1.sql",
+      "targetSha256": "4e013fa1a8ebb876d803691f8d34ab8e02f8efec051fd39ef828e6fb12c9aa1c",
+      "upstreamInput": "dsb/query025/query025_0.sql",
+      "upstreamInputSha256": "cdf8fada367f24de808ff963226cf01d83acb7edc08ecfd3e96431d4fa012401",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query027",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query027/query027_0.sql",
+      "sourceSha256": "a67e889bfebd0361d19c838003d0fe13923e11440643bca44466dbc88dc190b5",
+      "target": "dsb/query027/query027_1.sql",
+      "targetSha256": "a2da8bd8e626cfc100ceb60da05ea608a6a81d6a751076abaa630662b68425e5",
+      "upstreamInput": "dsb/query027/query027_0.sql",
+      "upstreamInputSha256": "a67e889bfebd0361d19c838003d0fe13923e11440643bca44466dbc88dc190b5",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "FILTER_INTO_JOIN"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "FILTER_INTO_JOIN"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "FILTER_REDUCE_EXPRESSIONS"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "FILTER_REDUCE_EXPRESSIONS"
+        },
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_SUB_QUERY_TO_CORRELATE"
+          ],
+          "rule": "FILTER_SUB_QUERY_TO_CORRELATE"
+        }
+      ],
+      "case": "rbot-dsb__query030",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "selectedRule": "FILTER_SUB_QUERY_TO_CORRELATE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query030/query030_0.sql",
+      "sourceSha256": "c6ca2884656b278f46169d56db8a3fa77399aa4a241f5d6395f7634cec4afa2a",
+      "target": "dsb/query030/query030_1.sql",
+      "targetSha256": "fa0721edb45c4120af0591a312763c61ac6b525ad28793c6d32dcdf20e9d81f3",
+      "upstreamInput": "dsb/query030/query030_0.sql",
+      "upstreamInputSha256": "c6ca2884656b278f46169d56db8a3fa77399aa4a241f5d6395f7634cec4afa2a",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query031",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REDUCE_EXPRESSIONS"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query031/query031_0.sql",
+      "sourceSha256": "b6d1d36fbf473c600884b442a88f43676aa347da83639b2ff48f39a043e82ff6",
+      "target": "dsb/query031/query031_1.sql",
+      "targetSha256": "267458869862e4ee4c7e6e0dd0a88738cd9ab5ccce1e14e7ff27fd877d8e94ff",
+      "upstreamInput": "dsb/query031/query031_0.sql",
+      "upstreamInputSha256": "b6d1d36fbf473c600884b442a88f43676aa347da83639b2ff48f39a043e82ff6",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query032",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query032/query032_0.sql",
+      "sourceSha256": "5742bc3247399bd88b39e341d0c80326f7fdbce594e9d91785c9a657f5fdb90e",
+      "target": "dsb/query032/query032_1.sql",
+      "targetSha256": "4b03a2a53f01b3554c7418a479fde29422d4ec0a1200ca07140534b094a43f77",
+      "upstreamInput": "dsb/query032/query032_0.sql",
+      "upstreamInputSha256": "5742bc3247399bd88b39e341d0c80326f7fdbce594e9d91785c9a657f5fdb90e",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query038",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "INTERSECT_TO_DISTINCT",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query038/query038_0.sql",
+      "sourceSha256": "9896a687807d3e2cec9e837f1a4f7159ce2c27fa4c3f33c7deb0b20131c8fca1",
+      "target": "dsb/query038/query038_1.sql",
+      "targetSha256": "788d9e5b076513ce36c22990ec48101d74cc04661363d873c5f81ef59cf53018",
+      "upstreamInput": "dsb/query038/query038_0.sql",
+      "upstreamInputSha256": "9896a687807d3e2cec9e837f1a4f7159ce2c27fa4c3f33c7deb0b20131c8fca1",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query039",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_LEFT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_RIGHT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REDUCE_EXPRESSIONS",
+        "SORT_PROJECT_TRANSPOSE",
+        "SORT_REMOVE_CONSTANT_KEYS"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query039/query039_0.sql",
+      "sourceSha256": "67bcc505154b6041676acdb410dde3de65f7a067e1714568eb6802be7faf2b80",
+      "target": "dsb/query039/query039_1.sql",
+      "targetSha256": "67ee220c3a22a65a3491693235babecb02a9a33898ab8ecf5cd26fe1e4f86180",
+      "upstreamInput": "dsb/query039/query039_0.sql",
+      "upstreamInputSha256": "f3d73763e241788c06bb3e7c21d0d3c257b0d30e2b6113c2f8c2a741cd3ff278",
+      "upstreamStatementCount": 2,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query040",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query040/query040_0.sql",
+      "sourceSha256": "c4b82806066a6e98343d56061198aa3a72efcd92d8837ffb1c29d533c7fae465",
+      "target": "dsb/query040/query040_1.sql",
+      "targetSha256": "279d9b33c13405a066aa374969351e5cf912a3d56c511c81fe18b8d2d0483602",
+      "upstreamInput": "dsb/query040/query040_0.sql",
+      "upstreamInputSha256": "c4b82806066a6e98343d56061198aa3a72efcd92d8837ffb1c29d533c7fae465",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query050",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query050/query050_0.sql",
+      "sourceSha256": "24f82b7beaeda360dea090ba49459e9063ed35ba053cd2ee353390f13509cf3b",
+      "target": "dsb/query050/query050_1.sql",
+      "targetSha256": "dff23d9b2bd4a36b5089cf9109a8bcdeea136d9c2186a1505dd72526cfe51ab0",
+      "upstreamInput": "dsb/query050/query050_0.sql",
+      "upstreamInputSha256": "24f82b7beaeda360dea090ba49459e9063ed35ba053cd2ee353390f13509cf3b",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query054",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_LEFT_UNION_TRANSPOSE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query054/query054_0.sql",
+      "sourceSha256": "18f84a9c960e39d87ece70c46ead15897191edac2f8590557292e5bbeece1caa",
+      "target": "dsb/query054/query054_1.sql",
+      "targetSha256": "b7f6d7111ad2055fc6c6060280d99f38d8cb5e701a0f98f7712249f1730d3e04",
+      "upstreamInput": "dsb/query054/query054_0.sql",
+      "upstreamInputSha256": "18f84a9c960e39d87ece70c46ead15897191edac2f8590557292e5bbeece1caa",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query058",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query058/query058_0.sql",
+      "sourceSha256": "ab1da77acc6b81e428374be68b6d0f091cfdb6798b935e03d43790553d3bde08",
+      "target": "dsb/query058/query058_1.sql",
+      "targetSha256": "16b2db5afdcdcd653ca7ba5464818d36cc05ba9af109b1899b92af9038f4c574",
+      "upstreamInput": "dsb/query058/query058_0.sql",
+      "upstreamInputSha256": "ab1da77acc6b81e428374be68b6d0f091cfdb6798b935e03d43790553d3bde08",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_CASE_TO_FILTER"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_CASE_TO_FILTER"
+          ],
+          "rule": "AGGREGATE_CASE_TO_FILTER"
+        }
+      ],
+      "case": "rbot-dsb__query059",
+      "matchedRules": [
+        "AGGREGATE_CASE_TO_FILTER",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_LEFT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_PROJECT_RIGHT_TRANSPOSE_INCLUDE_OUTER",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_CASE_TO_FILTER"
+      ],
+      "selectedRule": "AGGREGATE_CASE_TO_FILTER",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query059/query059_0.sql",
+      "sourceSha256": "4dc2ab0566f992042fcf202df818326505039ca94335aa93917c9376292ee299",
+      "target": "dsb/query059/query059_1.sql",
+      "targetSha256": "ca6cf0009ba638c62dc019b473926658d7327c7f008205349f0a2636c6d99efe",
+      "upstreamInput": "dsb/query059/query059_0.sql",
+      "upstreamInputSha256": "4dc2ab0566f992042fcf202df818326505039ca94335aa93917c9376292ee299",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query064",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REDUCE_EXPRESSIONS",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query064/query064_0.sql",
+      "sourceSha256": "8acdfeb733ce94640ee6709d0cb5990a8dcf7893dfa6492f0e3e8e20505578cc",
+      "target": "dsb/query064/query064_1.sql",
+      "targetSha256": "77080092c9e12b0d5aff9362021bbed0c23927a9066b34d690eb5c5f624d510e",
+      "upstreamInput": "dsb/query064/query064_0.sql",
+      "upstreamInputSha256": "8acdfeb733ce94640ee6709d0cb5990a8dcf7893dfa6492f0e3e8e20505578cc",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query065",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query065/query065_0.sql",
+      "sourceSha256": "16ff43ef9c9afd99540084c229dd3f8f7545fe2c73c224c3092f59add34459f6",
+      "target": "dsb/query065/query065_1.sql",
+      "targetSha256": "3cda25b4ce0239af6b51afed1061f036d1ec563b701d5ecd2391f2a2a76238b9",
+      "upstreamInput": "dsb/query065/query065_0.sql",
+      "upstreamInputSha256": "16ff43ef9c9afd99540084c229dd3f8f7545fe2c73c224c3092f59add34459f6",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query069",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query069/query069_0.sql",
+      "sourceSha256": "eed801a564ce0ca4f0fccf0488ff7a12f7de8b1ae7f65c379044491993c94cd2",
+      "target": "dsb/query069/query069_1.sql",
+      "targetSha256": "f8cfaeafc6fc31980c0d9a02a5a3de37187bcfe619b67a0d7f996354604497a4",
+      "upstreamInput": "dsb/query069/query069_0.sql",
+      "upstreamInputSha256": "eed801a564ce0ca4f0fccf0488ff7a12f7de8b1ae7f65c379044491993c94cd2",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query072",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_ADD_REDUNDANT_SEMI_JOIN",
+        "JOIN_DERIVE_IS_NOT_NULL_FILTER_RULE",
+        "JOIN_EXTRACT_FILTER",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query072/query072_0.sql",
+      "sourceSha256": "9da84fa3cbed5f3b7a9b00b71d11bf08d0c1e41a834df8326eee55d8e6a6a21f",
+      "target": "dsb/query072/query072_1.sql",
+      "targetSha256": "630d6c476e3d134837b1430eae1b2dbb6bee83c8c2a88199e47c4eb9991cb924",
+      "upstreamInput": "dsb/query072/query072_0.sql",
+      "upstreamInputSha256": "9da84fa3cbed5f3b7a9b00b71d11bf08d0c1e41a834df8326eee55d8e6a6a21f",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query075",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_ADD_REDUNDANT_SEMI_JOIN",
+        "JOIN_DERIVE_IS_NOT_NULL_FILTER_RULE",
+        "JOIN_EXTRACT_FILTER",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REDUCE_EXPRESSIONS",
+        "UNION_TO_DISTINCT"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query075/query075_0.sql",
+      "sourceSha256": "36f822e13cdab4f1ba21e89e0fbaa72a4da989d06b05d6462eece9e1838e4077",
+      "target": "dsb/query075/query075_1.sql",
+      "targetSha256": "a0d720e0e733072cb98f6484a7902143b35d7b812a9858de867f4ba779221fc6",
+      "upstreamInput": "dsb/query075/query075_0.sql",
+      "upstreamInputSha256": "36f822e13cdab4f1ba21e89e0fbaa72a4da989d06b05d6462eece9e1838e4077",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query080",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "AGGREGATE_UNION_TRANSPOSE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query080/query080_0.sql",
+      "sourceSha256": "56572f072b9b71265328fc1ce7590784b43bfd4aeb3dae36e573b0678164b2c1",
+      "target": "dsb/query080/query080_1.sql",
+      "targetSha256": "eacf6768ab5b41bc1d11bc4cfa683f42910552340c15f50ae912d89fd2478731",
+      "upstreamInput": "dsb/query080/query080_0.sql",
+      "upstreamInputSha256": "56572f072b9b71265328fc1ce7590784b43bfd4aeb3dae36e573b0678164b2c1",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        },
+        {
+          "accepted": false,
+          "appliedRules": [
+            "FILTER_INTO_JOIN"
+          ],
+          "rejection": "rbot-round-trip-failed",
+          "rule": "FILTER_INTO_JOIN"
+        },
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_SUB_QUERY_TO_CORRELATE"
+          ],
+          "rule": "FILTER_SUB_QUERY_TO_CORRELATE"
+        }
+      ],
+      "case": "rbot-dsb__query081",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "selectedRule": "FILTER_SUB_QUERY_TO_CORRELATE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query081/query081_0.sql",
+      "sourceSha256": "02801c8719bff927ba482532dfb7ef255531ac58c935afb94dd1f0e6b69946fc",
+      "target": "dsb/query081/query081_1.sql",
+      "targetSha256": "46fb3aeeed21d248bf5cb5c9129bc9ef38b6074cc907eeaa1c0b5eb637c2947d",
+      "upstreamInput": "dsb/query081/query081_0.sql",
+      "upstreamInputSha256": "02801c8719bff927ba482532dfb7ef255531ac58c935afb94dd1f0e6b69946fc",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query083",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query083/query083_0.sql",
+      "sourceSha256": "d1e67fa9882c101079901a5bbfc65150b502db757dcd97a3e7f1f463cf0e286a",
+      "target": "dsb/query083/query083_1.sql",
+      "targetSha256": "1c51aa4195589b5cb22b754e21a0919f8ca5c588ea88f9c4557dffb6a87b211c",
+      "upstreamInput": "dsb/query083/query083_0.sql",
+      "upstreamInputSha256": "d1e67fa9882c101079901a5bbfc65150b502db757dcd97a3e7f1f463cf0e286a",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "FILTER_INTO_JOIN"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_INTO_JOIN"
+          ],
+          "rule": "FILTER_INTO_JOIN"
+        }
+      ],
+      "case": "rbot-dsb__query084",
+      "matchedRules": [
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_INTO_JOIN"
+      ],
+      "selectedRule": "FILTER_INTO_JOIN",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query084/query084_0.sql",
+      "sourceSha256": "3d486276dd08f09294871cdf84d4bdeaea6724ea0a1da2f5a3474c8775cc9093",
+      "target": "dsb/query084/query084_1.sql",
+      "targetSha256": "9dee9b1a0160e242e3042d412cabcf94f90aa33c09af640082a80c1812ce587f",
+      "upstreamInput": "dsb/query084/query084_0.sql",
+      "upstreamInputSha256": "3d486276dd08f09294871cdf84d4bdeaea6724ea0a1da2f5a3474c8775cc9093",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query085",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query085/query085_0.sql",
+      "sourceSha256": "c763f73f1cf885d02285e6c3a41717203c714ad71c1718c15f0e02cc8389e90b",
+      "target": "dsb/query085/query085_1.sql",
+      "targetSha256": "a29e35ed453fc980c0499971082dbdd7c1e1eed161efff09e1717adcf3c854c1",
+      "upstreamInput": "dsb/query085/query085_0.sql",
+      "upstreamInputSha256": "c763f73f1cf885d02285e6c3a41717203c714ad71c1718c15f0e02cc8389e90b",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query087",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query087/query087_0.sql",
+      "sourceSha256": "1e263afd378eb30e6b9ad9e9075dedcccafdd53b0e32b1d24c19e8053a72fa8b",
+      "target": "dsb/query087/query087_1.sql",
+      "targetSha256": "6ad76cb59de35495da6b0cba97b159bf68a26cc17c8cf6bb009b0d55bb660295",
+      "upstreamInput": "dsb/query087/query087_0.sql",
+      "upstreamInputSha256": "1e263afd378eb30e6b9ad9e9075dedcccafdd53b0e32b1d24c19e8053a72fa8b",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query091",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query091/query091_0.sql",
+      "sourceSha256": "e9c96253f5901c9e34ef58aaa3188bebec9f53eaac308bed6a1b13b7590c0b6e",
+      "target": "dsb/query091/query091_1.sql",
+      "targetSha256": "b089e0d1210cc82e3e750dba65ab353c65047f9b68ebed4c3b907a9dbadd9433",
+      "upstreamInput": "dsb/query091/query091_0.sql",
+      "upstreamInputSha256": "e9c96253f5901c9e34ef58aaa3188bebec9f53eaac308bed6a1b13b7590c0b6e",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query092",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query092/query092_0.sql",
+      "sourceSha256": "000f3b90891ef72f8018f4de49c43cba873c8c4d15c5e5e31ae31c9496752550",
+      "target": "dsb/query092/query092_1.sql",
+      "targetSha256": "b03248db36fedafb8e2468fce569e9f7e1e2562c9a1ef96fd457b77093349ded",
+      "upstreamInput": "dsb/query092/query092_0.sql",
+      "upstreamInputSha256": "000f3b90891ef72f8018f4de49c43cba873c8c4d15c5e5e31ae31c9496752550",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+          ],
+          "rule": "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+        }
+      ],
+      "case": "rbot-dsb__query094",
+      "matchedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES",
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES_TO_JOIN",
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+      ],
+      "selectedRule": "AGGREGATE_EXPAND_DISTINCT_AGGREGATES",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query094/query094_0.sql",
+      "sourceSha256": "1fd05014cea6f6eee49a419ed12537d3e63d6daedeb1204fa02d04d908b90ad4",
+      "target": "dsb/query094/query094_1.sql",
+      "targetSha256": "de443fb5f7a105e7ce3558329ed6d6d7007990faaa4ebfd58a290bca248dff76",
+      "upstreamInput": "dsb/query094/query094_0.sql",
+      "upstreamInputSha256": "1fd05014cea6f6eee49a419ed12537d3e63d6daedeb1204fa02d04d908b90ad4",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-dsb__query099",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query099/query099_0.sql",
+      "sourceSha256": "6a0fb53289cf30c488f43c4f381e26577e9e2518049e113c4af988732cd70b45",
+      "target": "dsb/query099/query099_1.sql",
+      "targetSha256": "4536022748d4d340a31be72d54891cb7573cea76f002a70b75221945e691d101",
+      "upstreamInput": "dsb/query099/query099_0.sql",
+      "upstreamInputSha256": "6a0fb53289cf30c488f43c4f381e26577e9e2518049e113c4af988732cd70b45",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query100",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "PROJECT_REMOVE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query100/query100_0.sql",
+      "sourceSha256": "fef449692867f55a7ca370e61d68cec7d9e494589fbf31752bb0f9e7907145fd",
+      "target": "dsb/query100/query100_1.sql",
+      "targetSha256": "aafdf22347706a213cf469d0fd0d1840cb30387e3860aa3b5355bbfef16b4a24",
+      "upstreamInput": "dsb/query100/query100_0.sql",
+      "upstreamInputSha256": "fef449692867f55a7ca370e61d68cec7d9e494589fbf31752bb0f9e7907145fd",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query101",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query101/query101_0.sql",
+      "sourceSha256": "0e448f904eb690e4317be31580f85a1e28fca4400006d41fb4afee2612637786",
+      "target": "dsb/query101/query101_1.sql",
+      "targetSha256": "bff440eacdb271294caf5897916b12e394c3cf65a76f3ec5f0fe3d829d2e628d",
+      "upstreamInput": "dsb/query101/query101_0.sql",
+      "upstreamInputSha256": "0e448f904eb690e4317be31580f85a1e28fca4400006d41fb4afee2612637786",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-dsb__query102",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "dsb/query102/query102_0.sql",
+      "sourceSha256": "a10f220c298a53ca01292fcf26da1cf0745a2e4641f3e91bb647e3bfc4d55705",
+      "target": "dsb/query102/query102_1.sql",
+      "targetSha256": "962153434a64128db4bdacafc524de7ea2355f2c0a597802b47596700cc54164",
+      "upstreamInput": "dsb/query102/query102_0.sql",
+      "upstreamInputSha256": "a10f220c298a53ca01292fcf26da1cf0745a2e4641f3e91bb647e3bfc4d55705",
+      "upstreamStatementCount": 1,
+      "workload": "dsb"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query1",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query1/query1_0.sql",
+      "sourceSha256": "ce5aa50aabc577dd5118ea19fecab30f721db6a55bbedbfb1e354e91ff833c13",
+      "target": "tpch/query1/query1_1.sql",
+      "targetSha256": "47568d94831e35c38fbebb62fe541976c52f8214bb6694f189b246ab38230fce",
+      "upstreamInput": "tpch/query1/query1_0.sql",
+      "upstreamInputSha256": "ce5aa50aabc577dd5118ea19fecab30f721db6a55bbedbfb1e354e91ff833c13",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query10",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query10/query10_0.sql",
+      "sourceSha256": "4a83575b80f0b04a8d65ad187bc965ed8619edc6fe20919f3130f043ee83c2b7",
+      "target": "tpch/query10/query10_1.sql",
+      "targetSha256": "a89b49a0c0faf23123ccbf1efe22d0c236021531b90dfd023483334b280c1562",
+      "upstreamInput": "tpch/query10/query10_0.sql",
+      "upstreamInputSha256": "4a83575b80f0b04a8d65ad187bc965ed8619edc6fe20919f3130f043ee83c2b7",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query11",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query11/query11_0.sql",
+      "sourceSha256": "0f31524d68f2ec94f5167c72aa948ca816b44305c7bcfac3bc368e0ce981a220",
+      "target": "tpch/query11/query11_1.sql",
+      "targetSha256": "bc1cf4c20f2ea09aa90163290651bb0dde745f2b9573ef202d606667419c84be",
+      "upstreamInput": "tpch/query11/query11_0.sql",
+      "upstreamInputSha256": "0f31524d68f2ec94f5167c72aa948ca816b44305c7bcfac3bc368e0ce981a220",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query12",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query12/query12_0.sql",
+      "sourceSha256": "b0df59cbb67f86b39fd62393e022739759d8db0d442cfa64ca8a48391fe44a0d",
+      "target": "tpch/query12/query12_1.sql",
+      "targetSha256": "3b8b429e2573f11c65205423be4910f846c6c9bf1f0fd50c644c5c546a721bec",
+      "upstreamInput": "tpch/query12/query12_0.sql",
+      "upstreamInputSha256": "b0df59cbb67f86b39fd62393e022739759d8db0d442cfa64ca8a48391fe44a0d",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-tpch__query13",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "JOIN_CONDITION_PUSH",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_JOIN_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query13/query13_0.sql",
+      "sourceSha256": "50948949af5fe3df0677b612b1de33cc00112d3adfbfa629007739319452d4f1",
+      "target": "tpch/query13/query13_1.sql",
+      "targetSha256": "4d38af87ddf2316d0bad18934062aedaa3e7e7daa2e0ae74c031866f80a4eef8",
+      "upstreamInput": "tpch/query13/query13_0.sql",
+      "upstreamInputSha256": "50948949af5fe3df0677b612b1de33cc00112d3adfbfa629007739319452d4f1",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query14",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query14/query14_0.sql",
+      "sourceSha256": "de561001c5069cd65ad16e8517f6ad557d1f9f63e901d53f2fb4609ca487b55d",
+      "target": "tpch/query14/query14_1.sql",
+      "targetSha256": "4d1ed01b4f1b6f19c7e59f64bfb196c802184667b8b9b71ad8a18ae03baa3ca5",
+      "upstreamInput": "tpch/query14/query14_0.sql",
+      "upstreamInputSha256": "de561001c5069cd65ad16e8517f6ad557d1f9f63e901d53f2fb4609ca487b55d",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query15",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query15/query15_0.sql",
+      "sourceSha256": "ea5cc4952281f37f445e989026a0e22f96b42ce12b81c01f185f974ff9e735a7",
+      "target": "tpch/query15/query15_1.sql",
+      "targetSha256": "246535059f8c4dcbe9fb7aff725646d2fbacc1a978682cef53b5653474974a5f",
+      "upstreamInput": "tpch/query15/query15_0.sql",
+      "upstreamInputSha256": "ea5cc4952281f37f445e989026a0e22f96b42ce12b81c01f185f974ff9e735a7",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+          ],
+          "rule": "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+        }
+      ],
+      "case": "rbot-tpch__query16",
+      "matchedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES",
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES_TO_JOIN",
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_EXPAND_DISTINCT_AGGREGATES"
+      ],
+      "selectedRule": "AGGREGATE_EXPAND_DISTINCT_AGGREGATES",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query16/query16_0.sql",
+      "sourceSha256": "7743c97845f80b840c2d8c9b81983b19953eea3123e11b7b5ec76e32116a0803",
+      "target": "tpch/query16/query16_1.sql",
+      "targetSha256": "5cc5e198e55722b15bb7b5b52196345881c8b2e0714229cbc44533dd921748ef",
+      "upstreamInput": "tpch/query16/query16_0.sql",
+      "upstreamInputSha256": "7743c97845f80b840c2d8c9b81983b19953eea3123e11b7b5ec76e32116a0803",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-tpch__query17",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query17/query17_0.sql",
+      "sourceSha256": "b2829c302ae876fda6399c6fc1d2c678de033a7ff85f20e74dd0457ce89fa99a",
+      "target": "tpch/query17/query17_1.sql",
+      "targetSha256": "2e9309278a3d7b3cb679102a7896d38b55dce0de653aad3f7b605f0c915dfbd4",
+      "upstreamInput": "tpch/query17/query17_0.sql",
+      "upstreamInputSha256": "b2829c302ae876fda6399c6fc1d2c678de033a7ff85f20e74dd0457ce89fa99a",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-tpch__query18",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query18/query18_0.sql",
+      "sourceSha256": "4dbe19d90a13481e6d62b2a297baaf4afe1297720facca882054e3f076b99b9e",
+      "target": "tpch/query18/query18_1.sql",
+      "targetSha256": "95e2b4556c14487377a85cf6aa1bac209e87a59568cdbf1fd31ee5607d00cb71",
+      "upstreamInput": "tpch/query18/query18_0.sql",
+      "upstreamInputSha256": "4dbe19d90a13481e6d62b2a297baaf4afe1297720facca882054e3f076b99b9e",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query19",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query19/query19_0.sql",
+      "sourceSha256": "a6f145368382bb5e0147b492287c289ce61bbff335d72219aebb94717b5ca6fd",
+      "target": "tpch/query19/query19_1.sql",
+      "targetSha256": "657e89d06d6dff9460a2fe83ffe6f63b30b37676d1a6c65502aa76ac4903510a",
+      "upstreamInput": "tpch/query19/query19_0.sql",
+      "upstreamInputSha256": "a6f145368382bb5e0147b492287c289ce61bbff335d72219aebb94717b5ca6fd",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_SUB_QUERY_TO_CORRELATE"
+          ],
+          "rule": "FILTER_SUB_QUERY_TO_CORRELATE"
+        }
+      ],
+      "case": "rbot-tpch__query2",
+      "matchedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "selectedRule": "FILTER_SUB_QUERY_TO_CORRELATE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query2/query2_0.sql",
+      "sourceSha256": "ea69888141220ca67e7b46193392e85515e6eecd7ca82e7bdeec5ce488cb3c40",
+      "target": "tpch/query2/query2_1.sql",
+      "targetSha256": "ad780b9d1e7a514172b07e5279b1f0d05616ccec5e8de1a664284abf7c6f676e",
+      "upstreamInput": "tpch/query2/query2_0.sql",
+      "upstreamInputSha256": "ea69888141220ca67e7b46193392e85515e6eecd7ca82e7bdeec5ce488cb3c40",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "FILTER_INTO_JOIN"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "FILTER_INTO_JOIN"
+          ],
+          "rule": "FILTER_INTO_JOIN"
+        }
+      ],
+      "case": "rbot-tpch__query20",
+      "matchedRules": [
+        "FILTER_INTO_JOIN",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "FILTER_INTO_JOIN"
+      ],
+      "selectedRule": "FILTER_INTO_JOIN",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query20/query20_0.sql",
+      "sourceSha256": "2f33b4b78a26e382c00895a86913aba6a1fbf4d7144c533be6632b17527ebd5d",
+      "target": "tpch/query20/query20_1.sql",
+      "targetSha256": "80d0b3f0a27a060b7ea653bd97e5f99763386476516c00da77f6afcc86225662",
+      "upstreamInput": "tpch/query20/query20_0.sql",
+      "upstreamInputSha256": "2f33b4b78a26e382c00895a86913aba6a1fbf4d7144c533be6632b17527ebd5d",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-tpch__query21",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_SUB_QUERY_TO_CORRELATE",
+        "JOIN_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query21/query21_0.sql",
+      "sourceSha256": "1f7034c673511387030df7c6be6d4e96f5d3424a6270743074398fa40d226a40",
+      "target": "tpch/query21/query21_1.sql",
+      "targetSha256": "dab1c9a25df3cf9f60be350a0d28fa5eaa624a87274ae5a4100afeef431d61b0",
+      "upstreamInput": "tpch/query21/query21_0.sql",
+      "upstreamInputSha256": "1f7034c673511387030df7c6be6d4e96f5d3424a6270743074398fa40d226a40",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query22",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query22/query22_0.sql",
+      "sourceSha256": "121d1e715c2bb0741774a10f616404b07f71defafa33052134d708ebec3ebe36",
+      "target": "tpch/query22/query22_1.sql",
+      "targetSha256": "d63964d02d294be5782dd9798903a13c48e616442d76729319622303c4145b23",
+      "upstreamInput": "tpch/query22/query22_0.sql",
+      "upstreamInputSha256": "121d1e715c2bb0741774a10f616404b07f71defafa33052134d708ebec3ebe36",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query3",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query3/query3_0.sql",
+      "sourceSha256": "7e633d6558011125df8b4bf1d5564d2dd419cf82912201af9774bbebf88f6753",
+      "target": "tpch/query3/query3_1.sql",
+      "targetSha256": "ee73158df9dfc2900c8edc61332a690cf9b178fb776f0e0c20401f8f26a7bc9a",
+      "upstreamInput": "tpch/query3/query3_0.sql",
+      "upstreamInputSha256": "7e633d6558011125df8b4bf1d5564d2dd419cf82912201af9774bbebf88f6753",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_PROJECT_MERGE"
+          ],
+          "rule": "AGGREGATE_PROJECT_MERGE"
+        }
+      ],
+      "case": "rbot-tpch__query4",
+      "matchedRules": [
+        "AGGREGATE_PROJECT_MERGE",
+        "FILTER_SUB_QUERY_TO_CORRELATE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_PROJECT_MERGE"
+      ],
+      "selectedRule": "AGGREGATE_PROJECT_MERGE",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query4/query4_0.sql",
+      "sourceSha256": "e6a051b614e2443bec4c4f57d549c96c3792c6be5bf59d61b94997bafedc91b0",
+      "target": "tpch/query4/query4_1.sql",
+      "targetSha256": "6c459ed40cf46bbbf474a8d930057bbaae1c65d1d26544ceee4b4ffa2072b306",
+      "upstreamInput": "tpch/query4/query4_0.sql",
+      "upstreamInputSha256": "e6a051b614e2443bec4c4f57d549c96c3792c6be5bf59d61b94997bafedc91b0",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query5",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query5/query5_0.sql",
+      "sourceSha256": "ce2848386af75ee3267d9a55c352fd1aab699296080e83874d32e36b18bc4ba4",
+      "target": "tpch/query5/query5_1.sql",
+      "targetSha256": "62d71408e52854e7f526179893adfe9f8ddbd144fea6250cdccd8d6ef86cdd90",
+      "upstreamInput": "tpch/query5/query5_0.sql",
+      "upstreamInputSha256": "ce2848386af75ee3267d9a55c352fd1aab699296080e83874d32e36b18bc4ba4",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query6",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query6/query6_0.sql",
+      "sourceSha256": "0f01955d3e4e1f284a755daf90380f77fd59f9b182200afa3d3a0f4e71db0f03",
+      "target": "tpch/query6/query6_1.sql",
+      "targetSha256": "63203155e141c73c4ed6ff6072cb9e7f38953d1d6beccacab1163133763d586c",
+      "upstreamInput": "tpch/query6/query6_0.sql",
+      "upstreamInputSha256": "0f01955d3e4e1f284a755daf90380f77fd59f9b182200afa3d3a0f4e71db0f03",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query7",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query7/query7_0.sql",
+      "sourceSha256": "7e2e25aadf36b1da3285d929d998fa08886364548def3b7cf517c03fd5352e78",
+      "target": "tpch/query7/query7_1.sql",
+      "targetSha256": "b65b556d333a81d9b7f1f9b466537eb5b09b6ace2cbec41e35dbc230dc270ee9",
+      "upstreamInput": "tpch/query7/query7_0.sql",
+      "upstreamInputSha256": "7e2e25aadf36b1da3285d929d998fa08886364548def3b7cf517c03fd5352e78",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query8",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "FILTER_REDUCE_EXPRESSIONS",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE",
+        "SORT_PROJECT_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query8/query8_0.sql",
+      "sourceSha256": "397100ff66b97e1c80fc83bd88ee0c79bd2e9ae5bf78b639889d8299b08451fd",
+      "target": "tpch/query8/query8_1.sql",
+      "targetSha256": "9903aef9eb720aaa5da83ad7d6c0eed3d9758b3273e05f00ef32d97123e7fabd",
+      "upstreamInput": "tpch/query8/query8_0.sql",
+      "upstreamInputSha256": "397100ff66b97e1c80fc83bd88ee0c79bd2e9ae5bf78b639889d8299b08451fd",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    },
+    {
+      "appliedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "candidateAttempts": [
+        {
+          "accepted": true,
+          "appliedRules": [
+            "AGGREGATE_REDUCE_FUNCTIONS"
+          ],
+          "rule": "AGGREGATE_REDUCE_FUNCTIONS"
+        }
+      ],
+      "case": "rbot-tpch__query9",
+      "matchedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS",
+        "FILTER_INTO_JOIN",
+        "JOIN_TO_CORRELATE",
+        "PROJECT_FILTER_TRANSPOSE"
+      ],
+      "requestedRules": [
+        "AGGREGATE_REDUCE_FUNCTIONS"
+      ],
+      "selectedRule": "AGGREGATE_REDUCE_FUNCTIONS",
+      "selectedStatementIndex": 0,
+      "source": "tpch/query9/query9_0.sql",
+      "sourceSha256": "aa60ad1bce6ddd665bcc4b13bab1817830c0e7150c806bd27bb3896167210398",
+      "target": "tpch/query9/query9_1.sql",
+      "targetSha256": "1de82667f59268929f7ad72c6f622c6343dde8249e9d3fa516b60ec58914003f",
+      "upstreamInput": "tpch/query9/query9_0.sql",
+      "upstreamInputSha256": "aa60ad1bce6ddd665bcc4b13bab1817830c0e7150c806bd27bb3896167210398",
+      "upstreamStatementCount": 1,
+      "workload": "tpch"
+    }
+  ],
+  "description": "Fresh deterministic rewrites emitted by the pinned R-Bot Calcite engine; not the unpublished cost-selected outputs from the paper run.",
+  "generatedAt": "2026-07-28T13:53:21.153351+00:00",
+  "profile": "deterministic-first-roundtripping-matched-rule-v1",
+  "rewritePolicy": {
+    "candidateRuleOrder": "lexical-rule-name",
+    "candidateWidth": 1,
+    "requireNonIdentityOutput": true,
+    "requirePinnedRBotRoundTrip": true,
+    "rounds": 1
+  },
+  "schemaVersion": 1,
+  "sourceSelection": {
+    "statementPolicy": "first-executable-statement",
+    "totalCases": 59,
+    "variant": "_0",
+    "workloadCases": {
+      "dsb": 37,
+      "tpch": 22
+    }
+  },
+  "upstream": {
+    "commit": "c9c90e5d7867888c3aaba86e4fc9e6d48f53b375",
+    "rewriteJar": "CalciteRewrite/out/artifacts/LearnedRewrite_jar/LearnedRewrite.jar",
+    "rewriteJarSha256": "4040d466996e035faae3612f0742c146aed705a22c32fb39ab92604b15f0f0a1",
+    "url": "https://github.com/curtis-sun/LLM4Rewrite"
+  }
+}

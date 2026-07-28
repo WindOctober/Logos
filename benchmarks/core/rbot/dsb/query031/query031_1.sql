@@ -1,62 +1,45 @@
-
-with ss as
- (select ca_county,d_qoy, d_year,sum(ss_ext_sales_price) as store_sales
- from store_sales,date_dim,customer_address, item
- where ss_sold_date_sk = d_date_sk
-  and ss_addr_sk=ca_address_sk
-  and ss_item_sk = i_item_sk
-  and i_color IN ('mint', 'thistle')
-  and i_manager_id BETWEEN 13 and 32
-  and ss_list_price between 107 and 121
-  and ca_state in ('KS','ND')
- group by ca_county,d_qoy, d_year),
- ws as
- (select ca_county,d_qoy, d_year,sum(ws_ext_sales_price) as web_sales
- from web_sales,date_dim,customer_address, item
- where ws_sold_date_sk = d_date_sk
-  and ws_bill_addr_sk=ca_address_sk
-  and ws_item_sk = i_item_sk
-  and i_color IN ('mint', 'thistle')
-  and i_manager_id BETWEEN 13 and 32
-  and ws_list_price between 107 and 121
-  and ca_state in ('KS','ND')
-group by ca_county,d_qoy, d_year)
- select
-        ss1.ca_county
-       ,ss1.d_year
-       ,ws2.web_sales/ws1.web_sales web_q1_q2_increase
-       ,ss2.store_sales/ss1.store_sales store_q1_q2_increase
-       ,ws3.web_sales/ws2.web_sales web_q2_q3_increase
-       ,ss3.store_sales/ss2.store_sales store_q2_q3_increase
- from
-        ss ss1
-       ,ss ss2
-       ,ss ss3
-       ,ws ws1
-       ,ws ws2
-       ,ws ws3
- where
-    ss1.d_qoy = 1
-    and ss1.d_year = 1998
-    and ss1.ca_county = ss2.ca_county
-    and ss2.d_qoy = 2
-    and ss2.d_year = 1998
- and ss2.ca_county = ss3.ca_county
-    and ss3.d_qoy = 3
-    and ss3.d_year = 1998
-    and ss1.ca_county = ws1.ca_county
-    and ws1.d_qoy = 1
-    and ws1.d_year = 1998
-    and ws1.ca_county = ws2.ca_county
-    and ws2.d_qoy = 2
-    and ws2.d_year = 1998
-    and ws1.ca_county = ws3.ca_county
-    and ws3.d_qoy = 3
-    and ws3.d_year =1998
-    and case when ws1.web_sales > 0 then ws2.web_sales/ws1.web_sales else null end
-       > case when ss1.store_sales > 0 then ss2.store_sales/ss1.store_sales else null end
-    and case when ws2.web_sales > 0 then ws3.web_sales/ws2.web_sales else null end
-       > case when ss2.store_sales > 0 then ss3.store_sales/ss2.store_sales else null end
- order by web_q2_q3_increase;
-
-
+SELECT "t1"."ca_county", "t1"."d_year", "t13"."web_sales" / "t10"."web_sales" AS "web_q1_q2_increase", "t4"."store_sales" / "t1"."store_sales" AS "store_q1_q2_increase", "t16"."web_sales" / "t13"."web_sales" AS "web_q2_q3_increase", "t7"."store_sales" / "t4"."store_sales" AS "store_q2_q3_increase"
+FROM (SELECT "customer_address"."ca_county", "date_dim"."d_qoy", "date_dim"."d_year", SUM("store_sales"."ss_ext_sales_price") AS "store_sales"
+        FROM "store_sales",
+            "date_dim",
+            "customer_address",
+            "item"
+        WHERE "store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND "store_sales"."ss_addr_sk" = "customer_address"."ca_address_sk" AND ("store_sales"."ss_item_sk" = "item"."i_item_sk" AND ("item"."i_color" = 'cornsilk' OR "item"."i_color" = 'rosy')) AND ("item"."i_manager_id" >= 80 AND "item"."i_manager_id" <= 99 AND ("store_sales"."ss_list_price" >= 248 AND ("store_sales"."ss_list_price" <= 262 AND ("customer_address"."ca_state" = 'IL' OR "customer_address"."ca_state" = 'MI'))))
+        GROUP BY "date_dim"."d_year", "date_dim"."d_qoy", "customer_address"."ca_county") AS "t1",
+        (SELECT "customer_address0"."ca_county0", "date_dim0"."d_qoy0", "date_dim0"."d_year0", SUM("store_sales0"."ss_ext_sales_price0") AS "store_sales"
+        FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0"),
+            "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0"),
+            "customer_address" AS "customer_address0" ("ca_address_sk0", "ca_address_id0", "ca_street_number0", "ca_street_name0", "ca_street_type0", "ca_suite_number0", "ca_city0", "ca_county0", "ca_state0", "ca_zip0", "ca_country0", "ca_gmt_offset0", "ca_location_type0"),
+            "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0")
+        WHERE "store_sales0"."ss_sold_date_sk0" = "date_dim0"."d_date_sk0" AND "store_sales0"."ss_addr_sk0" = "customer_address0"."ca_address_sk0" AND ("store_sales0"."ss_item_sk0" = "item0"."i_item_sk0" AND ("item0"."i_color0" = 'cornsilk' OR "item0"."i_color0" = 'rosy')) AND ("item0"."i_manager_id0" >= 80 AND "item0"."i_manager_id0" <= 99 AND ("store_sales0"."ss_list_price0" >= 248 AND ("store_sales0"."ss_list_price0" <= 262 AND ("customer_address0"."ca_state0" = 'IL' OR "customer_address0"."ca_state0" = 'MI'))))
+        GROUP BY "date_dim0"."d_year0", "date_dim0"."d_qoy0", "customer_address0"."ca_county0") AS "t4",
+        (SELECT "customer_address1"."ca_county1", "date_dim1"."d_qoy1", "date_dim1"."d_year1", SUM("store_sales1"."ss_ext_sales_price1") AS "store_sales"
+        FROM "store_sales" AS "store_sales1" ("ss_sold_date_sk1", "ss_sold_time_sk1", "ss_item_sk1", "ss_customer_sk1", "ss_cdemo_sk1", "ss_hdemo_sk1", "ss_addr_sk1", "ss_store_sk1", "ss_promo_sk1", "ss_ticket_number1", "ss_quantity1", "ss_wholesale_cost1", "ss_list_price1", "ss_sales_price1", "ss_ext_discount_amt1", "ss_ext_sales_price1", "ss_ext_wholesale_cost1", "ss_ext_list_price1", "ss_ext_tax1", "ss_coupon_amt1", "ss_net_paid1", "ss_net_paid_inc_tax1", "ss_net_profit1"),
+            "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1"),
+            "customer_address" AS "customer_address1" ("ca_address_sk1", "ca_address_id1", "ca_street_number1", "ca_street_name1", "ca_street_type1", "ca_suite_number1", "ca_city1", "ca_county1", "ca_state1", "ca_zip1", "ca_country1", "ca_gmt_offset1", "ca_location_type1"),
+            "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1")
+        WHERE "store_sales1"."ss_sold_date_sk1" = "date_dim1"."d_date_sk1" AND "store_sales1"."ss_addr_sk1" = "customer_address1"."ca_address_sk1" AND ("store_sales1"."ss_item_sk1" = "item1"."i_item_sk1" AND ("item1"."i_color1" = 'cornsilk' OR "item1"."i_color1" = 'rosy')) AND ("item1"."i_manager_id1" >= 80 AND "item1"."i_manager_id1" <= 99 AND ("store_sales1"."ss_list_price1" >= 248 AND ("store_sales1"."ss_list_price1" <= 262 AND ("customer_address1"."ca_state1" = 'IL' OR "customer_address1"."ca_state1" = 'MI'))))
+        GROUP BY "date_dim1"."d_year1", "date_dim1"."d_qoy1", "customer_address1"."ca_county1") AS "t7",
+        (SELECT "customer_address2"."ca_county2", "date_dim2"."d_qoy2", "date_dim2"."d_year2", SUM("web_sales"."ws_ext_sales_price") AS "web_sales"
+        FROM "web_sales",
+            "date_dim" AS "date_dim2" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2"),
+            "customer_address" AS "customer_address2" ("ca_address_sk2", "ca_address_id2", "ca_street_number2", "ca_street_name2", "ca_street_type2", "ca_suite_number2", "ca_city2", "ca_county2", "ca_state2", "ca_zip2", "ca_country2", "ca_gmt_offset2", "ca_location_type2"),
+            "item" AS "item2" ("i_item_sk2", "i_item_id2", "i_rec_start_date2", "i_rec_end_date2", "i_item_desc2", "i_current_price2", "i_wholesale_cost2", "i_brand_id2", "i_brand2", "i_class_id2", "i_class2", "i_category_id2", "i_category2", "i_manufact_id2", "i_manufact2", "i_size2", "i_formulation2", "i_color2", "i_units2", "i_container2", "i_manager_id2", "i_product_name2")
+        WHERE "web_sales"."ws_sold_date_sk" = "date_dim2"."d_date_sk2" AND "web_sales"."ws_bill_addr_sk" = "customer_address2"."ca_address_sk2" AND ("web_sales"."ws_item_sk" = "item2"."i_item_sk2" AND ("item2"."i_color2" = 'cornsilk' OR "item2"."i_color2" = 'rosy')) AND ("item2"."i_manager_id2" >= 80 AND "item2"."i_manager_id2" <= 99 AND ("web_sales"."ws_list_price" >= 248 AND ("web_sales"."ws_list_price" <= 262 AND ("customer_address2"."ca_state2" = 'IL' OR "customer_address2"."ca_state2" = 'MI'))))
+        GROUP BY "date_dim2"."d_year2", "date_dim2"."d_qoy2", "customer_address2"."ca_county2") AS "t10",
+        (SELECT "customer_address3"."ca_county3", "date_dim3"."d_qoy3", "date_dim3"."d_year3", SUM("web_sales0"."ws_ext_sales_price0") AS "web_sales"
+        FROM "web_sales" AS "web_sales0" ("ws_sold_date_sk0", "ws_sold_time_sk0", "ws_ship_date_sk0", "ws_item_sk0", "ws_bill_customer_sk0", "ws_bill_cdemo_sk0", "ws_bill_hdemo_sk0", "ws_bill_addr_sk0", "ws_ship_customer_sk0", "ws_ship_cdemo_sk0", "ws_ship_hdemo_sk0", "ws_ship_addr_sk0", "ws_web_page_sk0", "ws_web_site_sk0", "ws_ship_mode_sk0", "ws_warehouse_sk0", "ws_promo_sk0", "ws_order_number0", "ws_quantity0", "ws_wholesale_cost0", "ws_list_price0", "ws_sales_price0", "ws_ext_discount_amt0", "ws_ext_sales_price0", "ws_ext_wholesale_cost0", "ws_ext_list_price0", "ws_ext_tax0", "ws_coupon_amt0", "ws_ext_ship_cost0", "ws_net_paid0", "ws_net_paid_inc_tax0", "ws_net_paid_inc_ship0", "ws_net_paid_inc_ship_tax0", "ws_net_profit0"),
+            "date_dim" AS "date_dim3" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3"),
+            "customer_address" AS "customer_address3" ("ca_address_sk3", "ca_address_id3", "ca_street_number3", "ca_street_name3", "ca_street_type3", "ca_suite_number3", "ca_city3", "ca_county3", "ca_state3", "ca_zip3", "ca_country3", "ca_gmt_offset3", "ca_location_type3"),
+            "item" AS "item3" ("i_item_sk3", "i_item_id3", "i_rec_start_date3", "i_rec_end_date3", "i_item_desc3", "i_current_price3", "i_wholesale_cost3", "i_brand_id3", "i_brand3", "i_class_id3", "i_class3", "i_category_id3", "i_category3", "i_manufact_id3", "i_manufact3", "i_size3", "i_formulation3", "i_color3", "i_units3", "i_container3", "i_manager_id3", "i_product_name3")
+        WHERE "web_sales0"."ws_sold_date_sk0" = "date_dim3"."d_date_sk3" AND "web_sales0"."ws_bill_addr_sk0" = "customer_address3"."ca_address_sk3" AND ("web_sales0"."ws_item_sk0" = "item3"."i_item_sk3" AND ("item3"."i_color3" = 'cornsilk' OR "item3"."i_color3" = 'rosy')) AND ("item3"."i_manager_id3" >= 80 AND "item3"."i_manager_id3" <= 99 AND ("web_sales0"."ws_list_price0" >= 248 AND ("web_sales0"."ws_list_price0" <= 262 AND ("customer_address3"."ca_state3" = 'IL' OR "customer_address3"."ca_state3" = 'MI'))))
+        GROUP BY "date_dim3"."d_year3", "date_dim3"."d_qoy3", "customer_address3"."ca_county3") AS "t13",
+        (SELECT "customer_address4"."ca_county4", "date_dim4"."d_qoy4", "date_dim4"."d_year4", SUM("web_sales1"."ws_ext_sales_price1") AS "web_sales"
+        FROM "web_sales" AS "web_sales1" ("ws_sold_date_sk1", "ws_sold_time_sk1", "ws_ship_date_sk1", "ws_item_sk1", "ws_bill_customer_sk1", "ws_bill_cdemo_sk1", "ws_bill_hdemo_sk1", "ws_bill_addr_sk1", "ws_ship_customer_sk1", "ws_ship_cdemo_sk1", "ws_ship_hdemo_sk1", "ws_ship_addr_sk1", "ws_web_page_sk1", "ws_web_site_sk1", "ws_ship_mode_sk1", "ws_warehouse_sk1", "ws_promo_sk1", "ws_order_number1", "ws_quantity1", "ws_wholesale_cost1", "ws_list_price1", "ws_sales_price1", "ws_ext_discount_amt1", "ws_ext_sales_price1", "ws_ext_wholesale_cost1", "ws_ext_list_price1", "ws_ext_tax1", "ws_coupon_amt1", "ws_ext_ship_cost1", "ws_net_paid1", "ws_net_paid_inc_tax1", "ws_net_paid_inc_ship1", "ws_net_paid_inc_ship_tax1", "ws_net_profit1"),
+            "date_dim" AS "date_dim4" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4"),
+            "customer_address" AS "customer_address4" ("ca_address_sk4", "ca_address_id4", "ca_street_number4", "ca_street_name4", "ca_street_type4", "ca_suite_number4", "ca_city4", "ca_county4", "ca_state4", "ca_zip4", "ca_country4", "ca_gmt_offset4", "ca_location_type4"),
+            "item" AS "item4" ("i_item_sk4", "i_item_id4", "i_rec_start_date4", "i_rec_end_date4", "i_item_desc4", "i_current_price4", "i_wholesale_cost4", "i_brand_id4", "i_brand4", "i_class_id4", "i_class4", "i_category_id4", "i_category4", "i_manufact_id4", "i_manufact4", "i_size4", "i_formulation4", "i_color4", "i_units4", "i_container4", "i_manager_id4", "i_product_name4")
+        WHERE "web_sales1"."ws_sold_date_sk1" = "date_dim4"."d_date_sk4" AND "web_sales1"."ws_bill_addr_sk1" = "customer_address4"."ca_address_sk4" AND ("web_sales1"."ws_item_sk1" = "item4"."i_item_sk4" AND ("item4"."i_color4" = 'cornsilk' OR "item4"."i_color4" = 'rosy')) AND ("item4"."i_manager_id4" >= 80 AND "item4"."i_manager_id4" <= 99 AND ("web_sales1"."ws_list_price1" >= 248 AND ("web_sales1"."ws_list_price1" <= 262 AND ("customer_address4"."ca_state4" = 'IL' OR "customer_address4"."ca_state4" = 'MI'))))
+        GROUP BY "date_dim4"."d_year4", "date_dim4"."d_qoy4", "customer_address4"."ca_county4") AS "t16"
+WHERE "t1"."d_qoy" = 1 AND "t1"."d_year" = 2002 AND ("t1"."ca_county" = "t4"."ca_county0" AND "t4"."d_qoy0" = 2) AND ("t4"."d_year0" = 2002 AND "t4"."ca_county0" = "t7"."ca_county1" AND ("t7"."d_qoy1" = 3 AND ("t7"."d_year1" = 2002 AND "t1"."ca_county" = "t10"."ca_county2"))) AND ("t10"."d_qoy2" = 1 AND "t10"."d_year2" = 2002 AND ("t10"."ca_county2" = "t13"."ca_county3" AND ("t13"."d_qoy3" = 2 AND "t13"."d_year3" = 2002)) AND ("t10"."ca_county2" = "t16"."ca_county4" AND "t16"."d_qoy4" = 3 AND ("t16"."d_year4" = 2002 AND (CASE WHEN "t10"."web_sales" > 0 THEN "t13"."web_sales" / "t10"."web_sales" ELSE NULL END > CASE WHEN "t1"."store_sales" > 0 THEN "t4"."store_sales" / "t1"."store_sales" ELSE NULL END AND CASE WHEN "t13"."web_sales" > 0 THEN "t16"."web_sales" / "t13"."web_sales" ELSE NULL END > CASE WHEN "t4"."store_sales" > 0 THEN "t7"."store_sales" / "t4"."store_sales" ELSE NULL END))))
+ORDER BY 3;

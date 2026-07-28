@@ -1,32 +1,16 @@
-
-select  i_item_desc
-      ,w_warehouse_name
-      ,d1.d_week_seq
-      ,sum(case when p_promo_sk is null then 1 else 0 end) no_promo
-      ,sum(case when p_promo_sk is not null then 1 else 0 end) promo
-      ,count(*) total_cnt
-from catalog_sales
-join inventory on (cs_item_sk = inv_item_sk)
-join warehouse on (w_warehouse_sk=inv_warehouse_sk)
-join item on (i_item_sk = cs_item_sk)
-join customer_demographics on (cs_bill_cdemo_sk = cd_demo_sk)
-join household_demographics on (cs_bill_hdemo_sk = hd_demo_sk)
-join date_dim d1 on (cs_sold_date_sk = d1.d_date_sk)
-join date_dim d2 on (inv_date_sk = d2.d_date_sk)
-join date_dim d3 on (cs_ship_date_sk = d3.d_date_sk)
-left outer join promotion on (cs_promo_sk=p_promo_sk)
-left outer join catalog_returns on (cr_item_sk = cs_item_sk and cr_order_number = cs_order_number)
-where d1.d_week_seq = d2.d_week_seq
-  and inv_quantity_on_hand < cs_quantity
-  and d3.d_date > d1.d_date + interval '3' day
-  and hd_buy_potential = '>10000'
-  and d1.d_year = 1998
-  and cd_marital_status = 'D'
-  and cd_dep_count between 9 and 11
-  and i_category IN ('Books', 'Children', 'Home')
-  and cs_wholesale_cost BETWEEN 43 AND 63
-group by i_item_desc,w_warehouse_name,d1.d_week_seq
-order by total_cnt desc, i_item_desc, w_warehouse_name, d_week_seq
-limit 100;
-
-
+SELECT "item"."i_item_desc", "warehouse"."w_warehouse_name", "date_dim"."d_week_seq", COALESCE(SUM(CASE WHEN "promotion"."p_promo_sk" IS NULL THEN 1 ELSE 0 END), 0) AS "no_promo", COALESCE(SUM(CASE WHEN "promotion"."p_promo_sk" IS NOT NULL THEN 1 ELSE 0 END), 0) AS "promo", COUNT(*) AS "total_cnt"
+FROM "catalog_sales"
+    INNER JOIN "inventory" ON "catalog_sales"."cs_item_sk" = "inventory"."inv_item_sk"
+    INNER JOIN "warehouse" ON "inventory"."inv_warehouse_sk" = "warehouse"."w_warehouse_sk"
+    INNER JOIN "item" ON "catalog_sales"."cs_item_sk" = "item"."i_item_sk"
+    INNER JOIN "customer_demographics" ON "catalog_sales"."cs_bill_cdemo_sk" = "customer_demographics"."cd_demo_sk"
+    INNER JOIN "household_demographics" ON "catalog_sales"."cs_bill_hdemo_sk" = "household_demographics"."hd_demo_sk"
+    INNER JOIN "date_dim" ON "catalog_sales"."cs_sold_date_sk" = "date_dim"."d_date_sk"
+    INNER JOIN "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0") ON "inventory"."inv_date_sk" = "date_dim0"."d_date_sk0"
+    INNER JOIN "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1") ON "catalog_sales"."cs_ship_date_sk" = "date_dim1"."d_date_sk1"
+    LEFT JOIN "promotion" ON "catalog_sales"."cs_promo_sk" = "promotion"."p_promo_sk"
+    LEFT JOIN "catalog_returns" ON "catalog_sales"."cs_item_sk" = "catalog_returns"."cr_item_sk" AND "catalog_sales"."cs_order_number" = "catalog_returns"."cr_order_number"
+WHERE "date_dim"."d_week_seq" = "date_dim0"."d_week_seq0" AND "inventory"."inv_quantity_on_hand" < "catalog_sales"."cs_quantity" AND ("date_dim1"."d_date1" > ("date_dim"."d_date" + INTERVAL '3' DAY) AND ("household_demographics"."hd_buy_potential" = '1001-5000' AND "date_dim"."d_year" = 1999)) AND ("customer_demographics"."cd_marital_status" = 'M' AND ("customer_demographics"."cd_dep_count" >= 6 AND "customer_demographics"."cd_dep_count" <= 8) AND (("item"."i_category" = 'Books' OR "item"."i_category" = 'Jewelry' OR "item"."i_category" = 'Shoes') AND ("catalog_sales"."cs_wholesale_cost" >= 73 AND "catalog_sales"."cs_wholesale_cost" <= 93)))
+GROUP BY "item"."i_item_desc", "warehouse"."w_warehouse_name", "date_dim"."d_week_seq"
+ORDER BY 6 DESC, "item"."i_item_desc", "warehouse"."w_warehouse_name", "date_dim"."d_week_seq"
+FETCH NEXT 100 ROWS ONLY;

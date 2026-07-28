@@ -1,31 +1,10 @@
-
-select 
-   w_state
-  ,i_item_id
-  ,sum(case when (cast(d_date as date) < cast ('1999-04-19' as date))
- 		then cs_sales_price - coalesce(cr_refunded_cash,0) else 0 end) as sales_before
-  ,sum(case when (cast(d_date as date) >= cast ('1999-04-19' as date))
- 		then cs_sales_price - coalesce(cr_refunded_cash,0) else 0 end) as sales_after
- from
-   catalog_sales left outer join catalog_returns on
-       (cs_order_number = cr_order_number
-        and cs_item_sk = cr_item_sk)
-  ,warehouse
-  ,item
-  ,date_dim
- where
- i_item_sk          = cs_item_sk
- and cs_warehouse_sk    = w_warehouse_sk
- and cs_sold_date_sk    = d_date_sk
- and d_date between  (cast ('1999-04-19' as date) - interval '30' day)
-                and (cast ('1999-04-19' as date) + interval '30' day) 
- and i_category  = 'Sports'
- and i_manager_id between 61 and 100
- and cs_wholesale_cost between 13 and 32
- and cr_reason_sk = 57
- group by
-    w_state,i_item_id
- order by w_state,i_item_id
-limit 100;
-
-
+SELECT "warehouse"."w_state", "item"."i_item_id", CASE WHEN COUNT(CASE WHEN "date_dim"."d_date" < DATE '2001-05-21' THEN "catalog_sales"."cs_sales_price" - CASE WHEN "catalog_returns"."cr_refunded_cash" IS NOT NULL THEN CAST("catalog_returns"."cr_refunded_cash" AS DECIMAL(12, 2)) ELSE 0 END ELSE 0 END) = 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN "date_dim"."d_date" < DATE '2001-05-21' THEN "catalog_sales"."cs_sales_price" - CASE WHEN "catalog_returns"."cr_refunded_cash" IS NOT NULL THEN CAST("catalog_returns"."cr_refunded_cash" AS DECIMAL(12, 2)) ELSE 0 END ELSE 0 END), 0) END AS "sales_before", CASE WHEN COUNT(CASE WHEN "date_dim"."d_date" >= DATE '2001-05-21' THEN "catalog_sales"."cs_sales_price" - CASE WHEN "catalog_returns"."cr_refunded_cash" IS NOT NULL THEN CAST("catalog_returns"."cr_refunded_cash" AS DECIMAL(12, 2)) ELSE 0 END ELSE 0 END) = 0 THEN NULL ELSE COALESCE(SUM(CASE WHEN "date_dim"."d_date" >= DATE '2001-05-21' THEN "catalog_sales"."cs_sales_price" - CASE WHEN "catalog_returns"."cr_refunded_cash" IS NOT NULL THEN CAST("catalog_returns"."cr_refunded_cash" AS DECIMAL(12, 2)) ELSE 0 END ELSE 0 END), 0) END AS "sales_after"
+FROM "catalog_sales"
+    LEFT JOIN "catalog_returns" ON "catalog_sales"."cs_order_number" = "catalog_returns"."cr_order_number" AND "catalog_sales"."cs_item_sk" = "catalog_returns"."cr_item_sk"
+    CROSS JOIN "warehouse"
+    CROSS JOIN "item"
+    CROSS JOIN "date_dim"
+WHERE "item"."i_item_sk" = "catalog_sales"."cs_item_sk" AND "catalog_sales"."cs_warehouse_sk" = "warehouse"."w_warehouse_sk" AND ("catalog_sales"."cs_sold_date_sk" = "date_dim"."d_date_sk" AND ("date_dim"."d_date" >= (CAST('2001-05-21' AS DATE) - INTERVAL '30' DAY) AND "date_dim"."d_date" <= (CAST('2001-05-21' AS DATE) + INTERVAL '30' DAY))) AND ("item"."i_category" = 'Books' AND ("item"."i_manager_id" >= 61 AND "item"."i_manager_id" <= 100) AND ("catalog_sales"."cs_wholesale_cost" >= 81 AND ("catalog_sales"."cs_wholesale_cost" <= 100 AND "catalog_returns"."cr_reason_sk" = 5)))
+GROUP BY "warehouse"."w_state", "item"."i_item_id"
+ORDER BY "warehouse"."w_state", "item"."i_item_id"
+FETCH NEXT 100 ROWS ONLY;

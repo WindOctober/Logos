@@ -1,77 +1,50 @@
-
-WITH all_sales AS (
- SELECT d_year
-       ,i_brand_id
-       ,i_class_id
-       ,i_category_id
-       ,i_manufact_id
-       ,SUM(sales_cnt) AS sales_cnt
-       ,SUM(sales_amt) AS sales_amt
- FROM (SELECT d_year
-             ,i_brand_id
-             ,i_class_id
-             ,i_category_id
-             ,i_manufact_id
-             ,cs_quantity - COALESCE(cr_return_quantity,0) AS sales_cnt
-             ,cs_ext_sales_price - COALESCE(cr_return_amount,0.0) AS sales_amt
-       FROM catalog_sales JOIN item ON i_item_sk=cs_item_sk
-                          JOIN date_dim ON d_date_sk=cs_sold_date_sk
-                          LEFT JOIN catalog_returns ON (cs_order_number=cr_order_number
-                                                    AND cs_item_sk=cr_item_sk)
-       WHERE i_category='Children'
-       and cs_sales_price / cs_list_price BETWEEN 80 * 0.01 AND 100 * 0.01
-       and cr_reason_sk in (18, 40, 48, 55, 68)
-       UNION
-       SELECT d_year
-             ,i_brand_id
-             ,i_class_id
-             ,i_category_id
-             ,i_manufact_id
-             ,ss_quantity - COALESCE(sr_return_quantity,0) AS sales_cnt
-             ,ss_ext_sales_price - COALESCE(sr_return_amt,0.0) AS sales_amt
-       FROM store_sales JOIN item ON i_item_sk=ss_item_sk
-                        JOIN date_dim ON d_date_sk=ss_sold_date_sk
-                        LEFT JOIN store_returns ON (ss_ticket_number=sr_ticket_number
-                                                AND ss_item_sk=sr_item_sk)
-       WHERE i_category='Children'
-       and ss_sales_price / ss_list_price BETWEEN 80 * 0.01 AND 100 * 0.01
-       and sr_reason_sk in (18, 40, 48, 55, 68)
-       UNION
-       SELECT d_year
-             ,i_brand_id
-             ,i_class_id
-             ,i_category_id
-             ,i_manufact_id
-             ,ws_quantity - COALESCE(wr_return_quantity,0) AS sales_cnt
-             ,ws_ext_sales_price - COALESCE(wr_return_amt,0.0) AS sales_amt
-       FROM web_sales JOIN item ON i_item_sk=ws_item_sk
-                      JOIN date_dim ON d_date_sk=ws_sold_date_sk
-                      LEFT JOIN web_returns ON (ws_order_number=wr_order_number
-                                            AND ws_item_sk=wr_item_sk)
-       WHERE i_category='Children'
-       and ws_sales_price / ws_list_price BETWEEN 80 * 0.01 AND 100 * 0.01
-       and wr_reason_sk in (18, 40, 48, 55, 68)) sales_detail
-GROUP BY d_year, i_brand_id, i_class_id, i_category_id, i_manufact_id)
- SELECT  prev_yr.d_year AS prev_year
-                          ,curr_yr.d_year AS "year"
-                          ,curr_yr.i_brand_id
-                          ,curr_yr.i_class_id
-                          ,curr_yr.i_category_id
-                          ,curr_yr.i_manufact_id
-                          ,prev_yr.sales_cnt AS prev_yr_cnt
-                          ,curr_yr.sales_cnt AS curr_yr_cnt
-                          ,curr_yr.sales_cnt-prev_yr.sales_cnt AS sales_cnt_diff
-                          ,curr_yr.sales_amt-prev_yr.sales_amt AS sales_amt_diff
- FROM all_sales curr_yr, all_sales prev_yr
- WHERE curr_yr.i_brand_id=prev_yr.i_brand_id
-   AND curr_yr.i_class_id=prev_yr.i_class_id
-   AND curr_yr.i_category_id=prev_yr.i_category_id
-   AND curr_yr.i_manufact_id=prev_yr.i_manufact_id
-   AND curr_yr.d_year=1999
-   AND prev_yr.d_year=1999-1
-   AND prev_yr.sales_cnt > 0
-   AND CAST(curr_yr.sales_cnt AS DECIMAL(17,2))/CAST(prev_yr.sales_cnt AS DECIMAL(17,2))<0.9
- ORDER BY sales_cnt_diff,sales_amt_diff
- limit 100;
-
-
+SELECT "t18"."d_year2", "t8"."d_year", "t8"."i_brand_id", "t8"."i_class_id", "t8"."i_category_id", "t8"."i_manufact_id", "t18"."sales_cnt5", "t8"."sales_cnt1", "t8"."sales_cnt1" - "t18"."sales_cnt5" AS "sales_cnt_diff", "t8"."sales_amt1" - "t18"."sales_amt5" AS "sales_amt_diff"
+FROM (SELECT "d_year", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id", CASE WHEN COUNT("sales_cnt") = 0 THEN NULL ELSE COALESCE(SUM("sales_cnt"), 0) END AS "sales_cnt1", CASE WHEN COUNT("sales_amt") = 0 THEN NULL ELSE COALESCE(SUM("sales_amt"), 0) END AS "sales_amt1"
+        FROM (SELECT *
+                    FROM (SELECT "date_dim"."d_year", "item"."i_brand_id", "item"."i_class_id", "item"."i_category_id", "item"."i_manufact_id", "catalog_sales"."cs_quantity" - CASE WHEN "catalog_returns"."cr_return_quantity" IS NOT NULL THEN CAST("catalog_returns"."cr_return_quantity" AS INTEGER) ELSE 0 END AS "sales_cnt", "catalog_sales"."cs_ext_sales_price" - CASE WHEN "catalog_returns"."cr_return_amount" IS NOT NULL THEN "catalog_returns"."cr_return_amount" ELSE 0.0 END AS "sales_amt"
+                                FROM "catalog_sales"
+                                    INNER JOIN "item" ON "catalog_sales"."cs_item_sk" = "item"."i_item_sk"
+                                    INNER JOIN "date_dim" ON "catalog_sales"."cs_sold_date_sk" = "date_dim"."d_date_sk"
+                                    LEFT JOIN "catalog_returns" ON "catalog_sales"."cs_order_number" = "catalog_returns"."cr_order_number" AND "catalog_sales"."cs_item_sk" = "catalog_returns"."cr_item_sk"
+                                WHERE "item"."i_category" = 'Electronics' AND "catalog_sales"."cs_sales_price" / "catalog_sales"."cs_list_price" >= 80 * 0.01 AND "catalog_sales"."cs_sales_price" / "catalog_sales"."cs_list_price" <= 100 * 0.01 AND ("catalog_returns"."cr_reason_sk" = 3 OR "catalog_returns"."cr_reason_sk" = 6 OR "catalog_returns"."cr_reason_sk" = 18 OR "catalog_returns"."cr_reason_sk" = 30 OR "catalog_returns"."cr_reason_sk" = 40)
+                                UNION
+                                SELECT "date_dim0"."d_year0", "item0"."i_brand_id0", "item0"."i_class_id0", "item0"."i_category_id0", "item0"."i_manufact_id0", "store_sales"."ss_quantity" - CASE WHEN "store_returns"."sr_return_quantity" IS NOT NULL THEN CAST("store_returns"."sr_return_quantity" AS INTEGER) ELSE 0 END AS "sales_cnt", "store_sales"."ss_ext_sales_price" - CASE WHEN "store_returns"."sr_return_amt" IS NOT NULL THEN "store_returns"."sr_return_amt" ELSE 0.0 END AS "sales_amt"
+                                FROM "store_sales"
+                                    INNER JOIN "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0") ON "store_sales"."ss_item_sk" = "item0"."i_item_sk0"
+                                    INNER JOIN "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0") ON "store_sales"."ss_sold_date_sk" = "date_dim0"."d_date_sk0"
+                                    LEFT JOIN "store_returns" ON "store_sales"."ss_ticket_number" = "store_returns"."sr_ticket_number" AND "store_sales"."ss_item_sk" = "store_returns"."sr_item_sk"
+                                WHERE "item0"."i_category0" = 'Electronics' AND "store_sales"."ss_sales_price" / "store_sales"."ss_list_price" >= 80 * 0.01 AND "store_sales"."ss_sales_price" / "store_sales"."ss_list_price" <= 100 * 0.01 AND ("store_returns"."sr_reason_sk" = 3 OR "store_returns"."sr_reason_sk" = 6 OR "store_returns"."sr_reason_sk" = 18 OR "store_returns"."sr_reason_sk" = 30 OR "store_returns"."sr_reason_sk" = 40)) AS "t"
+                    UNION
+                    SELECT "date_dim1"."d_year1", "item1"."i_brand_id1", "item1"."i_class_id1", "item1"."i_category_id1", "item1"."i_manufact_id1", "web_sales"."ws_quantity" - CASE WHEN "web_returns"."wr_return_quantity" IS NOT NULL THEN CAST("web_returns"."wr_return_quantity" AS INTEGER) ELSE 0 END AS "sales_cnt0", "web_sales"."ws_ext_sales_price" - CASE WHEN "web_returns"."wr_return_amt" IS NOT NULL THEN "web_returns"."wr_return_amt" ELSE 0.0 END AS "sales_amt0"
+                    FROM "web_sales"
+                        INNER JOIN "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1") ON "web_sales"."ws_item_sk" = "item1"."i_item_sk1"
+                        INNER JOIN "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1") ON "web_sales"."ws_sold_date_sk" = "date_dim1"."d_date_sk1"
+                        LEFT JOIN "web_returns" ON "web_sales"."ws_order_number" = "web_returns"."wr_order_number" AND "web_sales"."ws_item_sk" = "web_returns"."wr_item_sk"
+                    WHERE "item1"."i_category1" = 'Electronics' AND "web_sales"."ws_sales_price" / "web_sales"."ws_list_price" >= 80 * 0.01 AND "web_sales"."ws_sales_price" / "web_sales"."ws_list_price" <= 100 * 0.01 AND ("web_returns"."wr_reason_sk" = 3 OR "web_returns"."wr_reason_sk" = 6 OR "web_returns"."wr_reason_sk" = 18 OR "web_returns"."wr_reason_sk" = 30 OR "web_returns"."wr_reason_sk" = 40)) AS "t6"
+        GROUP BY "d_year", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id") AS "t8",
+        (SELECT "d_year2", "i_brand_id2", "i_class_id2", "i_category_id2", "i_manufact_id2", CASE WHEN COUNT("sales_cnt2") = 0 THEN NULL ELSE COALESCE(SUM("sales_cnt2"), 0) END AS "sales_cnt5", CASE WHEN COUNT("sales_amt2") = 0 THEN NULL ELSE COALESCE(SUM("sales_amt2"), 0) END AS "sales_amt5"
+        FROM (SELECT *
+                    FROM (SELECT "date_dim2"."d_year2", "item2"."i_brand_id2", "item2"."i_class_id2", "item2"."i_category_id2", "item2"."i_manufact_id2", "catalog_sales0"."cs_quantity0" - CASE WHEN "catalog_returns0"."cr_return_quantity0" IS NOT NULL THEN CAST("catalog_returns0"."cr_return_quantity0" AS INTEGER) ELSE 0 END AS "sales_cnt2", "catalog_sales0"."cs_ext_sales_price0" - CASE WHEN "catalog_returns0"."cr_return_amount0" IS NOT NULL THEN "catalog_returns0"."cr_return_amount0" ELSE 0.0 END AS "sales_amt2"
+                                FROM "catalog_sales" AS "catalog_sales0" ("cs_sold_date_sk0", "cs_sold_time_sk0", "cs_ship_date_sk0", "cs_bill_customer_sk0", "cs_bill_cdemo_sk0", "cs_bill_hdemo_sk0", "cs_bill_addr_sk0", "cs_ship_customer_sk0", "cs_ship_cdemo_sk0", "cs_ship_hdemo_sk0", "cs_ship_addr_sk0", "cs_call_center_sk0", "cs_catalog_page_sk0", "cs_ship_mode_sk0", "cs_warehouse_sk0", "cs_item_sk0", "cs_promo_sk0", "cs_order_number0", "cs_quantity0", "cs_wholesale_cost0", "cs_list_price0", "cs_sales_price0", "cs_ext_discount_amt0", "cs_ext_sales_price0", "cs_ext_wholesale_cost0", "cs_ext_list_price0", "cs_ext_tax0", "cs_coupon_amt0", "cs_ext_ship_cost0", "cs_net_paid0", "cs_net_paid_inc_tax0", "cs_net_paid_inc_ship0", "cs_net_paid_inc_ship_tax0", "cs_net_profit0")
+                                    INNER JOIN "item" AS "item2" ("i_item_sk2", "i_item_id2", "i_rec_start_date2", "i_rec_end_date2", "i_item_desc2", "i_current_price2", "i_wholesale_cost2", "i_brand_id2", "i_brand2", "i_class_id2", "i_class2", "i_category_id2", "i_category2", "i_manufact_id2", "i_manufact2", "i_size2", "i_formulation2", "i_color2", "i_units2", "i_container2", "i_manager_id2", "i_product_name2") ON "catalog_sales0"."cs_item_sk0" = "item2"."i_item_sk2"
+                                    INNER JOIN "date_dim" AS "date_dim2" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2") ON "catalog_sales0"."cs_sold_date_sk0" = "date_dim2"."d_date_sk2"
+                                    LEFT JOIN "catalog_returns" AS "catalog_returns0" ("cr_returned_date_sk0", "cr_returned_time_sk0", "cr_item_sk0", "cr_refunded_customer_sk0", "cr_refunded_cdemo_sk0", "cr_refunded_hdemo_sk0", "cr_refunded_addr_sk0", "cr_returning_customer_sk0", "cr_returning_cdemo_sk0", "cr_returning_hdemo_sk0", "cr_returning_addr_sk0", "cr_call_center_sk0", "cr_catalog_page_sk0", "cr_ship_mode_sk0", "cr_warehouse_sk0", "cr_reason_sk0", "cr_order_number0", "cr_return_quantity0", "cr_return_amount0", "cr_return_tax0", "cr_return_amt_inc_tax0", "cr_fee0", "cr_return_ship_cost0", "cr_refunded_cash0", "cr_reversed_charge0", "cr_store_credit0", "cr_net_loss0") ON "catalog_sales0"."cs_order_number0" = "catalog_returns0"."cr_order_number0" AND "catalog_sales0"."cs_item_sk0" = "catalog_returns0"."cr_item_sk0"
+                                WHERE "item2"."i_category2" = 'Electronics' AND "catalog_sales0"."cs_sales_price0" / "catalog_sales0"."cs_list_price0" >= 80 * 0.01 AND "catalog_sales0"."cs_sales_price0" / "catalog_sales0"."cs_list_price0" <= 100 * 0.01 AND ("catalog_returns0"."cr_reason_sk0" = 3 OR "catalog_returns0"."cr_reason_sk0" = 6 OR "catalog_returns0"."cr_reason_sk0" = 18 OR "catalog_returns0"."cr_reason_sk0" = 30 OR "catalog_returns0"."cr_reason_sk0" = 40)
+                                UNION
+                                SELECT "date_dim3"."d_year3", "item3"."i_brand_id3", "item3"."i_class_id3", "item3"."i_category_id3", "item3"."i_manufact_id3", "store_sales0"."ss_quantity0" - CASE WHEN "store_returns0"."sr_return_quantity0" IS NOT NULL THEN CAST("store_returns0"."sr_return_quantity0" AS INTEGER) ELSE 0 END AS "sales_cnt3", "store_sales0"."ss_ext_sales_price0" - CASE WHEN "store_returns0"."sr_return_amt0" IS NOT NULL THEN "store_returns0"."sr_return_amt0" ELSE 0.0 END AS "sales_amt3"
+                                FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0")
+                                    INNER JOIN "item" AS "item3" ("i_item_sk3", "i_item_id3", "i_rec_start_date3", "i_rec_end_date3", "i_item_desc3", "i_current_price3", "i_wholesale_cost3", "i_brand_id3", "i_brand3", "i_class_id3", "i_class3", "i_category_id3", "i_category3", "i_manufact_id3", "i_manufact3", "i_size3", "i_formulation3", "i_color3", "i_units3", "i_container3", "i_manager_id3", "i_product_name3") ON "store_sales0"."ss_item_sk0" = "item3"."i_item_sk3"
+                                    INNER JOIN "date_dim" AS "date_dim3" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3") ON "store_sales0"."ss_sold_date_sk0" = "date_dim3"."d_date_sk3"
+                                    LEFT JOIN "store_returns" AS "store_returns0" ("sr_returned_date_sk0", "sr_return_time_sk0", "sr_item_sk0", "sr_customer_sk0", "sr_cdemo_sk0", "sr_hdemo_sk0", "sr_addr_sk0", "sr_store_sk0", "sr_reason_sk0", "sr_ticket_number0", "sr_return_quantity0", "sr_return_amt0", "sr_return_tax0", "sr_return_amt_inc_tax0", "sr_fee0", "sr_return_ship_cost0", "sr_refunded_cash0", "sr_reversed_charge0", "sr_store_credit0", "sr_net_loss0") ON "store_sales0"."ss_ticket_number0" = "store_returns0"."sr_ticket_number0" AND "store_sales0"."ss_item_sk0" = "store_returns0"."sr_item_sk0"
+                                WHERE "item3"."i_category3" = 'Electronics' AND "store_sales0"."ss_sales_price0" / "store_sales0"."ss_list_price0" >= 80 * 0.01 AND "store_sales0"."ss_sales_price0" / "store_sales0"."ss_list_price0" <= 100 * 0.01 AND ("store_returns0"."sr_reason_sk0" = 3 OR "store_returns0"."sr_reason_sk0" = 6 OR "store_returns0"."sr_reason_sk0" = 18 OR "store_returns0"."sr_reason_sk0" = 30 OR "store_returns0"."sr_reason_sk0" = 40)) AS "t"
+                    UNION
+                    SELECT "date_dim4"."d_year4", "item4"."i_brand_id4", "item4"."i_class_id4", "item4"."i_category_id4", "item4"."i_manufact_id4", "web_sales0"."ws_quantity0" - CASE WHEN "web_returns0"."wr_return_quantity0" IS NOT NULL THEN CAST("web_returns0"."wr_return_quantity0" AS INTEGER) ELSE 0 END AS "sales_cnt4", "web_sales0"."ws_ext_sales_price0" - CASE WHEN "web_returns0"."wr_return_amt0" IS NOT NULL THEN "web_returns0"."wr_return_amt0" ELSE 0.0 END AS "sales_amt4"
+                    FROM "web_sales" AS "web_sales0" ("ws_sold_date_sk0", "ws_sold_time_sk0", "ws_ship_date_sk0", "ws_item_sk0", "ws_bill_customer_sk0", "ws_bill_cdemo_sk0", "ws_bill_hdemo_sk0", "ws_bill_addr_sk0", "ws_ship_customer_sk0", "ws_ship_cdemo_sk0", "ws_ship_hdemo_sk0", "ws_ship_addr_sk0", "ws_web_page_sk0", "ws_web_site_sk0", "ws_ship_mode_sk0", "ws_warehouse_sk0", "ws_promo_sk0", "ws_order_number0", "ws_quantity0", "ws_wholesale_cost0", "ws_list_price0", "ws_sales_price0", "ws_ext_discount_amt0", "ws_ext_sales_price0", "ws_ext_wholesale_cost0", "ws_ext_list_price0", "ws_ext_tax0", "ws_coupon_amt0", "ws_ext_ship_cost0", "ws_net_paid0", "ws_net_paid_inc_tax0", "ws_net_paid_inc_ship0", "ws_net_paid_inc_ship_tax0", "ws_net_profit0")
+                        INNER JOIN "item" AS "item4" ("i_item_sk4", "i_item_id4", "i_rec_start_date4", "i_rec_end_date4", "i_item_desc4", "i_current_price4", "i_wholesale_cost4", "i_brand_id4", "i_brand4", "i_class_id4", "i_class4", "i_category_id4", "i_category4", "i_manufact_id4", "i_manufact4", "i_size4", "i_formulation4", "i_color4", "i_units4", "i_container4", "i_manager_id4", "i_product_name4") ON "web_sales0"."ws_item_sk0" = "item4"."i_item_sk4"
+                        INNER JOIN "date_dim" AS "date_dim4" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4") ON "web_sales0"."ws_sold_date_sk0" = "date_dim4"."d_date_sk4"
+                        LEFT JOIN "web_returns" AS "web_returns0" ("wr_returned_date_sk0", "wr_returned_time_sk0", "wr_item_sk0", "wr_refunded_customer_sk0", "wr_refunded_cdemo_sk0", "wr_refunded_hdemo_sk0", "wr_refunded_addr_sk0", "wr_returning_customer_sk0", "wr_returning_cdemo_sk0", "wr_returning_hdemo_sk0", "wr_returning_addr_sk0", "wr_web_page_sk0", "wr_reason_sk0", "wr_order_number0", "wr_return_quantity0", "wr_return_amt0", "wr_return_tax0", "wr_return_amt_inc_tax0", "wr_fee0", "wr_return_ship_cost0", "wr_refunded_cash0", "wr_reversed_charge0", "wr_account_credit0", "wr_net_loss0") ON "web_sales0"."ws_order_number0" = "web_returns0"."wr_order_number0" AND "web_sales0"."ws_item_sk0" = "web_returns0"."wr_item_sk0"
+                    WHERE "item4"."i_category4" = 'Electronics' AND "web_sales0"."ws_sales_price0" / "web_sales0"."ws_list_price0" >= 80 * 0.01 AND "web_sales0"."ws_sales_price0" / "web_sales0"."ws_list_price0" <= 100 * 0.01 AND ("web_returns0"."wr_reason_sk0" = 3 OR "web_returns0"."wr_reason_sk0" = 6 OR "web_returns0"."wr_reason_sk0" = 18 OR "web_returns0"."wr_reason_sk0" = 30 OR "web_returns0"."wr_reason_sk0" = 40)) AS "t16"
+        GROUP BY "d_year2", "i_brand_id2", "i_class_id2", "i_category_id2", "i_manufact_id2") AS "t18"
+WHERE "t8"."i_brand_id" = "t18"."i_brand_id2" AND "t8"."i_class_id" = "t18"."i_class_id2" AND ("t8"."i_category_id" = "t18"."i_category_id2" AND "t8"."i_manufact_id" = "t18"."i_manufact_id2") AND ("t8"."d_year" = 2000 AND "t18"."d_year2" = 2000 - 1 AND ("t18"."sales_cnt5" > 0 AND CAST("t8"."sales_cnt1" AS DECIMAL(17, 2)) / CAST("t18"."sales_cnt5" AS DECIMAL(17, 2)) < 0.9))
+ORDER BY 9, 10
+FETCH NEXT 100 ROWS ONLY;

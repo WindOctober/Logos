@@ -1,85 +1,37 @@
-
-with ss_items as
- (select i_item_id item_id
-       ,c_birth_year birth_year
-        ,sum(ss_ext_sales_price) ss_item_rev
- from store_sales
-     ,item
-     ,date_dim
-     ,customer
- where ss_item_sk = i_item_sk
-   and d_date in (select d_date
-                  from date_dim
-                  where d_month_seq = (select d_month_seq
-                                      from date_dim
-                                      where d_date = '2000-01-02'))
-   and ss_sold_date_sk   = d_date_sk
-   and ss_list_price between 95 and 124
-   and i_manager_id BETWEEN 7 and 36
-   and ss_customer_sk = c_customer_sk
-   and c_birth_year BETWEEN 1934 AND 1940
-group by i_item_id, c_birth_year),
- cs_items as
- (select i_item_id item_id
-        ,c_birth_year birth_year
-        ,sum(cs_ext_sales_price) cs_item_rev
-  from catalog_sales
-      ,item
-      ,date_dim
-      ,customer
- where cs_item_sk = i_item_sk
-  and  d_date in (select d_date
-                  from date_dim
-                  where d_month_seq = (select d_month_seq
-                                      from date_dim
-                                      where d_date = '2000-01-02'))
-  and  cs_sold_date_sk = d_date_sk
-  and  cs_list_price between 95 and 124
-  and i_manager_id BETWEEN 7 and 36
-  and cs_bill_customer_sk = c_customer_sk
-  and c_birth_year BETWEEN 1934 AND 1940
-group by i_item_id, c_birth_year),
- ws_items as
- (select i_item_id item_id
-      ,c_birth_year birth_year
-        ,sum(ws_ext_sales_price) ws_item_rev
-  from web_sales
-      ,item
-      ,date_dim
-      ,customer
- where ws_item_sk = i_item_sk
-  and  d_date in (select d_date
-                  from date_dim
-                  where d_month_seq = (select d_month_seq
-                                     from date_dim
-                                     where d_date = '2000-01-02'))
-  and ws_sold_date_sk   = d_date_sk
-  and ws_list_price between 95 and 124
-  and i_manager_id BETWEEN 7 and 36
-  and ws_bill_customer_sk = c_customer_sk
-  and c_birth_year BETWEEN 1934 AND 1940
-group by i_item_id, c_birth_year)
-  select  ss_items.item_id, ss_items.birth_year
-       ,ss_item_rev
-       ,ss_item_rev/((ss_item_rev+cs_item_rev+ws_item_rev)/3) * 100 ss_dev
-       ,cs_item_rev
-       ,cs_item_rev/((ss_item_rev+cs_item_rev+ws_item_rev)/3) * 100 cs_dev
-       ,ws_item_rev
-       ,ws_item_rev/((ss_item_rev+cs_item_rev+ws_item_rev)/3) * 100 ws_dev
-       ,(ss_item_rev+cs_item_rev+ws_item_rev)/3 average
- from ss_items,cs_items,ws_items
- where ss_items.item_id=cs_items.item_id
-   and ss_items.item_id=ws_items.item_id
-   and ss_items.birth_year = cs_items.birth_year
-   and ss_items.birth_year = ws_items.birth_year
-   and ss_item_rev between 0.9 * cs_item_rev and 1.1 * cs_item_rev
-   and ss_item_rev between 0.9 * ws_item_rev and 1.1 * ws_item_rev
-   and cs_item_rev between 0.9 * ss_item_rev and 1.1 * ss_item_rev
-   and cs_item_rev between 0.9 * ws_item_rev and 1.1 * ws_item_rev
-   and ws_item_rev between 0.9 * ss_item_rev and 1.1 * ss_item_rev
-   and ws_item_rev between 0.9 * cs_item_rev and 1.1 * cs_item_rev
- order by item_id, birth_year
-         ,ss_item_rev
- limit 100;
-
-
+SELECT "t4"."i_item_id", "t4"."c_birth_year", "t4"."ss_item_rev", "t4"."ss_item_rev" / (("t4"."ss_item_rev" + "t10"."cs_item_rev" + "t16"."ws_item_rev") / 3) * 100 AS "ss_dev", "t10"."cs_item_rev", "t10"."cs_item_rev" / (("t4"."ss_item_rev" + "t10"."cs_item_rev" + "t16"."ws_item_rev") / 3) * 100 AS "cs_dev", "t16"."ws_item_rev", "t16"."ws_item_rev" / (("t4"."ss_item_rev" + "t10"."cs_item_rev" + "t16"."ws_item_rev") / 3) * 100 AS "ws_dev", ("t4"."ss_item_rev" + "t10"."cs_item_rev" + "t16"."ws_item_rev") / 3 AS "average"
+FROM (SELECT "item"."i_item_id", "customer"."c_birth_year", SUM("store_sales"."ss_ext_sales_price") AS "ss_item_rev"
+        FROM "store_sales",
+            "item",
+            "date_dim",
+            "customer"
+        WHERE "store_sales"."ss_item_sk" = "item"."i_item_sk" AND "date_dim"."d_date" IN (SELECT "d_date2"
+                    FROM "date_dim" AS "date_dim0" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2")
+                    WHERE "d_month_seq2" = (((SELECT "d_month_seq3"
+                                        FROM "date_dim" AS "date_dim1" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3")
+                                        WHERE "d_date3" = '2000-07-16')))) AND ("store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND ("store_sales"."ss_list_price" >= 271 AND "store_sales"."ss_list_price" <= 300)) AND ("item"."i_manager_id" >= 71 AND "item"."i_manager_id" <= 100 AND ("store_sales"."ss_customer_sk" = "customer"."c_customer_sk" AND ("customer"."c_birth_year" >= 1987 AND "customer"."c_birth_year" <= 1993)))
+        GROUP BY "item"."i_item_id", "customer"."c_birth_year") AS "t4",
+        (SELECT "item0"."i_item_id0", "customer0"."c_birth_year0", SUM("catalog_sales"."cs_ext_sales_price") AS "cs_item_rev"
+        FROM "catalog_sales",
+            "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0"),
+            "date_dim" AS "date_dim2" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0"),
+            "customer" AS "customer0" ("c_customer_sk0", "c_customer_id0", "c_current_cdemo_sk0", "c_current_hdemo_sk0", "c_current_addr_sk0", "c_first_shipto_date_sk0", "c_first_sales_date_sk0", "c_salutation0", "c_first_name0", "c_last_name0", "c_preferred_cust_flag0", "c_birth_day0", "c_birth_month0", "c_birth_year0", "c_birth_country0", "c_login0", "c_email_address0", "c_last_review_date_sk0")
+        WHERE "catalog_sales"."cs_item_sk" = "item0"."i_item_sk0" AND "date_dim2"."d_date0" IN (SELECT "d_date4"
+                    FROM "date_dim" AS "date_dim3" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4")
+                    WHERE "d_month_seq4" = (((SELECT "d_month_seq5"
+                                        FROM "date_dim" AS "date_dim4" ("d_date_sk5", "d_date_id5", "d_date5", "d_month_seq5", "d_week_seq5", "d_quarter_seq5", "d_year5", "d_dow5", "d_moy5", "d_dom5", "d_qoy5", "d_fy_year5", "d_fy_quarter_seq5", "d_fy_week_seq5", "d_day_name5", "d_quarter_name5", "d_holiday5", "d_weekend5", "d_following_holiday5", "d_first_dom5", "d_last_dom5", "d_same_day_ly5", "d_same_day_lq5", "d_current_day5", "d_current_week5", "d_current_month5", "d_current_quarter5", "d_current_year5")
+                                        WHERE "d_date5" = '2000-07-16')))) AND ("catalog_sales"."cs_sold_date_sk" = "date_dim2"."d_date_sk0" AND ("catalog_sales"."cs_list_price" >= 271 AND "catalog_sales"."cs_list_price" <= 300)) AND ("item0"."i_manager_id0" >= 71 AND "item0"."i_manager_id0" <= 100 AND ("catalog_sales"."cs_bill_customer_sk" = "customer0"."c_customer_sk0" AND ("customer0"."c_birth_year0" >= 1987 AND "customer0"."c_birth_year0" <= 1993)))
+        GROUP BY "item0"."i_item_id0", "customer0"."c_birth_year0") AS "t10",
+        (SELECT "item1"."i_item_id1", "customer1"."c_birth_year1", SUM("web_sales"."ws_ext_sales_price") AS "ws_item_rev"
+        FROM "web_sales",
+            "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1"),
+            "date_dim" AS "date_dim5" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1"),
+            "customer" AS "customer1" ("c_customer_sk1", "c_customer_id1", "c_current_cdemo_sk1", "c_current_hdemo_sk1", "c_current_addr_sk1", "c_first_shipto_date_sk1", "c_first_sales_date_sk1", "c_salutation1", "c_first_name1", "c_last_name1", "c_preferred_cust_flag1", "c_birth_day1", "c_birth_month1", "c_birth_year1", "c_birth_country1", "c_login1", "c_email_address1", "c_last_review_date_sk1")
+        WHERE "web_sales"."ws_item_sk" = "item1"."i_item_sk1" AND "date_dim5"."d_date1" IN (SELECT "d_date6"
+                    FROM "date_dim" AS "date_dim6" ("d_date_sk6", "d_date_id6", "d_date6", "d_month_seq6", "d_week_seq6", "d_quarter_seq6", "d_year6", "d_dow6", "d_moy6", "d_dom6", "d_qoy6", "d_fy_year6", "d_fy_quarter_seq6", "d_fy_week_seq6", "d_day_name6", "d_quarter_name6", "d_holiday6", "d_weekend6", "d_following_holiday6", "d_first_dom6", "d_last_dom6", "d_same_day_ly6", "d_same_day_lq6", "d_current_day6", "d_current_week6", "d_current_month6", "d_current_quarter6", "d_current_year6")
+                    WHERE "d_month_seq6" = (((SELECT "d_month_seq7"
+                                        FROM "date_dim" AS "date_dim7" ("d_date_sk7", "d_date_id7", "d_date7", "d_month_seq7", "d_week_seq7", "d_quarter_seq7", "d_year7", "d_dow7", "d_moy7", "d_dom7", "d_qoy7", "d_fy_year7", "d_fy_quarter_seq7", "d_fy_week_seq7", "d_day_name7", "d_quarter_name7", "d_holiday7", "d_weekend7", "d_following_holiday7", "d_first_dom7", "d_last_dom7", "d_same_day_ly7", "d_same_day_lq7", "d_current_day7", "d_current_week7", "d_current_month7", "d_current_quarter7", "d_current_year7")
+                                        WHERE "d_date7" = '2000-07-16')))) AND ("web_sales"."ws_sold_date_sk" = "date_dim5"."d_date_sk1" AND ("web_sales"."ws_list_price" >= 271 AND "web_sales"."ws_list_price" <= 300)) AND ("item1"."i_manager_id1" >= 71 AND "item1"."i_manager_id1" <= 100 AND ("web_sales"."ws_bill_customer_sk" = "customer1"."c_customer_sk1" AND ("customer1"."c_birth_year1" >= 1987 AND "customer1"."c_birth_year1" <= 1993)))
+        GROUP BY "item1"."i_item_id1", "customer1"."c_birth_year1") AS "t16"
+WHERE "t4"."i_item_id" = "t10"."i_item_id0" AND "t4"."i_item_id" = "t16"."i_item_id1" AND ("t4"."c_birth_year" = "t10"."c_birth_year0" AND "t4"."c_birth_year" = "t16"."c_birth_year1") AND ("t4"."ss_item_rev" >= 0.9 * "t10"."cs_item_rev" AND "t4"."ss_item_rev" <= 1.1 * "t10"."cs_item_rev" AND ("t4"."ss_item_rev" >= 0.9 * "t16"."ws_item_rev" AND "t4"."ss_item_rev" <= 1.1 * "t16"."ws_item_rev")) AND ("t10"."cs_item_rev" >= 0.9 * "t4"."ss_item_rev" AND "t10"."cs_item_rev" <= 1.1 * "t4"."ss_item_rev" AND ("t10"."cs_item_rev" >= 0.9 * "t16"."ws_item_rev" AND "t10"."cs_item_rev" <= 1.1 * "t16"."ws_item_rev") AND ("t16"."ws_item_rev" >= 0.9 * "t4"."ss_item_rev" AND "t16"."ws_item_rev" <= 1.1 * "t4"."ss_item_rev" AND ("t16"."ws_item_rev" >= 0.9 * "t10"."cs_item_rev" AND "t16"."ws_item_rev" <= 1.1 * "t10"."cs_item_rev")))
+ORDER BY "t4"."i_item_id", "t4"."c_birth_year", "t4"."ss_item_rev"
+FETCH NEXT 100 ROWS ONLY;

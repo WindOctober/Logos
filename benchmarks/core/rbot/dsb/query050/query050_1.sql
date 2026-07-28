@@ -1,61 +1,10 @@
-
-select 
-   s_store_name
-  ,s_company_id
-  ,s_street_number
-  ,s_street_name
-  ,s_street_type
-  ,s_suite_number
-  ,s_city
-  ,s_county
-  ,s_state
-  ,s_zip
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk <= 30 ) then 1 else 0 end)  as "30 days"
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 30) and
-                 (sr_returned_date_sk - ss_sold_date_sk <= 60) then 1 else 0 end )  as "31-60 days"
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 60) and
-                 (sr_returned_date_sk - ss_sold_date_sk <= 90) then 1 else 0 end)  as "61-90 days"
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 90) and
-                 (sr_returned_date_sk - ss_sold_date_sk <= 120) then 1 else 0 end)  as "91-120 days"
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk  > 120) then 1 else 0 end)  as ">120 days"
-from
-   store_sales
-  ,store_returns
-  ,store
-  ,date_dim d1
-  ,date_dim d2
-where
-    d2.d_year = 2000
-and d2.d_moy  = 7
-and ss_ticket_number = sr_ticket_number
-and ss_item_sk = sr_item_sk
-and ss_sold_date_sk   = d1.d_date_sk
-and sr_returned_date_sk   = d2.d_date_sk
-and ss_customer_sk = sr_customer_sk
-and ss_store_sk = s_store_sk
-and d1.d_date between (d2.d_date - interval '120' day)
-               and d2.d_date
-group by
-   s_store_name
-  ,s_company_id
-  ,s_street_number
-  ,s_street_name
-  ,s_street_type
-  ,s_suite_number
-  ,s_city
-  ,s_county
-  ,s_state
-  ,s_zip
-order by s_store_name
-        ,s_company_id
-        ,s_street_number
-        ,s_street_name
-        ,s_street_type
-        ,s_suite_number
-        ,s_city
-        ,s_county
-        ,s_state
-        ,s_zip
-limit 100;
-
-
+SELECT "store"."s_store_name", "store"."s_company_id", "store"."s_street_number", "store"."s_street_name", "store"."s_street_type", "store"."s_suite_number", "store"."s_city", "store"."s_county", "store"."s_state", "store"."s_zip", COALESCE(SUM(CASE WHEN "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" <= 30 THEN 1 ELSE 0 END), 0) AS "30 days", COALESCE(SUM(CASE WHEN "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" > 30 AND "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" <= 60 THEN 1 ELSE 0 END), 0) AS "31-60 days", COALESCE(SUM(CASE WHEN "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" > 60 AND "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" <= 90 THEN 1 ELSE 0 END), 0) AS "61-90 days", COALESCE(SUM(CASE WHEN "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" > 90 AND "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" <= 120 THEN 1 ELSE 0 END), 0) AS "91-120 days", COALESCE(SUM(CASE WHEN "store_returns"."sr_returned_date_sk" - "store_sales"."ss_sold_date_sk" > 120 THEN 1 ELSE 0 END), 0) AS ">120 days"
+FROM "store_sales",
+    "store_returns",
+    "store",
+    "date_dim",
+    "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+WHERE "date_dim0"."d_year0" = 1999 AND "date_dim0"."d_moy0" = 4 AND ("store_sales"."ss_ticket_number" = "store_returns"."sr_ticket_number" AND ("store_sales"."ss_item_sk" = "store_returns"."sr_item_sk" AND "store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk")) AND ("store_returns"."sr_returned_date_sk" = "date_dim0"."d_date_sk0" AND "store_sales"."ss_customer_sk" = "store_returns"."sr_customer_sk" AND ("store_sales"."ss_store_sk" = "store"."s_store_sk" AND ("date_dim"."d_date" >= ("date_dim0"."d_date0" - INTERVAL '120' DAY) AND "date_dim"."d_date" <= "date_dim0"."d_date0")))
+GROUP BY "store"."s_store_name", "store"."s_company_id", "store"."s_street_number", "store"."s_street_name", "store"."s_street_type", "store"."s_suite_number", "store"."s_city", "store"."s_county", "store"."s_state", "store"."s_zip"
+ORDER BY "store"."s_store_name", "store"."s_company_id", "store"."s_street_number", "store"."s_street_name", "store"."s_street_type", "store"."s_suite_number", "store"."s_city", "store"."s_county", "store"."s_state", "store"."s_zip"
+FETCH NEXT 100 ROWS ONLY;

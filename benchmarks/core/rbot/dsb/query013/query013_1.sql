@@ -1,52 +1,8 @@
-
-select avg(ss_quantity)
-,avg(ss_ext_sales_price)
-,avg(ss_ext_wholesale_cost)
-,sum(ss_ext_wholesale_cost)
-from store_sales
-   ,store
-   ,customer_demographics
-   ,household_demographics
-   ,customer_address
-   ,date_dim
-where s_store_sk = ss_store_sk
-and  ss_sold_date_sk = d_date_sk and d_year = 2001
-and((ss_hdemo_sk=hd_demo_sk
-and cd_demo_sk = ss_cdemo_sk
-and cd_marital_status = 'S'
-and cd_education_status = '4 yr Degree'
-and ss_sales_price between 100.00 and 150.00
-and hd_dep_count = 3
-   )or
-   (ss_hdemo_sk=hd_demo_sk
-and cd_demo_sk = ss_cdemo_sk
-and cd_marital_status = 'S'
-and cd_education_status = '4 yr Degree'
-and ss_sales_price between 50.00 and 100.00
-and hd_dep_count = 1
-   ) or
-   (ss_hdemo_sk=hd_demo_sk
-and cd_demo_sk = ss_cdemo_sk
-and cd_marital_status = 'D'
-and cd_education_status = 'Advanced Degree'
-and ss_sales_price between 150.00 and 200.00
-and hd_dep_count = 1
-   ))
-and((ss_addr_sk = ca_address_sk
-and ca_country = 'United States'
-and ca_state in ('KS', 'MD', 'NC')
-and ss_net_profit between 100 and 200
-   ) or
-   (ss_addr_sk = ca_address_sk
-and ca_country = 'United States'
-and ca_state in ('IN', 'MN', 'TN')
-and ss_net_profit between 150 and 300
-   ) or
-   (ss_addr_sk = ca_address_sk
-and ca_country = 'United States'
-and ca_state in ('MN', 'PA', 'WI')
-and ss_net_profit between 50 and 250
-   ))
-;
-
-
+SELECT AVG("store_sales"."ss_quantity"), AVG("store_sales"."ss_ext_sales_price"), AVG("store_sales"."ss_ext_wholesale_cost"), SUM("store_sales"."ss_ext_wholesale_cost")
+FROM "store_sales",
+    "store",
+    "customer_demographics",
+    "household_demographics",
+    "customer_address",
+    "date_dim"
+WHERE "store"."s_store_sk" = "store_sales"."ss_store_sk" AND "store_sales"."ss_sold_date_sk" = "date_dim"."d_date_sk" AND "date_dim"."d_year" = 2001 AND ("store_sales"."ss_hdemo_sk" = "household_demographics"."hd_demo_sk" AND ("customer_demographics"."cd_demo_sk" = "store_sales"."ss_cdemo_sk" AND "customer_demographics"."cd_marital_status" = 'S') AND ("customer_demographics"."cd_education_status" = 'Unknown' AND "store_sales"."ss_sales_price" >= 100.00 AND ("store_sales"."ss_sales_price" <= 150.00 AND "household_demographics"."hd_dep_count" = 3)) OR "store_sales"."ss_hdemo_sk" = "household_demographics"."hd_demo_sk" AND ("customer_demographics"."cd_demo_sk" = "store_sales"."ss_cdemo_sk" AND "customer_demographics"."cd_marital_status" = 'D') AND ("customer_demographics"."cd_education_status" = 'Unknown' AND "store_sales"."ss_sales_price" >= 50.00 AND ("store_sales"."ss_sales_price" <= 100.00 AND "household_demographics"."hd_dep_count" = 1)) OR "store_sales"."ss_hdemo_sk" = "household_demographics"."hd_demo_sk" AND ("customer_demographics"."cd_demo_sk" = "store_sales"."ss_cdemo_sk" AND "customer_demographics"."cd_marital_status" = 'W') AND ("customer_demographics"."cd_education_status" = 'Unknown' AND "store_sales"."ss_sales_price" >= 150.00 AND ("store_sales"."ss_sales_price" <= 200.00 AND "household_demographics"."hd_dep_count" = 1))) AND ("store_sales"."ss_addr_sk" = "customer_address"."ca_address_sk" AND "customer_address"."ca_country" = 'United States' AND ("customer_address"."ca_state" = 'KS' OR "customer_address"."ca_state" = 'LA' OR "customer_address"."ca_state" = 'OK') AND "store_sales"."ss_net_profit" >= 100 AND "store_sales"."ss_net_profit" <= 200 OR "store_sales"."ss_addr_sk" = "customer_address"."ca_address_sk" AND "customer_address"."ca_country" = 'United States' AND ("customer_address"."ca_state" = 'GA' OR "customer_address"."ca_state" = 'ME' OR "customer_address"."ca_state" = 'NC') AND "store_sales"."ss_net_profit" >= 150 AND "store_sales"."ss_net_profit" <= 300 OR "store_sales"."ss_addr_sk" = "customer_address"."ca_address_sk" AND "customer_address"."ca_country" = 'United States' AND ("customer_address"."ca_state" = 'IA' OR "customer_address"."ca_state" = 'IL' OR "customer_address"."ca_state" = 'MI') AND "store_sales"."ss_net_profit" >= 50 AND "store_sales"."ss_net_profit" <= 250);

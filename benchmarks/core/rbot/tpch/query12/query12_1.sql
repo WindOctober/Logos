@@ -1,33 +1,7 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	l_shipmode,
-	sum(case
-		when o_orderpriority = '1-URGENT'
-			or o_orderpriority = '2-HIGH'
-			then 1
-		else 0
-	end) as high_line_count,
-	sum(case
-		when o_orderpriority <> '1-URGENT'
-			and o_orderpriority <> '2-HIGH'
-			then 1
-		else 0
-	end) as low_line_count
-from
-	orders,
-	lineitem
-where
-	o_orderkey = l_orderkey
-	and l_shipmode in ('FOB', 'RAIL')
-	and l_commitdate < l_receiptdate
-	and l_shipdate < l_commitdate
-	and l_receiptdate >= date '1996-01-01'
-	and l_receiptdate < date '1996-01-01' + interval '1' year
-group by
-	l_shipmode
-order by
-	l_shipmode
-limit 1;
+SELECT "lineitem"."l_shipmode", COALESCE(SUM(CASE WHEN "orders"."o_orderpriority" = '1-URGENT' OR "orders"."o_orderpriority" = '2-HIGH' THEN 1 ELSE 0 END), 0) AS "high_line_count", COALESCE(SUM(CASE WHEN "orders"."o_orderpriority" <> '1-URGENT' AND "orders"."o_orderpriority" <> '2-HIGH' THEN 1 ELSE 0 END), 0) AS "low_line_count"
+FROM "orders",
+    "lineitem"
+WHERE "orders"."o_orderkey" = "lineitem"."l_orderkey" AND (("lineitem"."l_shipmode" = 'SHIP' OR "lineitem"."l_shipmode" = 'RAIL') AND "lineitem"."l_commitdate" < "lineitem"."l_receiptdate") AND ("lineitem"."l_shipdate" < "lineitem"."l_commitdate" AND ("lineitem"."l_receiptdate" >= DATE '1995-01-01' AND "lineitem"."l_receiptdate" < (DATE '1995-01-01' + INTERVAL '1' YEAR)))
+GROUP BY "lineitem"."l_shipmode"
+ORDER BY "lineitem"."l_shipmode"
+FETCH NEXT 1 ROWS ONLY;

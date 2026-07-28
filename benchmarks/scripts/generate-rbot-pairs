@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""Generate deterministic source/rewrite pairs with R-Bot's Calcite engine.
+
+The upstream ``*_0.sql`` and ``*_1.sql`` files are independent workload
+instances.  This generator therefore uses the first executable statement from
+each upstream ``*_0.sql`` as the source and replaces the local ``*_1.sql``
+with a rewrite emitted by R-Bot's pinned ``rewriter.Rewriter`` implementation.
+
+The paper's LLM responses and per-query output logs were not published.  To
+make this derived corpus reproducible, the generation profile tries applicable
+rules in lexical rule-name order and selects the first non-identity output that
+round-trips through the same pinned R-Bot parser/serializer.  The manifest
+records every candidate tried and the actually applied rule.  It does not claim
+to reconstruct the paper's cost-selected outputs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+LOGOS_ROOT = Path(__file__).resolve().parents[2]
+MATERIALIZER_DIR = LOGOS_ROOT / "benchmarks/adapters/materializers"
+sys.path.insert(0, str(MATERIALIZER_DIR))
+
+from materializer_sql import split_sql_statements  # noqa: E402
+
+
+UPSTREAM_URL = "https://github.com/curtis-sun/LLM4Rewrite"
+UPSTREAM_COMMIT = "c9c90e5d7867888c3aaba86e4fc9e6d48f53b375"
+PROFILE = "deterministic-first-roundtripping-matched-rule-v1"
+WORKLOADS = ("dsb", "tpch")
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def git_commit(repo: Path) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def find_rewriter_jar(rbot_root: Path) -> Path:
+    jar = (
+        rbot_root
+        / "CalciteRewrite/out/artifacts/LearnedRewrite_jar/LearnedRewrite.jar"
+    )
+    if not jar.is_file():
+        raise FileNotFoundError(f"R-Bot rewrite jar not found: {jar}")
+    return jar
+
+
+def copy_without_stale_signatures(source: Path, target: Path) -> None:
+    """Remove upstream's invalid shaded-jar signature metadata."""
+
+    signature_suffixes = (".SF", ".DSA", ".RSA")
+    with zipfile.ZipFile(source) as archive, zipfile.ZipFile(target, "w") as output:
+        for info in archive.infolist():
+            upper_name = info.filename.upper()
+            if upper_name.startswith("META-INF/") and upper_name.endswith(
+                signature_suffixes
+            ):
+                continue
+            output.writestr(info, archive.read(info.filename))
+
+
+def atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    temporary.write_text(content)
+    os.replace(temporary, path)
+
+
+def normalized_first_statement(sql: str, path: Path) -> tuple[str, int]:
+    statements = split_sql_statements(sql)
+    if not statements:
+        raise ValueError(f"no executable SQL statement in {path}")
+    return statements[0].rstrip() + ";\n", len(statements)
+
+
+def java_list(ArrayList, JString, values: list[str]):
+    return ArrayList([JString(value) for value in values])
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rbot-root", required=True, type=Path)
+    parser.add_argument(
+        "--benchmark-root",
+        type=Path,
+        default=LOGOS_ROOT / "benchmarks/core/rbot",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Defaults to <benchmark-root>/rewrite-pairs.manifest.json.",
+    )
+    args = parser.parse_args()
+
+    rbot_root = args.rbot_root.resolve()
+    benchmark_root = args.benchmark_root.resolve()
+    manifest_path = (
+        args.manifest.resolve()
+        if args.manifest
+        else benchmark_root / "rewrite-pairs.manifest.json"
+    )
+    actual_commit = git_commit(rbot_root)
+    if actual_commit != UPSTREAM_COMMIT:
+        raise SystemExit(
+            f"R-Bot commit mismatch: expected {UPSTREAM_COMMIT}, got {actual_commit}"
+        )
+
+    try:
+        import jpype
+    except ImportError as error:
+        raise SystemExit(
+            "JPype1 is required; install it in an isolated environment before running"
+        ) from error
+
+    source_jar = find_rewriter_jar(rbot_root)
+    records: list[dict[str, object]] = []
+    with tempfile.TemporaryDirectory(prefix="logos-rbot-pairgen-") as temp_dir:
+        sanitized_jar = Path(temp_dir) / "LearnedRewrite.jar"
+        copy_without_stale_signatures(source_jar, sanitized_jar)
+        jpype.startJVM(jpype.getDefaultJVMPath(), classpath=[str(sanitized_jar)])
+        try:
+            ArrayList = jpype.JClass("java.util.ArrayList")
+            JString = jpype.JString
+            Rewriter = jpype.JClass("rewriter.Rewriter")
+
+            for workload in WORKLOADS:
+                upstream_workload = rbot_root / workload
+                local_workload = benchmark_root / workload
+                upstream_schema = upstream_workload / "create_tables.sql"
+                local_schema = local_workload / "create_tables.sql"
+                if not upstream_schema.is_file() or not local_schema.is_file():
+                    raise FileNotFoundError(f"missing {workload} schema")
+                if upstream_schema.read_bytes() != local_schema.read_bytes():
+                    raise ValueError(
+                        f"local {workload} schema differs from pinned R-Bot schema"
+                    )
+                ddl_statements = split_sql_statements(upstream_schema.read_text())
+                java_ddls = java_list(ArrayList, JString, ddl_statements)
+
+                case_dirs = sorted(
+                    (path for path in local_workload.iterdir() if path.is_dir()),
+                    key=lambda path: path.name,
+                )
+                for case_dir in case_dirs:
+                    case_name = case_dir.name
+                    upstream_source = (
+                        upstream_workload / case_name / f"{case_name}_0.sql"
+                    )
+                    local_source = case_dir / f"{case_name}_0.sql"
+                    local_target = case_dir / f"{case_name}_1.sql"
+                    upstream_bytes = upstream_source.read_bytes()
+                    source_sql, upstream_statement_count = normalized_first_statement(
+                        upstream_bytes.decode(), upstream_source
+                    )
+                    # Preserve an ordinary one-statement upstream source byte for
+                    # byte.  Only the exceptional multi-statement template is
+                    # projected to the declared first-statement case unit.
+                    local_source_sql = (
+                        upstream_bytes.decode()
+                        if upstream_statement_count == 1
+                        else source_sql
+                    )
+
+                    matches = list(
+                        Rewriter.matchAllRules(
+                            JString(source_sql),
+                            java_ddls,
+                            JString("PostgreSQL"),
+                            False,
+                        )
+                    )
+                    matched_rules = sorted(
+                        {str(match.get("name")) for match in matches}
+                    )
+                    if not matched_rules:
+                        raise RuntimeError(f"no R-Bot rule matches {workload}/{case_name}")
+
+                    target_sql: str | None = None
+                    applied_rules: list[str] = []
+                    selected_rule: str | None = None
+                    candidate_attempts: list[dict[str, object]] = []
+                    for rule_name in matched_rules:
+                        result = Rewriter.rewrite(
+                            JString(source_sql),
+                            java_ddls,
+                            java_list(ArrayList, JString, [rule_name]),
+                            1,
+                            JString("PostgreSQL"),
+                        )
+                        candidate = (
+                            None if result.sql is None else str(result.sql).strip()
+                        )
+                        candidate_applied = [
+                            str(rule) for rule in list(result.rules)
+                        ]
+                        rejection: str | None = None
+                        if not candidate or candidate == "None":
+                            rejection = "no-serialized-output"
+                        else:
+                            candidate = candidate.rstrip(";") + ";\n"
+                            if candidate == source_sql:
+                                rejection = "identity-output"
+                            elif len(split_sql_statements(candidate)) != 1:
+                                rejection = "non-single-statement-output"
+                            elif not candidate_applied:
+                                rejection = "no-applied-rule"
+                            else:
+                                # RelToSqlConverter can emit text that its own
+                                # parser cannot read for some complex plans.
+                                # Require a parser/serializer round trip before
+                                # admitting a target, independently of every
+                                # equivalence solver under evaluation.
+                                round_trip = Rewriter.rewrite(
+                                    JString(candidate),
+                                    java_ddls,
+                                    java_list(ArrayList, JString, []),
+                                    1,
+                                    JString("PostgreSQL"),
+                                )
+                                if round_trip.sql is None or str(round_trip.sql) == "None":
+                                    rejection = "rbot-round-trip-failed"
+                        candidate_attempts.append(
+                            {
+                                "rule": rule_name,
+                                "appliedRules": candidate_applied,
+                                "accepted": rejection is None,
+                                **({"rejection": rejection} if rejection else {}),
+                            }
+                        )
+                        if rejection is None:
+                            target_sql = candidate
+                            applied_rules = candidate_applied
+                            selected_rule = rule_name
+                            break
+
+                    if target_sql is None or selected_rule is None:
+                        raise RuntimeError(
+                            "R-Bot emitted no round-tripping non-identity rewrite for "
+                            f"{workload}/{case_name}"
+                        )
+
+                    atomic_write(local_source, local_source_sql)
+                    atomic_write(local_target, target_sql)
+                    records.append(
+                        {
+                            "case": f"rbot-{workload}__{case_name}",
+                            "workload": workload,
+                            "source": str(local_source.relative_to(benchmark_root)),
+                            "target": str(local_target.relative_to(benchmark_root)),
+                            "upstreamInput": str(
+                                upstream_source.relative_to(rbot_root)
+                            ),
+                            "upstreamInputSha256": sha256_bytes(upstream_bytes),
+                            "upstreamStatementCount": upstream_statement_count,
+                            "selectedStatementIndex": 0,
+                            "sourceSha256": sha256_bytes(local_source_sql.encode()),
+                            "targetSha256": sha256_bytes(target_sql.encode()),
+                            "matchedRules": matched_rules,
+                            "candidateAttempts": candidate_attempts,
+                            "selectedRule": selected_rule,
+                            "requestedRules": [selected_rule],
+                            "appliedRules": applied_rules,
+                        }
+                    )
+                    print(
+                        f"generated rbot-{workload}__{case_name}: "
+                        f"matched={len(matched_rules)} applied={len(applied_rules)}",
+                        file=sys.stderr,
+                    )
+        finally:
+            jpype.shutdownJVM()
+
+    if len(records) != 59:
+        raise RuntimeError(f"expected 59 R-Bot cases, generated {len(records)}")
+    manifest = {
+        "schemaVersion": 1,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "profile": PROFILE,
+        "description": (
+            "Fresh deterministic rewrites emitted by the pinned R-Bot Calcite "
+            "engine; not the unpublished cost-selected outputs from the paper run."
+        ),
+        "upstream": {
+            "url": UPSTREAM_URL,
+            "commit": actual_commit,
+            "rewriteJar": str(source_jar.relative_to(rbot_root)),
+            "rewriteJarSha256": sha256_path(source_jar),
+        },
+        "sourceSelection": {
+            "variant": "_0",
+            "statementPolicy": "first-executable-statement",
+            "workloadCases": {"dsb": 37, "tpch": 22},
+            "totalCases": 59,
+        },
+        "rewritePolicy": {
+            "candidateRuleOrder": "lexical-rule-name",
+            "candidateWidth": 1,
+            "rounds": 1,
+            "requireNonIdentityOutput": True,
+            "requirePinnedRBotRoundTrip": True,
+        },
+        "cases": records,
+    }
+    atomic_write(manifest_path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    print(f"generated {len(records)} pairs; manifest: {manifest_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,79 +1,34 @@
-
-with sr_items as
- (select i_item_id item_id,
-        sum(sr_return_quantity) sr_item_qty
- from store_returns,
-      item,
-      date_dim
- where sr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-	where d_month_seq in
-		(select d_month_seq
-		from date_dim
-	  where d_date in ('1998-03-09','1998-05-10','1998-07-15','1998-10-07')))
- and   sr_returned_date_sk   = d_date_sk
- and i_category IN ('Children', 'Home')
- and i_manager_id BETWEEN 47 and 56
- and sr_return_amt / sr_return_quantity between 158 and 187
- and sr_reason_sk in (9, 13, 26, 40, 44)
-group by i_item_id),
- cr_items as
- (select i_item_id item_id,
-        sum(cr_return_quantity) cr_item_qty
- from catalog_returns,
-      item,
-      date_dim
- where cr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-  where d_month_seq in
-		(select d_month_seq
-		from date_dim
-	  	  where d_date in ('1998-03-09','1998-05-10','1998-07-15','1998-10-07')))
- and   cr_returned_date_sk   = d_date_sk
- and i_category IN ('Children', 'Home')
- and i_manager_id BETWEEN 47 and 56
- and cr_return_amount / cr_return_quantity between 158 and 187
- and cr_reason_sk in (9, 13, 26, 40, 44)
- group by i_item_id),
- wr_items as
- (select i_item_id item_id,
-        sum(wr_return_quantity) wr_item_qty
- from web_returns,
-      item,
-      date_dim
- where wr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-  where d_month_seq in
-		(select d_month_seq
-		from date_dim
-			  where d_date in ('1998-03-09','1998-05-10','1998-07-15','1998-10-07')))
- and   wr_returned_date_sk   = d_date_sk
- and i_category IN ('Children', 'Home')
- and i_manager_id BETWEEN 47 and 56
- and wr_return_amt / wr_return_quantity between 158 and 187
- and wr_reason_sk in (9, 13, 26, 40, 44)
- group by i_item_id)
-  select  sr_items.item_id
-       ,sr_item_qty
-       ,sr_item_qty/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0 * 100 sr_dev
-       ,cr_item_qty
-       ,cr_item_qty/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0 * 100 cr_dev
-       ,wr_item_qty
-       ,wr_item_qty/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0 * 100 wr_dev
-       ,(sr_item_qty+cr_item_qty+wr_item_qty)/3.0 average
- from sr_items
-     ,cr_items
-     ,wr_items
- where sr_items.item_id=cr_items.item_id
-   and sr_items.item_id=wr_items.item_id
- order by sr_items.item_id
-         ,sr_item_qty
- limit 100;
-
-
+SELECT "t4"."i_item_id", "t4"."sr_item_qty", "t4"."sr_item_qty" / ("t4"."sr_item_qty" + "t10"."cr_item_qty" + "t16"."wr_item_qty") / 3.0 * 100 AS "sr_dev", "t10"."cr_item_qty", "t10"."cr_item_qty" / ("t4"."sr_item_qty" + "t10"."cr_item_qty" + "t16"."wr_item_qty") / 3.0 * 100 AS "cr_dev", "t16"."wr_item_qty", "t16"."wr_item_qty" / ("t4"."sr_item_qty" + "t10"."cr_item_qty" + "t16"."wr_item_qty") / 3.0 * 100 AS "wr_dev", ("t4"."sr_item_qty" + "t10"."cr_item_qty" + "t16"."wr_item_qty") / 3.0 AS "average"
+FROM (SELECT "item"."i_item_id", SUM("store_returns"."sr_return_quantity") AS "sr_item_qty"
+        FROM "store_returns",
+            "item",
+            "date_dim"
+        WHERE "store_returns"."sr_item_sk" = "item"."i_item_sk" AND "date_dim"."d_date" IN (SELECT "d_date2"
+                    FROM "date_dim" AS "date_dim0" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2")
+                    WHERE "d_month_seq2" IN (SELECT "d_month_seq3"
+                                FROM "date_dim" AS "date_dim1" ("d_date_sk3", "d_date_id3", "d_date3", "d_month_seq3", "d_week_seq3", "d_quarter_seq3", "d_year3", "d_dow3", "d_moy3", "d_dom3", "d_qoy3", "d_fy_year3", "d_fy_quarter_seq3", "d_fy_week_seq3", "d_day_name3", "d_quarter_name3", "d_holiday3", "d_weekend3", "d_following_holiday3", "d_first_dom3", "d_last_dom3", "d_same_day_ly3", "d_same_day_lq3", "d_current_day3", "d_current_week3", "d_current_month3", "d_current_quarter3", "d_current_year3")
+                                WHERE "d_date3" = '1998-03-15' OR "d_date3" = '1998-04-10' OR "d_date3" = '1998-08-01' OR "d_date3" = '1998-10-05')) AND ("store_returns"."sr_returned_date_sk" = "date_dim"."d_date_sk" AND ("item"."i_category" = 'Shoes' OR "item"."i_category" = 'Sports')) AND ("item"."i_manager_id" >= 80 AND "item"."i_manager_id" <= 89 AND ("store_returns"."sr_return_amt" / "store_returns"."sr_return_quantity" >= 226 AND ("store_returns"."sr_return_amt" / "store_returns"."sr_return_quantity" <= 255 AND ("store_returns"."sr_reason_sk" = 17 OR "store_returns"."sr_reason_sk" = 20 OR "store_returns"."sr_reason_sk" = 22 OR "store_returns"."sr_reason_sk" = 65 OR "store_returns"."sr_reason_sk" = 73))))
+        GROUP BY "item"."i_item_id") AS "t4",
+        (SELECT "item0"."i_item_id0", SUM("catalog_returns"."cr_return_quantity") AS "cr_item_qty"
+        FROM "catalog_returns",
+            "item" AS "item0" ("i_item_sk0", "i_item_id0", "i_rec_start_date0", "i_rec_end_date0", "i_item_desc0", "i_current_price0", "i_wholesale_cost0", "i_brand_id0", "i_brand0", "i_class_id0", "i_class0", "i_category_id0", "i_category0", "i_manufact_id0", "i_manufact0", "i_size0", "i_formulation0", "i_color0", "i_units0", "i_container0", "i_manager_id0", "i_product_name0"),
+            "date_dim" AS "date_dim2" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+        WHERE "catalog_returns"."cr_item_sk" = "item0"."i_item_sk0" AND "date_dim2"."d_date0" IN (SELECT "d_date4"
+                    FROM "date_dim" AS "date_dim3" ("d_date_sk4", "d_date_id4", "d_date4", "d_month_seq4", "d_week_seq4", "d_quarter_seq4", "d_year4", "d_dow4", "d_moy4", "d_dom4", "d_qoy4", "d_fy_year4", "d_fy_quarter_seq4", "d_fy_week_seq4", "d_day_name4", "d_quarter_name4", "d_holiday4", "d_weekend4", "d_following_holiday4", "d_first_dom4", "d_last_dom4", "d_same_day_ly4", "d_same_day_lq4", "d_current_day4", "d_current_week4", "d_current_month4", "d_current_quarter4", "d_current_year4")
+                    WHERE "d_month_seq4" IN (SELECT "d_month_seq5"
+                                FROM "date_dim" AS "date_dim4" ("d_date_sk5", "d_date_id5", "d_date5", "d_month_seq5", "d_week_seq5", "d_quarter_seq5", "d_year5", "d_dow5", "d_moy5", "d_dom5", "d_qoy5", "d_fy_year5", "d_fy_quarter_seq5", "d_fy_week_seq5", "d_day_name5", "d_quarter_name5", "d_holiday5", "d_weekend5", "d_following_holiday5", "d_first_dom5", "d_last_dom5", "d_same_day_ly5", "d_same_day_lq5", "d_current_day5", "d_current_week5", "d_current_month5", "d_current_quarter5", "d_current_year5")
+                                WHERE "d_date5" = '1998-03-15' OR "d_date5" = '1998-04-10' OR "d_date5" = '1998-08-01' OR "d_date5" = '1998-10-05')) AND ("catalog_returns"."cr_returned_date_sk" = "date_dim2"."d_date_sk0" AND ("item0"."i_category0" = 'Shoes' OR "item0"."i_category0" = 'Sports')) AND ("item0"."i_manager_id0" >= 80 AND "item0"."i_manager_id0" <= 89 AND ("catalog_returns"."cr_return_amount" / "catalog_returns"."cr_return_quantity" >= 226 AND ("catalog_returns"."cr_return_amount" / "catalog_returns"."cr_return_quantity" <= 255 AND ("catalog_returns"."cr_reason_sk" = 17 OR "catalog_returns"."cr_reason_sk" = 20 OR "catalog_returns"."cr_reason_sk" = 22 OR "catalog_returns"."cr_reason_sk" = 65 OR "catalog_returns"."cr_reason_sk" = 73))))
+        GROUP BY "item0"."i_item_id0") AS "t10",
+        (SELECT "item1"."i_item_id1", SUM("web_returns"."wr_return_quantity") AS "wr_item_qty"
+        FROM "web_returns",
+            "item" AS "item1" ("i_item_sk1", "i_item_id1", "i_rec_start_date1", "i_rec_end_date1", "i_item_desc1", "i_current_price1", "i_wholesale_cost1", "i_brand_id1", "i_brand1", "i_class_id1", "i_class1", "i_category_id1", "i_category1", "i_manufact_id1", "i_manufact1", "i_size1", "i_formulation1", "i_color1", "i_units1", "i_container1", "i_manager_id1", "i_product_name1"),
+            "date_dim" AS "date_dim5" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1")
+        WHERE "web_returns"."wr_item_sk" = "item1"."i_item_sk1" AND "date_dim5"."d_date1" IN (SELECT "d_date6"
+                    FROM "date_dim" AS "date_dim6" ("d_date_sk6", "d_date_id6", "d_date6", "d_month_seq6", "d_week_seq6", "d_quarter_seq6", "d_year6", "d_dow6", "d_moy6", "d_dom6", "d_qoy6", "d_fy_year6", "d_fy_quarter_seq6", "d_fy_week_seq6", "d_day_name6", "d_quarter_name6", "d_holiday6", "d_weekend6", "d_following_holiday6", "d_first_dom6", "d_last_dom6", "d_same_day_ly6", "d_same_day_lq6", "d_current_day6", "d_current_week6", "d_current_month6", "d_current_quarter6", "d_current_year6")
+                    WHERE "d_month_seq6" IN (SELECT "d_month_seq7"
+                                FROM "date_dim" AS "date_dim7" ("d_date_sk7", "d_date_id7", "d_date7", "d_month_seq7", "d_week_seq7", "d_quarter_seq7", "d_year7", "d_dow7", "d_moy7", "d_dom7", "d_qoy7", "d_fy_year7", "d_fy_quarter_seq7", "d_fy_week_seq7", "d_day_name7", "d_quarter_name7", "d_holiday7", "d_weekend7", "d_following_holiday7", "d_first_dom7", "d_last_dom7", "d_same_day_ly7", "d_same_day_lq7", "d_current_day7", "d_current_week7", "d_current_month7", "d_current_quarter7", "d_current_year7")
+                                WHERE "d_date7" = '1998-03-15' OR "d_date7" = '1998-04-10' OR "d_date7" = '1998-08-01' OR "d_date7" = '1998-10-05')) AND ("web_returns"."wr_returned_date_sk" = "date_dim5"."d_date_sk1" AND ("item1"."i_category1" = 'Shoes' OR "item1"."i_category1" = 'Sports')) AND ("item1"."i_manager_id1" >= 80 AND "item1"."i_manager_id1" <= 89 AND ("web_returns"."wr_return_amt" / "web_returns"."wr_return_quantity" >= 226 AND ("web_returns"."wr_return_amt" / "web_returns"."wr_return_quantity" <= 255 AND ("web_returns"."wr_reason_sk" = 17 OR "web_returns"."wr_reason_sk" = 20 OR "web_returns"."wr_reason_sk" = 22 OR "web_returns"."wr_reason_sk" = 65 OR "web_returns"."wr_reason_sk" = 73))))
+        GROUP BY "item1"."i_item_id1") AS "t16"
+WHERE "t4"."i_item_id" = "t10"."i_item_id0" AND "t4"."i_item_id" = "t16"."i_item_id1"
+ORDER BY "t4"."i_item_id", "t4"."sr_item_qty"
+FETCH NEXT 100 ROWS ONLY;

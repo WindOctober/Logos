@@ -1,36 +1,9 @@
--- TPC TPC-H Parameter Substitution (Version 2.17.3 build 0)
--- using 1723123854 as a seed to the RNG
-
-
-select
-	c_custkey,
-	c_name,
-	sum(l_extendedprice * (1 - l_discount)) as revenue,
-	c_acctbal,
-	n_name,
-	c_address,
-	c_phone,
-	c_comment
-from
-	customer,
-	orders,
-	lineitem,
-	nation
-where
-	c_custkey = o_custkey
-	and l_orderkey = o_orderkey
-	and o_orderdate >= date '1994-08-01'
-	and o_orderdate < date '1994-08-01' + interval '3' month
-	and l_returnflag = 'R'
-	and c_nationkey = n_nationkey
-group by
-	c_custkey,
-	c_name,
-	c_acctbal,
-	c_phone,
-	n_name,
-	c_address,
-	c_comment
-order by
-	revenue desc
-limit 20;
+SELECT "customer"."c_custkey", "customer"."c_name", COALESCE(SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")), 0) AS "revenue", "customer"."c_acctbal", "nation"."n_name", "customer"."c_address", "customer"."c_phone", "customer"."c_comment"
+FROM "customer",
+    "orders",
+    "lineitem",
+    "nation"
+WHERE "customer"."c_custkey" = "orders"."o_custkey" AND ("lineitem"."l_orderkey" = "orders"."o_orderkey" AND "orders"."o_orderdate" >= DATE '1993-11-01') AND ("orders"."o_orderdate" < (DATE '1993-11-01' + INTERVAL '3' MONTH) AND ("lineitem"."l_returnflag" = 'R' AND "customer"."c_nationkey" = "nation"."n_nationkey"))
+GROUP BY "customer"."c_custkey", "customer"."c_name", "customer"."c_acctbal", "customer"."c_phone", "nation"."n_name", "customer"."c_address", "customer"."c_comment"
+ORDER BY 3 DESC
+FETCH NEXT 20 ROWS ONLY;

@@ -1,50 +1,22 @@
-
-with wss as
- (select d_week_seq,
-        ss_store_sk,
-        sum(case when (d_day_name='Sunday') then ss_sales_price else null end) sun_sales,
-        sum(case when (d_day_name='Monday') then ss_sales_price else null end) mon_sales,
-        sum(case when (d_day_name='Tuesday') then ss_sales_price else  null end) tue_sales,
-        sum(case when (d_day_name='Wednesday') then ss_sales_price else null end) wed_sales,
-        sum(case when (d_day_name='Thursday') then ss_sales_price else null end) thu_sales,
-        sum(case when (d_day_name='Friday') then ss_sales_price else null end) fri_sales,
-        sum(case when (d_day_name='Saturday') then ss_sales_price else null end) sat_sales
- from store_sales,date_dim
- where d_date_sk = ss_sold_date_sk
- and ss_sales_price / ss_list_price BETWEEN 54 * 0.01 AND 74 * 0.01
- group by d_week_seq,ss_store_sk
- )
-  select  s_store_name1,s_store_id1,d_week_seq1
-       ,sun_sales1/sun_sales2,mon_sales1/mon_sales2
-       ,tue_sales1/tue_sales2,wed_sales1/wed_sales2,thu_sales1/thu_sales2
-       ,fri_sales1/fri_sales2,sat_sales1/sat_sales2
- from
- (select s_store_name s_store_name1,wss.d_week_seq d_week_seq1
-        ,s_store_id s_store_id1,sun_sales sun_sales1
-        ,mon_sales mon_sales1,tue_sales tue_sales1
-        ,wed_sales wed_sales1,thu_sales thu_sales1
-        ,fri_sales fri_sales1,sat_sales sat_sales1
-  from wss,store,date_dim d
-  where d.d_week_seq = wss.d_week_seq and
-        ss_store_sk = s_store_sk and
-        d_month_seq between 1192 and 1192 + 11
-        and s_state in ('CO','GA','MN'
-                    ,'ND','NE','PA','TN','WI')
-        ) y,
- (select s_store_name s_store_name2,wss.d_week_seq d_week_seq2
-        ,s_store_id s_store_id2,sun_sales sun_sales2
-        ,mon_sales mon_sales2,tue_sales tue_sales2
-        ,wed_sales wed_sales2,thu_sales thu_sales2
-        ,fri_sales fri_sales2,sat_sales sat_sales2
-  from wss,store,date_dim d
-  where d.d_week_seq = wss.d_week_seq and
-        ss_store_sk = s_store_sk and
-        d_month_seq between 1192+ 12 and 1192 + 23
-        and s_state in ('CO','GA','MN'
-                    ,'ND','NE','PA','TN','WI')) x
- where s_store_id1=s_store_id2
-   and d_week_seq1=d_week_seq2-52
- order by s_store_name1,s_store_id1,d_week_seq1
-limit 100;
-
-
+SELECT "t3"."s_store_name", "t3"."s_store_id", "t3"."d_week_seq", "t3"."sun_sales" / "t8"."sun_sales", "t3"."mon_sales" / "t8"."mon_sales", "t3"."tue_sales" / "t8"."tue_sales", "t3"."wed_sales" / "t8"."wed_sales", "t3"."thu_sales" / "t8"."thu_sales", "t3"."fri_sales" / "t8"."fri_sales", "t3"."sat_sales" / "t8"."sat_sales"
+FROM (SELECT "store"."s_store_name", "t1"."d_week_seq", "store"."s_store_id", "t1"."sun_sales", "t1"."mon_sales", "t1"."tue_sales", "t1"."wed_sales", "t1"."thu_sales", "t1"."fri_sales", "t1"."sat_sales"
+        FROM (SELECT "date_dim"."d_week_seq", "store_sales"."ss_store_sk", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Sunday' IS TRUE) AS "sun_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Monday' IS TRUE) AS "mon_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Tuesday' IS TRUE) AS "tue_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Wednesday' IS TRUE) AS "wed_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Thursday' IS TRUE) AS "thu_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Friday' IS TRUE) AS "fri_sales", SUM("store_sales"."ss_sales_price") FILTER (WHERE "date_dim"."d_day_name" = 'Saturday' IS TRUE) AS "sat_sales"
+                FROM "store_sales",
+                    "date_dim"
+                WHERE "date_dim"."d_date_sk" = "store_sales"."ss_sold_date_sk" AND "store_sales"."ss_sales_price" / "store_sales"."ss_list_price" >= 77 * 0.01 AND "store_sales"."ss_sales_price" / "store_sales"."ss_list_price" <= 97 * 0.01
+                GROUP BY "date_dim"."d_week_seq", "store_sales"."ss_store_sk") AS "t1",
+            "store",
+            "date_dim" AS "date_dim0" ("d_date_sk0", "d_date_id0", "d_date0", "d_month_seq0", "d_week_seq0", "d_quarter_seq0", "d_year0", "d_dow0", "d_moy0", "d_dom0", "d_qoy0", "d_fy_year0", "d_fy_quarter_seq0", "d_fy_week_seq0", "d_day_name0", "d_quarter_name0", "d_holiday0", "d_weekend0", "d_following_holiday0", "d_first_dom0", "d_last_dom0", "d_same_day_ly0", "d_same_day_lq0", "d_current_day0", "d_current_week0", "d_current_month0", "d_current_quarter0", "d_current_year0")
+        WHERE "date_dim0"."d_week_seq0" = "t1"."d_week_seq" AND "t1"."ss_store_sk" = "store"."s_store_sk" AND "date_dim0"."d_month_seq0" >= 1212 AND "date_dim0"."d_month_seq0" <= 1212 + 11 AND ("store"."s_state" = 'GA' OR "store"."s_state" = 'IA' OR ("store"."s_state" = 'IL' OR "store"."s_state" = 'KS') OR ("store"."s_state" = 'LA' OR "store"."s_state" = 'ME' OR ("store"."s_state" = 'MI' OR "store"."s_state" = 'NC')))) AS "t3",
+        (SELECT "store0"."s_store_name0", "t6"."d_week_seq1", "store0"."s_store_id0", "t6"."sun_sales", "t6"."mon_sales", "t6"."tue_sales", "t6"."wed_sales", "t6"."thu_sales", "t6"."fri_sales", "t6"."sat_sales"
+        FROM (SELECT "date_dim1"."d_week_seq1", "store_sales0"."ss_store_sk0", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Sunday' IS TRUE) AS "sun_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Monday' IS TRUE) AS "mon_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Tuesday' IS TRUE) AS "tue_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Wednesday' IS TRUE) AS "wed_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Thursday' IS TRUE) AS "thu_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Friday' IS TRUE) AS "fri_sales", SUM("store_sales0"."ss_sales_price0") FILTER (WHERE "date_dim1"."d_day_name1" = 'Saturday' IS TRUE) AS "sat_sales"
+                FROM "store_sales" AS "store_sales0" ("ss_sold_date_sk0", "ss_sold_time_sk0", "ss_item_sk0", "ss_customer_sk0", "ss_cdemo_sk0", "ss_hdemo_sk0", "ss_addr_sk0", "ss_store_sk0", "ss_promo_sk0", "ss_ticket_number0", "ss_quantity0", "ss_wholesale_cost0", "ss_list_price0", "ss_sales_price0", "ss_ext_discount_amt0", "ss_ext_sales_price0", "ss_ext_wholesale_cost0", "ss_ext_list_price0", "ss_ext_tax0", "ss_coupon_amt0", "ss_net_paid0", "ss_net_paid_inc_tax0", "ss_net_profit0"),
+                    "date_dim" AS "date_dim1" ("d_date_sk1", "d_date_id1", "d_date1", "d_month_seq1", "d_week_seq1", "d_quarter_seq1", "d_year1", "d_dow1", "d_moy1", "d_dom1", "d_qoy1", "d_fy_year1", "d_fy_quarter_seq1", "d_fy_week_seq1", "d_day_name1", "d_quarter_name1", "d_holiday1", "d_weekend1", "d_following_holiday1", "d_first_dom1", "d_last_dom1", "d_same_day_ly1", "d_same_day_lq1", "d_current_day1", "d_current_week1", "d_current_month1", "d_current_quarter1", "d_current_year1")
+                WHERE "date_dim1"."d_date_sk1" = "store_sales0"."ss_sold_date_sk0" AND "store_sales0"."ss_sales_price0" / "store_sales0"."ss_list_price0" >= 77 * 0.01 AND "store_sales0"."ss_sales_price0" / "store_sales0"."ss_list_price0" <= 97 * 0.01
+                GROUP BY "date_dim1"."d_week_seq1", "store_sales0"."ss_store_sk0") AS "t6",
+            "store" AS "store0" ("s_store_sk0", "s_store_id0", "s_rec_start_date0", "s_rec_end_date0", "s_closed_date_sk0", "s_store_name0", "s_number_employees0", "s_floor_space0", "s_hours0", "s_manager0", "s_market_id0", "s_geography_class0", "s_market_desc0", "s_market_manager0", "s_division_id0", "s_division_name0", "s_company_id0", "s_company_name0", "s_street_number0", "s_street_name0", "s_street_type0", "s_suite_number0", "s_city0", "s_county0", "s_state0", "s_zip0", "s_country0", "s_gmt_offset0", "s_tax_precentage0"),
+            "date_dim" AS "date_dim2" ("d_date_sk2", "d_date_id2", "d_date2", "d_month_seq2", "d_week_seq2", "d_quarter_seq2", "d_year2", "d_dow2", "d_moy2", "d_dom2", "d_qoy2", "d_fy_year2", "d_fy_quarter_seq2", "d_fy_week_seq2", "d_day_name2", "d_quarter_name2", "d_holiday2", "d_weekend2", "d_following_holiday2", "d_first_dom2", "d_last_dom2", "d_same_day_ly2", "d_same_day_lq2", "d_current_day2", "d_current_week2", "d_current_month2", "d_current_quarter2", "d_current_year2")
+        WHERE "date_dim2"."d_week_seq2" = "t6"."d_week_seq1" AND "t6"."ss_store_sk0" = "store0"."s_store_sk0" AND "date_dim2"."d_month_seq2" >= 1212 + 12 AND "date_dim2"."d_month_seq2" <= 1212 + 23 AND ("store0"."s_state0" = 'GA' OR "store0"."s_state0" = 'IA' OR ("store0"."s_state0" = 'IL' OR "store0"."s_state0" = 'KS') OR ("store0"."s_state0" = 'LA' OR "store0"."s_state0" = 'ME' OR ("store0"."s_state0" = 'MI' OR "store0"."s_state0" = 'NC')))) AS "t8"
+WHERE "t3"."s_store_id" = "t8"."s_store_id0" AND "t3"."d_week_seq" = "t8"."d_week_seq1" - 52
+ORDER BY "t3"."s_store_name", "t3"."s_store_id", "t3"."d_week_seq"
+FETCH NEXT 100 ROWS ONLY;
