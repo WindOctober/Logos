@@ -26,5 +26,6 @@ pub struct Candidate {
 pub enum Decision {
     CounterexampleCandidate,
     NoCandidate,
+    #[serde(rename = "needs_review", alias = "manual_review")]
     ManualReview,
 }

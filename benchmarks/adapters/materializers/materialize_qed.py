@@ -20,6 +20,7 @@ try:
         POSTGRES_IDENTIFIER_CONTINUATION_CLASS,
         mask_sql_regions,
         parse_schema,
+        protected_sql_regions,
         split_sql_statements,
         split_top_level_commas,
         strip_sql_comments,
@@ -31,10 +32,22 @@ except ModuleNotFoundError:  # Imported as benchmarks.adapters.materializers.*
         POSTGRES_IDENTIFIER_CONTINUATION_CLASS,
         mask_sql_regions,
         parse_schema,
+        protected_sql_regions,
         split_sql_statements,
         split_top_level_commas,
         strip_sql_comments,
         substitute_unprotected,
+    )
+
+try:
+    from solver_frontend import (
+        SolverFrontendConfigurationError,
+        solver_materialization_config,
+    )
+except ModuleNotFoundError:  # Imported as benchmarks.adapters.materializers.*
+    from .solver_frontend import (
+        SolverFrontendConfigurationError,
+        solver_materialization_config,
     )
 
 
@@ -81,6 +94,8 @@ _RAW_CREATE_TABLE = re.compile(
 _CANONICAL_SOURCE_SCHEMA_AUTHORITY_CACHE: dict[
     tuple[str, str, str], dict[str, dict[str, Any]]
 ] = {}
+_QED_BASE_ALIAS_QUERY_POLICY = "qed-base-table-column-alias-order-v1"
+_QED_PARSER_PREFLIGHT_POLICY = "qed-parser-planner-v1"
 
 
 @dataclass
@@ -106,6 +121,955 @@ class QedJsonRepairError(RuntimeError):
 
 class QedJsonValidationError(RuntimeError):
     """The parser did not emit one complete, comparable QED query pair."""
+
+
+@dataclass(frozen=True)
+class _QedSqlToken:
+    """One offset-preserving token used by the QED alias-order attestation."""
+
+    kind: str
+    text: str
+    value: str | None
+    start: int
+    end: int
+    depth: int
+    quoted: bool = False
+
+
+def _qed_alias_order_report(
+    status: str,
+    *,
+    transformations: list[dict[str, Any]] | None = None,
+    star_expansions: list[dict[str, Any]] | None = None,
+    reason: str | None = None,
+    evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "version": 1,
+        "kind": "qed-base-table-column-alias-order",
+        "status": status,
+        "frontendColumnOrder": "case-sensitive-ASCII-lexicographic",
+        "transformations": transformations or [],
+        "starExpansions": star_expansions or [],
+        "semanticContract": (
+            "QED's QedTable sorts base columns lexicographically before Calcite "
+            "binds a positional table column-alias list. For an exact full base-table "
+            "list, emit the alias associated with each source DDL column at that "
+            "column's QED-sorted position. This preserves the source-column-to-alias "
+            "binding and leaves every query reference unchanged. Queries that can "
+            "observe the base row's physical field order through a qualified star "
+            "or whole-row alias reference are rejected. When either query side "
+            "activates this boundary, an unqualified SELECT-list star is expanded "
+            "on both sides only when its complete FROM/JOIN row consists of direct, "
+            "schema-attested base relations; expansion uses FROM/JOIN order and "
+            "source-column order. Derived, NATURAL, USING, malformed, or ambiguous "
+            "star scopes fail closed when they contain an alias-list candidate."
+        ),
+        "rowOrderObservationPolicy": (
+            "reject qualified alias stars and whole-row uses of a reordered "
+            "base-table alias; pairwise-expand only fully attested direct-base "
+            "unqualified stars in source row order"
+        ),
+    }
+    if reason is not None:
+        report["reason"] = reason
+    if evidence is not None:
+        report["evidence"] = evidence
+    return report
+
+
+def _lex_qed_alias_sql(sql: str) -> tuple[list[_QedSqlToken], list[Any]]:
+    """Tokenize enough SQL to attest direct base-table alias-list positions."""
+
+    regions = protected_sql_regions(sql)
+    by_start = {region.start: region for region in regions}
+    tokens: list[_QedSqlToken] = []
+    depth = 0
+    index = 0
+    while index < len(sql):
+        region = by_start.get(index)
+        if region is not None:
+            text = sql[region.start : region.end]
+            if region.kind in {"double_quote", "backtick_quote"} and region.terminated:
+                delimiter = region.delimiter
+                value = text[1:-1].replace(delimiter * 2, delimiter)
+                tokens.append(
+                    _QedSqlToken(
+                        "identifier",
+                        text,
+                        value,
+                        region.start,
+                        region.end,
+                        depth,
+                        quoted=True,
+                    )
+                )
+            elif region.kind != "comment":
+                tokens.append(
+                    _QedSqlToken(
+                        "literal",
+                        text,
+                        None,
+                        region.start,
+                        region.end,
+                        depth,
+                    )
+                )
+            index = region.end
+            continue
+
+        char = sql[index]
+        if char in " \t\n\r\f\v":
+            index += 1
+            continue
+        if char == "(":
+            tokens.append(_QedSqlToken("open", char, None, index, index + 1, depth))
+            depth += 1
+            index += 1
+            continue
+        if char == ")":
+            depth = max(0, depth - 1)
+            tokens.append(_QedSqlToken("close", char, None, index, index + 1, depth))
+            index += 1
+            continue
+        if char == ",":
+            tokens.append(_QedSqlToken("comma", char, None, index, index + 1, depth))
+            index += 1
+            continue
+        if char == ".":
+            tokens.append(_QedSqlToken("dot", char, None, index, index + 1, depth))
+            index += 1
+            continue
+        if char == "_" or char.isalpha() or ord(char) >= 128:
+            end = index + 1
+            while end < len(sql):
+                next_char = sql[end]
+                if not (
+                    next_char == "_"
+                    or next_char == "$"
+                    or next_char.isalnum()
+                    or ord(next_char) >= 128
+                ):
+                    break
+                end += 1
+            text = sql[index:end]
+            tokens.append(
+                _QedSqlToken("identifier", text, text, index, end, depth, quoted=False)
+            )
+            index = end
+            continue
+        if char.isdigit():
+            end = index + 1
+            while end < len(sql) and (sql[end].isalnum() or sql[end] in "._"):
+                end += 1
+            tokens.append(
+                _QedSqlToken("number", sql[index:end], None, index, end, depth)
+            )
+            index = end
+            continue
+        tokens.append(_QedSqlToken("symbol", char, None, index, index + 1, depth))
+        index += 1
+    return tokens, regions
+
+
+def _qed_matching_token_parens(tokens: list[_QedSqlToken]) -> dict[int, int]:
+    matches: dict[int, int] = {}
+    stack: list[int] = []
+    for index, token in enumerate(tokens):
+        if token.kind == "open":
+            stack.append(index)
+        elif token.kind == "close" and stack:
+            open_index = stack.pop()
+            matches[open_index] = index
+    return matches
+
+
+_QED_FROM_BOUNDARIES = frozenset(
+    {
+        "SELECT",
+        "FROM",
+        "JOIN",
+        "ON",
+        "WHERE",
+        "GROUP",
+        "HAVING",
+        "ORDER",
+        "LIMIT",
+        "OFFSET",
+        "FETCH",
+        "UNION",
+        "INTERSECT",
+        "EXCEPT",
+        "RETURNING",
+    }
+)
+
+
+def _qed_word(token: _QedSqlToken) -> str | None:
+    if token.kind != "identifier" or token.quoted or token.value is None:
+        return None
+    return token.value.upper()
+
+
+def _qed_table_factor_start(tokens: list[_QedSqlToken], index: int) -> bool:
+    if index <= 0:
+        return False
+    token = tokens[index]
+    previous = tokens[index - 1]
+    previous_word = _qed_word(previous)
+    if previous.depth == token.depth and previous_word in {"FROM", "JOIN"}:
+        return True
+    if previous.kind != "comma" or previous.depth != token.depth:
+        return False
+    for cursor in range(index - 2, -1, -1):
+        candidate = tokens[cursor]
+        if candidate.depth < token.depth:
+            return False
+        if candidate.depth != token.depth:
+            continue
+        word = _qed_word(candidate)
+        if word in _QED_FROM_BOUNDARIES:
+            return word in {"FROM", "JOIN"}
+    return False
+
+
+def _qed_alias_list_tokens(
+    tokens: list[_QedSqlToken], open_index: int, close_index: int
+) -> list[_QedSqlToken] | None:
+    expected_identifier = True
+    aliases: list[_QedSqlToken] = []
+    for token in tokens[open_index + 1 : close_index]:
+        if token.depth != tokens[open_index].depth + 1:
+            return None
+        if expected_identifier:
+            if token.kind != "identifier" or token.value is None:
+                return None
+            aliases.append(token)
+        elif token.kind != "comma":
+            return None
+        expected_identifier = not expected_identifier
+    if expected_identifier or not aliases:
+        return None
+    return aliases
+
+
+def _qed_alias_row_observation_problem(
+    tokens: list[_QedSqlToken], candidate: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Reject uses that observe a base row rather than a named base column."""
+
+    alias_token = candidate["aliasToken"]
+    alias = alias_token.value
+    if not isinstance(alias, str):
+        return {
+            "reason": "base-table-alias-is-malformed",
+            "evidence": {"table": candidate["tableToken"].value},
+        }
+    for index, token in enumerate(tokens):
+        if (
+            token.kind != "identifier"
+            or token.value is None
+            or token.value.casefold() != alias.casefold()
+            or token.start == alias_token.start
+        ):
+            continue
+        if (
+            index + 2 < len(tokens)
+            and tokens[index + 1].kind == "dot"
+            and tokens[index + 1].depth == token.depth
+            and tokens[index + 2].depth == token.depth
+        ):
+            selected = tokens[index + 2]
+            if selected.kind == "identifier":
+                continue
+            if selected.kind == "symbol" and selected.text == "*":
+                return {
+                    "reason": "qualified-base-table-alias-star-observes-row-order",
+                    "evidence": {
+                        "table": candidate["tableToken"].value,
+                        "alias": alias,
+                        "offset": token.start,
+                    },
+                }
+        return {
+            "reason": "whole-row-or-shadowed-base-table-alias-use-is-ambiguous",
+            "evidence": {
+                "table": candidate["tableToken"].value,
+                "alias": alias,
+                "offset": token.start,
+            },
+        }
+    return None
+
+
+def _qed_cte_names(
+    tokens: list[_QedSqlToken], parens: dict[int, int]
+) -> tuple[set[str], bool]:
+    """Collect visible CTE names conservatively; false means WITH was ambiguous."""
+
+    names: set[str] = set()
+    complete = True
+    for with_index, token in enumerate(tokens):
+        if _qed_word(token) != "WITH":
+            continue
+        depth = token.depth
+        cursor = with_index + 1
+        if cursor < len(tokens) and _qed_word(tokens[cursor]) == "RECURSIVE":
+            cursor += 1
+        while cursor < len(tokens):
+            name = tokens[cursor]
+            if name.depth != depth or name.kind != "identifier" or name.value is None:
+                complete = False
+                break
+            names.add(name.value.casefold())
+            cursor += 1
+            if (
+                cursor < len(tokens)
+                and tokens[cursor].kind == "open"
+                and tokens[cursor].depth == depth
+            ):
+                close = parens.get(cursor)
+                if (
+                    close is None
+                    or _qed_alias_list_tokens(tokens, cursor, close) is None
+                ):
+                    complete = False
+                    break
+                cursor = close + 1
+            if cursor >= len(tokens) or _qed_word(tokens[cursor]) != "AS":
+                complete = False
+                break
+            cursor += 1
+            if cursor < len(tokens) and _qed_word(tokens[cursor]) in {
+                "MATERIALIZED",
+                "NOT",
+            }:
+                complete = False
+                break
+            if cursor >= len(tokens) or tokens[cursor].kind != "open":
+                complete = False
+                break
+            close = parens.get(cursor)
+            if close is None:
+                complete = False
+                break
+            cursor = close + 1
+            if (
+                cursor < len(tokens)
+                and tokens[cursor].kind == "comma"
+                and tokens[cursor].depth == depth
+            ):
+                cursor += 1
+                continue
+            break
+    return names, complete
+
+
+def _qed_nearest_select_index(tokens: list[_QedSqlToken], index: int) -> int | None:
+    depth = tokens[index].depth
+    for cursor in range(index - 1, -1, -1):
+        token = tokens[cursor]
+        if token.depth < depth:
+            return None
+        if token.depth == depth and _qed_word(token) == "SELECT":
+            return cursor
+    return None
+
+
+def _qed_select_from_extent(
+    tokens: list[_QedSqlToken], select_index: int
+) -> tuple[int | None, int]:
+    depth = tokens[select_index].depth
+    from_index: int | None = None
+    end_index = len(tokens)
+    for cursor in range(select_index + 1, len(tokens)):
+        token = tokens[cursor]
+        if token.depth < depth:
+            end_index = cursor
+            break
+        if token.depth != depth:
+            continue
+        word = _qed_word(token)
+        if from_index is None:
+            if word == "FROM":
+                from_index = cursor
+            elif word in {"UNION", "INTERSECT", "EXCEPT"}:
+                end_index = cursor
+                break
+        elif word in {
+            "WHERE",
+            "GROUP",
+            "HAVING",
+            "ORDER",
+            "LIMIT",
+            "OFFSET",
+            "FETCH",
+            "UNION",
+            "INTERSECT",
+            "EXCEPT",
+            "RETURNING",
+        }:
+            end_index = cursor
+            break
+    return from_index, end_index
+
+
+def _qed_unqualified_select_stars(
+    tokens: list[_QedSqlToken], select_index: int, from_index: int
+) -> list[int]:
+    depth = tokens[select_index].depth
+    stars: list[int] = []
+    for index in range(select_index + 1, from_index):
+        token = tokens[index]
+        if token.depth != depth or token.kind != "symbol" or token.text != "*":
+            continue
+        previous = tokens[index - 1] if index > select_index else None
+        following = tokens[index + 1] if index + 1 < len(tokens) else None
+        if (
+            following is not None
+            and following.depth == depth
+            and (following.kind == "comma" or _qed_word(following) == "FROM")
+            and not (
+                previous is not None
+                and previous.depth == depth
+                and previous.kind == "dot"
+            )
+        ):
+            stars.append(index)
+    return stars
+
+
+_QED_BARE_FACTOR_ALIAS_BOUNDARIES = _QED_FROM_BOUNDARIES | frozenset(
+    {
+        "AS",
+        "INNER",
+        "LEFT",
+        "RIGHT",
+        "FULL",
+        "CROSS",
+        "NATURAL",
+        "OUTER",
+        "LATERAL",
+        "ONLY",
+        "USING",
+    }
+)
+
+
+def _qed_star_base_factor(
+    tokens: list[_QedSqlToken],
+    start: int,
+    tables: dict[str, dict[str, Any]],
+    candidates_by_table_offset: dict[int, dict[str, Any]],
+    cte_names: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    while start < len(tokens) and _qed_word(tokens[start]) in {"LATERAL", "ONLY"}:
+        start += 1
+    if start >= len(tokens) or tokens[start].kind != "identifier":
+        return None, "star-from-factor-is-not-a-direct-base-table"
+    table_token = tokens[start]
+    if table_token.value is None:
+        return None, "star-from-base-table-name-is-malformed"
+    cursor = start
+    identifiers = [table_token]
+    while (
+        cursor + 2 < len(tokens)
+        and tokens[cursor + 1].kind == "dot"
+        and tokens[cursor + 2].kind == "identifier"
+        and tokens[cursor + 2].depth == table_token.depth
+    ):
+        identifiers.append(tokens[cursor + 2])
+        cursor += 2
+    if len(identifiers) != 1:
+        return None, "star-from-base-table-is-schema-qualified"
+    if table_token.value.casefold() in cte_names:
+        return None, "star-from-base-table-is-shadowed-by-cte"
+    table = tables.get(table_token.value.casefold())
+    if table is None:
+        return None, "star-from-factor-is-not-an-attested-base-table"
+    if cursor + 1 < len(tokens) and tokens[cursor + 1].kind == "open":
+        return None, "star-from-factor-can-be-a-table-function"
+
+    alias_token = table_token
+    next_index = cursor + 1
+    if next_index < len(tokens) and _qed_word(tokens[next_index]) == "AS":
+        if next_index + 1 >= len(tokens):
+            return None, "star-from-base-table-alias-is-missing"
+        possible_alias = tokens[next_index + 1]
+        if possible_alias.kind != "identifier" or possible_alias.value is None:
+            return None, "star-from-base-table-alias-is-malformed"
+        alias_token = possible_alias
+        next_index += 2
+    elif next_index < len(tokens):
+        possible_alias = tokens[next_index]
+        if (
+            possible_alias.kind == "identifier"
+            and possible_alias.value is not None
+            and _qed_word(possible_alias) not in _QED_BARE_FACTOR_ALIAS_BOUNDARIES
+        ):
+            alias_token = possible_alias
+            next_index += 1
+
+    candidate = candidates_by_table_offset.get(table_token.start)
+    if candidate is not None:
+        aliases = candidate["aliases"]
+        if alias_token.start != candidate["aliasToken"].start:
+            return None, "star-from-alias-list-binding-is-inconsistent"
+        output_fields = [
+            {
+                "name": alias.value,
+                "sql": f"{alias_token.text}.{alias.text}",
+            }
+            for alias in aliases
+        ]
+    else:
+        if next_index < len(tokens) and tokens[next_index].kind == "open":
+            return None, "star-from-base-table-has-unattested-column-alias-list"
+        raw_columns = table.get("columns")
+        if not isinstance(raw_columns, list) or not all(
+            isinstance(column, dict) and isinstance(column.get("name"), str)
+            for column in raw_columns
+        ):
+            return None, "star-from-base-table-column-order-is-malformed"
+        output_fields = [
+            {
+                "name": column["name"],
+                "sql": f"{alias_token.text}.{quote_identifier(column['name'])}",
+            }
+            for column in raw_columns
+        ]
+    return (
+        {
+            "table": table_token.value,
+            "alias": alias_token.value,
+            "tableOffset": table_token.start,
+            "outputFields": output_fields,
+        },
+        None,
+    )
+
+
+def _qed_attest_unqualified_star_expansions(
+    sql: str,
+    tokens: list[_QedSqlToken],
+    tables: dict[str, dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    cte_names: set[str],
+    expand_all_attested_stars: bool,
+) -> tuple[list[tuple[int, int, str]], list[dict[str, Any]], dict[str, Any] | None]:
+    """Expand only stars whose complete direct base row is schema-attested."""
+
+    candidates_by_select: dict[int, list[dict[str, Any]]] = {}
+    candidates_by_table_offset = {
+        candidate["tableToken"].start: candidate for candidate in candidates
+    }
+    for candidate in candidates:
+        select_index = _qed_nearest_select_index(
+            tokens, tokens.index(candidate["tableToken"])
+        )
+        if select_index is not None:
+            candidates_by_select.setdefault(select_index, []).append(candidate)
+
+    select_indices = set(candidates_by_select)
+    if expand_all_attested_stars:
+        select_indices.update(
+            index for index, token in enumerate(tokens) if _qed_word(token) == "SELECT"
+        )
+
+    replacements: list[tuple[int, int, str]] = []
+    reports: list[dict[str, Any]] = []
+    for select_index in sorted(select_indices):
+        scope_candidates = candidates_by_select.get(select_index, [])
+        from_index, end_index = _qed_select_from_extent(tokens, select_index)
+        if from_index is None:
+            if not scope_candidates:
+                continue
+            return (
+                [],
+                [],
+                {
+                    "reason": "alias-list-select-scope-has-no-from-clause",
+                    "evidence": {"offset": tokens[select_index].start},
+                },
+            )
+        stars = _qed_unqualified_select_stars(tokens, select_index, from_index)
+        if not stars:
+            continue
+        depth = tokens[select_index].depth
+        if any(
+            token.depth == depth and _qed_word(token) in {"NATURAL", "USING"}
+            for token in tokens[from_index + 1 : end_index]
+        ):
+            if not scope_candidates:
+                continue
+            return (
+                [],
+                [],
+                {
+                    "reason": "unqualified-star-natural-or-using-row-order-is-unsupported",
+                    "evidence": {"offset": tokens[stars[0]].start},
+                },
+            )
+        factor_starts = [from_index + 1]
+        factor_starts.extend(
+            index + 1
+            for index in range(from_index + 1, end_index)
+            if tokens[index].depth == depth
+            and (tokens[index].kind == "comma" or _qed_word(tokens[index]) == "JOIN")
+        )
+        factors: list[dict[str, Any]] = []
+        for start in factor_starts:
+            factor, reason = _qed_star_base_factor(
+                tokens,
+                start,
+                tables,
+                candidates_by_table_offset,
+                cte_names,
+            )
+            if factor is None:
+                if not scope_candidates:
+                    factors = []
+                    break
+                return (
+                    [],
+                    [],
+                    {
+                        "reason": reason,
+                        "evidence": {"offset": tokens[stars[0]].start},
+                    },
+                )
+            factors.append(factor)
+        if not factors:
+            continue
+        factor_offsets = {factor["tableOffset"] for factor in factors}
+        if any(
+            candidate["tableToken"].start not in factor_offsets
+            for candidate in scope_candidates
+        ):
+            return (
+                [],
+                [],
+                {
+                    "reason": "unqualified-star-base-factor-coverage-is-incomplete",
+                    "evidence": {"offset": tokens[stars[0]].start},
+                },
+            )
+        output_fields = [
+            field for factor in factors for field in factor["outputFields"]
+        ]
+        if not output_fields:
+            return (
+                [],
+                [],
+                {
+                    "reason": "unqualified-star-base-row-is-empty",
+                    "evidence": {"offset": tokens[stars[0]].start},
+                },
+            )
+        replacement = ", ".join(field["sql"] for field in output_fields)
+        for star_index in stars:
+            star = tokens[star_index]
+            replacements.append((star.start, star.end, replacement))
+            reports.append(
+                {
+                    "line": sql.count("\n", 0, star.start) + 1,
+                    "sourceSpan": {"start": star.start, "end": star.end},
+                    "sourceText": star.text,
+                    "relationOrder": [
+                        {"table": factor["table"], "alias": factor["alias"]}
+                        for factor in factors
+                    ],
+                    "outputFieldOrder": [field["name"] for field in output_fields],
+                    "replacementSql": replacement,
+                    "semanticContract": (
+                        "replace one unqualified SELECT-list star over only direct, "
+                        "schema-attested base relations with the same qualified "
+                        "fields in FROM/JOIN and source-column order"
+                    ),
+                }
+            )
+    return replacements, reports, None
+
+
+def normalize_qed_base_table_column_alias_lists(
+    sql: str,
+    source_schema_type_authority: dict[str, Any],
+    *,
+    expand_all_attested_stars: bool = False,
+) -> tuple[str, dict[str, Any]]:
+    """Compensate only QED's attested base-column sorting before alias binding.
+
+    SQL table column aliases are positional in source DDL order. QED constructs
+    ``QedTable`` with the same columns sorted by name, so Calcite otherwise binds a
+    generated full alias list to the wrong base columns. The rewrite is admitted only
+    for an exact full base-table list and changes no identifier spelling or reference.
+    """
+
+    if source_schema_type_authority.get("status") != (
+        "verified-ordered-raw-source-schema-types"
+    ):
+        return sql, _qed_alias_order_report(
+            "unsupported", reason="source-schema-order-is-not-attested"
+        )
+    raw_tables = source_schema_type_authority.get("tables")
+    if not isinstance(raw_tables, list):
+        return sql, _qed_alias_order_report(
+            "unsupported", reason="source-schema-table-list-is-malformed"
+        )
+
+    tables: dict[str, dict[str, Any]] = {}
+    for raw_table in raw_tables:
+        if not isinstance(raw_table, dict) or not isinstance(
+            raw_table.get("name"), str
+        ):
+            return sql, _qed_alias_order_report(
+                "unsupported", reason="source-schema-table-is-malformed"
+            )
+        key = raw_table["name"].casefold()
+        if key in tables:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="source-schema-table-name-is-ambiguous",
+                evidence={"table": raw_table["name"]},
+            )
+        tables[key] = raw_table
+
+    tokens, regions = _lex_qed_alias_sql(sql)
+    parens = _qed_matching_token_parens(tokens)
+    cte_names, cte_scan_complete = _qed_cte_names(tokens, parens)
+    candidates: list[dict[str, Any]] = []
+
+    for start, token in enumerate(tokens):
+        if token.kind != "identifier" or token.value is None:
+            continue
+        if not _qed_table_factor_start(tokens, start):
+            continue
+        cursor = start
+        identifiers = [token]
+        while (
+            cursor + 2 < len(tokens)
+            and tokens[cursor + 1].kind == "dot"
+            and tokens[cursor + 2].kind == "identifier"
+            and tokens[cursor + 2].depth == token.depth
+        ):
+            identifiers.append(tokens[cursor + 2])
+            cursor += 2
+        table_token = identifiers[-1]
+        table = tables.get((table_token.value or "").casefold())
+        if table is None:
+            continue
+
+        alias_token: _QedSqlToken | None = None
+        open_index: int | None = None
+        next_index = cursor + 1
+        if next_index < len(tokens) and _qed_word(tokens[next_index]) == "AS":
+            if next_index + 2 < len(tokens):
+                alias_token = tokens[next_index + 1]
+                if (
+                    alias_token.kind == "identifier"
+                    and tokens[next_index + 2].kind == "open"
+                ):
+                    open_index = next_index + 2
+        elif next_index + 1 < len(tokens):
+            possible_alias = tokens[next_index]
+            if (
+                possible_alias.kind == "identifier"
+                and _qed_word(possible_alias) not in _QED_FROM_BOUNDARIES
+                and tokens[next_index + 1].kind == "open"
+            ):
+                alias_token = possible_alias
+                open_index = next_index + 1
+        if alias_token is None or alias_token.value is None or open_index is None:
+            continue
+
+        if len(identifiers) != 1:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="schema-qualified-base-table-alias-list-is-ambiguous",
+                evidence={"tableSql": ".".join(item.text for item in identifiers)},
+            )
+        if not cte_scan_complete:
+            return sql, _qed_alias_order_report(
+                "unsupported", reason="with-scope-could-not-be-attested"
+            )
+        if table_token.value.casefold() in cte_names:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-name-is-shadowed-by-cte",
+                evidence={"table": table_token.value},
+            )
+        close_index = parens.get(open_index)
+        if close_index is None:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-column-alias-list-is-unterminated",
+                evidence={"table": table_token.value, "alias": alias_token.value},
+            )
+        body_start = tokens[open_index].end
+        body_end = tokens[close_index].start
+        if any(
+            region.kind == "comment"
+            and region.start < body_end
+            and region.end > body_start
+            for region in regions
+        ):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-column-alias-list-contains-comment",
+                evidence={"table": table_token.value, "alias": alias_token.value},
+            )
+        aliases = _qed_alias_list_tokens(tokens, open_index, close_index)
+        if aliases is None:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-column-alias-list-is-not-a-simple-identifier-list",
+                evidence={"table": table_token.value, "alias": alias_token.value},
+            )
+        raw_columns = table.get("columns")
+        if not isinstance(raw_columns, list) or not all(
+            isinstance(column, dict) and isinstance(column.get("name"), str)
+            for column in raw_columns
+        ):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="source-schema-column-order-is-malformed",
+                evidence={"table": table_token.value},
+            )
+        source_columns = [column["name"] for column in raw_columns]
+        if any(not name.isascii() for name in source_columns):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="qed-java-column-sort-is-not-attested-for-non-ascii-name",
+                evidence={"table": table_token.value},
+            )
+        if len({name.casefold() for name in source_columns}) != len(source_columns):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="source-schema-column-name-is-ambiguous",
+                evidence={"table": table_token.value},
+            )
+        if len(aliases) != len(source_columns):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-column-alias-list-is-not-full",
+                evidence={
+                    "table": table_token.value,
+                    "alias": alias_token.value,
+                    "sourceColumnCount": len(source_columns),
+                    "aliasCount": len(aliases),
+                },
+            )
+        alias_values = [alias.value for alias in aliases]
+        if len({str(value).casefold() for value in alias_values}) != len(alias_values):
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason="base-table-column-alias-list-is-not-unique",
+                evidence={"table": table_token.value, "alias": alias_token.value},
+            )
+        candidates.append(
+            {
+                "tableToken": table_token,
+                "aliasToken": alias_token,
+                "openToken": tokens[open_index],
+                "closeToken": tokens[close_index],
+                "sourceColumns": source_columns,
+                "aliases": aliases,
+            }
+        )
+
+    duplicate_aliases = [
+        alias
+        for alias, count in Counter(
+            candidate["aliasToken"].value.casefold() for candidate in candidates
+        ).items()
+        if count > 1
+    ]
+    if duplicate_aliases:
+        return sql, _qed_alias_order_report(
+            "unsupported",
+            reason="base-table-alias-is-ambiguous-or-shadowed",
+            evidence={"aliases": sorted(duplicate_aliases)},
+        )
+    if not candidates and not expand_all_attested_stars:
+        return sql, _qed_alias_order_report("not-applicable")
+    for candidate in candidates:
+        problem = _qed_alias_row_observation_problem(tokens, candidate)
+        if problem is not None:
+            return sql, _qed_alias_order_report(
+                "unsupported",
+                reason=problem["reason"],
+                evidence=problem["evidence"],
+            )
+
+    star_replacements, star_expansions, star_problem = (
+        _qed_attest_unqualified_star_expansions(
+            sql,
+            tokens,
+            tables,
+            candidates,
+            cte_names,
+            expand_all_attested_stars,
+        )
+    )
+    if star_problem is not None:
+        return sql, _qed_alias_order_report(
+            "unsupported",
+            reason=star_problem["reason"],
+            evidence=star_problem["evidence"],
+        )
+    if star_expansions and not cte_scan_complete:
+        return sql, _qed_alias_order_report(
+            "unsupported", reason="with-scope-could-not-be-attested-for-star-expansion"
+        )
+    if not candidates and not star_expansions:
+        return sql, _qed_alias_order_report("not-applicable")
+
+    replacements: list[tuple[int, int, str]] = list(star_replacements)
+    transformations: list[dict[str, Any]] = []
+    for candidate in candidates:
+        source_columns = candidate["sourceColumns"]
+        aliases = candidate["aliases"]
+        alias_by_column = dict(zip(source_columns, aliases))
+        qed_columns = sorted(source_columns)
+        reordered = [alias_by_column[column] for column in qed_columns]
+        before_order = [alias.value for alias in aliases]
+        after_order = [alias.value for alias in reordered]
+        changed = before_order != after_order
+        if changed:
+            replacements.append(
+                (
+                    candidate["openToken"].end,
+                    candidate["closeToken"].start,
+                    ", ".join(alias.text for alias in reordered),
+                )
+            )
+        transformations.append(
+            {
+                "table": candidate["tableToken"].value,
+                "tableAlias": candidate["aliasToken"].value,
+                "line": sql.count("\n", 0, candidate["tableToken"].start) + 1,
+                "changed": changed,
+                "sourceColumnOrder": source_columns,
+                "aliasOrderBefore": before_order,
+                "qedColumnOrder": qed_columns,
+                "aliasOrderAfter": after_order,
+            }
+        )
+
+    normalized = sql
+    for start, end, replacement in sorted(replacements, reverse=True):
+        normalized = normalized[:start] + replacement + normalized[end:]
+    alias_changed = any(item["changed"] for item in transformations)
+    status = (
+        "verified-and-reordered"
+        if alias_changed
+        else ("verified-and-star-expanded" if star_expansions else "verified-no-change")
+    )
+    return normalized, _qed_alias_order_report(
+        status,
+        transformations=transformations,
+        star_expansions=star_expansions,
+    )
 
 
 def main() -> int:
@@ -281,14 +1245,28 @@ def materialize_case(
     read_dialect = case.read_dialect or case.benchmark.get("readDialect") or "postgres"
     write_dialect = "postgres"
     adapter = case.benchmark.get("adapter", config["defaults"].get("adapter", "none"))
+    qed_solver_config = solver_materialization_config(case.benchmark, "qed")
+    if qed_solver_config is not None and (
+        qed_solver_config.get("queryPolicy") != _QED_BASE_ALIAS_QUERY_POLICY
+        or qed_solver_config.get("preflight") != _QED_PARSER_PREFLIGHT_POLICY
+    ):
+        raise SolverFrontendConfigurationError(
+            "unknown QED solver materialization policy: "
+            + json.dumps(qed_solver_config, sort_keys=True)
+        )
     raw_statement_counts = {
         "before": count_noncomment_sql_statements(case.before_sql),
         "after": count_noncomment_sql_statements(case.after_sql),
     }
     raw_pair_verified = all(count == 1 for count in raw_statement_counts.values())
+    source_schema_type_authority = build_qed_source_schema_type_authority(
+        case.schema_sql
+    )
 
     with tempfile.TemporaryDirectory(prefix="logos-qed-") as tmp:
         tmp_dir = Path(tmp)
+        before_alias_order: dict[str, Any] | None = None
+        after_alias_order: dict[str, Any] | None = None
         if raw_pair_verified:
             before_sql, before_report = normalize_query(
                 tmp_dir=tmp_dir,
@@ -325,6 +1303,67 @@ def materialize_case(
         if day_arithmetic_report is not None:
             before_report["qedPairCompatibility"] = day_arithmetic_report
             after_report["qedPairCompatibility"] = day_arithmetic_report
+        if raw_pair_verified and qed_solver_config is not None:
+            base_before_sql = before_sql
+            base_after_sql = after_sql
+            before_sql, before_alias_order = (
+                normalize_qed_base_table_column_alias_lists(
+                    base_before_sql, source_schema_type_authority
+                )
+            )
+            after_sql, after_alias_order = normalize_qed_base_table_column_alias_lists(
+                base_after_sql, source_schema_type_authority
+            )
+            pair_alias_boundary_active = any(
+                report.get("status") != "not-applicable"
+                for report in (before_alias_order, after_alias_order)
+            )
+            if pair_alias_boundary_active:
+                before_sql, before_alias_order = (
+                    normalize_qed_base_table_column_alias_lists(
+                        base_before_sql,
+                        source_schema_type_authority,
+                        expand_all_attested_stars=True,
+                    )
+                )
+                after_sql, after_alias_order = (
+                    normalize_qed_base_table_column_alias_lists(
+                        base_after_sql,
+                        source_schema_type_authority,
+                        expand_all_attested_stars=True,
+                    )
+                )
+                pair_activation = {
+                    "status": "activated-for-query-pair",
+                    "queryPolicy": _QED_BASE_ALIAS_QUERY_POLICY,
+                    "preflight": _QED_PARSER_PREFLIGHT_POLICY,
+                    "reason": (
+                        "at least one query side contains an attested base-table "
+                        "column-alias list"
+                    ),
+                    "unqualifiedStarPolicy": (
+                        "expand only complete direct schema-attested base rows on "
+                        "both sides; leave unrelated unattested star scopes unchanged"
+                    ),
+                }
+                for report in (before_alias_order, after_alias_order):
+                    if report.get("status") != "not-applicable":
+                        report["pairBoundaryActivation"] = pair_activation
+        elif qed_solver_config is not None:
+            before_alias_order = _qed_alias_order_report(
+                "skipped", reason="raw-query-side-statement-count-is-not-one"
+            )
+            after_alias_order = dict(before_alias_order)
+        if before_alias_order is not None and before_alias_order.get("status") not in {
+            "not-applicable",
+            "skipped",
+        }:
+            before_report["qedBaseTableColumnAliasOrder"] = before_alias_order
+        if after_alias_order is not None and after_alias_order.get("status") not in {
+            "not-applicable",
+            "skipped",
+        }:
+            after_report["qedBaseTableColumnAliasOrder"] = after_alias_order
         quote_schema_identifiers = (
             adapter == "sqlglot" or benchmark_id == "wetune-issues"
         )
@@ -348,6 +1387,10 @@ def materialize_case(
     }
     pair_verified = raw_pair_verified and all(
         count == 1 for count in normalized_statement_counts.values()
+    )
+    alias_order_verified = all(
+        report is None or report.get("status") != "unsupported"
+        for report in (before_alias_order, after_alias_order)
     )
     pair_statement_attestation = {
         "status": (
@@ -376,7 +1419,7 @@ def materialize_case(
     qed_input_sha256 = sha256_path(case_dir / "qed.sql")
 
     fallback = None
-    if pair_verified and relaxed_schema_sql != schema_sql:
+    if pair_verified and alias_order_verified and relaxed_schema_sql != schema_sql:
         fallback_sql = patch_qed_interval_precision(
             relaxed_schema_sql
             + "\n"
@@ -398,7 +1441,7 @@ def materialize_case(
             "constraintCoverage": relaxed_constraint_coverage,
         }
 
-    parser_allowed = not skip_parser and pair_verified
+    parser_allowed = not skip_parser and pair_verified and alias_order_verified
     if not pair_verified:
         parser_status = {
             "skipped": True,
@@ -411,6 +1454,35 @@ def materialize_case(
                 "QED requires exactly one query statement on each source side: "
                 f"raw={raw_statement_counts!r}, "
                 f"normalized={normalized_statement_counts!r}"
+            ),
+        }
+    elif not alias_order_verified:
+        failed_sides = [
+            {
+                "side": side,
+                "reason": report.get("reason"),
+                "evidence": report.get("evidence"),
+            }
+            for side, report in (
+                ("before", before_alias_order),
+                ("after", after_alias_order),
+            )
+            if report.get("status") == "unsupported"
+        ]
+        parser_status = {
+            "skipped": True,
+            "jsonExists": False,
+            "frontendNormalization": {
+                "status": "unsupported",
+                "kind": "qed-base-table-column-alias-order",
+                "failedSides": failed_sides,
+            },
+        }
+        parser_problem = {
+            "kind": "unsafe-base-table-column-alias-list",
+            "message": (
+                "QED base-table column-alias ordering could not be attested: "
+                + json.dumps(failed_sides, sort_keys=True)
             ),
         }
     elif skip_parser:
@@ -788,7 +1860,7 @@ def materialize_case(
         parser_status["jsonExists"] = False
     status = (
         "parser-error"
-        if not pair_verified
+        if not pair_verified or not alias_order_verified
         else (
             "not-parsed"
             if skip_parser
@@ -809,9 +1881,7 @@ def materialize_case(
                 "status": status,
                 "qedInput": "qed.sql",
                 "qedInputSha256": qed_input_sha256,
-                "sourceSchemaTypeAuthority": build_qed_source_schema_type_authority(
-                    case.schema_sql
-                ),
+                "sourceSchemaTypeAuthority": source_schema_type_authority,
                 "qedPairStatementAttestation": pair_statement_attestation,
                 "qedJson": "qed.json" if (case_dir / "qed.json").exists() else None,
                 "activeQEDVariant": active_variant,
@@ -1943,6 +3013,22 @@ def validate_qed_input_bindings(
             raise QedJsonValidationError(
                 "QED raw source schema type authority is stale or malformed"
             )
+    normalization = metadata.get("normalizationForSolverRun")
+    if isinstance(normalization, dict):
+        for side in ("before", "after"):
+            side_report = normalization.get(side)
+            alias_report = (
+                side_report.get("qedBaseTableColumnAliasOrder")
+                if isinstance(side_report, dict)
+                else None
+            )
+            if isinstance(alias_report, dict) and alias_report.get("status") == (
+                "unsupported"
+            ):
+                raise QedJsonValidationError(
+                    "QED base-table column-alias ordering is unsupported on "
+                    f"{side}: {alias_report.get('reason')}"
+                )
 
     def attest_file(name: Any, expected: Any, label: str) -> dict[str, str]:
         if (

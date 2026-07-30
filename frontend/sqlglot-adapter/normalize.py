@@ -132,6 +132,22 @@ class AliasStyleNormalizationError(Exception):
         }
 
 
+class OrderAliasNormalizationError(Exception):
+    def __init__(self, code: str, message: str, **details: Any) -> None:
+        super().__init__(message)
+        self.code = code
+        self.details = details
+
+    def report_entry(self) -> dict:
+        return {
+            "stage": "postgres_order_alias_expression",
+            "type": type(self).__name__,
+            "code": self.code,
+            "message": str(self),
+            **self.details,
+        }
+
+
 class IdentifierFoldingError(Exception):
     def __init__(self, code: str, message: str, **details: Any) -> None:
         super().__init__(message)
@@ -871,6 +887,161 @@ def preserve_postgres_implicit_alias_style(
     return preserved
 
 
+_REPEATABLE_ORDER_ALIAS_NODES = (
+    exp.Add,
+    exp.Column,
+    exp.Grouping,
+    exp.Identifier,
+    exp.Literal,
+    exp.Paren,
+    exp.Sub,
+)
+
+
+def _nearest_select(expression: exp.Expression) -> exp.Select | None:
+    ancestor = expression.parent
+    while ancestor is not None:
+        if isinstance(ancestor, exp.Select):
+            return ancestor
+        ancestor = ancestor.parent
+    return None
+
+
+def _repeatable_order_alias_expression(expression: exp.Expression) -> bool:
+    """Whether duplicating an output expression in ORDER BY is conservative.
+
+    The TPC-DS ``ansi.tpl`` profile uses a same-level output alias inside a
+    CASE sort key. PostgreSQL and T-SQL reject that scope, while Calcite expands
+    the alias. Keep this bridge deliberately narrower than general alias
+    substitution: the admitted tree is pure GROUPING arithmetic over columns
+    and literals, so expansion cannot duplicate a volatile call, subquery,
+    window, aggregate finalization, or new runtime-error path.
+    """
+
+    return all(
+        isinstance(node, _REPEATABLE_ORDER_ALIAS_NODES) for node in expression.walk()
+    )
+
+
+def expand_postgres_order_alias_expressions(
+    generated_statements: list[str],
+    *,
+    identify: bool,
+    pretty: bool,
+    normalizations: list[dict],
+) -> list[str]:
+    """Expand non-standalone ORDER BY alias references for PostgreSQL.
+
+    PostgreSQL permits ``ORDER BY output_alias`` but not an output alias nested
+    in an expression such as ``ORDER BY CASE WHEN output_alias = 0 ...``.
+    Calcite accepts the TPC-DS generator form by substituting the aliased
+    expression. Reproduce exactly that substitution for the closed,
+    repeatable expression subset above.
+    """
+
+    writer = Dialect.get_or_raise(CalcitePostgres)
+    rewritten = []
+    for statement_index, generated_sql in enumerate(generated_statements, start=1):
+        try:
+            statement = sqlglot.parse_one(generated_sql, read="postgres")
+        except Exception as exc:
+            raise OrderAliasNormalizationError(
+                "generated_reparse_failed",
+                "generated PostgreSQL statement could not be reparsed for ORDER BY alias expansion",
+                statement=statement_index,
+                parserErrorType=type(exc).__name__,
+                parserError=str(exc),
+            ) from exc
+
+        statement_changed = False
+        for select_index, select in enumerate(statement.find_all(exp.Select), start=1):
+            aliases: dict[str, exp.Expression] = {}
+            duplicate_aliases: set[str] = set()
+            for projection in select.expressions:
+                if not isinstance(projection, exp.Alias):
+                    continue
+                identifier = projection.args.get("alias")
+                if not isinstance(identifier, exp.Identifier):
+                    continue
+                alias_name = _postgres_identifier_name(identifier)
+                if alias_name in aliases:
+                    duplicate_aliases.add(alias_name)
+                aliases[alias_name] = projection.this
+
+            order = select.args.get("order")
+            if not isinstance(order, exp.Order):
+                continue
+            for order_index, ordered in enumerate(order.expressions, start=1):
+                order_expression = ordered.this
+                if not isinstance(order_expression, exp.Expression):
+                    continue
+                # A standalone output alias is legal PostgreSQL and must remain
+                # an alias reference rather than duplicate its computation.
+                if (
+                    isinstance(order_expression, exp.Column)
+                    and not order_expression.table
+                ):
+                    continue
+
+                before = order_expression.sql(dialect="postgres")
+                expanded_aliases = []
+                for column in list(order_expression.find_all(exp.Column)):
+                    if column.table or _nearest_select(column) is not select:
+                        continue
+                    identifier = column.this
+                    if not isinstance(identifier, exp.Identifier):
+                        continue
+                    alias_name = _postgres_identifier_name(identifier)
+                    alias_expression = aliases.get(alias_name)
+                    if alias_expression is None:
+                        continue
+                    if alias_name in duplicate_aliases:
+                        raise OrderAliasNormalizationError(
+                            "ambiguous_output_alias",
+                            "ORDER BY expression refers to a duplicate output alias",
+                            statement=statement_index,
+                            select=select_index,
+                            orderItem=order_index,
+                            alias=alias_name,
+                        )
+                    if not _repeatable_order_alias_expression(alias_expression):
+                        raise OrderAliasNormalizationError(
+                            "order_alias_expression_not_repeatable",
+                            "ORDER BY alias expansion would duplicate an expression outside the admitted deterministic subset",
+                            statement=statement_index,
+                            select=select_index,
+                            orderItem=order_index,
+                            alias=alias_name,
+                            aliasExpression=alias_expression.sql(dialect="postgres"),
+                        )
+                    column.replace(exp.Paren(this=alias_expression.copy()))
+                    expanded_aliases.append(alias_name)
+
+                if expanded_aliases:
+                    statement_changed = True
+                    normalizations.append(
+                        {
+                            "kind": "postgres_order_alias_expression",
+                            "statement": statement_index,
+                            "select": select_index,
+                            "orderItem": order_index,
+                            "aliases": expanded_aliases,
+                            "source": before,
+                            "target": order_expression.sql(dialect="postgres"),
+                        }
+                    )
+
+        if statement_changed:
+            generated_sql = writer.generate(
+                statement,
+                copy=False,
+                identify=identify,
+                pretty=pretty,
+            )
+        rewritten.append(generated_sql)
+    return rewritten
+
+
 def normalize_sql(
     sql: str,
     read: str,
@@ -937,6 +1108,17 @@ def normalize_sql(
         return "", report
 
     effective_statements = [stmt.strip() for stmt in statements if is_effective_statement(stmt)]
+    if apply_patches and read.lower() == "tsql" and write.lower() == "postgres":
+        try:
+            effective_statements = expand_postgres_order_alias_expressions(
+                effective_statements,
+                identify=identify,
+                pretty=pretty,
+                normalizations=normalizations,
+            )
+        except OrderAliasNormalizationError as exc:
+            report["errors"].append(exc.report_entry())
+            return "", report
     if read.lower() == "postgres" and write.lower() == "postgres":
         try:
             effective_statements = preserve_postgres_implicit_alias_style(

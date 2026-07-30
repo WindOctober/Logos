@@ -1,4 +1,4 @@
-.PHONY: submodules check-rocq-env formal-sql formal-sql-catalog smoke logos-formal-sql-lemmas logos-formal-sql-checks calcite-ir status
+.PHONY: submodules check-rocq-env formal-sql formal-sql-catalog smoke logos-formal-sql-lemmas logos-formal-sql-checks trusted-rocq-sandbox-test calcite-ir calcite-wrapper-tests sqlglot-adapter-tests materializer-tests frontend-tests status
 
 OPAM ?= opam
 ROCQ_OPAM_SWITCH ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH),$(CURDIR)/.opam-rocq)
@@ -6,6 +6,8 @@ OPAM_SWITCH := $(ROCQ_OPAM_SWITCH)
 ROCQLIB ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH)/_opam/lib/coq,)
 COQLIB ?= $(ROCQLIB)
 OCAMLFIND_CONF ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH)/_opam/lib/findlib.conf,)
+MAVEN ?= $(if $(wildcard $(CURDIR)/.cache/apache-maven-3.9.11/bin/mvn),$(CURDIR)/.cache/apache-maven-3.9.11/bin/mvn,mvn)
+SQLGLOT_PYTHON ?= $(if $(wildcard $(CURDIR)/.cache/sqlglot-venv/bin/python),$(CURDIR)/.cache/sqlglot-venv/bin/python,python3)
 FORMALSQL_DIR := vendor/FormalSQL
 FORMALSQL_SRC := $(FORMALSQL_DIR)/src
 ROCQ_ENV := ROCQLIB=$(ROCQLIB) COQLIB=$(COQLIB) OCAMLFIND_CONF=$(OCAMLFIND_CONF)
@@ -113,8 +115,23 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FilterFkEliminationRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/Smoke.v
 
+trusted-rocq-sandbox-test: logos-formal-sql-lemmas
+	LOGOS_ROCQ_OPAM_SWITCH=$(OPAM_SWITCH) bash crates/logos-solver/scripts/test-trusted-rocq-check-sandbox.sh
+
 calcite-ir:
 	scripts/calcite-ir-sqlglot --schema frontend/calcite-wrapper/examples/schema.sql --sql frontend/calcite-wrapper/examples/query.sql --read postgres
+
+calcite-wrapper-tests:
+	cd frontend/calcite-wrapper && $(MAVEN) -q test
+	RUST_MIN_STACK=67108864 CARGO_BUILD_JOBS=4 cargo test -p logos-ir --test calcite_wrapper -- --ignored --test-threads=1
+
+sqlglot-adapter-tests:
+	$(SQLGLOT_PYTHON) -m unittest discover -s frontend/sqlglot-adapter -p 'test_*.py'
+
+materializer-tests:
+	python3 -m unittest discover -s benchmarks/adapters/materializers -p 'test_*.py'
+
+frontend-tests: calcite-wrapper-tests sqlglot-adapter-tests materializer-tests
 
 status:
 	git submodule status

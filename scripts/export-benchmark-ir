@@ -532,6 +532,7 @@ def build_metadata(config: dict[str, Any], case: Case) -> dict[str, Any]:
         "sourceBenchmark": benchmark["id"],
         "sourceCase": case.case_id,
         "source": case.source_metadata,
+        "sourceSchemaSha256": hashlib.sha256(case.schema_sql.encode()).hexdigest(),
         "schemaScope": benchmark["schemaScope"],
         "constraintScope": benchmark.get("constraintScope", "none"),
         "constraints": case.constraints,

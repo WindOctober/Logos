@@ -52,17 +52,60 @@ baselines without executing SQLSolver.
 ## Cosette Frontend Profile
 
 The generated Cosette profile is a frontend-compatibility profile over
-Cosette's public DSL, not a SQL normalizer. The adapter emits each query without
-semantic rewrites: it does not fold expressions, reassociate joins, qualify
-names, remove ordering, or otherwise rewrite PostgreSQL semantics into Cosette
-syntax. Before DSL embedding, shared protected-aware lexical normalization
-removes comments, compacts structural whitespace, and strips one structural
-trailing semicolon while leaving protected text unchanged.
+Cosette's public DSL, not a general SQL normalizer. Before DSL embedding, shared
+protected-aware lexical normalization removes comments, compacts structural
+whitespace, and strips one structural trailing semicolon while leaving
+protected text unchanged. A query may be reserialized from its exact generated
+Calcite tree only after the tree's embedded SQL and schema are bound to the
+current materialized case by content and digest.
 
-`benchmarks/adapters/materializers/materialize_cosette.py` admits only the
-unmodified overlap with Cosette's narrow parser and scalar model. Protected
-SQL regions are excluded from feature detection. Every case is still emitted
-for an auditable tool run. `metadata.json` reports two independent axes:
+`benchmarks/adapters/materializers/materialize_cosette.py` admits the
+unmodified parser overlap plus a closed set of attested compatibility
+lowerings. The ordinary bridge handles scans, inner products/joins, filters,
+projects, and ordinary grouping over a small typed Rex surface. An exact
+branch-wise compiler covers `Project`/inner-join/scan trees joined by
+`UNION ALL`, including exact product distribution; four additional rules cover
+grouped unobserved LEFT JOIN elimination, contradictory
+integer INTERSECT, error-free FETCH 0, and a singleton VALUES constant group
+key. A pair-level checker also recognizes base-relation occurrence renaming,
+inner join/conjunct order, duplicate predicates, simple equality closure,
+redundant strict integer bounds, GROUP BY key order, and a closed set of exact
+paired `WHERE` TRUE-acceptance identities over fixed-width integer fields. The
+last comparison is deliberately weaker than scalar Boolean equality: it may
+identify `FALSE` and `UNKNOWN` only because both reject a row at that exact
+filter site. A separate direct
+Project-over-equality-Filter rule substitutes a typed integer constant only
+after proving that the filter accepted the row and that every folded arithmetic
+result remains in range. A closed preprocessing layer additionally handles a
+small set of direct-field Boolean forms in `WHERE` or `INNER JOIN` matching:
+NULL partitions, comparison-implied non-NULL tests, equality to a non-NULL
+literal, finite two-integer exclusion searches, and selected error-free
+searched-`CASE` forms. Direct, error-free n-ary `AND`/`OR` trees may also be
+reassociated without changing operand order. These are TRUE-acceptance rewrites
+only; they are never applied to a predicate returned by `SELECT`. A directly
+adjacent null-rejecting filter may strengthen a LEFT or RIGHT join to INNER, or
+a FULL join when it rejects null extension from both sides. Under an explicit
+bag observation, a sort with no `OFFSET`/`FETCH` may be erased over direct
+base-scan keys, or at the root over fixed-width integer aggregate outputs,
+provided no ancestor consumes that order for a slice. The aggregate itself is
+still evaluated. The bridge does not use NULL-sensitive self-join elimination,
+general inequality reasoning, unmatched-row-preserving outer-join laws, or
+slicing laws, and it never moves unresolved checked arithmetic across a
+join/filter boundary. String trichotomy remains rejected because the bridge
+has no shared collation contract, even when one concrete PostgreSQL query would
+make the law valid.
+
+Every applied rule records its exact IR/schema/SQL digests and side conditions
+under `compatibilityLowering`; unknown trees and failed obligations retain the
+source query unchanged. Rewrites involving `CASE`, NULL, or Boolean-test nodes
+also carry an exact before/after Rex rewrite-site inventory. The source waiver
+is granted only when source occurrence counts equal the bound IR inventory and
+no risky node remains after preprocessing. Protected SQL regions are excluded
+from feature detection. Every case is still emitted for an auditable tool run.
+`metadata.json` binds the artifact and all three source inputs with
+`cosetteFileSha256`, `sourceSchemaSha256`, `sourceSql1Sha256`, and
+`sourceSql2Sha256`; the runner rejects a changed `case.cos` before execution.
+It also reports two independent axes:
 `syntaxCompatibility` covers the parser surface, while
 `semanticProfileCompatibility` covers source constraints, SQL NULL behavior,
 type lowering, and runtime-error/overflow semantics. Their blocker lists are
@@ -73,15 +116,22 @@ only for generated-profile compatibility.
 Call admission is closed: only unqualified `SUM`, `COUNT`, `MAX`, and `MIN`
 over one simple unquoted column path, plus `COUNT(*)`, are classified as
 compatible. Every other unprotected call name or aggregate form is flagged.
+Parser acceptance alone is not sufficient: for example, a filtered branch of
+`UNION ALL` remains flagged because the pinned public Rosette backend fails
+that shape (`rosSelectList`) even though its front end parses it. Likewise, the
+materializer does not move group-key `HAVING` below aggregation or replace
+`EXISTS` over a global `COUNT(*)` with `TRUE`, because either rewrite could
+avoid an aggregate overflow that PostgreSQL would have raised.
 
-Conservatively flagged constructs include CTEs, joins outside the admitted
-comma-product surface, derived relations, `VALUES`, duplicate-eliminating set
-operations, window and grouping-set syntax, `CASE`, `CAST`, SQL `NULL` and
-three-valued predicates, unsupported comparisons and functions, date/interval
-and decimal values, checked integer arithmetic, literal or subquery `IN`,
-`BETWEEN`, `ORDER BY`, and row slicing. These forms remain byte-present so
-runtime errors, type resolution, grouping ordinals, and predicate precedence
-cannot be erased by an unproved textual rewrite.
+Outside those exact patterns, conservatively flagged constructs include CTEs,
+outer joins, general `VALUES` and duplicate-eliminating set operations, window
+and grouping-set syntax, general `CASE`, non-identity `CAST`, unclosed SQL NULL
+and three-valued predicates, unsupported comparisons and functions,
+date/interval and decimal values, checked integer arithmetic without
+pair-identical error paths, general literal or subquery `IN`, `BETWEEN`,
+observable ordering, and row slicing. These forms remain byte-present so
+runtime errors, type resolution, grouping ordinals, collation, and predicate
+precedence cannot be erased by an unproved rewrite.
 
 ## Benchmark Semantics
 
@@ -112,7 +162,48 @@ one JSON line -> one schema/constraint environment -> one query pair
 
 Different lines may reuse the same schema, but consumers should not assume a single global schema for the whole file. When generating solver inputs, the schema must be reconstructed from the `schema` field of the same JSON line as the query pair, and supported constraints should be translated from the same line's `constraint` field.
 
+The generated SQLSolver metadata normalizes an absent or JSON `null` constraint
+array to `[]` and records an `integrityContract` source list. Logos treats the
+parser-facing `schema.sql` and, for pair-scoped inputs, the adjacent
+`metadata.json#/constraints` value as one authoritative contract. Pair-level
+constraints are therefore not lost merely because SQLSolver itself reads only
+its narrower DDL file.
+
 The `literature` subset contains compact rewrite examples from prior query-equivalence literature. The `calcite` subset contains rewrite examples derived from Apache Calcite optimizer tests.
+
+The common PostgreSQL execution profile preserves the raw Calcite benchmark and
+materializes coercions only after exact generated Calcite IR is available. Each
+rewrite must match the case metadata, source-schema digest, query text, and an
+inclusive Calcite source span; stale, overlapping, or unsupported evidence
+fails closed. The materialized case metadata records the IR digest and every inserted cast under
+`calciteCoercionMaterialization`.
+
+The current 236-case audit requires two closed rewrite classes. Validator Rex
+casts restore `NULL` result domains in `calcite-2` and the `VARCHAR`-to-`INTEGER`
+comparisons in `calcite-133`, which PostgreSQL otherwise rejects. Aggregate
+result casts align PostgreSQL's `SUM(BIGINT) -> NUMERIC` and
+`AVG`/`STDDEV`/`VARIANCE(INTEGER) -> NUMERIC` signatures with the observable
+types attested by Calcite. The affected aggregate cases are `calcite-2`,
+`calcite-54`, `calcite-79`, `calcite-97`, `calcite-104`, `calcite-174`,
+`calcite-175`, `calcite-176`, `calcite-202`, `calcite-212`, `calcite-219`,
+`calcite-232`, `calcite-234`, and `calcite-276`. Common-subexpression
+elimination may map several source aggregate occurrences to one Calcite call;
+all exactly matching source occurrences are rewritten. These 15 affected cases
+form the targeted rerun cohort after any in-flight campaign using the previous
+generated inputs has finished.
+
+No other value- or typmod-changing implicit Rex cast occurs in this retained
+Calcite subset; 35 additional Rex casts change only Calcite nullability and are
+not emitted as SQL. Bare `NULL` output columns remain unresolved rather than
+being assigned an invented domain. The coercion pass also does not rewrite
+`calcite-9` (ambiguous output `ORDER BY`), `calcite-158` (multi-argument
+`COUNT(DISTINCT ...)`), `calcite-209`/`calcite-343` (ambiguous unqualified
+columns), or `calcite-246` (`SINGLE_VALUE` is absent from PostgreSQL); these are
+separate syntax/name-resolution gaps. Future row, collection, collation,
+time-zone, or same-base typmod coercions require new exact IR-backed rules and
+remain fail-closed until implemented. Aggregate casts align observable result
+types for the PostgreSQL validation profile; they do not claim to reproduce a
+separate Calcite runtime's internal accumulator implementation.
 
 Only the standard-SQL subset is vendored here. Tool-specific VeriEQL inputs were removed, including symbolic predicates such as `B1(x)`, Calcite-internal dollar identifiers such as `$cor0.$f`, unquoted reserved identifiers such as `USER` and `YEAR`, and cases rejected by Calcite's standard SQL parser/validator as ambiguous or malformed. The upstream files originally contained 64 literature pairs and 397 Calcite pairs; this benchmark seed keeps 30 literature pairs and 236 Calcite pairs.
 
@@ -218,7 +309,7 @@ So TPC-DS variants are also **workload-level schema**:
 TPC-DS schema -> 14 base/variant query pairs
 ```
 
-The variants include rewrites such as manual `ROLLUP` expansion, `EXISTS`/`UNION ALL` rewrites, and window-function rewrites. The generated SQL may include dialect features such as `TOP`, `ROLLUP`, `GROUPING`, window functions, `FULL OUTER JOIN`, and `INTERSECT`; solver runners should consult `manifest.tsv` and normalize unsupported dialect constructs before invoking a solver.
+The variants include rewrites such as manual `ROLLUP` expansion, `EXISTS`/`UNION ALL` rewrites, and window-function rewrites. The generated SQL may include dialect features such as `TOP`, `ROLLUP`, `GROUPING`, window functions, `FULL OUTER JOIN`, and `INTERSECT`; solver runners should consult `manifest.tsv` and normalize unsupported dialect constructs before invoking a solver. For `query036`, `query070`, and `query086`, PostgreSQL materialization expands the kit's same-level `lochierarchy` alias inside `ORDER BY CASE` back to its exact `GROUPING` expression; the case-local normalization report records every such site.
 
 ### WeTune Issues
 
@@ -283,9 +374,73 @@ wetune/schemas/core/<app_name>.opt.schema.constraints.json
 
 The sidecar records each column's original declaration, original source type, nullability, default, generated/auto-increment flags, and the parser-facing lowered type. It also preserves semantic constraints that baseline DDL parsers do not uniformly accept, such as `FOREIGN KEY`, `CHECK`, and partial or expression unique indexes. Dump/runtime DDL such as `SET`, `CREATE EXTENSION`, `CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP TABLE`, ordinary non-unique indexes, table storage options, and MySQL versioned comments is stripped because it does not define the query-pair schema semantics.
 
-For a semantics-preserving benchmark interpretation, consumers must treat the normalized `*.schema.sql` file and its `*.schema.constraints.json` sidecar as one schema environment. If a baseline solver cannot consume the sidecar column types or constraints, that is recorded as a frontend/tool limitation rather than removed from the benchmark semantics.
+Consumers that claim fidelity to the raw source schema must reconcile the normalized
+`*.schema.sql` file with the raw-type audit fields and constraints in its
+`*.schema.constraints.json` sidecar. The frozen generated SQLSolver campaign described
+below intentionally makes a narrower claim: normalized DDL is its type authority, while
+the selected sidecar is authoritative only for integrity declarations.
 
 The current schema subset contains only the applications referenced by `issues.tsv`, not the full WeTune schema collection.
+
+## Independent Logos Materialization
+
+Logos has its own generated profile, separate from every external solver
+frontend:
+
+```bash
+benchmarks/scripts/materialize --tool logos --target all --force
+```
+
+The case layout is:
+
+```text
+benchmarks/core/.generated/logos/wetune-issues/<issue-id>/
+benchmarks/core/.generated/logos/nonwetune-flat/<benchmark>__<case>/
+  schema.sql
+  sql1.sql
+  sql2.sql
+  metadata.json
+```
+
+For the frozen 59-case R-Bot corpus, all three SQL files are byte-identical to
+the manifest-bound core schema/source/target files. In particular, PostgreSQL
+identifier delimiters are retained: `query075` keeps `AS "year"` rather than
+passing through the SQLSolver delimiter-elision policy. `metadata.json` records
+the manifest digest, each exact input and output digest, an empty `repairs`
+array, and the three files used as Calcite authority inputs. The materializer
+does not call an external solver preprocessor, parser, planner, or admission
+gate. The manifest itself is pinned to its campaign-launch digest, and any
+manifest, source, or target digest mismatch fails closed. The DSB and TPC-H
+schemas are independently pinned to
+`805a1b08edf45fee0326efca6056ca881d92a00969e102fe731cf0781d24c0ea` and
+`4fc33b97f09b573d748179f6a0a4d049f8d5057c7919ce2c163bb80e1af23eef`.
+Before writing any R-Bot output, including a filtered developer run, the
+materializer validates the exact exported 59-case superset and every frozen
+schema/query digest. The canonical runner and Rust integrity loader then
+independently revalidate adjacent files, identities, manifest/input hashes,
+empty repairs, and Calcite authority bindings. Borrowed or jointly rewritten
+metadata cannot establish a replacement authority.
+
+Existing non-R-Bot inputs are an intentional byte regression boundary. The
+Logos materializer regenerates their campaign-start representation from core
+sources with a frozen compatibility renderer; it does not copy the old
+`.generated/sqlsolver` tree at runtime. Historical SQLSolver-spelled metadata
+values remain only where changing `metadata.json` would violate that byte
+contract. The one frozen Calcite coercion class is a one-operand implicit
+`VARCHAR`-to-`INTEGER` cast bound to the current authority metadata, embedded
+query, exact source node span, and source text. Unsupported or stale evidence
+fails closed.
+
+An exhaustive scratch regeneration can enforce all 1,320 non-R-Bot hashes:
+
+```bash
+benchmarks/scripts/materialize \
+  --tool logos \
+  --target all \
+  --output-root <fresh-scratch-root> \
+  --force \
+  --verify-non-rbot-baseline
+```
 
 SQLSolver has a narrower SQL frontend than Calcite and QED: it does not accept quoted
 identifiers, and several ordinary application column names are reserved by its grammar
@@ -306,14 +461,30 @@ benchmarks/core/.generated/sqlsolver/wetune-issues/<issue-id>/
   metadata.json
 ```
 
-The SQLSolver profile is a semantics-preserving frontend adaptation. It first normalizes
+The frozen SQLSolver campaign is a normalized benchmark profile. It first normalizes
 each query with the same per-application SQLGlot reader as the Calcite ingestion path,
 then consistently alpha-renames unsafe table and column identifiers in both the full
 application core schema and the two queries. `metadata.json` records the source issue,
 read dialect, materialized tables, semantic constraint counts, and every identifier
-rename. SQLSolver's DDL frontend does not support the full constraint vocabulary, so
-foreign keys and checks remain in the benchmark sidecar metadata instead of being
-lowered into SQLSolver's input DDL.
+rename. SQLSolver's DDL frontend does not support the full constraint vocabulary, so its
+`schema.sql` remains a frontend-compatible subset and SQLSolver alone does not enforce
+the omitted forms. For Logos, `metadata.json.integrityContract` selects exactly the
+`<app_name>.base.schema.constraints.json` sidecar together with
+`metadata.json#/renamedIdentifiers` as the integrity source. The Logos loader consumes
+ordinary unique keys, foreign keys, checks, and partial or expression unique indexes
+from that source; these forms are not reimplemented by the materializer and are not
+silently discarded.
+
+This frozen generated profile deliberately distinguishes type authority from integrity
+declaration authority. Every WeTune `metadata.json` records
+`typeAuthority: "parser_facing_normalized_ddl"` and
+`sidecarAuthority: "integrity_declarations_only"`. It also copies the sidecar's exact
+`semanticSchema.typeSemantics` raw-source statement into
+`sidecarRawTypeSemantics`, with `sidecarRawTypeSemanticsDisposition` set to
+`"preserved_for_audit_but_overridden_by_typeAuthority"`. Thus the statement
+remains auditable, but the generated campaign uses the normalized parser-facing DDL for
+column types and uses the selected sidecar only for integrity declarations. This profile
+does not claim fidelity to the raw WeTune source types.
 
 The materializer also audits type lowerings against the actual query text. It records
 observed lowerings in each case's `metadata.json`, including lowerings that may be
@@ -368,12 +539,32 @@ benchmarks/core/.generated/sqlsolver/nonwetune-flat/<benchmark>__<case>/
   metadata.json
 ```
 
-The materializer follows the same query adapter policy as the Calcite IR ingestion
-config. In addition, it lowers each case's schema DDL through SQLGlot into MySQL
-syntax for SQLSolver's schema parser. This is a DDL frontend adaptation: for
-example, unbounded `VARCHAR` declarations are emitted as MySQL `TEXT` rather than
-`VARCHAR(255)`, so the generated schema does not introduce an artificial string
-length bound.
+Calcite ingestion and solver materialization are separate boundaries. The
+ingestion `adapter` still controls the first normalization, but it is never used
+as evidence that a target solver needs no further frontend work. A benchmark may
+declare a target-specific `solverMaterialization.sqlsolver` policy. The R-Bot
+policy removes double-quote delimiters only from complete ASCII lowercase
+non-keyword identifiers under PostgreSQL's lowercase-folding rule. It neither
+renames identifiers nor changes their spelling, so qualifications, correlated
+bindings, output labels, aggregate expressions, and `ORDER BY` alias references
+remain identical. Whitespace/`$`/case-sensitive/reserved identifiers stay quoted
+and make the pair `Unsupport`, because SQLSolver rewrites those quotes as string
+quotes and has no sound alternate delimiter for them.
+
+Every enabled query-side transformation is recorded under
+`normalizationForSolverRun.<side>.solverBoundary`, including its rule, affected
+identifier counts, input/output digests, residual preservation obligations, and
+protected-layout normalization. The materializer then invokes
+`benchmarks/scripts/sqlsolver-preflight`, which mirrors SQLSolver's actual
+preprocess, parser, validator, and relational planner and stops before proof
+search. `solverFrontendPreflight` distinguishes materialization preservation
+failure and target parser/validator/planner unsupported from a prover result;
+only `status=ready` permits submission to the prover.
+
+Schemas are independently lowered through SQLGlot into MySQL syntax for
+SQLSolver's DDL parser. This is a DDL frontend adaptation: for example, unbounded
+`VARCHAR` declarations are emitted as MySQL `TEXT` rather than `VARCHAR(255)`, so
+the generated schema does not introduce an artificial string length bound.
 
 To regenerate both SQLSolver benchmark subsets from one benchmark-facing entrypoint,
 run:
@@ -418,11 +609,70 @@ recorded. Foreign keys, unattested checks, and nullable unique keys are likewise
 `constraintCompatibility` records every conservative relaxation. Calcite/QED interval
 precision spelling is patched where needed.
 
+QED-specific query normalization is enabled only by an explicit
+`solverMaterialization.qed` policy; absence keeps the historical output path
+byte-for-byte unchanged. For an exact, unique, full positional base-table
+column-alias list, the policy reorders aliases into QED's lexicographically
+sorted base-column order while preserving each source-column-to-alias binding.
+If either query side activates the policy, an unqualified SELECT-list star is
+expanded pairwise only over a complete row of direct schema-attested base
+relations, in source `FROM`/column order. Qualified alias stars, whole-row uses,
+partial or ambiguous lists, CTE shadowing, and derived/NATURAL/USING star scopes
+fail closed. Every admitted reorder and star expansion is recorded under
+`normalizationForSolverRun.<side>.qedBaseTableColumnAliasOrder`, then the actual
+QED parser/planner performs the frontend preflight.
+
+The runner always tries that complete-row `qed.sql` first. If QED's name-sorted
+table representation makes a relational star disagree with an explicit
+source-order projection, an exact `qed-equivalence-star-expanded.sql` retry
+rewrites only the exact root-star source span, without pruning the schema or
+changing operators. Admission closes three independent order facts: syntactic
+source `FROM` order and direct derived-table lineage, Calcite's direct `$N`
+output lineage, and QED's final direct-column lineage after its name-sorted
+schema representation. A same-typed column permutation therefore still fails
+closed. The same retry may follow an EQ-only `NOT NULL VARCHAR` relaxation when
+QED's charset bug is encountered first.
+
+For VARCHAR-only equality fragments, a separate fallback uses an injective
+encoding of every VARCHAR schema value into INTEGER while preserving NULL. A
+direct `LIKE`/`NOT LIKE` over a VARCHAR column and a backslash-free literal,
+with no `ESCAPE`, may be represented by one nullable uninterpreted Boolean
+function: equality for every interpretation of that function implies equality
+for PostgreSQL's concrete strict LIKE interpretation. Other string operations
+fail closed. If live but unobserved columns instead keep the parser blocked,
+`qed-equivalence-projected.sql` pushes projections and reports the combined
+base-column dependency closure. It may remove only unused, direct `Column`
+outputs from a derived SELECT; calls, casts, arithmetic, top-level outputs,
+whole-row references, NATURAL JOIN, and JOIN USING fail closed. Consequently a
+top-level `SELECT *` still has the original arity and order, while an unobserved
+column on an auxiliary relation can be omitted. A query whose derived outputs
+were not changed retains its normalized source text instead of being needlessly
+reserialized.
+
+Both the raw and normalized source sides must contain exactly one query
+statement. Generated JSON is accepted only when it contains one complete pair
+whose ordered output type vector and source-AST output arity agree. Metadata
+keeps immutable `sourceConstraintCoverage` alongside each variant's active
+coverage, and binds the source SQL, Calcite authority, generated SQL, and active
+JSON by digest so a stale fallback cannot be replayed against new input. Every
+relaxation or fallback is EQ-only; a non-EQ outcome from such a profile is
+reported as non-authoritative.
+
 For Cosette runs, generate the DSL-facing profile with:
 
 ```bash
 benchmarks/scripts/materialize --tool cosette --target all --force
 ```
+
+`benchmarks/scripts/cosette-preflight` checks the emitted DSL with the pinned
+Cosette image's actual Coq and Rosette parser/translators. It calls only
+`solver.gen_coq` and `solver.gen_rosette`, records each stage and exact input
+digest, and never invokes `solver.solve` or either prover. Parser/translator
+unsupported and timeout/resource outcomes therefore remain distinct from a
+Cosette proof result. Because Cosette's own `solver.solve` lowercases the entire
+DSL before those generators—including protected SQL strings—the preflight
+faithfully mirrors that target-builtin normalization but records its before/after
+digests and does not claim it preserves source semantics.
 
 This writes:
 
@@ -451,7 +701,27 @@ This adapter is a tool-facing frontend profile. Cosette's public DSL exposes `in
 and `string` scalar sorts, so richer SQL scalar types are lowered into those two
 sorts for frontend testing. Constraints not expressible in the DSL remain in the
 source metadata and cause a semantic-profile blocker rather than being silently
-treated as Cosette assumptions. Syntax or profile flags never pre-filter the run:
+treated as Cosette assumptions. IR-backed lowering starts only after the current
+source SQL and ordered schema are bound to the generated Calcite artifacts. The
+binding accepts exact SQL, or the closed WeTune presentation bridge authorized
+by `metadata.json#/renamedIdentifiers`: injective simple-ASCII identifier
+unquoting/renaming plus independently checked keyword/identifier case and
+optional `AS` spelling. It never infers a rename from similar text. The current
+typed Calcite `conditionRex`, `projectRex`, `aggCallDetails`, slice, and VALUES
+payloads are validated before exposing their exact textual digests to the
+older closed Cosette compiler; this is a checked representation view, not a
+semantic rewrite.
+
+TPC-DS's T-SQL-like `date + N days` spelling has one additional pair-level
+bridge. It is admitted only when raw source, normalized SQLSolver input, the IR
+frontend-input digests, and Calcite's embedded SQL agree on the complete
+`BETWEEN` date/day multiset; exactly one whole source side must carry the unit,
+the complete ordered source/IR schema must preserve every declared type, and
+both sides are replayed as the same explicit DAY interval. An IR that collapses
+declared `CHAR` to `VARCHAR`, as well as protected or unrelated lookalikes,
+fails closed. These authority bridges can make a previously rejected query
+available to the closed compatibility compiler without clearing its independent
+semantic-profile obligations. Syntax or profile flags never pre-filter the run:
 all emitted cases remain in the experimental denominator.
 
 ## Calcite IR Ingestion

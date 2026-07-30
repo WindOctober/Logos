@@ -17,6 +17,34 @@ spec.loader.exec_module(exporter)
 
 
 class ExportBenchmarkIrIntegrityTests(unittest.TestCase):
+    def test_metadata_binds_the_exact_source_schema(self) -> None:
+        schema_sql = "CREATE TABLE t (x INTEGER);\n"
+        config = {
+            "defaults": {
+                "adapter": "none",
+                "semanticProfile": "test",
+                "bagSemantics": True,
+                "nullSemantics": "sql-three-valued",
+            }
+        }
+        case = exporter.Case(
+            benchmark={"id": "suite", "schemaScope": "pair"},
+            case_id="case",
+            schema_sql=schema_sql,
+            before_sql="SELECT x FROM t",
+            after_sql="SELECT x FROM t",
+            constraints=[],
+            feature_tags=[],
+            source_metadata={},
+        )
+
+        metadata = exporter.build_metadata(config, case)
+
+        self.assertEqual(
+            metadata["sourceSchemaSha256"],
+            hashlib.sha256(schema_sql.encode()).hexdigest(),
+        )
+
     def test_force_failure_cannot_reuse_stale_pair_artifacts(self) -> None:
         config = {
             "defaults": {
@@ -182,7 +210,9 @@ class ExportBenchmarkIrIntegrityTests(unittest.TestCase):
         )
         self.assertEqual(
             report["frontendInputSha256"]["before"],
-            hashlib.sha256(exporter.ensure_sql_terminated(expected).encode()).hexdigest(),
+            hashlib.sha256(
+                exporter.ensure_sql_terminated(expected).encode()
+            ).hexdigest(),
         )
 
     def test_tsql_date_day_patch_rejects_aliases_and_pair_mismatches(self) -> None:
@@ -199,7 +229,9 @@ class ExportBenchmarkIrIntegrityTests(unittest.TestCase):
             (safe_before, safe_after.replace("+ 14", "+ 15")),
             (safe_before, safe_before),
             (
-                safe_before + " OR " + safe_after.removeprefix("SELECT * FROM d WHERE "),
+                safe_before
+                + " OR "
+                + safe_after.removeprefix("SELECT * FROM d WHERE "),
                 safe_after + " OR " + safe_after.removeprefix("SELECT * FROM d WHERE "),
             ),
             (
@@ -239,8 +271,8 @@ class ExportBenchmarkIrIntegrityTests(unittest.TestCase):
                     feature_tags=[],
                     source_metadata={},
                 )
-                actual_before, actual_after, report = (
-                    exporter.patch_tsql_date_day_pair(case)
+                actual_before, actual_after, report = exporter.patch_tsql_date_day_pair(
+                    case
                 )
                 self.assertEqual((actual_before, actual_after), (before, after))
                 self.assertIsNone(report)

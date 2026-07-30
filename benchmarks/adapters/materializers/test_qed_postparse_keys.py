@@ -83,6 +83,415 @@ class QedPostParseKeyTests(unittest.TestCase):
         return report
 
     @staticmethod
+    def alias_order_authority(ddl: str):
+        return qed.build_qed_source_schema_type_authority(ddl)
+
+    def test_qed_full_base_table_alias_list_is_reordered_to_frontend_order(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority(
+            "CREATE TABLE t (z INTEGER, a VARCHAR(7), m DATE);"
+        )
+        sql = (
+            'SELECT "x"."z0", "x"."a0", "x"."m0" ' 'FROM "t" AS "x" ("z0", "a0", "m0")'
+        )
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(
+            normalized,
+            'SELECT "x"."z0", "x"."a0", "x"."m0" ' 'FROM "t" AS "x" ("a0", "m0", "z0")',
+        )
+        self.assertEqual(report["status"], "verified-and-reordered")
+        self.assertEqual(len(report["transformations"]), 1)
+        transformation = report["transformations"][0]
+        self.assertEqual(transformation["sourceColumnOrder"], ["z", "a", "m"])
+        self.assertEqual(transformation["qedColumnOrder"], ["a", "m", "z"])
+        self.assertEqual(transformation["aliasOrderAfter"], ["a0", "m0", "z0"])
+        self.assertIn('"x"."z0"', normalized)
+
+    def test_qed_alias_reorder_preserves_quoted_space_dollar_and_reserved_names(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority(
+            'CREATE TABLE t (z INTEGER, "select" INTEGER, a INTEGER);'
+        )
+        sql = (
+            'SELECT "scope"."has space", "scope"."$odd", "scope"."order" '
+            'FROM t AS "scope" ("has space", "$odd", "order")'
+        )
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(report["status"], "verified-and-reordered")
+        self.assertIn('AS "scope" ("order", "$odd", "has space")', normalized)
+        self.assertTrue(
+            normalized.startswith(
+                'SELECT "scope"."has space", "scope"."$odd", "scope"."order"'
+            )
+        )
+
+    def test_qed_alias_reorder_rejects_qualified_star_and_whole_row_use(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority("CREATE TABLE t (z INTEGER, a INTEGER);")
+        rejected = {
+            "qualified-star": (
+                "SELECT x.* FROM t AS x (z0, a0)",
+                "qualified-base-table-alias-star",
+            ),
+            "whole-row": (
+                "SELECT x FROM t AS x (z0, a0)",
+                "whole-row-or-shadowed",
+            ),
+            "whole-row-function": (
+                "SELECT ROW(x) FROM t AS x (z0, a0)",
+                "whole-row-or-shadowed",
+            ),
+        }
+
+        for name, (sql, reason) in rejected.items():
+            with self.subTest(name=name):
+                normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+                    sql, authority
+                )
+                self.assertEqual(normalized, sql)
+                self.assertEqual(report["status"], "unsupported")
+                self.assertIn(reason, report["reason"])
+
+    def test_qed_alias_reorder_expands_attested_unqualified_star_in_source_order(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority("CREATE TABLE t (z INTEGER, a INTEGER);")
+        sql = "SELECT * FROM t AS x (z0, a0)"
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(
+            normalized,
+            "SELECT x.z0, x.a0 FROM t AS x (a0, z0)",
+        )
+        self.assertEqual(report["status"], "verified-and-reordered")
+        self.assertEqual(len(report["starExpansions"]), 1)
+        self.assertEqual(report["starExpansions"][0]["outputFieldOrder"], ["z0", "a0"])
+        self.assertEqual(report["transformations"][0]["aliasOrderAfter"], ["a0", "z0"])
+
+        before_normalized, before_report = (
+            qed.normalize_qed_base_table_column_alias_lists(
+                "SELECT * FROM t",
+                authority,
+                expand_all_attested_stars=True,
+            )
+        )
+        self.assertEqual(before_normalized, 'SELECT t."z", t."a" FROM t')
+        self.assertEqual(before_report["status"], "verified-and-star-expanded")
+        self.assertEqual(before_report["transformations"], [])
+
+    def test_qed_alias_reorder_fails_closed_for_unattested_star_scope(self) -> None:
+        authority = self.alias_order_authority("CREATE TABLE t (z INTEGER, a INTEGER);")
+        sql = (
+            "SELECT * FROM t AS x (z0, a0) "
+            "JOIN (SELECT 1 AS z0) AS derived ON derived.z0 = x.z0"
+        )
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(normalized, sql)
+        self.assertEqual(report["status"], "unsupported")
+        self.assertIn("not-a-direct-base-table", report["reason"])
+
+    def test_qed_alias_reorder_expands_distinct_on_star_not_multiplication(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority("CREATE TABLE t (z INTEGER, a INTEGER);")
+        sql = "SELECT DISTINCT ON (x.z0) * FROM t AS x (z0, a0)"
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(
+            normalized,
+            "SELECT DISTINCT ON (x.z0) x.z0, x.a0 FROM t AS x (a0, z0)",
+        )
+        self.assertEqual(len(report["starExpansions"]), 1)
+
+        multiplication = "SELECT x.z0 * x.a0 FROM t AS x (z0, a0)"
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            multiplication, authority
+        )
+        self.assertEqual(
+            normalized,
+            "SELECT x.z0 * x.a0 FROM t AS x (a0, z0)",
+        )
+        self.assertEqual(report["starExpansions"], [])
+
+    def test_qed_alias_reorder_preserves_complex_query_scope_bytes(self) -> None:
+        authority = self.alias_order_authority(
+            "CREATE TABLE t (z INTEGER, a INTEGER); "
+            "CREATE TABLE u (q INTEGER, b INTEGER);"
+        )
+        sql = (
+            "SELECT CAST(x.a0 AS INTEGER), SUM(x.z0), COUNT(*) "
+            "FROM t AS x (z0, a0) "
+            "WHERE EXISTS (SELECT 1 FROM u AS y (q0, b0) "
+            "WHERE y.b0 = x.a0) "
+            "GROUP BY ROLLUP(x.a0) "
+            "UNION ALL "
+            "SELECT CAST(x2.a2 AS INTEGER), SUM(x2.z2), COUNT(*) "
+            "FROM t AS x2 (z2, a2) "
+            "GROUP BY ROLLUP(x2.a2) "
+            "ORDER BY 1 NULLS LAST OFFSET 0 ROWS FETCH FIRST 5 ROWS ONLY"
+        )
+        expected = (
+            sql.replace("x (z0, a0)", "x (a0, z0)")
+            .replace("y (q0, b0)", "y (b0, q0)")
+            .replace("x2 (z2, a2)", "x2 (a2, z2)")
+        )
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(normalized, expected)
+        self.assertEqual(report["status"], "verified-and-reordered")
+        self.assertEqual(len(report["transformations"]), 3)
+        self.assertIn("COUNT(*)", normalized)
+        self.assertIn("WHERE y.b0 = x.a0", normalized)
+        self.assertTrue(
+            normalized.endswith(
+                "ORDER BY 1 NULLS LAST OFFSET 0 ROWS FETCH FIRST 5 ROWS ONLY"
+            )
+        )
+
+    def test_qed_alias_reorder_ignores_protected_and_derived_alias_lists(self) -> None:
+        authority = self.alias_order_authority("CREATE TABLE t (z INTEGER, a INTEGER);")
+        sql = (
+            "SELECT 'FROM t AS x (z0, a0)' AS payload "
+            "FROM (SELECT z, a FROM t) AS derived (z0, a0)"
+        )
+
+        normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+            sql, authority
+        )
+
+        self.assertEqual(normalized, sql)
+        self.assertEqual(report["status"], "not-applicable")
+
+    def test_qed_alias_reorder_fails_closed_for_partial_or_duplicate_lists(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority(
+            "CREATE TABLE t (z INTEGER, a INTEGER, m INTEGER);"
+        )
+        rejected = {
+            "partial": ("SELECT * FROM t AS x (z0, a0)", "is-not-full"),
+            "duplicate": (
+                "SELECT * FROM t AS x (z0, z0, m0)",
+                "is-not-unique",
+            ),
+            "comment": (
+                "SELECT * FROM t AS x (z0, /* positional */ a0, m0)",
+                "contains-comment",
+            ),
+        }
+
+        for name, (sql, reason) in rejected.items():
+            with self.subTest(name=name):
+                normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+                    sql, authority
+                )
+                self.assertEqual(normalized, sql)
+                self.assertEqual(report["status"], "unsupported")
+                self.assertIn(reason, report["reason"])
+
+    def test_qed_alias_reorder_fails_closed_for_cte_shadow_and_alias_ambiguity(
+        self,
+    ) -> None:
+        authority = self.alias_order_authority(
+            "CREATE TABLE t (z INTEGER, a INTEGER); CREATE TABLE u (q INTEGER, b INTEGER);"
+        )
+        rejected = {
+            "cte-shadow": (
+                "WITH t AS (SELECT 1 AS z, 2 AS a) " "SELECT * FROM t AS x (z0, a0)",
+                "shadowed-by-cte",
+            ),
+            "duplicate-alias": (
+                "SELECT * FROM t AS x (z0, a0), u AS x (q0, b0)",
+                "ambiguous-or-shadowed",
+            ),
+            "qualified-table": (
+                "SELECT * FROM public.t AS x (z0, a0)",
+                "schema-qualified",
+            ),
+        }
+
+        for name, (sql, reason) in rejected.items():
+            with self.subTest(name=name):
+                normalized, report = qed.normalize_qed_base_table_column_alias_lists(
+                    sql, authority
+                )
+                self.assertEqual(normalized, sql)
+                self.assertEqual(report["status"], "unsupported")
+                self.assertIn(reason, report["reason"])
+
+    def test_qed_materializer_records_alias_reorder_and_skips_unsafe_parser(
+        self,
+    ) -> None:
+        config = {
+            "defaults": {
+                "adapter": "none",
+                "semanticProfile": "postgres",
+                "bagSemantics": "bag",
+                "nullSemantics": "three-valued",
+            }
+        }
+
+        def case(after_sql: str, *, enable_qed_policy: bool = True):
+            benchmark = {
+                "id": "bench",
+                "adapter": "none",
+                "schemaScope": "per-case",
+                "constraintScope": "none",
+            }
+            if enable_qed_policy:
+                benchmark["solverMaterialization"] = {
+                    "qed": {
+                        "queryPolicy": "qed-base-table-column-alias-order-v1",
+                        "preflight": "qed-parser-planner-v1",
+                    }
+                }
+            return SimpleNamespace(
+                benchmark=benchmark,
+                case_id="aliases",
+                before_sql="SELECT z FROM t",
+                after_sql=after_sql,
+                schema_sql="CREATE TABLE t (z INTEGER, a INTEGER, m INTEGER);",
+                constraints=[],
+                read_dialect=None,
+                source_dialect=None,
+                source_metadata={},
+                feature_tags=[],
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "valid"
+            status = qed.materialize_case(
+                config,
+                case('SELECT "x"."z0" FROM "t" AS "x" ("z0", "a0", "m0")'),
+                output,
+                skip_parser=True,
+            )
+            metadata = json.loads(next(output.rglob("metadata.json")).read_text())
+            qed_sql = next(output.rglob("qed.sql")).read_text()
+
+            self.assertEqual(status, "not-parsed")
+            self.assertIn('AS "x" ("a0", "m0", "z0")', qed_sql)
+            after_report = metadata["normalizationForSolverRun"]["after"]
+            self.assertNotIn(
+                "qedBaseTableColumnAliasOrder",
+                metadata["normalizationForSolverRun"]["before"],
+            )
+            self.assertEqual(
+                after_report["qedBaseTableColumnAliasOrder"]["status"],
+                "verified-and-reordered",
+            )
+
+            inapplicable = Path(directory) / "inapplicable"
+            inapplicable_status = qed.materialize_case(
+                config,
+                case("SELECT z FROM t"),
+                inapplicable,
+                skip_parser=True,
+            )
+            inapplicable_metadata = json.loads(
+                next(inapplicable.rglob("metadata.json")).read_text()
+            )
+            self.assertEqual(inapplicable_status, "not-parsed")
+            for side in ("before", "after"):
+                self.assertNotIn(
+                    "qedBaseTableColumnAliasOrder",
+                    inapplicable_metadata["normalizationForSolverRun"][side],
+                )
+
+            isolated = Path(directory) / "policy-absent"
+            isolated_status = qed.materialize_case(
+                config,
+                case(
+                    'SELECT "x"."z0" FROM "t" AS "x" ("z0", "a0", "m0")',
+                    enable_qed_policy=False,
+                ),
+                isolated,
+                skip_parser=True,
+            )
+            isolated_metadata = json.loads(
+                next(isolated.rglob("metadata.json")).read_text()
+            )
+            isolated_sql = next(isolated.rglob("qed.sql")).read_text()
+            self.assertEqual(isolated_status, "not-parsed")
+            self.assertIn('AS "x" ("z0", "a0", "m0")', isolated_sql)
+            self.assertNotIn('AS "x" ("a0", "m0", "z0")', isolated_sql)
+            for side in ("before", "after"):
+                self.assertNotIn(
+                    "qedBaseTableColumnAliasOrder",
+                    isolated_metadata["normalizationForSolverRun"][side],
+                )
+
+            unsafe = Path(directory) / "unsafe"
+            with mock.patch.object(qed, "run_qed_parser") as parser:
+                unsafe_status = qed.materialize_case(
+                    config,
+                    case('SELECT "x"."z0" FROM "t" AS "x" ("z0", "a0")'),
+                    unsafe,
+                    skip_parser=False,
+                )
+            unsafe_metadata = json.loads(
+                next(unsafe.rglob("metadata.json")).read_text()
+            )
+
+        parser.assert_not_called()
+        self.assertEqual(unsafe_status, "parser-error")
+        self.assertEqual(
+            unsafe_metadata["parserProblem"]["kind"],
+            "unsafe-base-table-column-alias-list",
+        )
+
+    def test_qed_input_binding_rejects_unsupported_alias_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "qed.sql").write_text("SELECT 1; SELECT 1;")
+            metadata = {
+                "qedInput": "qed.sql",
+                "qedInputSha256": hashlib.sha256(
+                    (root / "qed.sql").read_bytes()
+                ).hexdigest(),
+                "normalizationForSolverRun": {
+                    "before": {
+                        "qedBaseTableColumnAliasOrder": {
+                            "status": "unsupported",
+                            "reason": "base-table-column-alias-list-is-not-full",
+                        }
+                    },
+                    "after": {},
+                },
+            }
+            metadata_path = root / "metadata.json"
+            metadata_path.write_text(json.dumps(metadata))
+
+            with self.assertRaisesRegex(
+                qed.QedJsonValidationError, "column-alias ordering is unsupported"
+            ):
+                qed.validate_qed_input_bindings(metadata_path)
+
+    @staticmethod
     def write_calcite_ir(
         root: Path,
         side: str,

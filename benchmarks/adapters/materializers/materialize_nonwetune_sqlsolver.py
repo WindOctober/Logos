@@ -11,7 +11,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from calcite_postgres_coercions import materialize_calcite_coercions
 from materializer_sql import normalize_sql_layout
+from solver_frontend import (
+    SQLSOLVER_POSTGRES_IDENTIFIER_POLICY,
+    SQLSOLVER_PREFLIGHT_POLICY,
+    materialize_sqlsolver_query,
+    pair_preservation_established,
+    solver_materialization_config,
+)
 from sqlsolver_schema_constraints import materialize_pair_constraints
 
 
@@ -19,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = ROOT / "scripts/export-benchmark-ir"
 DEFAULT_CONFIG = "benchmarks/core/ingestion.json"
 DEFAULT_OUTPUT = "benchmarks/core/.generated/sqlsolver/nonwetune-flat"
+CALCITE_IR_ROOT = ROOT / "benchmarks/core/.generated/calcite-ir"
 EXCLUDED_BENCHMARKS = {"wetune-issues"}
 
 
@@ -67,7 +76,7 @@ def main() -> int:
             if args.limit is not None and materialized >= args.limit:
                 return finish(materialized, failed)
             try:
-                materialize_case(config, case, output_dir)
+                materialize_case(config, case, output_dir, exporter)
                 materialized += 1
                 print(
                     f"materialized {benchmark_id}/{case.case_id}",
@@ -102,7 +111,9 @@ def resolve_path(path: str | Path) -> Path:
     return candidate if candidate.is_absolute() else ROOT / candidate
 
 
-def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> None:
+def materialize_case(
+    config: dict[str, Any], case: Any, output_dir: Path, exporter: Any
+) -> None:
     benchmark = case.benchmark
     flat_case_id = f"{benchmark['id']}__{case.case_id}"
     case_dir = output_dir / flat_case_id
@@ -111,14 +122,37 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
     read_dialect = case.read_dialect or benchmark.get("readDialect") or "postgres"
     write_dialect = case.write_dialect or benchmark.get("writeDialect") or "postgres"
     adapter = benchmark.get("adapter", config["defaults"].get("adapter", "none"))
+    solver_config = solver_materialization_config(benchmark, "sqlsolver")
+    before_sql, after_sql, date_day_bridge = exporter.patch_tsql_date_day_pair(case)
+    before_sql, before_coercions = materialize_calcite_coercions(
+        repository_root=ROOT,
+        authority_root=CALCITE_IR_ROOT,
+        benchmark_id=benchmark["id"],
+        case_id=case.case_id,
+        source_metadata=case.source_metadata,
+        schema_sql=case.schema_sql,
+        side="before",
+        sql=before_sql,
+    )
+    after_sql, after_coercions = materialize_calcite_coercions(
+        repository_root=ROOT,
+        authority_root=CALCITE_IR_ROOT,
+        benchmark_id=benchmark["id"],
+        case_id=case.case_id,
+        source_metadata=case.source_metadata,
+        schema_sql=case.schema_sql,
+        side="after",
+        sql=after_sql,
+    )
+
     with tempfile.TemporaryDirectory(prefix="logos-sqlsolver-nonwetune-") as tmp:
         tmp_dir = Path(tmp)
         schema_source = write_text(tmp_dir / "schema.source.sql", case.schema_sql)
         sql1_source = write_text(
-            tmp_dir / "sql1.source.sql", ensure_sql_terminated(case.before_sql)
+            tmp_dir / "sql1.source.sql", ensure_sql_terminated(before_sql)
         )
         sql2_source = write_text(
-            tmp_dir / "sql2.source.sql", ensure_sql_terminated(case.after_sql)
+            tmp_dir / "sql2.source.sql", ensure_sql_terminated(after_sql)
         )
 
         schema_target = tmp_dir / "schema.sql"
@@ -166,9 +200,90 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
             query_reports["before"] = {"skipped": True}
             query_reports["after"] = {"skipped": True}
 
+        solver_preflight = None
+        solver_frontend_status = None
+        if solver_config is not None:
+            query_policy = solver_config.get("queryPolicy")
+            preflight_policy = solver_config.get("preflight")
+            if query_policy != SQLSOLVER_POSTGRES_IDENTIFIER_POLICY:
+                raise ValueError(
+                    f"{flat_case_id} has unknown SQLSolver query policy "
+                    f"{query_policy!r}"
+                )
+            if preflight_policy != SQLSOLVER_PREFLIGHT_POLICY:
+                raise ValueError(
+                    f"{flat_case_id} has unknown SQLSolver preflight policy "
+                    f"{preflight_policy!r}"
+                )
+            sql1_materialized, before_solver_report = materialize_sqlsolver_query(
+                sql1_target.read_text(),
+                read_dialect=read_dialect,
+                policy=query_policy,
+            )
+            sql2_materialized, after_solver_report = materialize_sqlsolver_query(
+                sql2_target.read_text(),
+                read_dialect=read_dialect,
+                policy=query_policy,
+            )
+            query_reports["before"] = {
+                "ingestionNormalization": query_reports["before"],
+                "solverBoundary": before_solver_report,
+            }
+            query_reports["after"] = {
+                "ingestionNormalization": query_reports["after"],
+                "solverBoundary": after_solver_report,
+            }
+            preflight_schema = write_text(
+                tmp_dir / "schema.preflight.sql", materialized_schema
+            )
+            preflight_sql1 = write_text(
+                tmp_dir / "sql1.preflight.sql", sql1_materialized
+            )
+            preflight_sql2 = write_text(
+                tmp_dir / "sql2.preflight.sql", sql2_materialized
+            )
+            target_preflight = run_sqlsolver_preflight(
+                schema=preflight_schema,
+                sql1=preflight_sql1,
+                sql2=preflight_sql2,
+            )
+            preservation_established = pair_preservation_established(
+                before_solver_report, after_solver_report
+            )
+            target_status = target_preflight.get("status")
+            admitted = preservation_established and target_status == "planned"
+            solver_frontend_status = (
+                "ready"
+                if admitted
+                else ("Timeout" if target_status == "timeout" else "Unsupport")
+            )
+            solver_preflight = {
+                "policy": preflight_policy,
+                "status": solver_frontend_status,
+                "semanticPreservationEstablished": preservation_established,
+                "proverSubmissionAllowed": admitted,
+                "unsupportedStage": (
+                    None
+                    if admitted
+                    else (
+                        "materialization-preservation"
+                        if not preservation_established
+                        else (
+                            "target-frontend-timeout"
+                            if target_status == "timeout"
+                            else "target-frontend"
+                        )
+                    )
+                ),
+                "targetFrontend": target_preflight,
+            }
+        else:
+            sql1_materialized = ensure_one_line(sql1_target.read_text())
+            sql2_materialized = ensure_one_line(sql2_target.read_text())
+
         write_text(case_dir / "schema.sql", materialized_schema)
-        write_text(case_dir / "sql1.sql", ensure_one_line(sql1_target.read_text()))
-        write_text(case_dir / "sql2.sql", ensure_one_line(sql2_target.read_text()))
+        write_text(case_dir / "sql1.sql", sql1_materialized)
+        write_text(case_dir / "sql2.sql", sql2_materialized)
         write_text(
             case_dir / "metadata.json",
             json.dumps(
@@ -178,6 +293,29 @@ def materialize_case(config: dict[str, Any], case: Any, output_dir: Path) -> Non
                         case,
                         flat_case_id,
                         constraint_materialization,
+                    ),
+                    **(
+                        {"pairedTsqlDateDayBridge": date_day_bridge}
+                        if date_day_bridge is not None
+                        else {}
+                    ),
+                    **(
+                        {
+                            "calciteCoercionMaterialization": {
+                                "before": before_coercions,
+                                "after": after_coercions,
+                            }
+                        }
+                        if before_coercions is not None or after_coercions is not None
+                        else {}
+                    ),
+                    **(
+                        {
+                            "solverFrontendStatus": solver_frontend_status,
+                            "solverFrontendPreflight": solver_preflight,
+                        }
+                        if solver_config is not None
+                        else {}
                     ),
                     "normalizationForSolverRun": {
                         "schema": {
@@ -234,6 +372,43 @@ def normalize_sql(
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr)
+
+
+def run_sqlsolver_preflight(*, schema: Path, sql1: Path, sql2: Path) -> dict[str, Any]:
+    command = [
+        str(ROOT / "benchmarks/scripts/sqlsolver-preflight"),
+        "--schema",
+        str(schema),
+        "--sql1",
+        str(sql1),
+        "--sql2",
+        str(sql2),
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "SQLSolver frontend preflight failed as infrastructure: "
+            + completed.stderr.strip()
+        )
+    try:
+        report = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("SQLSolver frontend preflight emitted invalid JSON") from exc
+    if (
+        not isinstance(report, dict)
+        or report.get("actualTargetFrontend") is not True
+        or report.get("proofSearchInvoked") is not False
+        or report.get("status") not in {"planned", "unsupported", "timeout"}
+    ):
+        raise RuntimeError("SQLSolver frontend preflight report is malformed")
+    return report
 
 
 def build_metadata(

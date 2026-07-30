@@ -1,22 +1,14 @@
 use crate::error::{Error, Result};
-use crate::proposal::types::{Candidate, Decision};
+use crate::proposal::types::Candidate;
 
 pub fn parse_proposal(raw: &str) -> Result<Candidate> {
-    let proposal: Candidate =
-        serde_json::from_str(raw).map_err(|error| Error::InvalidCandidate(error.to_string()))?;
-    if proposal.decision == Decision::CounterexampleCandidate
-        && proposal.witness_sql.trim().is_empty()
-    {
-        return Err(Error::InvalidCandidate(
-            "counterexample_candidate proposal must include witnessSql".to_owned(),
-        ));
-    }
-    Ok(proposal)
+    serde_json::from_str(raw).map_err(|error| Error::InvalidCandidate(error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proposal::Decision;
 
     #[test]
     fn parses_candidate_json() {
@@ -26,9 +18,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_candidate_without_witness_sql() {
+    fn parses_candidate_contract_separately_from_the_wire_format() {
         let raw = "{\"decision\":\"counterexample_candidate\",\"reason\":\"x\"}";
-        assert!(parse_proposal(raw).is_err());
+        let proposal = parse_proposal(raw).expect("parse structurally valid candidate JSON");
+        assert_eq!(proposal.decision, Decision::CounterexampleCandidate);
+        assert!(proposal.witness_sql.is_empty());
+    }
+
+    #[test]
+    fn needs_review_is_canonical_and_manual_review_remains_a_legacy_alias() {
+        let current = parse_proposal("{\"decision\":\"needs_review\"}")
+            .expect("parse canonical needs_review decision");
+        let legacy = parse_proposal("{\"decision\":\"manual_review\"}")
+            .expect("parse legacy manual_review decision");
+        assert_eq!(current.decision, Decision::ManualReview);
+        assert_eq!(legacy.decision, Decision::ManualReview);
+        assert_eq!(
+            serde_json::to_value(current).expect("serialize canonical decision")["decision"],
+            serde_json::json!("needs_review")
+        );
     }
 
     #[test]

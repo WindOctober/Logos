@@ -14,6 +14,7 @@ pub(super) struct SearchRun<'a> {
     started: Instant,
     rounds: Vec<ProposalRound>,
     pub(super) feedback: Vec<String>,
+    formal_witness_snapshot: Option<crate::validation::FormalWitnessSnapshot>,
 }
 
 pub(super) struct RecordedRound {
@@ -27,7 +28,7 @@ pub(super) struct RecordedRound {
 }
 
 pub(in crate::engine) enum CounterexampleStageResult {
-    Terminal(SolverReport),
+    Terminal(Box<SolverReport>),
     ProceedToProof(SearchReport),
 }
 
@@ -38,7 +39,36 @@ impl<'a> SearchRun<'a> {
             started,
             rounds: Vec::new(),
             feedback: Vec::new(),
+            formal_witness_snapshot: None,
         }
+    }
+
+    pub(super) fn resume(
+        artifacts: &'a ArtifactWriter,
+        started: Instant,
+        rounds: Vec<ProposalRound>,
+        feedback: Vec<String>,
+    ) -> Self {
+        Self {
+            artifacts,
+            started,
+            rounds,
+            feedback,
+            formal_witness_snapshot: None,
+        }
+    }
+
+    pub(super) fn retain_formal_witness_snapshot(
+        &mut self,
+        snapshot: crate::validation::FormalWitnessSnapshot,
+    ) {
+        self.formal_witness_snapshot = Some(snapshot);
+    }
+
+    pub(super) fn next_round(&self) -> usize {
+        self.rounds
+            .last()
+            .map_or(1, |round| round.round.saturating_add(1))
     }
 
     pub(super) fn record_round(&mut self, recorded: RecordedRound) -> Result<()> {
@@ -53,26 +83,34 @@ impl<'a> SearchRun<'a> {
         self.rounds.push(ProposalRound {
             round: recorded.round,
             assessment: recorded.assessment,
-            proposal: recorded.proposal,
+            proposal: Some(recorded.proposal),
             validation: recorded.validation,
         });
         Ok(())
     }
 
     pub(super) fn record_assessment_failure(
-        &self,
+        &mut self,
         round: usize,
         assessment: LlmAssessmentLog,
+        outcome: RoundOutcome,
         error: &Error,
     ) -> Result<()> {
         write_round_report(
             self.artifacts,
             round,
-            assessment,
+            assessment.clone(),
             None,
-            RoundOutcome::AssessmentOnly,
+            outcome,
             Some(error.to_string()),
-        )
+        )?;
+        self.rounds.push(ProposalRound {
+            round,
+            assessment,
+            proposal: None,
+            validation: None,
+        });
+        Ok(())
     }
 
     pub(super) fn finish_terminal(
@@ -82,13 +120,14 @@ impl<'a> SearchRun<'a> {
         reason: String,
         counterexample: Option<Evidence>,
     ) -> Result<CounterexampleStageResult> {
-        let counterexample_report = SearchReport::finished(
+        let mut counterexample_report = SearchReport::finished(
             search_status,
             reason.clone(),
             self.rounds.clone(),
             counterexample.clone(),
             self.started,
-        );
+        )?;
+        counterexample_report.formal_witness_snapshot = self.formal_witness_snapshot.clone();
         self.artifacts
             .write_json("counterexample-stage/report.json", &counterexample_report)?;
         let report = SolverReport::finished(
@@ -99,9 +138,9 @@ impl<'a> SearchRun<'a> {
             None,
             self.artifacts.root().display().to_string(),
             self.started,
-        );
+        )?;
         self.artifacts.write_json("report.json", &report)?;
-        Ok(CounterexampleStageResult::Terminal(report))
+        Ok(CounterexampleStageResult::Terminal(Box::new(report)))
     }
 
     pub(super) fn finish_without_counterexample(
@@ -109,7 +148,9 @@ impl<'a> SearchRun<'a> {
         search_status: SearchStatus,
         reason: String,
     ) -> Result<CounterexampleStageResult> {
-        let report = SearchReport::finished(search_status, reason, self.rounds, None, self.started);
+        let mut report =
+            SearchReport::finished(search_status, reason, self.rounds, None, self.started)?;
+        report.formal_witness_snapshot = self.formal_witness_snapshot;
         self.artifacts
             .write_json("counterexample-stage/report.json", &report)?;
         Ok(CounterexampleStageResult::ProceedToProof(report))

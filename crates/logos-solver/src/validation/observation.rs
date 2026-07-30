@@ -1,16 +1,11 @@
-use serde::{Deserialize, Serialize};
+use crate::core::{PostgresStructureToken, postgres_structure_tokens};
+use crate::validation::types::ValidationWarning;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ObservationMode {
     Bag,
-    OrderedList,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ValidationWarning {
-    pub code: String,
-    pub message: String,
+    ExecutableSequence,
+    Unclassifiable,
 }
 
 #[derive(Debug, Clone)]
@@ -19,365 +14,203 @@ pub(super) struct ObservationPlan {
     pub warnings: Vec<ValidationWarning>,
 }
 
-pub(super) fn classify_observation(source: &str, target: &str) -> ObservationPlan {
-    let source_features = TopLevelFeatures::scan(source);
-    let target_features = TopLevelFeatures::scan(target);
-    let order_sensitive =
-        source_features.is_order_sensitive() || target_features.is_order_sensitive();
-    let mut warnings = Vec::new();
+impl ObservationPlan {
+    pub(super) fn rejection_message(&self) -> String {
+        let details = self
+            .warnings
+            .iter()
+            .map(|warning| warning.message.as_str())
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!(
+            "PostgreSQL observation cannot be classified without approximating the submitted SQL: {details}"
+        )
+    }
+}
 
-    for (label, features) in [("source", source_features), ("target", target_features)] {
-        if features.has_unstable_topk() {
-            warnings.push(ValidationWarning {
-                code: format!("{label}_topk_without_order_by"),
-                message: format!(
-                    "{label} query uses LIMIT/OFFSET/FETCH without a top-level ORDER BY; validation compares the observed PostgreSQL row order"
-                ),
-            });
-        }
-        if features.has_distinct_on && !features.has_order_by {
-            warnings.push(ValidationWarning {
-                code: format!("{label}_distinct_on_without_order_by"),
-                message: format!(
-                    "{label} query uses DISTINCT ON without a top-level ORDER BY; validation compares the observed PostgreSQL row order"
-                ),
-            });
+pub(super) fn classify_observation(source: &str, target: &str) -> ObservationPlan {
+    let mut warnings = Vec::new();
+    let mut mode = ObservationMode::Bag;
+
+    for (label, query) in [("source", source), ("target", target)] {
+        match TopLevelFeatures::scan(query) {
+            Ok(features) => {
+                mode = mode.combine(features.observation_mode(label, &mut warnings));
+            }
+            Err(reason) => {
+                mode = ObservationMode::Unclassifiable;
+                warnings.push(ValidationWarning {
+                    code: format!("{label}_observation_scan_unsupported"),
+                    message: format!(
+                        "{label} query cannot be classified without approximating PostgreSQL lexical structure ({reason}); validation is refused"
+                    ),
+                });
+            }
         }
     }
 
-    ObservationPlan {
-        mode: if order_sensitive || !warnings.is_empty() {
-            ObservationMode::OrderedList
-        } else {
-            ObservationMode::Bag
-        },
-        warnings,
+    ObservationPlan { mode, warnings }
+}
+
+impl ObservationMode {
+    fn combine(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Unclassifiable, _) | (_, Self::Unclassifiable) => Self::Unclassifiable,
+            (Self::ExecutableSequence, _) | (_, Self::ExecutableSequence) => {
+                Self::ExecutableSequence
+            }
+            (Self::Bag, Self::Bag) => Self::Bag,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 struct TopLevelFeatures {
     has_order_by: bool,
-    has_limit: bool,
-    has_offset: bool,
-    has_fetch: bool,
-    has_distinct_on: bool,
+    has_top_level_limit: bool,
+    has_top_level_offset: bool,
+    has_top_level_fetch: bool,
+    has_nested_topk: bool,
+    has_any_distinct_on: bool,
 }
 
 impl TopLevelFeatures {
-    fn is_order_sensitive(self) -> bool {
-        self.has_order_by
-            || self.has_limit
-            || self.has_offset
-            || self.has_fetch
-            || self.has_distinct_on
+    fn observation_mode(
+        self,
+        label: &str,
+        warnings: &mut Vec<ValidationWarning>,
+    ) -> ObservationMode {
+        if self.has_order_by {
+            warnings.push(ValidationWarning {
+                code: format!("{label}_ordered_executable_sequence"),
+                message: format!(
+                    "{label} query has a top-level ORDER BY; PostgreSQL supplies one concrete sequence, which is authoritative only with a host-recomputed exact-observation functionality certificate"
+                ),
+            });
+        }
+        if self.has_nested_topk {
+            warnings.push(ValidationWarning {
+                code: format!("{label}_nested_topk_execution_choice"),
+                message: format!(
+                    "{label} query has nested LIMIT, OFFSET, or FETCH; one PostgreSQL execution may select only one of several legal observations, so a functionality or FormalSQL separation certificate is required"
+                ),
+            });
+        }
+        if self.has_any_distinct_on {
+            warnings.push(ValidationWarning {
+                code: format!("{label}_distinct_on_execution_choice"),
+                message: format!(
+                    "{label} query has DISTINCT ON; when ordering does not uniquely select a representative, one PostgreSQL choice is not a non-equivalence certificate"
+                ),
+            });
+        }
+        let has_top_level_slice =
+            self.has_top_level_limit || self.has_top_level_offset || self.has_top_level_fetch;
+        if has_top_level_slice {
+            warnings.push(ValidationWarning {
+                code: format!("{label}_topk_executable_sequence"),
+                message: format!(
+                    "{label} query has top-level LIMIT, OFFSET, or FETCH; the concrete PostgreSQL sequence is conclusive only after exact-observation functionality is certified"
+                ),
+            });
+        }
+        if self.has_order_by || has_top_level_slice {
+            ObservationMode::ExecutableSequence
+        } else {
+            ObservationMode::Bag
+        }
     }
 
-    fn has_unstable_topk(self) -> bool {
-        (self.has_limit || self.has_offset || self.has_fetch) && !self.has_order_by
-    }
-
-    fn scan(sql: &str) -> Self {
-        let tokens = top_level_tokens(sql);
+    fn scan(sql: &str) -> Result<Self, String> {
+        let lexemes = postgres_structure_tokens(sql)?;
+        let range = query_lexeme_range(&lexemes)?;
         let mut features = TopLevelFeatures::default();
-        for index in 0..tokens.len() {
-            match tokens[index].as_str() {
-                "ORDER" if tokens.get(index + 1).is_some_and(|next| next == "BY") => {
+        let mut depth = 0usize;
+        let mut words = Vec::new();
+
+        for lexeme in &lexemes[range] {
+            match lexeme {
+                PostgresStructureToken::LeftParen => {
+                    depth = depth.checked_add(1).ok_or_else(|| {
+                        "parenthesis nesting exceeds the supported range".to_owned()
+                    })?
+                }
+                PostgresStructureToken::RightParen => {
+                    depth = depth
+                        .checked_sub(1)
+                        .ok_or_else(|| "unmatched closing parenthesis".to_owned())?;
+                }
+                PostgresStructureToken::Word(word) => words.push((depth, word.as_str())),
+            }
+        }
+        if depth != 0 {
+            return Err("unmatched opening parenthesis".to_owned());
+        }
+
+        for index in 0..words.len() {
+            let (depth, word) = words[index];
+            match word {
+                "order"
+                    if depth == 0
+                        && words
+                            .get(index + 1)
+                            .is_some_and(|next| *next == (depth, "by")) =>
+                {
                     features.has_order_by = true;
                 }
-                "LIMIT" => features.has_limit = true,
-                "OFFSET" => features.has_offset = true,
-                "FETCH" => features.has_fetch = true,
-                "DISTINCT" if tokens.get(index + 1).is_some_and(|next| next == "ON") => {
-                    features.has_distinct_on = true;
+                "limit" if depth == 0 => features.has_top_level_limit = true,
+                "offset" if depth == 0 => features.has_top_level_offset = true,
+                "fetch" if depth == 0 => features.has_top_level_fetch = true,
+                "limit" | "offset" | "fetch" => features.has_nested_topk = true,
+                "distinct"
+                    if words
+                        .get(index + 1)
+                        .is_some_and(|next| *next == (depth, "on")) =>
+                {
+                    features.has_any_distinct_on = true;
                 }
                 _ => {}
             }
         }
-        features
+        Ok(features)
     }
 }
 
-fn top_level_tokens(sql: &str) -> Vec<String> {
-    let sql = strip_redundant_enclosing_parens(sql);
-    let mut tokens = Vec::new();
-    let mut token = String::new();
-    let mut depth = 0usize;
-    let mut chars = sql.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\'' => skip_single_quoted_string(&mut chars),
-            '"' => skip_double_quoted_identifier(&mut chars),
-            '-' if chars.peek() == Some(&'-') => {
-                chars.next();
-                skip_line_comment(&mut chars);
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                chars.next();
-                skip_block_comment(&mut chars);
-            }
-            '$' if try_skip_dollar_quoted_string(&mut chars) => {}
-            '(' => {
-                flush_token(&mut tokens, &mut token, depth);
-                depth += 1;
-            }
-            ')' => {
-                flush_token(&mut tokens, &mut token, depth);
-                depth = depth.saturating_sub(1);
-            }
-            _ if depth == 0 && is_token_char(ch) => token.push(ch.to_ascii_uppercase()),
-            _ => flush_token(&mut tokens, &mut token, depth),
-        }
-    }
-    flush_token(&mut tokens, &mut token, depth);
-    tokens
-}
-
-fn strip_redundant_enclosing_parens(mut sql: &str) -> &str {
-    loop {
-        let trimmed = sql.trim();
-        let Some(inner) = enclosed_by_single_paren_pair(trimmed) else {
-            return trimmed;
-        };
-        sql = inner;
-    }
-}
-
-fn enclosed_by_single_paren_pair(sql: &str) -> Option<&str> {
-    if !sql.starts_with('(') || !sql.ends_with(')') {
-        return None;
-    }
-
-    let mut depth = 0usize;
-    let mut chars = sql.char_indices().peekable();
-    while let Some((index, ch)) = chars.next() {
-        match ch {
-            '\'' => skip_single_quoted_string_with_indices(&mut chars),
-            '"' => skip_double_quoted_identifier_with_indices(&mut chars),
-            '-' if chars.peek().is_some_and(|(_, next)| *next == '-') => {
-                chars.next();
-                skip_line_comment_with_indices(&mut chars);
-            }
-            '/' if chars.peek().is_some_and(|(_, next)| *next == '*') => {
-                chars.next();
-                skip_block_comment_with_indices(&mut chars);
-            }
-            '$' if try_skip_dollar_quoted_string_with_indices(&mut chars) => {}
-            '(' => depth += 1,
-            ')' => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 && index != sql.len() - 1 {
-                    return None;
+fn query_lexeme_range(
+    lexemes: &[PostgresStructureToken],
+) -> Result<std::ops::Range<usize>, String> {
+    let mut start = 0usize;
+    let mut end = lexemes.len();
+    while lexemes.get(start) == Some(&PostgresStructureToken::LeftParen) {
+        let mut depth = 0usize;
+        let mut matching_close = None;
+        for (index, lexeme) in lexemes.iter().enumerate().take(end).skip(start) {
+            match lexeme {
+                PostgresStructureToken::LeftParen => {
+                    depth = depth.checked_add(1).ok_or_else(|| {
+                        "parenthesis nesting exceeds the supported range".to_owned()
+                    })?;
                 }
-            }
-            _ => {}
-        }
-    }
-
-    Some(&sql[1..sql.len() - 1])
-}
-
-fn flush_token(tokens: &mut Vec<String>, token: &mut String, depth: usize) {
-    if depth == 0 && !token.is_empty() {
-        tokens.push(std::mem::take(token));
-    } else {
-        token.clear();
-    }
-}
-
-fn is_token_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-fn skip_single_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    while let Some(ch) = chars.next() {
-        if ch == '\\' {
-            chars.next();
-        } else if ch == '\'' {
-            if chars.peek() == Some(&'\'') {
-                chars.next();
-            } else {
-                break;
+                PostgresStructureToken::RightParen => {
+                    depth = depth
+                        .checked_sub(1)
+                        .ok_or_else(|| "unmatched closing parenthesis".to_owned())?;
+                    if depth == 0 {
+                        matching_close = Some(index);
+                        break;
+                    }
+                }
+                PostgresStructureToken::Word(_) => {}
             }
         }
-    }
-}
-
-fn skip_double_quoted_identifier(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    while let Some(ch) = chars.next() {
-        if ch == '"' {
-            if chars.peek() == Some(&'"') {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-    }
-}
-
-fn skip_line_comment(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    for ch in chars.by_ref() {
-        if ch == '\n' {
+        if matching_close == Some(end - 1) {
+            start += 1;
+            end -= 1;
+        } else {
             break;
         }
     }
-}
-
-fn skip_block_comment(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    let mut depth = 1usize;
-    while let Some(ch) = chars.next() {
-        if ch == '/' && chars.peek() == Some(&'*') {
-            chars.next();
-            depth += 1;
-        } else if ch == '*' && chars.peek() == Some(&'/') {
-            chars.next();
-            depth -= 1;
-            if depth == 0 {
-                break;
-            }
-        }
-    }
-}
-
-fn try_skip_dollar_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> bool {
-    let Some(delimiter) = dollar_quote_delimiter(chars.clone()) else {
-        return false;
-    };
-    for _ in 1..delimiter.chars().count() {
-        chars.next();
-    }
-    skip_until_delimiter(chars, &delimiter);
-    true
-}
-
-fn dollar_quote_delimiter(mut chars: std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
-    let mut delimiter = String::from("$");
-    while let Some(ch) = chars.next() {
-        delimiter.push(ch);
-        if ch == '$' {
-            return Some(delimiter);
-        }
-        if !(ch.is_ascii_alphanumeric() || ch == '_') {
-            return None;
-        }
-    }
-    None
-}
-
-fn skip_until_delimiter(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, delimiter: &str) {
-    let mut window = String::new();
-    let delimiter_len = delimiter.chars().count();
-    while let Some(ch) = chars.next() {
-        window.push(ch);
-        while window.chars().count() > delimiter_len {
-            let next_len = window.chars().next().map_or(0, char::len_utf8);
-            window.drain(..next_len);
-        }
-        if window == delimiter {
-            break;
-        }
-    }
-}
-
-fn skip_single_quoted_string_with_indices(
-    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
-) {
-    while let Some((_, ch)) = chars.next() {
-        if ch == '\\' {
-            chars.next();
-        } else if ch == '\'' {
-            if chars.peek().is_some_and(|(_, next)| *next == '\'') {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-    }
-}
-
-fn skip_double_quoted_identifier_with_indices(
-    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
-) {
-    while let Some((_, ch)) = chars.next() {
-        if ch == '"' {
-            if chars.peek().is_some_and(|(_, next)| *next == '"') {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-    }
-}
-
-fn skip_line_comment_with_indices(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>) {
-    for (_, ch) in chars.by_ref() {
-        if ch == '\n' {
-            break;
-        }
-    }
-}
-
-fn skip_block_comment_with_indices(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>) {
-    let mut depth = 1usize;
-    while let Some((_, ch)) = chars.next() {
-        if ch == '/' && chars.peek().is_some_and(|(_, next)| *next == '*') {
-            chars.next();
-            depth += 1;
-        } else if ch == '*' && chars.peek().is_some_and(|(_, next)| *next == '/') {
-            chars.next();
-            depth -= 1;
-            if depth == 0 {
-                break;
-            }
-        }
-    }
-}
-
-fn try_skip_dollar_quoted_string_with_indices(
-    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
-) -> bool {
-    let Some(delimiter) = dollar_quote_delimiter_with_indices(chars.clone()) else {
-        return false;
-    };
-    for _ in 1..delimiter.chars().count() {
-        chars.next();
-    }
-    skip_until_delimiter_with_indices(chars, &delimiter);
-    true
-}
-
-fn dollar_quote_delimiter_with_indices(
-    mut chars: std::iter::Peekable<std::str::CharIndices<'_>>,
-) -> Option<String> {
-    let mut delimiter = String::from("$");
-    while let Some((_, ch)) = chars.next() {
-        delimiter.push(ch);
-        if ch == '$' {
-            return Some(delimiter);
-        }
-        if !(ch.is_ascii_alphanumeric() || ch == '_') {
-            return None;
-        }
-    }
-    None
-}
-
-fn skip_until_delimiter_with_indices(
-    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
-    delimiter: &str,
-) {
-    let mut window = String::new();
-    let delimiter_len = delimiter.chars().count();
-    while let Some((_, ch)) = chars.next() {
-        window.push(ch);
-        while window.chars().count() > delimiter_len {
-            let next_len = window.chars().next().map_or(0, char::len_utf8);
-            window.drain(..next_len);
-        }
-        if window == delimiter {
-            break;
-        }
-    }
+    Ok(start..end)
 }
 
 #[cfg(test)]
@@ -385,10 +218,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_top_level_order_by() {
+    fn validates_source_top_level_order_by_as_an_executable_sequence() {
         let plan = classify_observation("select * from t order by a", "select * from t");
-        assert_eq!(plan.mode, ObservationMode::OrderedList);
-        assert!(plan.warnings.is_empty());
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
+        assert_eq!(plan.warnings.len(), 1);
+        assert_eq!(plan.warnings[0].code, "source_ordered_executable_sequence");
+    }
+
+    #[test]
+    fn validates_target_top_level_order_by_as_an_executable_sequence() {
+        let plan = classify_observation("select * from t", "select * from t order by a");
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
+        assert_eq!(plan.warnings.len(), 1);
+        assert_eq!(plan.warnings[0].code, "target_ordered_executable_sequence");
     }
 
     #[test]
@@ -398,19 +240,63 @@ mod tests {
             "select * from t",
         );
         assert_eq!(plan.mode, ObservationMode::Bag);
+        assert!(plan.warnings.is_empty());
     }
 
     #[test]
-    fn warns_on_limit_without_order_by() {
-        let plan = classify_observation("select * from t limit 1", "select * from t limit 1");
-        assert_eq!(plan.mode, ObservationMode::OrderedList);
+    fn validates_nested_limit_by_the_outer_bag_observation() {
+        let plan = classify_observation(
+            "select * from (select * from t limit 1) q",
+            "select * from t",
+        );
+        assert_eq!(plan.mode, ObservationMode::Bag);
+        assert_eq!(plan.warnings[0].code, "source_nested_topk_execution_choice");
+    }
+
+    #[test]
+    fn validates_limit_as_an_executable_sequence_without_synthetic_ordinals() {
+        let plan = classify_observation(
+            "select * from t order by non_unique limit 1",
+            "select * from t order by non_unique limit 1",
+        );
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
+        assert_eq!(plan.warnings.len(), 4);
+        assert!(
+            plan.warnings
+                .iter()
+                .any(|warning| warning.code == "source_topk_executable_sequence")
+        );
+    }
+
+    #[test]
+    fn validates_offset_and_fetch_as_executable_sequences() {
+        let plan = classify_observation(
+            "select * from t offset 1",
+            "select * from t fetch first 1 row only",
+        );
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
         assert_eq!(plan.warnings.len(), 2);
     }
 
     #[test]
+    fn validates_distinct_on_as_the_concrete_postgres_execution() {
+        let plan = classify_observation(
+            "select distinct on (k) k, v from t order by k",
+            "select distinct on (k) k, v from t order by k",
+        );
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
+        assert_eq!(plan.warnings.len(), 4);
+        assert!(
+            plan.warnings
+                .iter()
+                .any(|warning| warning.code == "source_distinct_on_execution_choice")
+        );
+    }
+
+    #[test]
     fn detects_order_by_inside_whole_query_parentheses() {
-        let plan = classify_observation("(select * from t order by a)", "select * from t");
-        assert_eq!(plan.mode, ObservationMode::OrderedList);
+        let plan = classify_observation("((select * from t order by a))", "select * from t");
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
     }
 
     #[test]
@@ -421,9 +307,16 @@ mod tests {
     }
 
     #[test]
-    fn skips_escape_string_quotes() {
+    fn ordinary_string_backslash_does_not_escape_closing_quote() {
+        let plan = classify_observation(r"select 'ordinary \' order by a", "select 'ordinary'");
+        assert_eq!(plan.mode, ObservationMode::ExecutableSequence);
+        assert_eq!(plan.warnings[0].code, "source_ordered_executable_sequence");
+    }
+
+    #[test]
+    fn escape_string_backslash_does_escape_quote() {
         let plan = classify_observation(
-            r"select E'not a query: \' limit 1' as text",
+            r"select E'not a query: \' order by a' as text",
             "select 'x' as text",
         );
         assert_eq!(plan.mode, ObservationMode::Bag);
@@ -438,5 +331,12 @@ mod tests {
         );
         assert_eq!(plan.mode, ObservationMode::Bag);
         assert!(plan.warnings.is_empty());
+    }
+
+    #[test]
+    fn malformed_lexical_structure_is_rejected_conservatively() {
+        let plan = classify_observation("select 'unterminated", "select 1");
+        assert_eq!(plan.mode, ObservationMode::Unclassifiable);
+        assert_eq!(plan.warnings[0].code, "source_observation_scan_unsupported");
     }
 }

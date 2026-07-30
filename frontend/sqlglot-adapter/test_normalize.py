@@ -280,6 +280,70 @@ class CompatibilityPatchLexingTests(unittest.TestCase):
                 )
 
 
+class PostgresOrderAliasExpressionTests(unittest.TestCase):
+    def normalize(self, sql: str) -> tuple[str, dict]:
+        return normalize.normalize_sql(
+            sql=sql,
+            read="tsql",
+            write="postgres",
+            identify=False,
+            pretty=False,
+            apply_patches=True,
+        )
+
+    def test_expands_tpcds_grouping_alias_inside_order_expression(self) -> None:
+        normalized, report = self.normalize(
+            "SELECT TOP 100 i_category, i_class, "
+            "GROUPING(i_category) + GROUPING(i_class) AS lochierarchy "
+            "FROM item GROUP BY ROLLUP(i_category, i_class) "
+            "ORDER BY lochierarchy DESC, "
+            "CASE WHEN lochierarchy = 0 THEN i_category END"
+        )
+
+        self.assertFalse(report["errors"])
+        self.assertIn("ORDER BY lochierarchy DESC", normalized)
+        self.assertIn(
+            "CASE WHEN (GROUPING(i_category) + GROUPING(i_class)) = 0",
+            normalized,
+        )
+        self.assertIn("LIMIT 100", normalized)
+        rewrites = [
+            entry
+            for entry in report["normalizations"]
+            if entry["kind"] == "postgres_order_alias_expression"
+        ]
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(rewrites[0]["aliases"], ["lochierarchy"])
+
+    def test_leaves_standalone_order_alias_unchanged(self) -> None:
+        normalized, report = self.normalize(
+            "SELECT TOP 5 GROUPING(category) AS hierarchy "
+            "FROM item GROUP BY ROLLUP(category) ORDER BY hierarchy DESC"
+        )
+
+        self.assertFalse(report["errors"])
+        self.assertIn("ORDER BY hierarchy DESC", normalized)
+        self.assertFalse(
+            any(
+                entry["kind"] == "postgres_order_alias_expression"
+                for entry in report["normalizations"]
+            )
+        )
+
+    def test_fails_closed_before_duplicating_unknown_function(self) -> None:
+        normalized, report = self.normalize(
+            "SELECT RAND() AS choice FROM item "
+            "ORDER BY CASE WHEN choice > 0 THEN 1 ELSE 0 END"
+        )
+
+        self.assertEqual(normalized, "")
+        self.assertEqual(len(report["errors"]), 1)
+        self.assertEqual(
+            report["errors"][0]["code"],
+            "order_alias_expression_not_repeatable",
+        )
+
+
 class PostgresIdentifierFoldingTests(unittest.TestCase):
     def normalize(self, sql: str, *, identify: bool = True) -> tuple[str, dict]:
         return normalize.normalize_sql(

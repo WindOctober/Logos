@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Run SQLSolver's real parser/validator/planner without proof search."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE = ROOT.parent
+SOURCE = ROOT / "benchmarks/adapters/materializers/SqlSolverFrontendPreflight.java"
+DEFAULT_JAR = WORKSPACE / "PaperTools/SQLSolver/build/libs/sqlsolver-v1.1.0.jar"
+POLICY = "sqlsolver-parser-validator-planner-v1"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Preflight one SQLSolver pair through its actual preprocess, parser, "
+            "validator, and relational planner; do not invoke the prover."
+        )
+    )
+    parser.add_argument("--schema", required=True)
+    parser.add_argument("--sql1", required=True)
+    parser.add_argument("--sql2", required=True)
+    parser.add_argument(
+        "--jar", default=os.environ.get("SQLSOLVER_JAR", str(DEFAULT_JAR))
+    )
+    parser.add_argument("--timeout-seconds", type=int, default=120)
+    args = parser.parse_args()
+
+    jar = Path(args.jar).resolve()
+    paths = {
+        "schema": Path(args.schema).resolve(),
+        "before": Path(args.sql1).resolve(),
+        "after": Path(args.sql2).resolve(),
+    }
+    for label, path in {"helper": SOURCE, "jar": jar, **paths}.items():
+        if not path.is_file():
+            print(f"missing {label}: {path}", file=sys.stderr)
+            return 2
+
+    java_home = Path(
+        os.environ.get("JAVA_HOME", WORKSPACE / "PaperTools/envs/sqlsolver-jdk17")
+    )
+    javac = java_home / "bin/javac"
+    java = java_home / "bin/java"
+    if not javac.is_file() or not java.is_file():
+        print(f"JAVA_HOME does not contain Java 17 tools: {java_home}", file=sys.stderr)
+        return 2
+
+    helper_sha = sha256_path(SOURCE)
+    jar_sha = sha256_path(jar)
+    cache_key = hashlib.sha256(f"{helper_sha}:{jar_sha}".encode()).hexdigest()[:20]
+    classes = ROOT / ".cache/sqlsolver-preflight" / cache_key
+    class_file = classes / "SqlSolverFrontendPreflight.class"
+    if not class_file.is_file():
+        classes.mkdir(parents=True, exist_ok=True)
+        compiled = subprocess.run(
+            [str(javac), "-cp", str(jar), "-d", str(classes), str(SOURCE)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if compiled.returncode != 0:
+            print(compiled.stderr, file=sys.stderr)
+            return compiled.returncode or 2
+
+    java_command = [
+        str(java),
+        "-cp",
+        os.pathsep.join((str(classes), str(jar))),
+        "SqlSolverFrontendPreflight",
+        str(paths["schema"]),
+        str(paths["before"]),
+        str(paths["after"]),
+    ]
+    try:
+        completed = subprocess.run(
+            java_command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=args.timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        report = {
+            "target": "sqlsolver",
+            "policy": POLICY,
+            "status": "timeout",
+            "failureCategory": "timeout-resource",
+            "actualTargetFrontend": True,
+            "proofSearchInvoked": False,
+            "timeoutSeconds": args.timeout_seconds,
+            "helperSha256": helper_sha,
+            "sqlsolverJarSha256": jar_sha,
+            "inputs": {label: sha256_path(path) for label, path in paths.items()},
+            "results": {},
+            "stderrTail": decode_timeout_output(exc.stderr)[-4000:],
+        }
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
+    if completed.returncode != 0:
+        print(completed.stderr, file=sys.stderr)
+        return completed.returncode or 2
+
+    results: dict[str, dict[str, object]] = {}
+    for line in completed.stdout.splitlines():
+        fields = line.split("\t")
+        if len(fields) != 6 or fields[0] not in {"schema", "before", "after"}:
+            continue
+        (
+            side,
+            status,
+            stage,
+            encoded_message,
+            encoded_preprocessed,
+            encoded_output_fields,
+        ) = fields
+        message = decode(encoded_message)
+        preprocessed = decode(encoded_preprocessed)
+        output_fields_text = decode(encoded_output_fields)
+        results[side] = {
+            "status": status,
+            "stage": stage,
+            "message": message or None,
+            "preprocessedSha256": (
+                hashlib.sha256(preprocessed.encode()).hexdigest()
+                if preprocessed
+                else None
+            ),
+            "outputFields": (
+                output_fields_text.split("\0") if output_fields_text else []
+            ),
+        }
+
+    if "schema" in results:
+        overall = "unsupported"
+    elif set(results) != {"before", "after"}:
+        print("malformed SQLSolver preflight output", file=sys.stderr)
+        if completed.stdout:
+            print(completed.stdout, file=sys.stderr)
+        return 2
+    else:
+        overall = (
+            "planned"
+            if all(results[side]["status"] == "planned" for side in ("before", "after"))
+            else "unsupported"
+        )
+
+    report = {
+        "target": "sqlsolver",
+        "policy": POLICY,
+        "status": overall,
+        "actualTargetFrontend": True,
+        "proofSearchInvoked": False,
+        "helperSha256": helper_sha,
+        "sqlsolverJarSha256": jar_sha,
+        "inputs": {label: sha256_path(path) for label, path in paths.items()},
+        "results": results,
+        "stderrTail": completed.stderr[-4000:],
+    }
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def decode(value: str) -> str:
+    return base64.b64decode(value.encode(), validate=True).decode()
+
+
+def decode_timeout_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    return value.decode(errors="replace") if isinstance(value, bytes) else value
+
+
+def sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

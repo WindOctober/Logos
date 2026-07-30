@@ -1,0 +1,1691 @@
+#!/usr/bin/env python3
+"""Run a bounded, evidence-producing Logos transform-only campaign."""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import dataclasses
+import datetime as dt
+import hashlib
+import json
+import os
+import runpy
+import signal
+import subprocess
+import tempfile
+import threading
+import time
+from pathlib import Path
+from typing import Any
+
+
+LOGOS_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOW_ROOT = LOGOS_ROOT.parent
+FULL_RUNNER_PATH = Path(__file__).with_name("run-logos")
+FULL_RUNNER = runpy.run_path(
+    str(FULL_RUNNER_PATH), run_name="logos_transform_runner_dependencies"
+)
+BenchmarkCase = FULL_RUNNER["BenchmarkCase"]
+BaseRunnerError = FULL_RUNNER["RunnerError"]
+ManagedProcess = FULL_RUNNER["ManagedProcess"]
+DEFAULT_INPUT_ROOT = FULL_RUNNER["DEFAULT_INPUT_ROOT"]
+DEFAULT_SOLVER_BIN = FULL_RUNNER["DEFAULT_SOLVER_BIN"]
+DEFAULT_ROCQ_OPAM_SWITCH = FULL_RUNNER["DEFAULT_ROCQ_OPAM_SWITCH"]
+CANONICAL_FRONTEND_COMMAND = FULL_RUNNER["CANONICAL_FRONTEND_COMMAND"]
+INPUT_MANIFEST_ALGORITHM = FULL_RUNNER["INPUT_MANIFEST_ALGORITHM"]
+GENERATED_MODULE_TREE_ALGORITHM = "logos-generated-module-tree-v1"
+TRANSFORM_ARTIFACT_SET_ALGORITHM = "logos-transform-artifact-set-v1"
+DEFAULT_RUN_ROOT = LOGOS_ROOT / "var/logos-solver/transform-runs"
+DEFAULT_CASE_TIMEOUT_SECONDS = 20 * 60
+DEFAULT_TERMINATION_GRACE_SECONDS = 10.0
+TERMINAL_STATUSES = frozenset(("completed", "timed_out", "failed", "cancelled"))
+REQUIRED_WORKSPACE_FILE_FIELDS = (
+    "problemPath",
+    "goalPath",
+    "witnessPath",
+    "proofAgentPromptPath",
+    "rocqCheckScriptPath",
+    "dockerAgentScriptPath",
+)
+REQUIRED_TRANSFORM_ARTIFACT_PATHS = (
+    "input/integrity-contract.json",
+    "input/integrity-contract.txt",
+    "input/integrity-schema-probe.sql",
+    "input/integrity-validator-checks.json",
+    "input/schema-ir.json",
+    "input/source-ir.json",
+    "input/sql-environment.json",
+    "input/target-ir.json",
+    "input/verification-input.json",
+    "proof-stage/formal-sql-lowering.json",
+)
+
+
+class RunnerError(RuntimeError):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class RunConfig:
+    input_root: Path
+    run_dir: Path
+    solver_bin: Path
+    jobs: int
+    case_timeout_seconds: float
+    termination_grace_seconds: float
+    proof_rocq_opam_switch: Path
+    sql_time_zone: str
+    sql_default_collation: str
+    sql_character_classification: str
+    sql_locale_provider: str
+    sql_server_encoding: str
+    input_manifest: dict[str, Any]
+    input_files: dict[str, dict[str, Any]]
+    solver_binary: dict[str, Any]
+    framework_source_tree: dict[str, Any]
+    frontend_stack: dict[str, Any]
+    runner_binary: dict[str, Any]
+
+
+class ProcessRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._processes: dict[int, ManagedProcess] = {}
+
+    def register(self, process: subprocess.Popen[bytes]) -> ManagedProcess:
+        managed = ManagedProcess(process)
+        with self._lock:
+            self._processes[process.pid] = managed
+        return managed
+
+    def unregister(self, managed: ManagedProcess) -> None:
+        with self._lock:
+            current = self._processes.get(managed.pid)
+            if current is managed:
+                self._processes.pop(managed.pid, None)
+        managed.close()
+
+    def terminate_all(self, grace_seconds: float) -> None:
+        with self._lock:
+            processes = list(self._processes.values())
+        FULL_RUNNER["terminate_process_trees"](processes, grace_seconds)
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate and validate FormalSQL/Rocq proof workspaces without running "
+            "counterexample or proof agents."
+        )
+    )
+    parser.add_argument(
+        "--input-root",
+        default=str(DEFAULT_INPUT_ROOT),
+        help="Independent Logos generated input root (default: .generated/logos).",
+    )
+    parser.add_argument(
+        "--run-dir",
+        help="Fresh output directory; defaults below var/logos-solver/transform-runs.",
+    )
+    parser.add_argument("--jobs", type=int, default=16)
+    parser.add_argument(
+        "--case-timeout",
+        type=parse_duration,
+        default=DEFAULT_CASE_TIMEOUT_SECONDS,
+        metavar="DURATION",
+    )
+    parser.add_argument(
+        "--termination-grace",
+        type=parse_duration,
+        default=DEFAULT_TERMINATION_GRACE_SECONDS,
+        metavar="DURATION",
+    )
+    parser.add_argument("--case", action="append")
+    parser.add_argument("--case-file", action="append")
+    parser.add_argument("--benchmark", action="append")
+    parser.add_argument("--match", action="append")
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--list", action="store_true")
+    parser.add_argument("--solver-bin", default=str(DEFAULT_SOLVER_BIN))
+    parser.add_argument("--no-build", action="store_true")
+    parser.add_argument("--no-frontend-build", action="store_true")
+    parser.add_argument(
+        "--proof-rocq-opam-switch", default=str(DEFAULT_ROCQ_OPAM_SWITCH)
+    )
+    parser.add_argument("--sql-time-zone", default="UTC")
+    parser.add_argument("--sql-default-collation", default="C")
+    parser.add_argument("--sql-character-classification", default="C")
+    parser.add_argument("--sql-locale-provider", default="libc")
+    parser.add_argument("--sql-server-encoding", default="UTF8")
+    return parser
+
+
+def parse_duration(value: str) -> float:
+    try:
+        return FULL_RUNNER["parse_duration"](value)
+    except (argparse.ArgumentTypeError, BaseRunnerError) as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def validate_args(args: argparse.Namespace) -> None:
+    if args.jobs < 1:
+        raise RunnerError("--jobs must be at least 1")
+    if args.case_timeout <= 0:
+        raise RunnerError("--case-timeout must be positive")
+    if args.termination_grace < 0:
+        raise RunnerError("--termination-grace cannot be negative")
+    if args.limit is not None and args.limit < 1:
+        raise RunnerError("--limit must be at least 1")
+
+
+def resolve_path(value: str | Path) -> Path:
+    try:
+        return FULL_RUNNER["resolve_path"](value)
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def discover_cases(input_root: Path) -> list[BenchmarkCase]:
+    try:
+        return FULL_RUNNER["discover_cases"](input_root)
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def select_cases(
+    cases: list[BenchmarkCase], args: argparse.Namespace
+) -> list[BenchmarkCase]:
+    try:
+        return FULL_RUNNER["select_cases"](cases, args)
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def compact_json_sha256(value: Any) -> str:
+    """Match ``serde_json::to_vec`` for JSON read from solver artifacts."""
+
+    encoded = json.dumps(
+        value, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    return sha256_bytes(encoded)
+
+
+def read_json_artifact(path: Path, description: str) -> Any:
+    if path.is_symlink() or not path.is_file():
+        raise RunnerError(f"{description} is missing, symlinked, or non-regular")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RunnerError(f"cannot read {description}: {error}") from error
+
+
+POSTGRES_SQL_WHITESPACE = " \t\n\r\f\v"
+
+
+def _bare_identifier_start(value: str) -> bool:
+    return value == "_" or "A" <= value <= "Z" or "a" <= value <= "z"
+
+
+def _bare_identifier_part(value: str) -> bool:
+    return _bare_identifier_start(value) or value.isascii() and value.isdigit() or value == "$"
+
+
+def _dollar_quote_delimiter_end(sql: str, start: int) -> int | None:
+    if start > 0:
+        previous = sql[start - 1]
+        if _bare_identifier_part(previous) or ord(previous) >= 0x80:
+            return None
+    index = start + 1
+    if index < len(sql) and ord(sql[index]) >= 0x80:
+        raise RunnerError("non-ASCII PostgreSQL dollar-quote tags are unsupported")
+    if index < len(sql) and sql[index] == "$":
+        return index + 1
+    if index >= len(sql) or not _bare_identifier_start(sql[index]):
+        return None
+    index += 1
+    while index < len(sql) and (
+        _bare_identifier_start(sql[index])
+        or sql[index].isascii() and sql[index].isdigit()
+    ):
+        index += 1
+    if index < len(sql) and ord(sql[index]) >= 0x80:
+        raise RunnerError("non-ASCII PostgreSQL dollar-quote tags are unsupported")
+    return index + 1 if index < len(sql) and sql[index] == "$" else None
+
+
+def _postgres_escape_string_quote(sql: str, quote_start: int) -> bool:
+    if quote_start == 0 or sql[quote_start - 1] not in ("E", "e"):
+        return False
+    if quote_start == 1:
+        return True
+    previous = sql[quote_start - 2]
+    return not _bare_identifier_part(previous) and ord(previous) < 0x80
+
+
+def _quoted_token_end(sql: str, start: int, quote: str) -> int:
+    index = start + 1
+    backslash_escapes = quote == "'" and _postgres_escape_string_quote(sql, start)
+    while index < len(sql):
+        current = sql[index]
+        index += 1
+        if current == "\\" and backslash_escapes and index < len(sql):
+            index += 1
+        elif current == quote:
+            if index < len(sql) and sql[index] == quote:
+                index += 1
+            else:
+                return index
+    raise RunnerError("unterminated quoted token in SQL query file")
+
+
+def _bracket_quoted_token_end(sql: str, start: int) -> int:
+    index = start + 1
+    while index < len(sql):
+        current = sql[index]
+        index += 1
+        if current == "]":
+            if index < len(sql) and sql[index] == "]":
+                index += 1
+            else:
+                return index
+    raise RunnerError("unterminated bracket-quoted identifier in SQL query file")
+
+
+def _skip_sql_comment(sql: str, index: int) -> int:
+    if sql.startswith("--", index):
+        index += 2
+        while index < len(sql) and sql[index] not in ("\n", "\r"):
+            index += 1
+        return index
+    if sql.startswith("/*", index):
+        depth = 1
+        index += 2
+        while index < len(sql) and depth > 0:
+            if sql.startswith("/*", index):
+                depth += 1
+                index += 2
+            elif sql.startswith("*/", index):
+                depth -= 1
+                index += 2
+            else:
+                index += 1
+        if depth != 0:
+            raise RunnerError("unterminated block comment in SQL query file")
+        return index
+    return index
+
+
+def _contains_sql_token(sql: str) -> bool:
+    index = 0
+    while index < len(sql):
+        if sql[index] in POSTGRES_SQL_WHITESPACE:
+            index += 1
+        elif sql.startswith("--", index) or sql.startswith("/*", index):
+            index = _skip_sql_comment(sql, index)
+        else:
+            return True
+    return False
+
+
+def split_calcite_query_program(sql: str) -> list[str]:
+    """Port the wrapper's protected-token ``splitQueries`` contract."""
+
+    queries = []
+    start = 0
+    index = 0
+    while index < len(sql):
+        current = sql[index]
+        if sql.startswith("--", index) or sql.startswith("/*", index):
+            index = _skip_sql_comment(sql, index)
+            continue
+        if current in ("'", '"', "`"):
+            index = _quoted_token_end(sql, index, current)
+            continue
+        if current == "[":
+            index = _bracket_quoted_token_end(sql, index)
+            continue
+        if current == "$":
+            delimiter_end = _dollar_quote_delimiter_end(sql, index)
+            if delimiter_end is not None:
+                delimiter = sql[index:delimiter_end]
+                close = sql.find(delimiter, delimiter_end)
+                if close < 0:
+                    raise RunnerError("unterminated dollar-quoted SQL string")
+                index = close + len(delimiter)
+                continue
+        if current == ";":
+            candidate = sql[start:index].strip(POSTGRES_SQL_WHITESPACE)
+            if candidate and _contains_sql_token(candidate):
+                queries.append(candidate)
+            start = index + 1
+        index += 1
+    candidate = sql[start:].strip(POSTGRES_SQL_WHITESPACE)
+    if candidate and _contains_sql_token(candidate):
+        queries.append(candidate)
+    return queries
+
+
+def canonical_json_bytes(value: Any) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+
+
+def atomic_write_json(path: Path, value: Any) -> None:
+    encoded = (json.dumps(value, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def workspace_display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(WORKFLOW_ROOT).as_posix()
+    except ValueError:
+        return str(path.resolve())
+
+
+def resolve_recorded_path(value: object, description: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise RunnerError(f"{description} path is missing")
+    recorded = Path(value)
+    if recorded.is_absolute():
+        return recorded.resolve()
+    return (WORKFLOW_ROOT / recorded).resolve()
+
+
+def iso_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def executable_record(path: Path, description: str) -> dict[str, Any]:
+    candidate = path.absolute()
+    if candidate.is_symlink() or not candidate.is_file():
+        raise RunnerError(
+            f"{description} is missing, symlinked, or non-executable: {candidate}"
+        )
+    resolved = candidate.resolve()
+    if not os.access(resolved, os.X_OK):
+        raise RunnerError(
+            f"{description} is missing, symlinked, or non-executable: {resolved}"
+        )
+    return {
+        "path": workspace_display_path(resolved),
+        "sha256": sha256_file(resolved),
+        "bytes": resolved.stat().st_size,
+    }
+
+
+def regular_file_record(path: Path, description: str) -> dict[str, Any]:
+    candidate = path.absolute()
+    if candidate.is_symlink() or not candidate.is_file():
+        raise RunnerError(
+            f"{description} is missing, symlinked, or non-regular: {candidate}"
+        )
+    resolved = candidate.resolve()
+    return {
+        "path": workspace_display_path(resolved),
+        "sha256": sha256_file(resolved),
+        "bytes": resolved.stat().st_size,
+    }
+
+
+def prepare_run_dir(value: str | None) -> Path:
+    if value:
+        run_dir = resolve_path(value)
+    else:
+        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        run_dir = DEFAULT_RUN_ROOT / f"run-{stamp}-{os.getpid()}"
+    if run_dir.exists() and any(run_dir.iterdir()):
+        raise RunnerError(f"run directory is not empty: {run_dir}")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir.resolve()
+
+
+def build_solver() -> None:
+    completed = subprocess.run(
+        ["cargo", "build", "-p", "logos-solver"], cwd=LOGOS_ROOT, check=False
+    )
+    if completed.returncode != 0:
+        raise RunnerError(f"cargo build failed with exit code {completed.returncode}")
+
+
+def prepare_frontend_stack() -> None:
+    try:
+        FULL_RUNNER["prepare_frontend_stack"]()
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def framework_source_tree_record(run_dir: Path) -> dict[str, Any]:
+    try:
+        return FULL_RUNNER["framework_source_tree_record"](run_dir, resume=False)
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def frontend_stack_record(run_dir: Path) -> dict[str, Any]:
+    try:
+        return FULL_RUNNER["frontend_stack_record"](run_dir, resume=False)
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def input_manifest_record(
+    run_dir: Path,
+    available_cases: list[BenchmarkCase],
+    selected_cases: list[BenchmarkCase],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    try:
+        record, files = FULL_RUNNER["input_manifest_record"](
+            run_dir,
+            available_cases,
+            selected_cases,
+            frozen=False,
+            resume=False,
+        )
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+    if record.get("algorithm") != INPUT_MANIFEST_ALGORITHM:
+        raise RunnerError("transform runner requires the metadata-bound Logos manifest")
+    return record, files
+
+
+def sql_environment_record(config: RunConfig) -> dict[str, str]:
+    return {
+        "timeZone": config.sql_time_zone,
+        "defaultCollation": config.sql_default_collation,
+        "characterClassification": config.sql_character_classification,
+        "localeProvider": config.sql_locale_provider,
+        "serverEncoding": config.sql_server_encoding,
+    }
+
+
+def solver_environment() -> dict[str, str]:
+    try:
+        return FULL_RUNNER["canonical_frontend_environment"](
+            include_runtime_classpath=True
+        )
+    except BaseRunnerError as error:
+        raise RunnerError(str(error)) from error
+
+
+def selection_record(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "benchmarks": list(args.benchmark or ()),
+        "cases": list(args.case or ()),
+        "caseFiles": list(args.case_file or ()),
+        "patterns": list(args.match or ()),
+        "limit": args.limit,
+    }
+
+
+def configuration_record(config: RunConfig) -> dict[str, Any]:
+    environment = solver_environment()
+    return {
+        "inputRoot": workspace_display_path(config.input_root),
+        "runDir": workspace_display_path(config.run_dir),
+        "jobs": config.jobs,
+        "caseTimeoutSeconds": config.case_timeout_seconds,
+        "terminationGraceSeconds": config.termination_grace_seconds,
+        "transformOnly": True,
+        "counterexampleSearch": "disabled",
+        "proofAgent": "disabled",
+        "solverBinary": config.solver_binary,
+        "runnerBinary": config.runner_binary,
+        "canonicalFrontendCommand": CANONICAL_FRONTEND_COMMAND,
+        "frontendStack": config.frontend_stack,
+        "frameworkSourceTree": config.framework_source_tree,
+        "proofRocqOpamSwitch": workspace_display_path(config.proof_rocq_opam_switch),
+        "inputManifest": config.input_manifest,
+        "sqlEnvironment": sql_environment_record(config),
+        "solverEnvironment": {
+            "variableNames": sorted(environment),
+            "sha256": hashlib.sha256(canonical_json_bytes(environment)).hexdigest(),
+        },
+    }
+
+
+def base_result(case: BenchmarkCase, config: RunConfig) -> dict[str, Any]:
+    case_dir = config.run_dir / "cases" / case.case_id
+    input_files = config.input_files[case.case_id]
+    return {
+        "caseId": case.case_id,
+        "benchmark": case.source_benchmark or case.cohort,
+        "inputDir": workspace_display_path(case.input_dir),
+        "caseDir": workspace_display_path(case_dir),
+        "reportPath": workspace_display_path(case_dir / "report.json"),
+        "stdoutPath": workspace_display_path(case_dir / "stdout.log"),
+        "stderrPath": workspace_display_path(case_dir / "stderr.log"),
+        "inputFiles": input_files,
+        "source": {
+            "status": "not_lowered",
+            "sha256": input_files["source"]["sha256"],
+        },
+        "target": {
+            "status": "not_lowered",
+            "sha256": input_files["target"]["sha256"],
+        },
+        "reportEvidence": {
+            "path": workspace_display_path(case_dir / "report.json"),
+            "present": False,
+            "sha256": None,
+        },
+        "workspaceEvidence": [],
+        "generatedModuleEvidence": None,
+        "transformArtifactEvidence": None,
+    }
+
+
+def resolve_case_artifact(case_dir: Path, value: object, field: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise RunnerError(f"proofWorkspace.{field} is missing")
+    path = Path(value)
+    if not path.is_absolute():
+        path = case_dir / path
+    if path.is_symlink():
+        raise RunnerError(f"proofWorkspace.{field} is symlinked")
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(case_dir.resolve())
+    except ValueError as error:
+        raise RunnerError(
+            f"proofWorkspace.{field} escapes its case directory"
+        ) from error
+    return resolved
+
+
+def transform_artifact_set_record(case_dir: Path) -> dict[str, Any]:
+    """Bind every accepted input artifact plus the FormalSQL lowering report.
+
+    The solver-owned ``input`` directory is intentionally treated as one
+    closed artifact set rather than a filename allowlist.  The mandatory paths
+    establish the current frontend/integrity contract, while recording every
+    additional regular input file prevents a newly added verifier input or
+    probe from silently falling outside campaign integrity.
+    """
+
+    if case_dir.is_symlink() or not case_dir.is_dir():
+        raise RunnerError(
+            f"transform case directory is missing, symlinked, or non-directory: {case_dir}"
+        )
+    resolved_case = case_dir.resolve()
+    input_dir = case_dir / "input"
+    if input_dir.is_symlink() or not input_dir.is_dir():
+        raise RunnerError(
+            f"transform input artifact directory is missing or symlinked: {input_dir}"
+        )
+
+    candidates: dict[str, Path] = {}
+    for path in sorted(input_dir.rglob("*")):
+        relative = path.relative_to(case_dir).as_posix()
+        if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+            raise RunnerError(
+                f"transform input artifact tree contains a symlink or non-regular entry: {path}"
+            )
+        if path.is_file():
+            candidates[relative] = path
+
+    lowering_relative = "proof-stage/formal-sql-lowering.json"
+    candidates[lowering_relative] = case_dir / lowering_relative
+    missing = [
+        relative
+        for relative in REQUIRED_TRANSFORM_ARTIFACT_PATHS
+        if relative not in candidates
+        or candidates[relative].is_symlink()
+        or not candidates[relative].is_file()
+    ]
+    if missing:
+        raise RunnerError(
+            "completed transform is missing required accepted/lowering artifacts: "
+            + ", ".join(missing)
+        )
+
+    artifacts = []
+    for relative, path in sorted(candidates.items()):
+        record = regular_file_record(path, f"transform artifact {relative}")
+        resolved = resolve_recorded_path(
+            record["path"], f"transform artifact {relative}"
+        )
+        try:
+            actual_relative = resolved.relative_to(resolved_case).as_posix()
+        except ValueError as error:
+            raise RunnerError(
+                f"transform artifact escapes its case directory: {relative}"
+            ) from error
+        if actual_relative != relative:
+            raise RunnerError(
+                f"transform artifact path is borrowed or redirected: {relative}"
+            )
+        artifacts.append({"artifact": relative, **record})
+
+    return {
+        "algorithm": TRANSFORM_ARTIFACT_SET_ALGORITHM,
+        "caseDir": workspace_display_path(resolved_case),
+        "artifactCount": len(artifacts),
+        "artifactsSha256": hashlib.sha256(canonical_json_bytes(artifacts)).hexdigest(),
+        "artifacts": artifacts,
+    }
+
+
+def generated_module_tree_record(module_dir: Path) -> dict[str, Any]:
+    if not module_dir.is_dir() or module_dir.is_symlink():
+        raise RunnerError(
+            f"generated FormalSQL module directory is missing or symlinked: {module_dir}"
+        )
+    rows = []
+    for path in sorted(module_dir.rglob("*")):
+        if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+            raise RunnerError(
+                f"generated FormalSQL module tree contains a non-regular entry: {path}"
+            )
+        relative = path.relative_to(module_dir).as_posix()
+        if path.is_dir():
+            rows.append({"kind": "directory", "path": relative})
+        else:
+            rows.append(
+                {
+                    "kind": "file",
+                    "path": relative,
+                    "sha256": sha256_file(path),
+                    "bytes": path.stat().st_size,
+                }
+            )
+    file_count = sum(row["kind"] == "file" for row in rows)
+    if file_count == 0:
+        raise RunnerError("generated FormalSQL module directory is empty")
+    return {
+        "algorithm": GENERATED_MODULE_TREE_ALGORITHM,
+        "path": workspace_display_path(module_dir),
+        "entryCount": len(rows),
+        "fileCount": file_count,
+        "sha256": hashlib.sha256(canonical_json_bytes(rows)).hexdigest(),
+        "entries": rows,
+    }
+
+
+def validate_transform_report(
+    report: dict[str, Any], case_dir: Path
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    log_dir = report.get("logDir")
+    if not isinstance(log_dir, str) or Path(log_dir).resolve() != case_dir.resolve():
+        raise RunnerError("transform report logDir does not identify its case")
+    proof = report.get("proof")
+    if (
+        report.get("outcome") != "transform_only"
+        or not isinstance(proof, dict)
+        or proof.get("backendStatus") != "workspace_generated"
+    ):
+        raise RunnerError(
+            "transform report is not transform_only/workspace_generated evidence"
+        )
+    workspace = proof.get("proofWorkspace")
+    if not isinstance(workspace, dict):
+        raise RunnerError("transform report has no proofWorkspace object")
+    module_dir = resolve_case_artifact(
+        case_dir, workspace.get("generatedModuleDir"), "generatedModuleDir"
+    )
+    if not module_dir.is_dir() or module_dir.is_symlink():
+        raise RunnerError(
+            "generated FormalSQL module directory is missing or symlinked"
+        )
+    evidence = []
+    for field in REQUIRED_WORKSPACE_FILE_FIELDS:
+        path = resolve_case_artifact(case_dir, workspace.get(field), field)
+        if not path.is_file() or path.is_symlink():
+            raise RunnerError(f"proof workspace file is missing or symlinked: {field}")
+        evidence.append(
+            {
+                "field": field,
+                "path": workspace_display_path(path),
+                "sha256": sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+        )
+    return (
+        evidence,
+        generated_module_tree_record(module_dir),
+        transform_artifact_set_record(case_dir),
+    )
+
+
+def append_report_evidence(
+    result: dict[str, Any], case_dir: Path
+) -> tuple[dict[str, Any] | None, str | None]:
+    report_path = case_dir / "report.json"
+    if not report_path.exists():
+        return None, "solver produced no report.json"
+    if not report_path.is_file() or report_path.is_symlink():
+        return None, "solver report is non-regular or symlinked"
+    result["reportEvidence"] = {
+        "path": workspace_display_path(report_path),
+        "present": True,
+        "sha256": sha256_file(report_path),
+    }
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return None, f"cannot read solver report: {error}"
+    if not isinstance(report, dict):
+        return None, "solver report is not a JSON object"
+    result["outcome"] = report.get("outcome")
+    proof = report.get("proof")
+    if isinstance(proof, dict):
+        result["backendStatus"] = proof.get("backendStatus")
+    try:
+        workspace_evidence, module_evidence, transform_artifact_evidence = (
+            validate_transform_report(report, case_dir)
+        )
+        result["workspaceEvidence"] = workspace_evidence
+        result["generatedModuleEvidence"] = module_evidence
+        result["transformArtifactEvidence"] = transform_artifact_evidence
+    except RunnerError as error:
+        return report, str(error)
+    return report, None
+
+
+def solver_command(case: BenchmarkCase, case_dir: Path, config: RunConfig) -> list[str]:
+    return [
+        str(config.solver_bin),
+        "check",
+        "--schema",
+        str(case.schema),
+        "--source",
+        str(case.source),
+        "--target",
+        str(case.target),
+        "--log-dir",
+        str(case_dir),
+        "--logos-repo-root",
+        str(LOGOS_ROOT),
+        "--calcite-ir-command",
+        CANONICAL_FRONTEND_COMMAND,
+        "--verification-mode",
+        "outcome-unconditional",
+        "--proof-rocq-opam-switch",
+        str(config.proof_rocq_opam_switch),
+        "--sql-time-zone",
+        config.sql_time_zone,
+        "--sql-default-collation",
+        config.sql_default_collation,
+        "--sql-character-classification",
+        config.sql_character_classification,
+        "--sql-locale-provider",
+        config.sql_locale_provider,
+        "--sql-server-encoding",
+        config.sql_server_encoding,
+        "--disable-counterexample-search",
+        "--disable-proof-agent",
+        "--transform-only",
+        "--quiet",
+    ]
+
+
+def write_case_result(
+    config: RunConfig, case: BenchmarkCase, result: dict[str, Any]
+) -> None:
+    case_dir = config.run_dir / "cases" / case.case_id
+    atomic_write_json(case_dir / "runner-result.json", result)
+    atomic_write_json(
+        case_dir / "status.json",
+        {
+            "schemaVersion": 1,
+            "caseId": case.case_id,
+            "status": result.get("status"),
+            "returnCode": result.get("returnCode"),
+            "outcome": result.get("outcome"),
+            "backendStatus": result.get("backendStatus"),
+            "runnerError": result.get("runnerError"),
+        },
+    )
+
+
+def run_case(
+    case: BenchmarkCase,
+    config: RunConfig,
+    registry: ProcessRegistry,
+    stop_event: threading.Event,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    result = base_result(case, config)
+    case_dir = config.run_dir / "cases" / case.case_id
+    case_dir.mkdir(parents=True, exist_ok=False)
+    command = solver_command(case, case_dir, config)
+    result["solverCommand"] = command
+    if stop_event.is_set():
+        result.update({"status": "cancelled", "returnCode": None, "elapsedMs": 0})
+        write_case_result(config, case, result)
+        return result
+    stdout_path = case_dir / "stdout.log"
+    stderr_path = case_dir / "stderr.log"
+    timed_out = False
+    with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+        process = subprocess.Popen(
+            command,
+            cwd=LOGOS_ROOT,
+            env=solver_environment(),
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+        )
+        managed = registry.register(process)
+        try:
+            try:
+                return_code = managed.wait(config.case_timeout_seconds)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                FULL_RUNNER["terminate_process_group"](
+                    managed, config.termination_grace_seconds
+                )
+                return_code = managed.wait(0.0)
+        finally:
+            if not managed.has_exited():
+                FULL_RUNNER["terminate_process_group"](
+                    managed, config.termination_grace_seconds
+                )
+            else:
+                managed.wait(0.0)
+            registry.unregister(managed)
+    elapsed_ms = round((time.monotonic() - started) * 1000)
+    _report, report_error = append_report_evidence(result, case_dir)
+    if report_error is None:
+        try:
+            validate_transform_artifact_semantics(case, config, case_dir)
+        except RunnerError as error:
+            report_error = str(error)
+    if timed_out:
+        status = "timed_out"
+    elif stop_event.is_set() and return_code != 0:
+        status = "cancelled"
+    elif return_code == 0 and report_error is None:
+        status = "completed"
+    else:
+        status = "failed"
+    result.update(
+        {"status": status, "returnCode": return_code, "elapsedMs": elapsed_ms}
+    )
+    if report_error is not None:
+        result["runnerError"] = report_error
+    if status == "completed":
+        result["source"]["status"] = "lowered"
+        result["target"]["status"] = "lowered"
+    elif status != "completed":
+        try:
+            diagnostic = stderr_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            diagnostic = ""
+        diagnostic = diagnostic[-4000:].strip()
+        if diagnostic:
+            result["stderrTail"] = diagnostic
+        if status == "failed":
+            exit_error = f"solver exited with return code {return_code}"
+            if diagnostic:
+                exit_error += f": {diagnostic}"
+            prior_error = result.get("runnerError")
+            result["runnerError"] = (
+                f"{prior_error}; {exit_error}" if prior_error else exit_error
+            )
+    write_case_result(config, case, result)
+    return result
+
+
+def run_case_guarded(
+    case: BenchmarkCase,
+    config: RunConfig,
+    registry: ProcessRegistry,
+    stop_event: threading.Event,
+) -> dict[str, Any]:
+    try:
+        return run_case(case, config, registry, stop_event)
+    except Exception as error:
+        case_dir = config.run_dir / "cases" / case.case_id
+        case_dir.mkdir(parents=True, exist_ok=True)
+        result = base_result(case, config)
+        result["solverCommand"] = solver_command(case, case_dir, config)
+        result.update(
+            {
+                "status": "failed",
+                "returnCode": None,
+                "elapsedMs": 0,
+                "runnerError": f"{type(error).__name__}: {error}",
+            }
+        )
+        write_case_result(config, case, result)
+        return result
+
+
+def result_counts(results: list[dict[str, Any]], total: int) -> dict[str, int]:
+    counts = {
+        "selected": total,
+        "pending": total - len(results),
+        "completed": 0,
+        "timedOut": 0,
+        "failed": 0,
+        "cancelled": 0,
+    }
+    names = {
+        "completed": "completed",
+        "timed_out": "timedOut",
+        "failed": "failed",
+        "cancelled": "cancelled",
+    }
+    for result in results:
+        key = names.get(result.get("status"))
+        if key is not None:
+            counts[key] += 1
+    return counts
+
+
+def verify_workspace_evidence(result: dict[str, Any], case_dir: Path) -> None:
+    evidence = result.get("workspaceEvidence")
+    module_evidence = result.get("generatedModuleEvidence")
+    if result.get("status") != "completed":
+        if evidence not in ([], None):
+            for row in evidence:
+                path = resolve_recorded_path(row.get("path"), "workspace evidence")
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or sha256_file(path) != row.get("sha256")
+                ):
+                    raise RunnerError(
+                        f"non-completed workspace evidence changed: {result['caseId']}"
+                    )
+        if module_evidence is not None:
+            module_dir = resolve_recorded_path(
+                module_evidence.get("path"), "generated module evidence"
+            )
+            if generated_module_tree_record(module_dir) != module_evidence:
+                raise RunnerError(
+                    f"non-completed generated module evidence changed: {result['caseId']}"
+                )
+        return
+    if not isinstance(evidence, list) or len(evidence) != len(
+        REQUIRED_WORKSPACE_FILE_FIELDS
+    ):
+        raise RunnerError(
+            f"completed case has incomplete workspace evidence: {result['caseId']}"
+        )
+    if {row.get("field") for row in evidence} != set(REQUIRED_WORKSPACE_FILE_FIELDS):
+        raise RunnerError(
+            f"completed case has wrong workspace fields: {result['caseId']}"
+        )
+    for row in evidence:
+        path = resolve_recorded_path(row.get("path"), "workspace evidence")
+        try:
+            path.relative_to(case_dir.resolve())
+        except ValueError as error:
+            raise RunnerError("workspace evidence escapes its case") from error
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or sha256_file(path) != row.get("sha256")
+            or path.stat().st_size != row.get("bytes")
+        ):
+            raise RunnerError(f"workspace evidence changed: {result['caseId']}")
+    if not isinstance(module_evidence, dict):
+        raise RunnerError(
+            f"completed case has no generated module evidence: {result['caseId']}"
+        )
+    module_dir = resolve_recorded_path(
+        module_evidence.get("path"), "generated module evidence"
+    )
+    try:
+        module_dir.relative_to(case_dir.resolve())
+    except ValueError as error:
+        raise RunnerError("generated module evidence escapes its case") from error
+    if generated_module_tree_record(module_dir) != module_evidence:
+        raise RunnerError(f"generated module tree changed: {result['caseId']}")
+
+
+def validate_transform_artifact_semantics(
+    case: BenchmarkCase, config: RunConfig, case_dir: Path
+) -> None:
+    """Cross-bind mutable artifacts to the selected immutable case inputs."""
+
+    canonical_paths = {
+        name: resolve_recorded_path(record.get("path"), f"canonical {name} input")
+        for name, record in config.input_files[case.case_id].items()
+    }
+    try:
+        canonical_sql = {
+            name: canonical_paths[name].read_bytes().decode("utf-8")
+            for name in ("schema", "source", "target")
+        }
+    except (OSError, UnicodeDecodeError) as error:
+        raise RunnerError(
+            f"cannot read canonical SQL input for {case.case_id}: {error}"
+        ) from error
+    metadata = read_json_artifact(canonical_paths["metadata"], "canonical case metadata")
+    if not isinstance(metadata, dict):
+        raise RunnerError(f"canonical case metadata is not an object: {case.case_id}")
+    expected_case_id = metadata.get("flatCaseId")
+    if (
+        not isinstance(expected_case_id, str)
+        or not expected_case_id
+        or case.flat_case_id != expected_case_id
+    ):
+        raise RunnerError(f"canonical flat case identity is incoherent: {case.case_id}")
+
+    verification_path = case_dir / "input/verification-input.json"
+    integrity_path = case_dir / "input/integrity-contract.json"
+    schema_ir_path = case_dir / "input/schema-ir.json"
+    source_ir_path = case_dir / "input/source-ir.json"
+    target_ir_path = case_dir / "input/target-ir.json"
+    lowering_path = case_dir / "proof-stage/formal-sql-lowering.json"
+    verification = read_json_artifact(verification_path, "verification input")
+    integrity = read_json_artifact(integrity_path, "integrity contract")
+    schema_ir = read_json_artifact(schema_ir_path, "accepted schema IR")
+    source_ir = read_json_artifact(source_ir_path, "accepted source IR")
+    target_ir = read_json_artifact(target_ir_path, "accepted target IR")
+    lowering = read_json_artifact(lowering_path, "FormalSQL lowering report")
+    if not all(
+        isinstance(document, dict)
+        for document in (verification, integrity, schema_ir, lowering)
+    ) or not isinstance(source_ir, list) or not isinstance(target_ir, list):
+        raise RunnerError(f"transform semantic artifacts have wrong JSON shapes: {case.case_id}")
+
+    expected_environment = {
+        "defaultCollation": config.sql_default_collation,
+        "characterClassification": config.sql_character_classification,
+        "localeProvider": config.sql_locale_provider,
+        "serverEncoding": config.sql_server_encoding,
+    }
+    if verification.get("sqlEnvironment") != expected_environment:
+        raise RunnerError(f"verification input SQL environment drifted: {case.case_id}")
+    for field, input_name in (
+        ("schema", "schema"),
+        ("sourceQuery", "source"),
+        ("targetQuery", "target"),
+    ):
+        binding = verification.get(field)
+        if (
+            not isinstance(binding, dict)
+            or not isinstance(binding.get("path"), str)
+            or Path(binding["path"]).resolve() != canonical_paths[input_name]
+            or binding.get("sql") != canonical_sql[input_name]
+        ):
+            raise RunnerError(
+                f"verification input {field} is not the selected case input: {case.case_id}"
+            )
+    if verification.get("integrityContract") != integrity:
+        raise RunnerError(f"verification/integrity contract binding drifted: {case.case_id}")
+    integrity_source = integrity.get("source")
+    if (
+        integrity.get("caseId") != expected_case_id
+        or not isinstance(integrity_source, str)
+        or Path(integrity_source).resolve() != canonical_paths["metadata"]
+    ):
+        raise RunnerError(f"integrity contract borrows another case: {case.case_id}")
+
+    schema_tables = schema_ir.get("tables")
+    integrity_tables = integrity.get("tables")
+    if not isinstance(schema_tables, list) or not isinstance(integrity_tables, list):
+        raise RunnerError(f"schema/integrity table bindings are malformed: {case.case_id}")
+    schema_constraints = []
+    for table in schema_tables:
+        if not isinstance(table, dict) or not isinstance(table.get("name"), str):
+            raise RunnerError(f"accepted schema IR has a malformed table: {case.case_id}")
+        constraints = table.get("constraints")
+        if constraints:
+            schema_constraints.append(
+                {"name": table["name"], "constraints": constraints}
+            )
+    if schema_constraints != integrity_tables:
+        raise RunnerError(f"schema IR/integrity contract binding drifted: {case.case_id}")
+
+    for label, program, sql in (
+        ("source", source_ir, canonical_sql["source"]),
+        ("target", target_ir, canonical_sql["target"]),
+    ):
+        expected_statements = split_calcite_query_program(sql)
+        actual_statements = []
+        for statement in program:
+            if not isinstance(statement, dict) or not isinstance(
+                statement.get("sourceSql"), str
+            ):
+                raise RunnerError(f"accepted {label} IR has a malformed statement")
+            actual_statements.append(statement["sourceSql"])
+        if actual_statements != expected_statements:
+            raise RunnerError(
+                "accepted "
+                f"{label} IR does not match the selected SQL splitter contract: "
+                f"{case.case_id}"
+            )
+
+    expected_input_bindings = {
+        "schemaVersion": 1,
+        "caseId": expected_case_id,
+        "schemaSqlSha256": config.input_files[case.case_id]["schema"]["sha256"],
+        "sourceSqlSha256": config.input_files[case.case_id]["source"]["sha256"],
+        "targetSqlSha256": config.input_files[case.case_id]["target"]["sha256"],
+        "verificationInputSha256": sha256_file(verification_path),
+        "integrityContractSha256": sha256_file(integrity_path),
+        "schemaIrSha256": sha256_file(schema_ir_path),
+        "sourceIrSha256": sha256_file(source_ir_path),
+        "targetIrSha256": sha256_file(target_ir_path),
+    }
+    if (
+        lowering.get("backend") != "formal_sql_rocq"
+        or lowering.get("sqlEnvironment") != expected_environment
+        or lowering.get("inputBindings") != expected_input_bindings
+    ):
+        raise RunnerError(
+            f"FormalSQL lowering input bindings are stale or cross-case: {case.case_id}"
+        )
+    for label, program in (("source", source_ir), ("target", target_ir)):
+        lowered = lowering.get(label)
+        if (
+            not isinstance(lowered, dict)
+            or lowered.get("status") != "lowered"
+            or not isinstance(lowered.get("statements"), list)
+            or len(lowered["statements"]) != len(program)
+            or any(
+                not isinstance(statement, dict)
+                or statement.get("status") != "lowered"
+                for statement in lowered["statements"]
+            )
+        ):
+            raise RunnerError(f"FormalSQL {label} lowering is incomplete: {case.case_id}")
+    lowered_schema = lowering.get("schema")
+    if not isinstance(lowered_schema, dict) or lowered_schema.get("status") != "lowered":
+        raise RunnerError(f"FormalSQL schema lowering is incomplete: {case.case_id}")
+
+    module_dir = case_dir / "proof-stage/formal-sql"
+    module_bindings = (
+        (("schema", "schema", "rocqModule"), "Schema.v"),
+        (("queryModule", "rocqModule"), "Queries.v"),
+        (("proofModule", "rocqModule"), "Problem.v"),
+        (("goalModule", "rocqModule"), "Goal.v"),
+    )
+    for keys, filename in module_bindings:
+        value: Any = lowering
+        for key in keys:
+            value = value.get(key) if isinstance(value, dict) else None
+        module_path = module_dir / filename
+        try:
+            module_text = module_path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise RunnerError(f"cannot read generated {filename}: {error}") from error
+        if value != module_text:
+            raise RunnerError(
+                f"FormalSQL lowering borrows a different generated {filename}: {case.case_id}"
+            )
+
+    observation_path = module_dir / "observation-certificates.json"
+    observation = read_json_artifact(observation_path, "observation certificates")
+    if (
+        not isinstance(observation, dict)
+        or observation.get("schemaVersion") != 1
+        or observation.get("verificationInputSha256")
+        != compact_json_sha256(verification)
+        or observation.get("loweringSha256") != compact_json_sha256(lowering)
+    ):
+        raise RunnerError(
+            f"observation certificate input/lowering binding drifted: {case.case_id}"
+        )
+
+    query_shape = read_json_artifact(module_dir / "query-shape.json", "query shape")
+    context = read_json_artifact(module_dir / "context-manifest.json", "context manifest")
+    if not isinstance(query_shape, dict) or not isinstance(context, dict):
+        raise RunnerError(f"FormalSQL context binding is malformed: {case.case_id}")
+    if (
+        query_shape.get("sourceSqlSha256")
+        != config.input_files[case.case_id]["source"]["sha256"]
+        or query_shape.get("targetSqlSha256")
+        != config.input_files[case.case_id]["target"]["sha256"]
+        or query_shape.get("schemaModuleSha256") != sha256_file(module_dir / "Schema.v")
+        or query_shape.get("queriesModuleSha256") != sha256_file(module_dir / "Queries.v")
+    ):
+        raise RunnerError(f"query-shape case binding drifted: {case.case_id}")
+    for field, filename, input_name in (
+        ("sourceSql", "source.sql", "source"),
+        ("targetSql", "target.sql", "target"),
+    ):
+        path = module_dir / filename
+        binding = context.get(field)
+        if (
+            not isinstance(binding, dict)
+            or binding.get("path") != filename
+            or binding.get("bytes") != path.stat().st_size
+            or binding.get("sha256") != sha256_file(path)
+            or path.read_bytes() != canonical_paths[input_name].read_bytes()
+        ):
+            raise RunnerError(f"FormalSQL context {field} borrows another case")
+    for field, filename in (
+        ("schemaModule", "Schema.v"),
+        ("queriesModule", "Queries.v"),
+        ("observationCertificates", "observation-certificates.json"),
+    ):
+        path = module_dir / filename
+        binding = context.get(field)
+        if (
+            not isinstance(binding, dict)
+            or binding.get("path") != filename
+            or binding.get("bytes") != path.stat().st_size
+            or binding.get("sha256") != sha256_file(path)
+        ):
+            raise RunnerError(f"FormalSQL context {field} binding drifted")
+
+
+def verify_transform_artifact_evidence(
+    result: dict[str, Any], case: BenchmarkCase, config: RunConfig, case_dir: Path
+) -> None:
+    evidence = result.get("transformArtifactEvidence")
+    if result.get("status") != "completed" and evidence is None:
+        return
+    if not isinstance(evidence, dict):
+        raise RunnerError(
+            f"completed case has no accepted/lowering artifact evidence: {result['caseId']}"
+        )
+    if evidence.get("algorithm") != TRANSFORM_ARTIFACT_SET_ALGORITHM:
+        raise RunnerError(
+            f"case has unknown transform artifact evidence algorithm: {result['caseId']}"
+        )
+    recorded_case = resolve_recorded_path(
+        evidence.get("caseDir"), "transform artifact case directory"
+    )
+    if recorded_case != case_dir.resolve():
+        raise RunnerError(
+            f"transform artifact evidence borrows another case: {result['caseId']}"
+        )
+    artifacts = evidence.get("artifacts")
+    if (
+        not isinstance(artifacts, list)
+        or evidence.get("artifactCount") != len(artifacts)
+        or evidence.get("artifactsSha256")
+        != hashlib.sha256(canonical_json_bytes(artifacts)).hexdigest()
+    ):
+        raise RunnerError(
+            f"transform artifact evidence manifest is incoherent: {result['caseId']}"
+        )
+
+    seen = set()
+    for row in artifacts:
+        if not isinstance(row, dict):
+            raise RunnerError(
+                f"transform artifact evidence row is malformed: {result['caseId']}"
+            )
+        relative = row.get("artifact")
+        if not isinstance(relative, str) or not relative:
+            raise RunnerError(
+                f"transform artifact evidence has no relative identity: {result['caseId']}"
+            )
+        relative_path = Path(relative)
+        if (
+            relative_path.is_absolute()
+            or ".." in relative_path.parts
+            or relative_path.as_posix() != relative
+            or relative in seen
+        ):
+            raise RunnerError(
+                "transform artifact evidence has a duplicate or unsafe identity: "
+                f"{result['caseId']}"
+            )
+        seen.add(relative)
+        expected_path = case_dir / relative_path
+        recorded_path = resolve_recorded_path(
+            row.get("path"), f"transform artifact {relative}"
+        )
+        if recorded_path != expected_path.resolve():
+            raise RunnerError(
+                f"transform artifact evidence borrows another case: {result['caseId']}"
+            )
+        try:
+            recorded_path.relative_to(case_dir.resolve())
+        except ValueError as error:
+            raise RunnerError(
+                f"transform artifact evidence escapes its case: {result['caseId']}"
+            ) from error
+        if (
+            expected_path.is_symlink()
+            or not expected_path.is_file()
+            or sha256_file(expected_path) != row.get("sha256")
+            or expected_path.stat().st_size != row.get("bytes")
+        ):
+            raise RunnerError(f"transform artifact changed: {result['caseId']}")
+
+    expected = transform_artifact_set_record(case_dir)
+    if evidence != expected:
+        raise RunnerError(f"transform artifact set changed: {result['caseId']}")
+    validate_transform_artifact_semantics(case, config, case_dir)
+
+
+def verify_run_integrity(
+    available_cases: list[BenchmarkCase],
+    selected_cases: list[BenchmarkCase],
+    config: RunConfig,
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        source_manifest = FULL_RUNNER["build_source_tree_manifest"](LOGOS_ROOT)
+        source_digest = FULL_RUNNER["source_tree_manifest_sha256"](source_manifest)
+        frontend_manifest = FULL_RUNNER["build_frontend_stack_manifest"]()
+    except (BaseRunnerError, FULL_RUNNER["SourceTreeError"]) as error:
+        raise RunnerError(str(error)) from error
+    frontend_digest = hashlib.sha256(
+        canonical_json_bytes(frontend_manifest)
+    ).hexdigest()
+    if source_digest != config.framework_source_tree["manifestSha256"]:
+        raise RunnerError("framework source tree changed while transforms were active")
+    if frontend_digest != config.frontend_stack["manifestSha256"]:
+        raise RunnerError("Calcite frontend stack changed while transforms were active")
+    if executable_record(config.solver_bin, "logos-solver") != config.solver_binary:
+        raise RunnerError("logos-solver binary changed while transforms were active")
+    if regular_file_record(Path(__file__), "transform runner") != config.runner_binary:
+        raise RunnerError("transform runner changed while transforms were active")
+    for record, description in (
+        (config.framework_source_tree, "framework source-tree manifest"),
+        (config.frontend_stack, "Calcite frontend-stack manifest"),
+    ):
+        path = resolve_recorded_path(record.get("manifestPath"), description)
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or sha256_file(path) != record.get("manifestSha256")
+        ):
+            raise RunnerError(f"preserved {description} changed")
+
+    full_document = FULL_RUNNER["build_input_manifest"](available_cases, legacy=False)
+    selected_document = FULL_RUNNER["build_input_manifest"](
+        selected_cases, legacy=False
+    )
+    full_digest = FULL_RUNNER["input_manifest_sha256"](full_document)
+    selected_digest = FULL_RUNNER["input_manifest_sha256"](selected_document)
+    if (
+        full_digest != config.input_manifest["sha256"]
+        or selected_digest != config.input_manifest["selectedSha256"]
+    ):
+        raise RunnerError(
+            "metadata/schema/query inputs changed while transforms were active"
+        )
+    for key in ("path", "selectedPath"):
+        path = resolve_recorded_path(
+            config.input_manifest[key], f"input manifest {key}"
+        )
+        expected = full_digest if key == "path" else selected_digest
+        if not path.is_file() or path.is_symlink() or sha256_file(path) != expected:
+            raise RunnerError(f"preserved {key} input manifest changed")
+
+    expected_ids = [case.case_id for case in selected_cases]
+    result_ids = [result.get("caseId") for result in results]
+    if len(results) != len(selected_cases) or sorted(result_ids) != sorted(
+        expected_ids
+    ):
+        raise RunnerError("terminal result accounting is incomplete or duplicated")
+    case_by_id = {case.case_id: case for case in selected_cases}
+    transform_artifact_sets = []
+    for result in results:
+        case_id = result["caseId"]
+        if result.get("status") not in TERMINAL_STATUSES:
+            raise RunnerError(f"case has no terminal status: {case_id}")
+        if result.get("inputFiles") != config.input_files[case_id]:
+            raise RunnerError(f"case input binding changed: {case_id}")
+        if result.get("solverCommand") != solver_command(
+            case_by_id[case_id], config.run_dir / "cases" / case_id, config
+        ):
+            raise RunnerError(f"case solver command changed: {case_id}")
+        for record in config.input_files[case_id].values():
+            path = resolve_recorded_path(record.get("path"), "case input")
+            if (
+                not path.is_file()
+                or path.is_symlink()
+                or sha256_file(path) != record.get("sha256")
+            ):
+                raise RunnerError(f"case input file changed: {case_id}")
+        case_dir = config.run_dir / "cases" / case_id
+        result_path = case_dir / "runner-result.json"
+        status_path = case_dir / "status.json"
+        try:
+            if result_path.is_symlink() or status_path.is_symlink():
+                raise RunnerError(f"terminal record is symlinked: {case_id}")
+            preserved = json.loads(result_path.read_text(encoding="utf-8"))
+            preserved_status = json.loads(status_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise RunnerError(
+                f"cannot read terminal result for {case_id}: {error}"
+            ) from error
+        if preserved != result:
+            raise RunnerError(f"durable terminal result differs: {case_id}")
+        expected_status = {
+            "schemaVersion": 1,
+            "caseId": case_id,
+            "status": result.get("status"),
+            "returnCode": result.get("returnCode"),
+            "outcome": result.get("outcome"),
+            "backendStatus": result.get("backendStatus"),
+            "runnerError": result.get("runnerError"),
+        }
+        if preserved_status != expected_status:
+            raise RunnerError(f"durable terminal status differs: {case_id}")
+        report_evidence = result.get("reportEvidence")
+        if not isinstance(report_evidence, dict):
+            raise RunnerError(f"case has no report evidence: {case_id}")
+        report_path = resolve_recorded_path(report_evidence.get("path"), "case report")
+        if report_path != (case_dir / "report.json").resolve():
+            raise RunnerError(f"case report path escapes its case: {case_id}")
+        if report_evidence.get("present") is True:
+            if (
+                not report_path.is_file()
+                or report_path.is_symlink()
+                or sha256_file(report_path) != report_evidence.get("sha256")
+            ):
+                raise RunnerError(f"case report changed: {case_id}")
+        elif result.get("status") == "completed":
+            raise RunnerError(f"completed case has no report: {case_id}")
+        verify_workspace_evidence(result, case_dir)
+        verify_transform_artifact_evidence(
+            result, case_by_id[case_id], config, case_dir
+        )
+        artifact_evidence = result.get("transformArtifactEvidence")
+        if isinstance(artifact_evidence, dict):
+            transform_artifact_sets.append(
+                {
+                    "caseId": case_id,
+                    "artifactCount": artifact_evidence.get("artifactCount"),
+                    "artifactsSha256": artifact_evidence.get("artifactsSha256"),
+                }
+            )
+        if result.get("status") == "completed":
+            if (
+                result.get("outcome") != "transform_only"
+                or result.get("backendStatus") != "workspace_generated"
+                or result.get("source", {}).get("status") != "lowered"
+                or result.get("target", {}).get("status") != "lowered"
+            ):
+                raise RunnerError(
+                    f"completed transform evidence is incoherent: {case_id}"
+                )
+        if case_by_id[case_id].case_id != case_id:
+            raise RunnerError(f"case identity changed: {case_id}")
+    transform_artifact_sets.sort(key=lambda row: row["caseId"])
+    return {
+        "verified": True,
+        "verifiedAt": iso_now(),
+        "frameworkSourceTreeManifestSha256": source_digest,
+        "frontendStackManifestSha256": frontend_digest,
+        "solverBinarySha256": config.solver_binary["sha256"],
+        "runnerBinarySha256": config.runner_binary["sha256"],
+        "inputManifestSha256": full_digest,
+        "selectedInputManifestSha256": selected_digest,
+        "terminalCaseCount": len(results),
+        "transformArtifactEvidenceCaseCount": len(transform_artifact_sets),
+        "transformArtifactEvidenceSha256": hashlib.sha256(
+            canonical_json_bytes(transform_artifact_sets)
+        ).hexdigest(),
+    }
+
+
+def run_selected_cases(
+    available_cases: list[BenchmarkCase],
+    selected_cases: list[BenchmarkCase],
+    config: RunConfig,
+    selection: dict[str, Any],
+) -> int:
+    started_at = iso_now()
+    started_monotonic = time.monotonic()
+    case_order = {case.case_id: index for index, case in enumerate(selected_cases)}
+    results: list[dict[str, Any]] = []
+    registry = ProcessRegistry()
+    stop_event = threading.Event()
+    interrupted_signal: list[int | None] = [None]
+    integrity: dict[str, Any] | None = None
+    integrity_error: str | None = None
+
+    def request_stop(signum: int, _frame: Any) -> None:
+        if interrupted_signal[0] is None:
+            interrupted_signal[0] = signum
+        stop_event.set()
+        registry.terminate_all(config.termination_grace_seconds)
+
+    previous_handlers = {}
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        previous_handlers[sig] = signal.getsignal(sig)
+        signal.signal(sig, request_stop)
+
+    def write_summary(status: str) -> None:
+        ordered = sorted(results, key=lambda row: case_order[row["caseId"]])
+        document = {
+            "schemaVersion": 1,
+            "kind": "logos-transform-only-runner-summary",
+            "status": status,
+            "startedAt": started_at,
+            "updatedAt": iso_now(),
+            "elapsedMs": round((time.monotonic() - started_monotonic) * 1000),
+            "inputRoot": workspace_display_path(config.input_root),
+            "runDir": workspace_display_path(config.run_dir),
+            "jobs": config.jobs,
+            "caseTimeoutSeconds": config.case_timeout_seconds,
+            "transformOnly": True,
+            "selection": selection,
+            "cases": [case.case_id for case in selected_cases],
+            "counts": result_counts(ordered, len(selected_cases)),
+            "configuration": configuration_record(config),
+            "inputManifest": config.input_manifest,
+            "integrityVerification": integrity,
+            "results": ordered,
+        }
+        if integrity_error is not None:
+            document["integrityError"] = integrity_error
+        atomic_write_json(config.run_dir / "runner-summary.json", document)
+
+    write_summary("running")
+    try:
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=config.jobs)
+        futures = {
+            executor.submit(run_case_guarded, case, config, registry, stop_event): case
+            for case in selected_cases
+        }
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                results.append(future.result())
+                write_summary("interrupted" if stop_event.is_set() else "running")
+        finally:
+            if stop_event.is_set():
+                for future in futures:
+                    future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+    finally:
+        registry.terminate_all(config.termination_grace_seconds)
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
+
+    if interrupted_signal[0] is not None:
+        write_summary("interrupted")
+        return 128 + int(interrupted_signal[0])
+    try:
+        integrity = verify_run_integrity(
+            available_cases, selected_cases, config, results
+        )
+    except Exception as error:
+        integrity = {"verified": False}
+        integrity_error = f"{type(error).__name__}: {error}"
+        write_summary("interrupted")
+        return 2
+    write_summary("complete")
+    return 0
+
+
+def main() -> int:
+    parser = argument_parser()
+    args = parser.parse_args()
+    try:
+        validate_args(args)
+        input_root = resolve_path(args.input_root)
+        available_cases = discover_cases(input_root)
+        selected_cases = select_cases(available_cases, args)
+        if args.list:
+            FULL_RUNNER["print_case_list"](selected_cases)
+            return 0
+        run_dir = prepare_run_dir(args.run_dir)
+        if not args.no_build:
+            build_solver()
+        if not args.no_frontend_build:
+            prepare_frontend_stack()
+        solver_bin = resolve_path(args.solver_bin)
+        proof_switch = resolve_path(args.proof_rocq_opam_switch)
+        solver_binary = executable_record(solver_bin, "logos-solver")
+        runner_binary = regular_file_record(Path(__file__), "transform runner")
+        framework = framework_source_tree_record(run_dir)
+        frontend = frontend_stack_record(run_dir)
+        input_manifest, input_files = input_manifest_record(
+            run_dir, available_cases, selected_cases
+        )
+        config = RunConfig(
+            input_root=input_root,
+            run_dir=run_dir,
+            solver_bin=solver_bin,
+            jobs=args.jobs,
+            case_timeout_seconds=args.case_timeout,
+            termination_grace_seconds=args.termination_grace,
+            proof_rocq_opam_switch=proof_switch,
+            sql_time_zone=args.sql_time_zone,
+            sql_default_collation=args.sql_default_collation,
+            sql_character_classification=args.sql_character_classification,
+            sql_locale_provider=args.sql_locale_provider,
+            sql_server_encoding=args.sql_server_encoding,
+            input_manifest=input_manifest,
+            input_files=input_files,
+            solver_binary=solver_binary,
+            framework_source_tree=framework,
+            frontend_stack=frontend,
+            runner_binary=runner_binary,
+        )
+        return run_selected_cases(
+            available_cases, selected_cases, config, selection_record(args)
+        )
+    except (RunnerError, BaseRunnerError) as error:
+        parser.error(str(error))
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

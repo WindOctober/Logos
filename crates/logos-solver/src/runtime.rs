@@ -1,7 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const DEFAULT_CALCITE_IR_ARGS: &str = "--read postgres --write postgres";
+// Keep the solver's sourceSql byte/token authority in the same unquoted form
+// as the submitted PostgreSQL program. The adapter's identify mode is safe for
+// standalone ingestion after its quote-identity audit, but the solver does not
+// consume that separate audit report and therefore must not infer authority
+// from newly inserted quotes.
+const DEFAULT_CALCITE_IR_ARGS: &str = "--read postgres --write postgres --no-identify";
 
 pub fn repo_root() -> PathBuf {
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -38,6 +43,7 @@ pub fn rocq_opam_switch(logos_repo_root: &Path) -> Option<PathBuf> {
         std::env::var_os("LOGOS_ROCQ_OPAM_SWITCH").map(PathBuf::from),
         std::env::var_os("ROCQ_OPAM_SWITCH").map(PathBuf::from),
         std::env::var_os("OPAM_SWITCH").map(PathBuf::from),
+        Some(logos_repo_root.join(".opam-rocq")),
         Some(logos_repo_root.join(".opam")),
         logos_repo_root
             .parent()
@@ -61,4 +67,16 @@ fn is_repo_root(path: &Path) -> bool {
 fn shell_quote_path(path: &Path) -> String {
     let text = path.to_string_lossy();
     format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_calcite_command_preserves_solver_source_identifier_authority() {
+        let command = calcite_ir_command(Path::new("/tmp/logos repo"));
+        assert!(command.contains("scripts/calcite-ir-sqlglot"));
+        assert!(command.contains("--read postgres --write postgres --no-identify"));
+    }
 }

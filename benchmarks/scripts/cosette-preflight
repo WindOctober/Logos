@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+"""Run Cosette's actual parsers/translators without proof search."""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_INPUT = ROOT / "benchmarks/core/.generated/cosette/nonwetune-flat"
+DEFAULT_IMAGE = (
+    "shumo/cosette-frontend@"
+    "sha256:184fb5eb5217b8cd2d53f513610747e046d927f8fc31602652c9addf23ffdad9"
+)
+POLICY = "cosette-parser-translator-v1"
+
+_CONTAINER_PROGRAM = r"""
+import hashlib
+import json
+import solver
+
+raw_source = open('/case/case.cos').read()
+source = raw_source.lower()
+
+def run(frontend):
+    accepted, output = frontend(source, '/Cosette')
+    if isinstance(output, bytes):
+        output = output.decode(errors='replace')
+    else:
+        output = str(output)
+    return {
+        'status': 'translated' if accepted else 'unsupported',
+        'outputBytes': len(output.encode()),
+        'outputSha256': hashlib.sha256(output.encode()).hexdigest(),
+        'messageTail': None if accepted else output[-2000:],
+    }
+
+print(json.dumps({
+    'coq': run(solver.gen_coq),
+    'rosette': run(solver.gen_rosette),
+    'normalization': {
+        'kind': 'cosette-solver-whole-input-lowercase',
+        'changed': raw_source != source,
+        'inputBytes': len(raw_source.encode()),
+        'inputSha256': hashlib.sha256(raw_source.encode()).hexdigest(),
+        'outputBytes': len(source.encode()),
+        'outputSha256': hashlib.sha256(source.encode()).hexdigest(),
+    },
+}, sort_keys=True))
+""".strip()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check Cosette DSL with its actual Coq/Rosette parser-translators; "
+            "never start either prover."
+        )
+    )
+    parser.add_argument("--input-root", default=str(DEFAULT_INPUT))
+    parser.add_argument("--report")
+    parser.add_argument("--case", action="append", help="Case-id regex; repeatable.")
+    parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--timeout-seconds", type=int, default=120)
+    parser.add_argument("--image", default=DEFAULT_IMAGE)
+    args = parser.parse_args()
+
+    if args.jobs <= 0 or args.timeout_seconds <= 0:
+        parser.error("jobs and timeout-seconds must be positive")
+    input_root = Path(args.input_root).resolve()
+    patterns = [re.compile(pattern) for pattern in args.case or []]
+    cases = discover_cases(input_root, patterns)
+    if not cases:
+        print(f"no Cosette cases discovered under {input_root}", file=sys.stderr)
+        return 2
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        results = list(
+            pool.map(
+                lambda case_dir: preflight_case(
+                    input_root=input_root,
+                    case_dir=case_dir,
+                    image=args.image,
+                    timeout_seconds=args.timeout_seconds,
+                ),
+                cases,
+            )
+        )
+    results.sort(key=lambda item: str(item["case"]))
+    statuses = Counter(str(item["status"]) for item in results)
+    normalization_changed = sum(
+        item.get("targetBuiltinNormalization", {}).get("changed") is True
+        for item in results
+    )
+    report = {
+        "target": "cosette",
+        "policy": POLICY,
+        "actualTargetFrontend": True,
+        "proofSearchInvoked": False,
+        "frontendEntrypoints": ["solver.gen_coq", "solver.gen_rosette"],
+        "containerProgramSha256": hashlib.sha256(
+            _CONTAINER_PROGRAM.encode()
+        ).hexdigest(),
+        "preflightScriptSha256": sha256_path(Path(__file__)),
+        "image": args.image,
+        "inputRoot": portable_path(input_root),
+        "cases": len(results),
+        "statuses": dict(sorted(statuses.items())),
+        "targetBuiltinNormalization": {
+            "kind": "cosette-solver-whole-input-lowercase",
+            "changedCases": normalization_changed,
+            "semanticPreservationEstablished": False,
+            "contract": (
+                "Faithfully mirror solver.solve by lowercasing the complete Cosette "
+                "input before both code generators. This target-builtin operation "
+                "also changes protected SQL strings, so it is recorded as a target "
+                "limitation and is not materialization or semantic-preservation evidence."
+            ),
+            "sourceAuthoritativeDisposition": (
+                "No source-authoritative proof result may be inferred solely from "
+                "this frontend profile when lowercasing changes the input."
+            ),
+        },
+        "results": results,
+    }
+    payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.report:
+        atomic_write(Path(args.report).resolve(), payload)
+        print(
+            f"cosette frontend preflight: cases={len(results)} "
+            f"statuses={dict(sorted(statuses.items()))}",
+            file=sys.stderr,
+        )
+    else:
+        sys.stdout.write(payload)
+    return 1 if statuses.get("infrastructure-error", 0) else 0
+
+
+def discover_cases(input_root: Path, patterns: list[re.Pattern]) -> list[Path]:
+    if input_root.is_file():
+        if input_root.name != "case.cos":
+            return []
+        candidates = [input_root.parent]
+        base = input_root.parent
+    elif (input_root / "case.cos").is_file():
+        candidates = [input_root]
+        base = input_root
+    elif input_root.is_dir():
+        candidates = sorted(
+            (path.parent for path in input_root.rglob("case.cos")),
+            key=lambda path: path.relative_to(input_root).as_posix(),
+        )
+        base = input_root
+    else:
+        return []
+    return [
+        case_dir
+        for case_dir in candidates
+        if not patterns
+        or any(
+            pattern.search(case_dir.name)
+            or pattern.search(relative_case_id(base, case_dir))
+            for pattern in patterns
+        )
+    ]
+
+
+def preflight_case(
+    *, input_root: Path, case_dir: Path, image: str, timeout_seconds: int
+) -> dict[str, Any]:
+    case_id = relative_case_id(input_root, case_dir)
+    try:
+        binding = validate_case_binding(case_dir)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "case": case_id,
+            "status": "infrastructure-error",
+            "failureCategory": "input-integrity",
+            "message": str(exc),
+            "stages": {},
+        }
+
+    command = [
+        "/usr/bin/timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        f"{timeout_seconds}s",
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{case_dir.resolve()}:/case:ro",
+        "-w",
+        "/Cosette",
+        image,
+        "python",
+        "-c",
+        _CONTAINER_PROGRAM,
+    ]
+    started = time.monotonic()
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT.parent,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds + 15,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "case": case_id,
+            "status": "timeout",
+            "failureCategory": "timeout-resource",
+            "elapsedSeconds": round(time.monotonic() - started, 3),
+            "timeoutSeconds": timeout_seconds,
+            "input": binding,
+            "stages": {},
+            "stderrTail": decode_timeout_output(exc.stderr)[-2000:],
+        }
+    elapsed = round(time.monotonic() - started, 3)
+    if completed.returncode == 124:
+        return {
+            "case": case_id,
+            "status": "timeout",
+            "failureCategory": "timeout-resource",
+            "returnCode": completed.returncode,
+            "elapsedSeconds": elapsed,
+            "timeoutSeconds": timeout_seconds,
+            "input": binding,
+            "stages": {},
+            "stderrTail": completed.stderr[-2000:],
+        }
+    if completed.returncode != 0:
+        return {
+            "case": case_id,
+            "status": "infrastructure-error",
+            "failureCategory": "target-process",
+            "returnCode": completed.returncode,
+            "elapsedSeconds": elapsed,
+            "input": binding,
+            "stages": {},
+            "stderrTail": completed.stderr[-2000:],
+        }
+    try:
+        target = parse_target_output(completed.stdout)
+        normalization = target["normalization"]
+        if normalization["inputSha256"] != binding["sha256"]:
+            raise ValueError("Cosette target normalized a different input digest")
+    except (ValueError, json.JSONDecodeError) as exc:
+        return {
+            "case": case_id,
+            "status": "infrastructure-error",
+            "failureCategory": "malformed-target-output",
+            "returnCode": completed.returncode,
+            "elapsedSeconds": elapsed,
+            "input": binding,
+            "stages": {},
+            "message": str(exc),
+            "stderrTail": completed.stderr[-2000:],
+        }
+    stages = {name: dict(target[name]) for name in ("coq", "rosette")}
+    for stage in stages.values():
+        if stage["status"] == "unsupported":
+            stage["failureCategory"] = classify_stage_failure(stage["messageTail"])
+    stage_categories = {stage.get("failureCategory") for stage in stages.values()}
+    if all(stage["status"] == "translated" for stage in stages.values()):
+        status = "translated"
+        failure_category = None
+    elif "tool-crash" in stage_categories:
+        status = "infrastructure-error"
+        failure_category = "tool-crash"
+    elif "validator-or-translator-unsupported" in stage_categories:
+        status = "unsupported"
+        failure_category = "validator-or-translator-unsupported"
+    else:
+        status = "unsupported"
+        failure_category = "parser-failure"
+    preservation_established = normalization["changed"] is False
+    return {
+        "case": case_id,
+        "status": status,
+        "failureCategory": failure_category,
+        "returnCode": completed.returncode,
+        "elapsedSeconds": elapsed,
+        "input": binding,
+        "targetBuiltinNormalization": {
+            **normalization,
+            "semanticPreservationEstablished": preservation_established,
+            "sourceAuthoritativeSubmissionAllowed": False,
+            "disposition": (
+                "frontend-preflight-cannot-authorize-source-result"
+                if preservation_established
+                else "target-lowercasing-unattested-for-source-semantics"
+            ),
+        },
+        "stages": stages,
+        "stderrTail": completed.stderr[-2000:],
+    }
+
+
+def validate_case_binding(case_dir: Path) -> dict[str, Any]:
+    metadata_path = case_dir / "metadata.json"
+    metadata_bytes = metadata_path.read_bytes()
+    metadata = json.loads(metadata_bytes)
+    if not isinstance(metadata, dict) or metadata.get("profile") != "cosette":
+        raise ValueError("metadata profile is not cosette")
+    if metadata.get("cosetteFile") != "case.cos":
+        raise ValueError("metadata does not select case.cos")
+    case_path = case_dir / "case.cos"
+    actual = sha256_path(case_path)
+    if metadata.get("cosetteFileSha256") != actual:
+        raise ValueError("case.cos digest does not match metadata")
+    semantic_compatibility = metadata.get("semanticProfileCompatibility")
+    semantic_blockers = metadata.get("semanticProfileCompatibilityBlockers")
+    if semantic_compatibility not in {"compatible", "flagged"}:
+        raise ValueError("metadata has no semantic profile compatibility")
+    if not isinstance(semantic_blockers, list) or not all(
+        isinstance(blocker, str) for blocker in semantic_blockers
+    ):
+        raise ValueError("metadata has malformed semantic profile blockers")
+    if (semantic_compatibility == "compatible") == bool(semantic_blockers):
+        raise ValueError("semantic profile compatibility contradicts its blockers")
+    return {
+        "path": portable_path(case_path),
+        "sha256": actual,
+        "metadataSha256": hashlib.sha256(metadata_bytes).hexdigest(),
+        "semanticProfileCompatibility": semantic_compatibility,
+        "semanticProfileBlockerCount": len(semantic_blockers),
+    }
+
+
+def parse_target_output(stdout: str) -> dict[str, Any]:
+    for line in reversed(stdout.splitlines()):
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(value, dict)
+            and set(value) == {"coq", "rosette", "normalization"}
+            and all(isinstance(value[name], dict) for name in value)
+        ):
+            validate_target_output(value)
+            return value
+    raise ValueError("Cosette frontend emitted no structured result")
+
+
+def validate_target_output(value: dict[str, Any]) -> None:
+    for name in ("coq", "rosette"):
+        stage = value[name]
+        if (
+            stage.get("status") not in {"translated", "unsupported"}
+            or not isinstance(stage.get("outputBytes"), int)
+            or stage["outputBytes"] < 0
+            or re.fullmatch(r"[0-9a-f]{64}", str(stage.get("outputSha256"))) is None
+            or not (
+                stage.get("messageTail") is None
+                or isinstance(stage.get("messageTail"), str)
+            )
+        ):
+            raise ValueError(f"Cosette {name} frontend result is malformed")
+    normalization = value["normalization"]
+    if (
+        normalization.get("kind") != "cosette-solver-whole-input-lowercase"
+        or not isinstance(normalization.get("changed"), bool)
+        or any(
+            not isinstance(normalization.get(field), int) or normalization[field] < 0
+            for field in ("inputBytes", "outputBytes")
+        )
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", str(normalization.get(field))) is None
+            for field in ("inputSha256", "outputSha256")
+        )
+    ):
+        raise ValueError("Cosette target normalization report is malformed")
+
+
+def classify_stage_failure(message: str | None) -> str:
+    normalized = (message or "").casefold()
+    if "syntax error" in normalized or "parse error" in normalized:
+        return "parser-failure"
+    if "internal error" in normalized or "traceback" in normalized:
+        return "tool-crash"
+    return "validator-or-translator-unsupported"
+
+
+def relative_case_id(input_root: Path, case_dir: Path) -> str:
+    try:
+        parts = case_dir.relative_to(input_root).parts
+    except ValueError:
+        return case_dir.name
+    if parts and parts[0] == "nonwetune-flat":
+        parts = parts[1:]
+    return "__".join(parts) if parts else case_dir.name
+
+
+def portable_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT.parent.resolve()).as_posix()
+    except ValueError:
+        return str(path.resolve())
+
+
+def sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def decode_timeout_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    return value.decode(errors="replace") if isinstance(value, bytes) else value
+
+
+def atomic_write(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as target:
+            target.write(payload)
+            target.flush()
+            os.fsync(target.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

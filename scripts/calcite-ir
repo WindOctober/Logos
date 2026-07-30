@@ -1,18 +1,53 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(/usr/bin/dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MAVEN_VERSION="${MAVEN_VERSION:-3.9.11}"
 MAVEN_DIR="$ROOT_DIR/.cache/apache-maven-$MAVEN_VERSION"
 MAVEN_BIN="$MAVEN_DIR/bin/mvn"
 
+# Frozen benchmark runs prepare and bind the complete runtime classpath once,
+# then select this direct path explicitly.  That keeps mutable Maven plugins
+# out of each SQL-to-IR invocation while retaining the ordinary Maven-backed
+# development path when the variable is absent.
+if [[ -n "${LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE:-}" ]]; then
+  CLASSPATH_FILE="$LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE"
+  CLASSES_DIR="$ROOT_DIR/frontend/calcite-wrapper/target/classes"
+  : "${JAVA_HOME:?JAVA_HOME is required for the bound Calcite runtime}"
+  JAVA_BIN="$(/usr/bin/readlink -f "$JAVA_HOME/bin/java")"
+  [[ -f "$CLASSPATH_FILE" && ! -L "$CLASSPATH_FILE" ]] || {
+    echo "bound Calcite classpath is missing, non-regular, or symlinked: $CLASSPATH_FILE" >&2
+    exit 2
+  }
+  [[ -d "$CLASSES_DIR" && ! -L "$CLASSES_DIR" ]] || {
+    echo "bound Calcite classes directory is missing or symlinked: $CLASSES_DIR" >&2
+    exit 2
+  }
+  [[ -f "$JAVA_BIN" && -x "$JAVA_BIN" && ! -L "$JAVA_BIN" ]] || {
+    echo "bound Java executable does not resolve to a regular executable: $JAVA_BIN" >&2
+    exit 2
+  }
+  RUNTIME_CLASSPATH="$(<"$CLASSPATH_FILE")"
+  [[ -n "$RUNTIME_CLASSPATH" && "$RUNTIME_CLASSPATH" != *$'\n'* ]] || {
+    echo "bound Calcite runtime classpath must be one nonempty line" >&2
+    exit 2
+  }
+  # Every benchmark case runs in its own PID namespace while sharing the host
+  # /tmp.  HotSpot otherwise gives concurrent JVMs the same namespace-local
+  # hsperfdata PID and prints a lock warning to stdout, corrupting the JSON IR.
+  # The frontend does not consume JVM performance counters, so keep them out
+  # of the shared filesystem entirely.
+  exec "$JAVA_BIN" -XX:+PerfDisableSharedMem -cp "$CLASSES_DIR:$RUNTIME_CLASSPATH" \
+    dev.logos.calcite.CalciteIrCli "$@"
+fi
+
 if [[ ! -x "$MAVEN_BIN" ]]; then
-  mkdir -p "$ROOT_DIR/.cache"
+  /usr/bin/mkdir -p "$ROOT_DIR/.cache"
   archive="$ROOT_DIR/.cache/apache-maven-$MAVEN_VERSION-bin.tar.gz"
   if [[ ! -f "$archive" ]]; then
-    curl -fsSL "https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz" -o "$archive"
+    /usr/bin/curl -fsSL "https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz" -o "$archive"
   fi
-  tar -xzf "$archive" -C "$ROOT_DIR/.cache"
+  /usr/bin/tar -xzf "$archive" -C "$ROOT_DIR/.cache"
 fi
 
 exec "$MAVEN_BIN" -q -f "$ROOT_DIR/frontend/calcite-wrapper/pom.xml" \

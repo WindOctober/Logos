@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+exec "$SCRIPT_DIR/run-logos" \
+  --case-file "$SCRIPT_DIR/logos-regression-core.txt" \
+  --jobs 16 \
+  --case-timeout 1h \
+  --verification-mode outcome-unconditional \
+  "$@"

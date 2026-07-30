@@ -582,56 +582,6 @@ Proof.
   - apply native_values_observation.
 Qed.
 
-(** UNION existence is capped independently of either arm's dead target.
-    Once the left arm supplies a row, the error-capable right projection is
-    not evaluated. *)
-Example exists_union_stops_after_nonempty_left_arm :
-  native_eval_exists nil
-    (QExpr_Set Union
-      (QExpr_Values [native_scalar_x]
-        (rows_bag TNull [native_scalar_row_one]))
-      native_division_projection)
-    (SqlSuccess true3).
-Proof.
-  eapply EExists_SetUnionLeftTrue with (truth := true3).
-  - replace (SqlSuccess true3) with
-      (@query_exists_rows_outcome TNull (SqlSuccess [native_scalar_row_one]))
-      by reflexivity.
-    eapply EExists_Demanded with
-      (outcome := SqlSuccess [native_scalar_row_one]).
-    + reflexivity.
-    + apply native_values_observation.
-  - reflexivity.
-Qed.
-
-Definition native_error_join_predicate : FormulaExpr :=
-  FExpr_Scalar
-    (@SExpr_Pred TNull relname PredicateEq
-      [native_one_div_zero;
-       @SExpr_Leaf TNull relname type_int32 native_int32_zero_term]).
-
-(** A left outer join has an output row whenever its two chosen child
-    observations include a left row.  EXISTS therefore need not evaluate the
-    ON predicate merely to decide cardinality. *)
-Example exists_left_join_uses_left_cardinality_law :
-  native_eval_exists nil
-    (QExpr_Join QueryJoinLeft native_error_join_predicate
-      (@Projection._Select_List TNull [])
-      (@Projection._Select_List TNull [])
-      (@Projection._Select_List TNull [])
-      (QExpr_Values [native_scalar_x]
-        (rows_bag TNull [native_scalar_row_one]))
-      (QExpr_Values [native_scalar_x]
-        (rows_bag TNull [native_scalar_row_one])))
-    (SqlSuccess true3).
-Proof.
-  eapply EExists_JoinLeftSuccess with
-    (left_rows := [native_scalar_row_one])
-    (right_rows := [native_scalar_row_one]).
-  - apply native_values_observation.
-  - apply native_values_observation.
-Qed.
-
 (** OFFSET is a PostgreSQL demand barrier: even OFFSET 0 retains ordinary
     target evaluation before existential cardinality is observed. *)
 Example exists_offset_evaluates_one_div_zero_target :

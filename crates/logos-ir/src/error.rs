@@ -35,10 +35,16 @@ pub enum Error {
     UnsupportedSortDirection(String),
     #[error("unsupported Calcite SQL type: {0}")]
     UnsupportedSqlType(String),
+    #[error("unsupported PostgreSQL collation semantics: {0}")]
+    UnsupportedSqlCollation(String),
+    #[error("invalid schema: {0}")]
+    InvalidSchema(String),
     #[error("invalid Calcite scalar expression: {0}")]
     InvalidScalar(String),
     #[error("invalid Calcite aggregate call: {0}")]
     InvalidAggregateCall(String),
+    #[error("invalid Calcite/source relational provenance: {0}")]
+    InvalidRelSourceProvenance(String),
     #[error("{node} expected {expected} input(s), found {actual}")]
     Arity {
         node: &'static str,
@@ -57,6 +63,4 @@ pub enum Error {
         node: &'static str,
         field: &'static str,
     },
-    #[error("invalid Calcite groupSet: {0}")]
-    InvalidGroupSet(String),
 }

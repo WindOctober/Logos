@@ -2,13 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-READ_DIALECT="tsql"
+# Logos/FormalSQL uses PostgreSQL as its concrete semantic dialect. A T-SQL
+# default silently changes observable behavior (notably ASC NULL placement),
+# so non-PostgreSQL inputs must opt in explicitly with --read.
+READ_DIALECT="postgres"
 WRITE_DIALECT="postgres"
 IDENTIFY=1
 SCHEMA=""
 SQL=""
 NORMALIZED_OUTPUT=""
 REPORT_OUTPUT=""
+DEFAULT_COLLATION="unspecified"
+CHARACTER_CLASSIFICATION="unspecified"
+LOCALE_PROVIDER="unspecified"
+SERVER_ENCODING="unspecified"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +47,22 @@ while [[ $# -gt 0 ]]; do
       REPORT_OUTPUT="$2"
       shift 2
       ;;
+    --default-collation)
+      DEFAULT_COLLATION="$2"
+      shift 2
+      ;;
+    --character-classification)
+      CHARACTER_CLASSIFICATION="$2"
+      shift 2
+      ;;
+    --locale-provider)
+      LOCALE_PROVIDER="$2"
+      shift 2
+      ;;
+    --server-encoding)
+      SERVER_ENCODING="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 2
@@ -48,7 +71,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SCHEMA" || -z "$SQL" ]]; then
-  echo "Usage: calcite-ir-sqlglot --schema <schema.sql> --sql <query.sql> [--read tsql] [--write postgres] [--no-identify] [--normalized-output out.sql] [--report report.json]" >&2
+  echo "Usage: calcite-ir-sqlglot --schema <schema.sql> --sql <query.sql> [--read postgres] [--write postgres] [--default-collation unspecified|C] [--character-classification unspecified|C] [--locale-provider unspecified|libc] [--server-encoding unspecified|UTF8] [--no-identify] [--normalized-output out.sql] [--report report.json]" >&2
   exit 2
 fi
 
@@ -79,4 +102,10 @@ if [[ -n "$REPORT_OUTPUT" ]]; then
   cp "$REPORT" "$REPORT_OUTPUT"
 fi
 
-"$ROOT_DIR/scripts/calcite-ir" --schema "$SCHEMA" --sql "$NORMALIZED_SQL"
+"$ROOT_DIR/scripts/calcite-ir" \
+  --schema "$SCHEMA" \
+  --sql "$NORMALIZED_SQL" \
+  --default-collation "$DEFAULT_COLLATION" \
+  --character-classification "$CHARACTER_CLASSIFICATION" \
+  --locale-provider "$LOCALE_PROVIDER" \
+  --server-encoding "$SERVER_ENCODING"

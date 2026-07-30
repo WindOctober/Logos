@@ -142,6 +142,16 @@
       "frontendTargetDialectPurpose": "calcite_syntax_only",
       "semanticProfile": "formal-sql-core",
       "constraintScope": "none",
+      "solverMaterialization": {
+        "sqlsolver": {
+          "queryPolicy": "postgres-simple-lowercase-identifier-delimiter-elision-v1",
+          "preflight": "sqlsolver-parser-validator-planner-v1"
+        },
+        "qed": {
+          "queryPolicy": "qed-base-table-column-alias-order-v1",
+          "preflight": "qed-parser-planner-v1"
+        }
+      },
       "materialization": "Use the shared schema and existing SQL pair, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
     },
     {
@@ -163,6 +173,16 @@
       "frontendTargetDialectPurpose": "calcite_syntax_only",
       "semanticProfile": "formal-sql-core",
       "constraintScope": "none",
+      "solverMaterialization": {
+        "sqlsolver": {
+          "queryPolicy": "postgres-simple-lowercase-identifier-delimiter-elision-v1",
+          "preflight": "sqlsolver-parser-validator-planner-v1"
+        },
+        "qed": {
+          "queryPolicy": "qed-base-table-column-alias-order-v1",
+          "preflight": "qed-parser-planner-v1"
+        }
+      },
       "materialization": "Use the shared schema and existing SQL pair, run Calcite, and keep only before/after Calcite IR JSON plus metadata by default."
     },
     {

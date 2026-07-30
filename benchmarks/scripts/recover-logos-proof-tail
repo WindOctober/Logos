@@ -1,0 +1,3227 @@
+#!/usr/bin/env python3
+"""Recover trusted proof tails from exact host-broker checkpoints.
+
+This command never invokes Codex or a proof agent.  Preparation copies one
+already accepted problem-mode checkpoint into a fresh staging workspace and
+runs the case-local host trusted checker.  Publication is a separate step so a
+live benchmark runner cannot overwrite or observe a partially updated case.
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import dataclasses
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import re
+import runpy
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Any
+
+
+SCRIPT = Path(__file__).resolve()
+LOGOS_ROOT = SCRIPT.parents[2]
+WORKFLOW_ROOT = LOGOS_ROOT.parent
+RUNNER_PATH = SCRIPT.with_name("run-logos")
+RUNNER = runpy.run_path(str(RUNNER_PATH), run_name="proof_tail_recovery_runner")
+RECOVERY_RELATIVE = Path("proof-stage/deterministic-tail-recovery")
+STAGING_ROOT_NAMES = ("Schema.v", "Queries.v", "Witness.v", "Problem.v", "Goal.v")
+TRUSTED_CACHE_ROOT_FILES = (
+    "Schema.v",
+    "Schema.vo",
+    "Queries.v",
+    "Queries.vo",
+    "Witness.v",
+    "Witness.vo",
+)
+TRUSTED_CHECKER_SOURCE = "crates/logos-solver/scripts/run-trusted-rocq-check.sh"
+PROOF_MODULE_NAME = re.compile(r"[A-Z][A-Za-z0-9_]*\.v")
+CONTEXT_MANIFEST_BASE_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "authority",
+        "verificationMode",
+        "staticPromptAndPrimerBytes",
+        "sourceSql",
+        "targetSql",
+        "queryShape",
+        "orderedSignatures",
+        "observationCertificates",
+        "semanticPrimer",
+        "schemaModule",
+        "queriesModule",
+        "witnessModule",
+        "goalModule",
+    }
+)
+CONTEXT_MANIFEST_AUTHORITY = (
+    "navigation context only; exact SQL is pipeline input and generated Rocq plus "
+    "FormalSQL and the Rocq kernel remain authoritative"
+)
+CONTEXT_BINDING_PATHS = {
+    "sourceSql": "source.sql",
+    "targetSql": "target.sql",
+    "queryShape": "query-shape.json",
+    "orderedSignatures": "ordered-signatures.json",
+    "observationCertificates": "observation-certificates.json",
+    "semanticPrimer": "semantic-primer.md",
+    "declarationSearch": "search-rocq-declarations.py",
+    "schemaModule": "Schema.v",
+    "queriesModule": "Queries.v",
+    "witnessModule": "Witness.v",
+    "goalModule": "Goal.v",
+}
+CONTEXT_REPORT_BINDINGS = {
+    "sourceSql": ("sourceSqlSha256", "sourceSqlBytes"),
+    "targetSql": ("targetSqlSha256", "targetSqlBytes"),
+    "queryShape": ("queryShapeSha256", "queryShapeBytes"),
+    "orderedSignatures": ("orderedSignaturesSha256", "orderedSignaturesBytes"),
+    "observationCertificates": (
+        "observationCertificatesSha256",
+        "observationCertificatesBytes",
+    ),
+    "schemaModule": ("schemaModuleSha256", "schemaModuleBytes"),
+    "queriesModule": ("queriesModuleSha256", "queriesModuleBytes"),
+    "witnessModule": ("witnessModuleSha256", "witnessModuleBytes"),
+    "declarationSearch": ("declarationSearchSha256", "declarationSearchBytes"),
+}
+SUMMARY_CONFIGURATION_KEYS = frozenset(
+    {
+        "inputRoot",
+        "solverBin",
+        "solverBinary",
+        "solverBinarySnapshotPolicy",
+        "caseProcessIsolation",
+        "rocqRuntimeSnapshot",
+        "rocqAuthoritySnapshot",
+        "rocqAuthoritySnapshotPolicy",
+        "jobs",
+        "caseTimeoutSeconds",
+        "statementTimeoutSeconds",
+        "maxCounterexampleRounds",
+        "terminationGraceSeconds",
+        "verificationMode",
+        "model",
+        "reasoningEffort",
+        "solverArgs",
+        "effectiveSolverArgs",
+        "counterexampleAssessmentPolicy",
+        "postgresUrl",
+        "sqlEnvironment",
+        "solverLaunchEnvironmentPolicy",
+        "solverEnvironment",
+        "frontendLaunchEnvironmentPolicy",
+        "commandProviderEnvironmentPolicy",
+        "frameworkSourceTree",
+        "frameworkSourceTreeDigestPolicy",
+        "inputManifest",
+        "trustedStack",
+        "frontendStack",
+        "codexProvider",
+        "postgresServerProfile",
+        "cohort16Gate",
+        "frozenBenchmark",
+        "rbotAuthority",
+        "proofAgent",
+    }
+)
+PROOF_AGENT_CONFIGURATION_KEYS = frozenset(
+    {
+        "model",
+        "reasoningEffort",
+        "sessionRestartAfterFailedRounds",
+        "sessionHomePolicy",
+        "diagnosticTransport",
+        "diagnosticCachePolicy",
+        "diagnosticTimeoutPolicy",
+        "diagnosticBudgetPolicy",
+        "diagnosticCheckerParallelismMax",
+        "diagnosticCheckerSchedulingPolicy",
+        "compileCheckpointPolicy",
+        "scratchPersistencePolicy",
+        "writableStorageLimitBytes",
+        "writableStoragePolicy",
+        "scratchAllowedExtensions",
+        "trustedCheckerEnvironmentPolicy",
+        "proofAgentLauncherEnvironmentPolicy",
+        "totalTimeoutSeconds",
+        "trustedCheckTimeoutSeconds",
+        "resourcePolicy",
+        "dockerImage",
+        "rocqOpamSwitch",
+    }
+)
+EXPORT_FAILURE_MARKER = (
+    "proof-agent container produced an unsafe or invalid export archive"
+)
+
+
+class RecoveryError(RuntimeError):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class TrustedModuleCache:
+    root: Path
+    order: tuple[str, ...]
+    order_sha256: str
+    manifest_sha256: str
+    source_bindings: tuple[tuple[str, str, int], ...]
+
+    def staging_names(self) -> tuple[str, ...]:
+        return (
+            *STAGING_ROOT_NAMES,
+            *(f"ProofModules/{name}" for name in self.order),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class RecoveryAuthority:
+    run_dir: Path
+    configuration: dict[str, Any]
+    rocq_runtime_snapshot: dict[str, Any]
+    rocq_runtime_document: dict[str, Any]
+    proof_authority_root: Path
+    rocq_authority_snapshot: dict[str, Any]
+    rocq_authority_document: dict[str, Any]
+    trusted_stack: dict[str, Any]
+    trusted_stack_document: dict[str, Any]
+    rocq_opam_switch: Path
+
+
+def sha256_file(path: Path) -> str:
+    state = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            state.update(block)
+    return state.hexdigest()
+
+
+def canonical_json_bytes(value: Any) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def atomic_write(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def atomic_write_json(path: Path, value: Any) -> None:
+    atomic_write(path, canonical_json_bytes(value))
+
+
+def read_object(path: Path, description: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RecoveryError(f"cannot read {description} {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise RecoveryError(f"{description} is not a JSON object: {path}")
+    return value
+
+
+def regular_file(path: Path, description: str) -> Path:
+    if not path.is_file() or path.is_symlink():
+        raise RecoveryError(f"{description} is not a regular non-symlink file: {path}")
+    return path
+
+
+def strict_case_path(
+    case_dir: Path,
+    relative: str | Path,
+    description: str,
+    *,
+    directory: bool = False,
+) -> Path:
+    """Resolve one case artifact without following any case-local symlink.
+
+    Recovery runs trusted tooling over durable files left by an earlier solver
+    process.  Checking only the final path component would let a symlinked
+    ancestor redirect Goal.v, the context manifest, or a cache outside its
+    recorded semantic location.
+    """
+    root = case_dir.resolve()
+    value = Path(relative)
+    if value.is_absolute() or not value.parts or any(
+        part in {"", ".", ".."} for part in value.parts
+    ):
+        raise RecoveryError(f"{description} path is not canonical")
+    current = root
+    for index, part in enumerate(value.parts):
+        current = current / part
+        try:
+            metadata = current.lstat()
+        except OSError as error:
+            raise RecoveryError(f"{description} is missing: {current}: {error}") from error
+        final = index == len(value.parts) - 1
+        expected_directory = directory if final else True
+        if expected_directory:
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise RecoveryError(
+                    f"{description} has a non-directory or symlinked ancestor: {current}"
+                )
+        elif not stat.S_ISREG(metadata.st_mode):
+            raise RecoveryError(
+                f"{description} is not a regular non-symlink file: {current}"
+            )
+    return current
+
+
+def validate_formal_context(
+    case_dir: Path, proof: dict[str, Any], input_files: Any
+) -> dict[str, dict[str, Any]]:
+    """Bind the recovery goal and generated modules to the recorded context."""
+    configuration = proof.get("proofAgentConfiguration")
+    context = (
+        configuration.get("context") if isinstance(configuration, dict) else None
+    )
+    if not isinstance(context, dict):
+        raise RecoveryError("proof report has no generated-context authority")
+    manifest_relative = "proof-stage/formal-sql/context-manifest.json"
+    if context.get("manifestPath") != manifest_relative:
+        raise RecoveryError("proof context manifest path is not canonical")
+    manifest_path = strict_case_path(
+        case_dir, manifest_relative, "proof context manifest"
+    )
+    manifest = read_object(manifest_path, "proof context manifest")
+    schema_version = manifest.get("schemaVersion")
+    expected_manifest_keys = set(CONTEXT_MANIFEST_BASE_KEYS)
+    expected_context_keys = {
+        "manifestPath",
+        "manifestSha256",
+        "manifestBytes",
+        "sourceSqlSha256",
+        "sourceSqlBytes",
+        "targetSqlSha256",
+        "targetSqlBytes",
+        "queryShapeSha256",
+        "queryShapeBytes",
+        "orderedSignaturesSha256",
+        "orderedSignaturesBytes",
+        "observationCertificatesSha256",
+        "observationCertificatesBytes",
+        "schemaModuleSha256",
+        "schemaModuleBytes",
+        "queriesModuleSha256",
+        "queriesModuleBytes",
+        "witnessModuleSha256",
+        "witnessModuleBytes",
+        "problemModuleBytes",
+        "goalModuleBytes",
+        "semanticPrimerBytes",
+        "generatedContextBytes",
+    }
+    if schema_version == 8:
+        expected_manifest_keys.add("declarationSearch")
+        expected_context_keys.update(
+            {"declarationSearchSha256", "declarationSearchBytes"}
+        )
+    elif schema_version != 7:
+        raise RecoveryError("proof context manifest schemaVersion is unsupported")
+    if set(manifest) != expected_manifest_keys or set(context) != expected_context_keys:
+        raise RecoveryError("proof context manifest or report schema is incompatible")
+    if (
+        manifest.get("verificationMode") != proof.get("verificationMode")
+        or proof.get("verificationMode") != "outcome_unconditional"
+        or manifest.get("authority") != CONTEXT_MANIFEST_AUTHORITY
+        or require_nonnegative_integer(
+            manifest.get("staticPromptAndPrimerBytes"),
+            "proof context static prompt byte count",
+        )
+        != configuration.get("staticPromptAndPrimerBytes")
+        or context.get("manifestSha256") != sha256_file(manifest_path)
+        or context.get("manifestBytes") != manifest_path.stat().st_size
+    ):
+        raise RecoveryError("proof context manifest authority drifted")
+
+    bindings: dict[str, dict[str, Any]] = {}
+    formal_relative = Path("proof-stage/formal-sql")
+    for key, expected_name in CONTEXT_BINDING_PATHS.items():
+        if key == "declarationSearch" and schema_version == 7:
+            continue
+        binding = manifest.get(key)
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"path", "bytes", "sha256"}
+            or binding.get("path") != expected_name
+            or not isinstance(binding.get("sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", binding["sha256"]) is None
+        ):
+            raise RecoveryError(f"proof context {key} binding is malformed")
+        byte_count = require_nonnegative_integer(
+            binding.get("bytes"), f"proof context {key} byte count"
+        )
+        path = strict_case_path(
+            case_dir, formal_relative / expected_name, f"proof context {key}"
+        )
+        if path.stat().st_size != byte_count or sha256_file(path) != binding["sha256"]:
+            raise RecoveryError(f"proof context {key} artifact drifted")
+        report_fields = CONTEXT_REPORT_BINDINGS.get(key)
+        if report_fields is not None and (
+            context.get(report_fields[0]) != binding["sha256"]
+            or context.get(report_fields[1]) != byte_count
+        ):
+            raise RecoveryError(f"proof context {key} report binding drifted")
+        bindings[expected_name] = binding
+
+    if (
+        context.get("goalModuleBytes") != bindings["Goal.v"]["bytes"]
+        or context.get("semanticPrimerBytes") != bindings["semantic-primer.md"]["bytes"]
+        or not isinstance(context.get("problemModuleBytes"), int)
+        or isinstance(context.get("problemModuleBytes"), bool)
+        or context["problemModuleBytes"] < 0
+        or not isinstance(context.get("generatedContextBytes"), int)
+        or isinstance(context.get("generatedContextBytes"), bool)
+        or context["generatedContextBytes"] < 0
+    ):
+        raise RecoveryError("proof context aggregate byte bindings drifted")
+    if not isinstance(input_files, dict):
+        raise RecoveryError("runner result has no frozen input bindings")
+    for role, context_key in (("source", "sourceSqlSha256"), ("target", "targetSqlSha256")):
+        input_binding = input_files.get(role)
+        if (
+            not isinstance(input_binding, dict)
+            or not isinstance(input_binding.get("sha256"), str)
+            or context.get(context_key) != input_binding["sha256"]
+        ):
+            raise RecoveryError(f"proof context {role} SQL differs from frozen input")
+    return bindings
+
+
+def validate_staged_context(
+    staging: Path, context_bindings: dict[str, dict[str, Any]]
+) -> None:
+    for name in ("Schema.v", "Queries.v", "Witness.v", "Goal.v"):
+        binding = context_bindings[name]
+        path = regular_file(staging / name, f"staged context {name}")
+        if path.stat().st_size != binding["bytes"] or sha256_file(path) != binding["sha256"]:
+            raise RecoveryError(f"staged context differs from manifest: {name}")
+
+
+def validate_case_semantic_authority(
+    case_dir: Path,
+    proof: dict[str, Any],
+    old_result: dict[str, Any],
+    context_bindings: dict[str, dict[str, Any]],
+) -> None:
+    """Bind the recovered Rocq context to this runner case's accepted inputs/IR."""
+    input_files = old_result.get("inputFiles")
+    if not isinstance(input_files, dict):
+        raise RecoveryError("runner result has no frozen input bindings")
+    canonical_paths: dict[str, Path] = {}
+    canonical_sql: dict[str, str] = {}
+    for role in ("schema", "source", "target"):
+        binding = input_files.get(role)
+        if (
+            not isinstance(binding, dict)
+            or not isinstance(binding.get("path"), str)
+            or not isinstance(binding.get("sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", binding["sha256"]) is None
+        ):
+            raise RecoveryError(f"runner {role} input binding is malformed")
+        path = regular_file(
+            resolve_display_path(binding["path"]), f"frozen {role} SQL input"
+        ).resolve()
+        if sha256_file(path) != binding["sha256"]:
+            raise RecoveryError(f"frozen {role} SQL input digest drifted")
+        try:
+            canonical_sql[role] = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeError) as error:
+            raise RecoveryError(f"frozen {role} SQL input is not UTF-8: {error}") from error
+        canonical_paths[role] = path
+
+    verification_path = strict_case_path(
+        case_dir, "input/verification-input.json", "verification input"
+    )
+    integrity_path = strict_case_path(
+        case_dir, "input/integrity-contract.json", "integrity contract"
+    )
+    schema_ir_path = strict_case_path(case_dir, "input/schema-ir.json", "schema IR")
+    source_ir_path = strict_case_path(case_dir, "input/source-ir.json", "source IR")
+    target_ir_path = strict_case_path(case_dir, "input/target-ir.json", "target IR")
+    lowering_path = strict_case_path(
+        case_dir,
+        "proof-stage/formal-sql-lowering.json",
+        "FormalSQL lowering report",
+    )
+    verification = read_object(verification_path, "verification input")
+    integrity = read_object(integrity_path, "integrity contract")
+    lowering = read_object(lowering_path, "FormalSQL lowering report")
+    if set(verification) != {
+        "sqlEnvironment",
+        "integrityContract",
+        "schema",
+        "sourceQuery",
+        "targetQuery",
+    }:
+        raise RecoveryError("verification input schema is incompatible")
+
+    effective = old_result.get("effectiveConfiguration")
+    effective_sql = effective.get("sqlEnvironment") if isinstance(effective, dict) else None
+    if not isinstance(effective_sql, dict):
+        raise RecoveryError("runner result has no effective SQL environment")
+    expected_environment = {
+        "defaultCollation": effective_sql.get("defaultCollation"),
+        "characterClassification": effective_sql.get("characterClassification"),
+        "localeProvider": effective_sql.get("localeProvider"),
+        "serverEncoding": effective_sql.get("serverEncoding"),
+    }
+    if (
+        any(value is None for value in expected_environment.values())
+        or verification.get("sqlEnvironment") != expected_environment
+        or proof.get("sqlEnvironment") != expected_environment
+        or lowering.get("sqlEnvironment") != expected_environment
+        or effective.get("verificationMode") != "outcome-unconditional"
+        or proof.get("verificationMode") != "outcome_unconditional"
+    ):
+        raise RecoveryError("recovery SQL environment or verification mode drifted")
+
+    for field, role in (
+        ("schema", "schema"),
+        ("sourceQuery", "source"),
+        ("targetQuery", "target"),
+    ):
+        binding = verification.get(field)
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"path", "sql"}
+            or not isinstance(binding.get("path"), str)
+            or Path(binding["path"]).resolve() != canonical_paths[role]
+            or binding.get("sql") != canonical_sql[role]
+        ):
+            raise RecoveryError(f"verification input {field} borrows another case")
+    if verification.get("integrityContract") != integrity:
+        raise RecoveryError("verification input integrity contract drifted")
+
+    input_dir_value = old_result.get("inputDir")
+    if not isinstance(input_dir_value, str) or not input_dir_value:
+        raise RecoveryError("runner result has no input directory")
+    metadata_path = regular_file(
+        resolve_display_path(input_dir_value) / "metadata.json", "case metadata"
+    ).resolve()
+    metadata = read_object(metadata_path, "case metadata")
+    metadata_case_id = metadata.get("flatCaseId")
+    integrity_source = integrity.get("source")
+    metadata_integrity = metadata.get("integrityContract")
+    if not isinstance(metadata_integrity, dict):
+        raise RecoveryError("case metadata has no integrity authority declaration")
+    semantic_sidecar = metadata_integrity.get("semanticSidecar")
+    if semantic_sidecar is None:
+        expected_integrity_source = metadata_path
+    else:
+        semantic_constraints = metadata.get("semanticConstraints")
+        if (
+            metadata_integrity.get("authoritativeForLogos") is not True
+            or metadata_integrity.get("sourceKind")
+            != "wetune_base_schema_sidecar"
+            or metadata_integrity.get("sidecarAuthority")
+            != "integrity_declarations_only"
+            or not isinstance(semantic_sidecar, str)
+            or not semantic_sidecar
+            or not isinstance(semantic_constraints, dict)
+            or semantic_constraints.get("source") != semantic_sidecar
+        ):
+            raise RecoveryError("case metadata semantic-sidecar authority is malformed")
+        expected_integrity_source = regular_file(
+            resolve_display_path(semantic_sidecar), "semantic integrity sidecar"
+        ).resolve()
+    if (
+        not isinstance(metadata_case_id, str)
+        or not metadata_case_id
+        or integrity.get("caseId") != metadata_case_id
+        or not isinstance(integrity_source, str)
+        or resolve_display_path(integrity_source).resolve()
+        != expected_integrity_source
+    ):
+        raise RecoveryError("integrity contract borrows another case")
+    metadata_binding = input_files.get("metadata")
+    if metadata_binding is not None and (
+        not isinstance(metadata_binding, dict)
+        or resolve_display_path(metadata_binding.get("path", "")).resolve()
+        != metadata_path
+        or metadata_binding.get("sha256") != sha256_file(metadata_path)
+    ):
+        raise RecoveryError("runner metadata input binding drifted")
+
+    expected_input_bindings = {
+        "schemaVersion": 1,
+        "caseId": metadata_case_id,
+        "schemaSqlSha256": input_files["schema"]["sha256"],
+        "sourceSqlSha256": input_files["source"]["sha256"],
+        "targetSqlSha256": input_files["target"]["sha256"],
+        "verificationInputSha256": sha256_file(verification_path),
+        "integrityContractSha256": sha256_file(integrity_path),
+        "schemaIrSha256": sha256_file(schema_ir_path),
+        "sourceIrSha256": sha256_file(source_ir_path),
+        "targetIrSha256": sha256_file(target_ir_path),
+    }
+    if (
+        lowering.get("backend") != "formal_sql_rocq"
+        or lowering.get("inputBindings") != expected_input_bindings
+    ):
+        raise RecoveryError("FormalSQL lowering input bindings are stale or cross-case")
+
+    lowered_schema = lowering.get("schema")
+    schema_record = lowered_schema.get("schema") if isinstance(lowered_schema, dict) else None
+    generated_sources = {
+        "Schema.v": schema_record.get("rocqModule")
+        if isinstance(schema_record, dict)
+        else None,
+        "Queries.v": lowering.get("queryModule", {}).get("rocqModule")
+        if isinstance(lowering.get("queryModule"), dict)
+        else None,
+        "Goal.v": lowering.get("goalModule", {}).get("rocqModule")
+        if isinstance(lowering.get("goalModule"), dict)
+        else None,
+    }
+    for name, source in generated_sources.items():
+        if not isinstance(source, str) or hashlib.sha256(source.encode("utf-8")).hexdigest() != context_bindings[name]["sha256"]:
+            raise RecoveryError(f"generated {name} differs from FormalSQL lowering")
+    problem_module = lowering.get("proofModule")
+    generated_problem = (
+        problem_module.get("rocqModule") if isinstance(problem_module, dict) else None
+    )
+    context = proof["proofAgentConfiguration"]["context"]
+    if (
+        not isinstance(generated_problem, str)
+        or len(generated_problem.encode("utf-8")) != context.get("problemModuleBytes")
+    ):
+        raise RecoveryError("generated Problem.v scaffold binding drifted")
+
+
+def relative_binding(case_dir: Path, path: Path) -> dict[str, Any]:
+    path = regular_file(path, "bound artifact")
+    try:
+        relative = path.relative_to(case_dir).as_posix()
+    except ValueError as error:
+        raise RecoveryError(f"artifact escapes case directory: {path}") from error
+    return {
+        "path": relative,
+        "sha256": sha256_file(path),
+        "bytes": path.stat().st_size,
+    }
+
+
+def verify_binding(case_dir: Path, value: Any, description: str) -> Path:
+    if not isinstance(value, dict) or set(value) != {"path", "sha256", "bytes"}:
+        raise RecoveryError(f"{description} binding is malformed")
+    relative = value.get("path")
+    if not isinstance(relative, str) or not relative:
+        raise RecoveryError(f"{description} path is malformed")
+    lexical = case_dir / relative
+    try:
+        resolved = lexical.resolve(strict=True)
+        resolved.relative_to(case_dir.resolve())
+    except (OSError, ValueError) as error:
+        raise RecoveryError(f"{description} escapes the case directory") from error
+    path = regular_file(lexical, description)
+    if value.get("sha256") != sha256_file(path) or value.get("bytes") != path.stat().st_size:
+        raise RecoveryError(f"{description} binding drifted")
+    return path
+
+
+def require_exact_object(
+    value: Any, keys: frozenset[str] | set[str], description: str
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise RecoveryError(f"{description} has an incompatible schema")
+    return value
+
+
+def require_nonnegative_integer(value: Any, description: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise RecoveryError(f"{description} must be a nonnegative integer")
+    return value
+
+
+def require_positive_integer(value: Any, description: str) -> int:
+    result = require_nonnegative_integer(value, description)
+    if result == 0:
+        raise RecoveryError(f"{description} must be positive")
+    return result
+
+
+def resolve_expected_path(value: Any, expected: Path, description: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise RecoveryError(f"{description} path is malformed")
+    resolved = resolve_display_path(value).resolve()
+    if resolved != expected.resolve():
+        raise RecoveryError(
+            f"{description} path differs from the preserved run layout: {resolved}"
+        )
+    return resolved
+
+
+def expected_trusted_stack_summary(
+    manifest_path: Path,
+    manifest_sha256: str,
+    document: dict[str, Any],
+    proof_agent: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        host_tools = document["trustedHostTools"]
+        ldd_runtime_loaders = host_tools["lddRuntimeLoaders"]
+        resolver_configuration = host_tools["systemResolverConfiguration"]
+        identity_configuration = host_tools["systemIdentityConfiguration"]
+        return {
+            "manifestPath": RUNNER["workspace_display_path"](manifest_path),
+            "manifestSha256": manifest_sha256,
+            "manifestSchemaVersion": document["schemaVersion"],
+            "algorithm": document["algorithm"],
+            "dynamicLinkingAlgorithm": document["dynamicLinking"]["algorithm"],
+            "rocqRuntimeSnapshot": document["rocqRuntimeSnapshot"],
+            "rocqAuthoritySnapshot": document["rocqAuthoritySnapshot"],
+            "sourceObjectPairCount": len(document["sourceObjects"]),
+            "rocqStdlibObjectCount": document["rocqStdlib"]["objectCount"],
+            "rocqRuntimeComponentCount": document["rocqRuntime"]["componentCount"],
+            "rocqRuntimeConfigurationCount": document["rocqRuntime"][
+                "configurationCount"
+            ],
+            "trustedExecutableCount": len(document["executables"]),
+            "dynamicRuntimeFileCount": document["dynamicLinking"]["fileCount"],
+            "trustedHostToolCount": host_tools["toolCount"],
+            "trustedHostDynamicRuntimeFileCount": host_tools["dynamicLinking"][
+                "fileCount"
+            ],
+            "trustedInspectionEnvironmentPolicy": host_tools[
+                "inspectionEnvironment"
+            ]["policy"],
+            "trustedInspectionEnvironmentVariableCount": host_tools[
+                "inspectionEnvironment"
+            ]["allowedVariableCount"],
+            "lddRuntimeLoaderCandidateCount": ldd_runtime_loaders["candidateCount"],
+            "lddRuntimeLoaderClosureAlgorithm": ldd_runtime_loaders["algorithm"],
+            "lddRuntimeLoaderPresentCandidateCount": ldd_runtime_loaders[
+                "presentCandidateCount"
+            ],
+            "lddRuntimeLoaderAbsentCandidateCount": ldd_runtime_loaders[
+                "absentCandidateCount"
+            ],
+            "systemResolverConfigurationPathCount": resolver_configuration[
+                "pathCount"
+            ],
+            "systemResolverConfigurationAlgorithm": resolver_configuration[
+                "algorithm"
+            ],
+            "systemResolverConfigurationPresentPathCount": resolver_configuration[
+                "presentPathCount"
+            ],
+            "systemResolverConfigurationAbsentPathCount": resolver_configuration[
+                "absentPathCount"
+            ],
+            "systemIdentityConfigurationAlgorithm": identity_configuration[
+                "algorithm"
+            ],
+            "systemIdentityConfigurationPathCount": identity_configuration[
+                "pathCount"
+            ],
+            "systemIdentityConfigurationPresentPathCount": identity_configuration[
+                "presentPathCount"
+            ],
+            "systemIdentityConfigurationAbsentPathCount": identity_configuration[
+                "absentPathCount"
+            ],
+            "rocqExecutable": document["executables"]["rocq"],
+            "rocqCheckExecutable": document["executables"]["rocqchk"],
+            "rocqWorkerExecutable": document["executables"]["rocqworker"],
+            "rocqNativeExecutable": document["executables"]["rocqnative"],
+            "bwrapExecutable": document["executables"]["bwrap"],
+            "trustedCheckerEnvironmentPolicy": proof_agent[
+                "trustedCheckerEnvironmentPolicy"
+            ],
+            "proofAgentLauncherEnvironmentPolicy": proof_agent[
+                "proofAgentLauncherEnvironmentPolicy"
+            ],
+        }
+    except (KeyError, TypeError) as error:
+        raise RecoveryError("trusted proof-stack manifest is malformed") from error
+
+
+def validate_summary_configuration(
+    summary: dict[str, Any], run_dir: Path
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if summary.get("schemaVersion") != 1:
+        raise RecoveryError("runner summary schemaVersion must equal 1")
+    configuration = require_exact_object(
+        summary.get("configuration"),
+        SUMMARY_CONFIGURATION_KEYS,
+        "runner summary configuration",
+    )
+    proof_agent = require_exact_object(
+        configuration.get("proofAgent"),
+        PROOF_AGENT_CONFIGURATION_KEYS,
+        "runner summary proof-agent configuration",
+    )
+    framework_source_tree = configuration.get("frameworkSourceTree")
+    if (
+        not isinstance(framework_source_tree, dict)
+        or framework_source_tree.get("sourceTreeDigestHelper")
+        != RUNNER["source_tree_digest_helper_record"]()
+    ):
+        raise RecoveryError(
+            "runner summary source-tree digest helper binding drifted"
+        )
+    resolve_expected_path(summary.get("runDir"), run_dir, "runner summary runDir")
+    for summary_name, configuration_name in (
+        ("inputRoot", "inputRoot"),
+        ("solverBin", "solverBin"),
+        ("jobs", "jobs"),
+        ("caseTimeoutSeconds", "caseTimeoutSeconds"),
+        ("terminationGraceSeconds", "terminationGraceSeconds"),
+        ("verificationMode", "verificationMode"),
+        ("model", "model"),
+        ("reasoningEffort", "reasoningEffort"),
+        ("statementTimeoutSeconds", "statementTimeoutSeconds"),
+        ("maxCounterexampleRounds", "maxCounterexampleRounds"),
+        ("solverArgs", "solverArgs"),
+        ("effectiveSolverArgs", "effectiveSolverArgs"),
+        ("sqlEnvironment", "sqlEnvironment"),
+    ):
+        if summary.get(summary_name) != configuration.get(configuration_name):
+            raise RecoveryError(
+                f"runner summary {summary_name} differs from its preserved configuration"
+            )
+    if (
+        configuration.get("counterexampleAssessmentPolicy") != "force-fresh"
+        or configuration.get("frameworkSourceTreeDigestPolicy")
+        not in {"required", "record-only"}
+        or not isinstance(configuration.get("sqlEnvironment"), dict)
+        or set(configuration["sqlEnvironment"])
+        != {
+            "timeZone",
+            "defaultCollation",
+            "characterClassification",
+            "localeProvider",
+            "serverEncoding",
+        }
+    ):
+        raise RecoveryError("runner summary configuration policies are malformed")
+    case_timeout = configuration.get("caseTimeoutSeconds")
+    if (
+        isinstance(case_timeout, bool)
+        or not isinstance(case_timeout, (int, float))
+        or not math.isfinite(case_timeout)
+        or case_timeout <= 300
+    ):
+        raise RecoveryError("runner summary case timeout is malformed")
+    resource_policy = require_exact_object(
+        proof_agent.get("resourcePolicy"),
+        {"memoryLimitMiB", "storageLimitMiB", "cpuLimit"},
+        "proof-agent resource policy",
+    )
+    memory_limit_mib = require_positive_integer(
+        resource_policy.get("memoryLimitMiB"),
+        "proof-agent memory limit",
+    )
+    storage_limit_mib = require_positive_integer(
+        resource_policy.get("storageLimitMiB"),
+        "proof-agent storage limit",
+    )
+    trusted_check_timeout = require_positive_integer(
+        proof_agent.get("trustedCheckTimeoutSeconds"),
+        "proof-agent trusted-check timeout",
+    )
+    docker_image = proof_agent.get("dockerImage")
+    if not isinstance(docker_image, dict):
+        raise RecoveryError("proof-agent Docker image identity is malformed")
+    if (
+        proof_agent.get("model") != configuration.get("model")
+        or proof_agent.get("reasoningEffort") != configuration.get("reasoningEffort")
+        or proof_agent.get("totalTimeoutSeconds") != max(1, int(case_timeout) - 300)
+        or trusted_check_timeout != summary.get("proofCheckTimeoutSeconds")
+        or memory_limit_mib != summary.get("proofAgentMemoryLimitMiB")
+        or storage_limit_mib != summary.get("proofAgentStorageLimitMiB")
+        or resource_policy.get("cpuLimit") is not None
+        or proof_agent.get("writableStorageLimitBytes")
+        != storage_limit_mib * 1024 * 1024
+        or proof_agent.get("trustedCheckerEnvironmentPolicy")
+        != RUNNER["trusted_checker_environment_policy_record"]()
+        or proof_agent.get("proofAgentLauncherEnvironmentPolicy")
+        != RUNNER["proof_agent_launcher_environment_policy_record"]()
+        or docker_image.get("reference") != summary.get("proofDockerImageRequested")
+        or docker_image.get("effectiveReference")
+        != summary.get("proofDockerImageEffective")
+        or summary.get("proofDockerImage") != summary.get("proofDockerImageEffective")
+    ):
+        raise RecoveryError("runner summary proof-agent configuration drifted")
+    cases = summary.get("cases")
+    if (
+        not isinstance(cases, list)
+        or not all(isinstance(case_id, str) and case_id for case_id in cases)
+        or len(cases) != len(set(cases))
+    ):
+        raise RecoveryError("runner summary case list is malformed")
+    return configuration, proof_agent
+
+
+def load_recovery_authority(
+    run_dir: Path,
+    summary: dict[str, Any] | None = None,
+) -> RecoveryAuthority:
+    run_dir = run_dir.resolve()
+    summary_path = regular_file(run_dir / "runner-summary.json", "runner summary")
+    preserved_summary = read_object(summary_path, "runner summary")
+    if summary is not None and summary != preserved_summary:
+        raise RecoveryError("in-memory runner summary differs from its durable record")
+    summary = preserved_summary
+    configuration, proof_agent = validate_summary_configuration(summary, run_dir)
+
+    runtime_snapshot = configuration.get("rocqRuntimeSnapshot")
+    if not isinstance(runtime_snapshot, dict):
+        raise RecoveryError("runner summary has no Rocq runtime snapshot")
+    runtime_manifest_path = resolve_expected_path(
+        runtime_snapshot.get("manifestPath"),
+        run_dir / "trusted-rocq-runtime-manifest.json",
+        "trusted Rocq runtime manifest",
+    )
+    runtime_root = resolve_expected_path(
+        runtime_snapshot.get("root"),
+        run_dir / "runtime/trusted-rocq-switch",
+        "trusted Rocq runtime root",
+    )
+    runtime_document, runtime_digest = RUNNER[
+        "read_trusted_rocq_runtime_snapshot_manifest"
+    ](runtime_manifest_path)
+    RUNNER["verify_trusted_rocq_runtime_snapshot_tree"](
+        runtime_root, runtime_document
+    )
+    expected_runtime_snapshot = RUNNER["trusted_rocq_runtime_snapshot_summary"](
+        runtime_root,
+        runtime_manifest_path,
+        runtime_document,
+        runtime_digest,
+    )
+    if runtime_snapshot != expected_runtime_snapshot:
+        raise RecoveryError("trusted Rocq runtime snapshot summary drifted")
+
+    snapshot = configuration.get("rocqAuthoritySnapshot")
+    if not isinstance(snapshot, dict):
+        raise RecoveryError("runner summary has no Rocq authority snapshot")
+    snapshot_manifest_path = resolve_expected_path(
+        snapshot.get("manifestPath"),
+        run_dir / "trusted-rocq-authority-manifest.json",
+        "trusted Rocq authority manifest",
+    )
+    authority_root = resolve_expected_path(
+        snapshot.get("root"),
+        run_dir / "runtime/trusted-rocq-authority",
+        "trusted Rocq authority root",
+    )
+    authority_document, authority_digest = RUNNER[
+        "read_rocq_authority_snapshot_manifest"
+    ](snapshot_manifest_path)
+    expected_snapshot = RUNNER["rocq_authority_snapshot_summary"](
+        authority_root,
+        snapshot_manifest_path,
+        authority_document,
+        authority_digest,
+    )
+    if snapshot != expected_snapshot:
+        raise RecoveryError("trusted Rocq authority snapshot summary drifted")
+    if configuration.get("rocqAuthoritySnapshotPolicy") != snapshot.get("policy"):
+        raise RecoveryError("trusted Rocq authority snapshot policy drifted")
+    RUNNER["verify_rocq_authority_snapshot_tree"](
+        authority_root, authority_document
+    )
+    RUNNER["validate_rocq_authority_external_bindings"](
+        authority_document,
+        runtime_snapshot,
+        configuration.get("frameworkSourceTree"),
+    )
+
+    trusted_stack = configuration.get("trustedStack")
+    if not isinstance(trusted_stack, dict):
+        raise RecoveryError("runner summary has no trusted proof-stack record")
+    stack_manifest_path = resolve_expected_path(
+        trusted_stack.get("manifestPath"),
+        run_dir / "trusted-proof-stack-manifest.json",
+        "trusted proof-stack manifest",
+    )
+    stack_manifest_path = regular_file(
+        stack_manifest_path, "trusted proof-stack manifest"
+    )
+    stack_document = read_object(stack_manifest_path, "trusted proof-stack manifest")
+    if stack_manifest_path.read_bytes() != RUNNER["canonical_json_bytes"](
+        stack_document
+    ):
+        raise RecoveryError("trusted proof-stack manifest is not canonical JSON")
+    stack_digest = sha256_file(stack_manifest_path)
+    expected_stack = expected_trusted_stack_summary(
+        stack_manifest_path, stack_digest, stack_document, proof_agent
+    )
+    if trusted_stack != expected_stack:
+        raise RecoveryError("trusted proof-stack summary or manifest digest drifted")
+    if (
+        stack_document.get("rocqRuntimeSnapshot") != runtime_snapshot
+        or stack_document.get("rocqAuthoritySnapshot") != snapshot
+    ):
+        raise RecoveryError("trusted proof stack snapshot summaries drifted")
+    if stack_document.get("sourceObjects") != authority_document.get("sourceObjects"):
+        raise RecoveryError(
+            "trusted proof stack does not bind the frozen Rocq authority closure"
+        )
+
+    rocq_opam_switch = resolve_display_path(
+        proof_agent.get("rocqOpamSwitch", "")
+    ).resolve()
+    if (
+        rocq_opam_switch != runtime_root
+        or
+        not isinstance(stack_document.get("rocqOpamSwitch"), str)
+        or resolve_display_path(stack_document["rocqOpamSwitch"]).resolve()
+        != rocq_opam_switch
+    ):
+        raise RecoveryError("configured Rocq switch differs from the trusted stack")
+    current_stack = RUNNER["build_trusted_stack_manifest"](
+        rocq_opam_switch, authority_root
+    )
+    if not isinstance(current_stack, dict):
+        raise RecoveryError("cannot reconstruct the current trusted proof stack")
+    # Recovery executes the preserved case-local checker, not a mutable
+    # checkout script. All runtime, host-tool, and source/object records
+    # still have to match exactly.
+    current_stack = dict(current_stack)
+    current_stack["trustedScripts"] = stack_document.get("trustedScripts")
+    if current_stack != stack_document:
+        raise RecoveryError(
+            "configured Rocq runtime or trusted host stack changed since the run"
+        )
+
+    provenance = summary.get("provenance")
+    if isinstance(provenance, dict):
+        if (
+            provenance.get("rocqAuthoritySnapshotManifestSha256")
+            != snapshot["manifestSha256"]
+            or provenance.get("rocqRuntimeSnapshotManifestSha256")
+            != runtime_snapshot["manifestSha256"]
+            or provenance.get("rocqRuntimeSnapshotRoot") != runtime_snapshot["root"]
+            or provenance.get("rocqAuthoritySnapshotRoot") != snapshot["root"]
+            or provenance.get("trustedStackManifestSha256")
+            != trusted_stack["manifestSha256"]
+        ):
+            raise RecoveryError("runner provenance disagrees with proof authority")
+    return RecoveryAuthority(
+        run_dir=run_dir,
+        configuration=configuration,
+        rocq_runtime_snapshot=runtime_snapshot,
+        rocq_runtime_document=runtime_document,
+        proof_authority_root=authority_root,
+        rocq_authority_snapshot=snapshot,
+        rocq_authority_document=authority_document,
+        trusted_stack=trusted_stack,
+        trusted_stack_document=stack_document,
+        rocq_opam_switch=rocq_opam_switch,
+    )
+
+
+def run_dir_for_case(case_dir: Path) -> Path:
+    case_dir = case_dir.resolve()
+    if case_dir.parent.name != "cases":
+        raise RecoveryError("case directory is not below a runner cases directory")
+    return case_dir.parent.parent
+
+
+def recovery_authority_for_case(
+    case_dir: Path, authority: RecoveryAuthority | None = None
+) -> RecoveryAuthority:
+    run_dir = run_dir_for_case(case_dir)
+    if authority is None:
+        return load_recovery_authority(run_dir)
+    if authority.run_dir != run_dir:
+        raise RecoveryError("recovery authority belongs to a different run")
+    return authority
+
+
+def trusted_checker_manifest_entry(authority: RecoveryAuthority) -> dict[str, Any]:
+    scripts = authority.trusted_stack_document.get("trustedScripts")
+    if not isinstance(scripts, list):
+        raise RecoveryError("trusted proof stack has no script closure")
+    matches = [
+        entry
+        for entry in scripts
+        if isinstance(entry, dict) and entry.get("path") == TRUSTED_CHECKER_SOURCE
+    ]
+    if len(matches) != 1 or set(matches[0]) != {"path", "sha256", "bytes"}:
+        raise RecoveryError("trusted proof stack has no unique checker binding")
+    entry = matches[0]
+    if (
+        not isinstance(entry.get("sha256"), str)
+        or re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]) is None
+        or require_positive_integer(entry.get("bytes"), "trusted checker byte count")
+        != entry["bytes"]
+    ):
+        raise RecoveryError("trusted checker manifest binding is malformed")
+    return entry
+
+
+def validate_case_trusted_checker(
+    case_dir: Path, authority: RecoveryAuthority
+) -> Path:
+    checker = regular_file(
+        case_dir
+        / "proof-stage/proof-agent/trusted-launcher/run-trusted-rocq-check.sh",
+        "case-local trusted checker",
+    )
+    expected = trusted_checker_manifest_entry(authority)
+    if (
+        checker.stat().st_size != expected["bytes"]
+        or sha256_file(checker) != expected["sha256"]
+    ):
+        raise RecoveryError(
+            "case-local trusted checker differs from the preserved trusted stack"
+        )
+    return checker
+
+
+def decode_module_order(path: Path) -> tuple[tuple[str, ...], bytes]:
+    path = regular_file(path, "trusted proof-module ORDER")
+    payload = path.read_bytes()
+    if not payload:
+        return (), payload
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError as error:
+        raise RecoveryError("trusted proof-module ORDER is not UTF-8") from error
+    if not text.endswith("\n") or "\r" in text:
+        raise RecoveryError("trusted proof-module ORDER is not canonical")
+    names = tuple(text[:-1].split("\n"))
+    if (
+        not names
+        or any(not name or PROOF_MODULE_NAME.fullmatch(name) is None for name in names)
+        or len(names) != len(set(names))
+        or payload != "".join(f"{name}\n" for name in names).encode("utf-8")
+    ):
+        raise RecoveryError("trusted proof-module ORDER is invalid or duplicated")
+    return names, payload
+
+
+def validated_trusted_cache(
+    cache: Path, formal_workspace: Path | None = None
+) -> TrustedModuleCache:
+    if not cache.is_dir() or cache.is_symlink():
+        raise RecoveryError("trusted diagnostic cache is missing or unsafe")
+    expected_root_entries = {*TRUSTED_CACHE_ROOT_FILES, "SHA256SUMS", "ProofModules"}
+    if {entry.name for entry in cache.iterdir()} != expected_root_entries:
+        raise RecoveryError("trusted diagnostic cache root file set drifted")
+    for name in (*TRUSTED_CACHE_ROOT_FILES, "SHA256SUMS"):
+        path = regular_file(cache / name, f"trusted diagnostic cache {name}")
+        if path.stat().st_size == 0:
+            raise RecoveryError(f"trusted diagnostic cache entry is empty: {name}")
+    module_root = cache / "ProofModules"
+    if not module_root.is_dir() or module_root.is_symlink():
+        raise RecoveryError("trusted proof-module cache is unsafe")
+    order, order_bytes = decode_module_order(module_root / "ORDER")
+    expected_module_entries = {"ORDER"}
+    source_bindings: list[tuple[str, str, int]] = []
+    for name in order:
+        stem = name[:-2]
+        expected_module_entries.update({name, f"{stem}.vo"})
+        source = regular_file(module_root / name, f"trusted proof module {name}")
+        object_path = regular_file(
+            module_root / f"{stem}.vo", f"trusted proof module object {stem}.vo"
+        )
+        if source.stat().st_size == 0 or object_path.stat().st_size == 0:
+            raise RecoveryError(f"trusted proof-module cache entry is empty: {name}")
+        source_bindings.append((name, sha256_file(source), source.stat().st_size))
+    if {entry.name for entry in module_root.iterdir()} != expected_module_entries:
+        raise RecoveryError("trusted proof-module cache contains unordered entries")
+    manifest_names = (
+        *TRUSTED_CACHE_ROOT_FILES,
+        "ProofModules/ORDER",
+        *(
+            relative
+            for name in order
+            for relative in (f"ProofModules/{name}", f"ProofModules/{name[:-2]}.vo")
+        ),
+    )
+    expected_manifest = "".join(
+        f"{sha256_file(cache / relative)}  {relative}\n"
+        for relative in manifest_names
+    )
+    manifest_path = cache / "SHA256SUMS"
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+    except UnicodeError as error:
+        raise RecoveryError("trusted diagnostic cache manifest is not UTF-8") from error
+    if manifest_text != expected_manifest:
+        raise RecoveryError("trusted diagnostic cache digest manifest is not canonical")
+    if formal_workspace is not None:
+        for name in ("Schema.v", "Queries.v", "Witness.v"):
+            formal_source = regular_file(
+                formal_workspace / name, f"formal workspace {name}"
+            )
+            if formal_source.read_bytes() != (cache / name).read_bytes():
+                raise RecoveryError(
+                    f"trusted diagnostic cache source binding drifted: {name}"
+                )
+    return TrustedModuleCache(
+        root=cache.resolve(),
+        order=order,
+        order_sha256=hashlib.sha256(order_bytes).hexdigest(),
+        manifest_sha256=sha256_file(manifest_path),
+        source_bindings=tuple(source_bindings),
+    )
+
+
+def stage_recovery_workspace(
+    staging: Path,
+    formal_workspace: Path,
+    checkpoint_problem: Path,
+    cache: TrustedModuleCache,
+) -> None:
+    if not staging.is_dir() or staging.is_symlink() or any(staging.iterdir()):
+        raise RecoveryError("recovery staging workspace is not a fresh directory")
+    for name in STAGING_ROOT_NAMES:
+        source = (
+            checkpoint_problem
+            if name == "Problem.v"
+            else regular_file(formal_workspace / name, f"formal workspace {name}")
+        )
+        shutil.copyfile(source, staging / name)
+    module_root = staging / "ProofModules"
+    module_root.mkdir(mode=0o700)
+    for name, digest, byte_count in cache.source_bindings:
+        source = regular_file(cache.root / "ProofModules" / name, f"cached module {name}")
+        destination = module_root / name
+        shutil.copyfile(source, destination)
+        if destination.stat().st_size != byte_count or sha256_file(destination) != digest:
+            raise RecoveryError(f"staged proof module drifted while copying: {name}")
+
+
+def persist_staging_module_order(recovery_root: Path, cache: TrustedModuleCache) -> Path:
+    destination = recovery_root / "proof-module-order.txt"
+    shutil.copyfile(
+        regular_file(cache.root / "ProofModules/ORDER", "trusted proof-module ORDER"),
+        destination,
+    )
+    if sha256_file(destination) != cache.order_sha256:
+        raise RecoveryError("staged proof-module ORDER drifted while copying")
+    return destination
+
+
+def staging_manifest_document(
+    staging: Path,
+    checkpoint_sha256: str,
+    cache: TrustedModuleCache,
+    order_path: Path,
+) -> dict[str, Any]:
+    names = cache.staging_names()
+    return {
+        "schemaVersion": 2,
+        "checkpointSha256": checkpoint_sha256,
+        "proofModuleOrder": {
+            "path": "proof-module-order.txt",
+            "sha256": sha256_file(order_path),
+            "bytes": order_path.stat().st_size,
+            "modules": list(cache.order),
+        },
+        "files": [
+            {
+                "name": name,
+                "sha256": sha256_file(regular_file(staging / name, f"staging {name}")),
+                "bytes": (staging / name).stat().st_size,
+            }
+            for name in names
+        ],
+    }
+
+
+def validate_staging_workspace(
+    staging: Path,
+    manifest: dict[str, Any],
+    checkpoint_problem: Path,
+    formal_workspace: Path,
+    cache: TrustedModuleCache,
+    order_path: Path,
+) -> None:
+    if not staging.is_dir() or staging.is_symlink():
+        raise RecoveryError("prepared staging workspace is unsafe")
+    expected_names = cache.staging_names()
+    manifest_files = manifest.get("files")
+    if (
+        set(manifest)
+        != {"schemaVersion", "checkpointSha256", "proofModuleOrder", "files"}
+        or manifest.get("schemaVersion") != 2
+        or manifest.get("checkpointSha256") != sha256_file(checkpoint_problem)
+        or not isinstance(manifest_files, list)
+        or len(manifest_files) != len(expected_names)
+        or not all(isinstance(entry, dict) for entry in manifest_files)
+        or [entry.get("name") for entry in manifest_files] != list(expected_names)
+    ):
+        raise RecoveryError("prepared staging manifest is malformed")
+    if {entry.name for entry in staging.iterdir()} != {
+        *STAGING_ROOT_NAMES,
+        "ProofModules",
+    }:
+        raise RecoveryError("prepared staging root file set drifted")
+    module_root = staging / "ProofModules"
+    if not module_root.is_dir() or module_root.is_symlink() or {
+        entry.name for entry in module_root.iterdir()
+    } != set(cache.order):
+        raise RecoveryError("prepared staging proof-module file set drifted")
+    order_binding = manifest.get("proofModuleOrder")
+    if order_binding != {
+        "path": "proof-module-order.txt",
+        "sha256": cache.order_sha256,
+        "bytes": order_path.stat().st_size,
+        "modules": list(cache.order),
+    } or order_path.read_bytes() != regular_file(
+        cache.root / "ProofModules/ORDER", "trusted proof-module ORDER"
+    ).read_bytes():
+        raise RecoveryError("prepared staging proof-module ORDER binding drifted")
+    for entry, name in zip(manifest_files, expected_names, strict=True):
+        if set(entry) != {"name", "sha256", "bytes"}:
+            raise RecoveryError("prepared staging file binding is malformed")
+        path = regular_file(staging / name, f"staging {name}")
+        if entry != {
+            "name": name,
+            "sha256": sha256_file(path),
+            "bytes": path.stat().st_size,
+        }:
+            raise RecoveryError(f"prepared staging binding drifted: {name}")
+        if name == "Problem.v":
+            expected_source = checkpoint_problem
+        elif name.startswith("ProofModules/"):
+            expected_source = cache.root / name
+        else:
+            expected_source = formal_workspace / name
+        if path.read_bytes() != regular_file(
+            expected_source, f"prepared staging source {name}"
+        ).read_bytes():
+            raise RecoveryError(f"prepared staging source binding drifted: {name}")
+
+
+def validate_formal_proof_modules(
+    formal_workspace: Path, cache: TrustedModuleCache
+) -> None:
+    module_root = formal_workspace / "ProofModules"
+    if not module_root.is_dir() or module_root.is_symlink():
+        raise RecoveryError("published formal ProofModules directory is unsafe")
+    if {entry.name for entry in module_root.iterdir()} != set(cache.order):
+        raise RecoveryError("published formal ProofModules file set drifted")
+    for name, digest, byte_count in cache.source_bindings:
+        path = regular_file(module_root / name, f"published proof module {name}")
+        if path.stat().st_size != byte_count or sha256_file(path) != digest:
+            raise RecoveryError(f"published proof module drifted: {name}")
+
+
+def verify_prepared_case(
+    case_dir: Path,
+    timeout_seconds: int,
+    authority: RecoveryAuthority | None = None,
+) -> dict[str, Any]:
+    authority = recovery_authority_for_case(case_dir, authority)
+    if timeout_seconds != authority.configuration["proofAgent"][
+        "trustedCheckTimeoutSeconds"
+    ]:
+        raise RecoveryError("prepared recovery timeout differs from the preserved run")
+    contract = checkpoint_contract(case_dir)
+    recovery_root = case_dir / RECOVERY_RELATIVE
+    record = read_object(
+        recovery_root / "prepared-recovery.json", "prepared recovery record"
+    )
+    require_exact_object(
+        record,
+        {
+            "schemaVersion",
+            "status",
+            "recoveredAt",
+            "claim",
+            "sourceFailure",
+            "checkpoint",
+            "stagingWorkspace",
+            "trustedCheck",
+            "publishedProblem",
+        },
+        "prepared recovery record",
+    )
+    source_failure = require_exact_object(
+        record.get("sourceFailure"),
+        {
+            "round",
+            "agentExitCode",
+            "agentError",
+            "agentUsageError",
+            "runRecord",
+            "stderr",
+        },
+        "prepared source-failure record",
+    )
+    checkpoint = require_exact_object(
+        record.get("checkpoint"),
+        {"round", "sequence", "problem", "request", "invocation", "audit"},
+        "prepared checkpoint record",
+    )
+    staging_workspace = require_exact_object(
+        record.get("stagingWorkspace"),
+        {"path", "manifest"},
+        "prepared staging-workspace record",
+    )
+    trusted = require_exact_object(
+        record.get("trustedCheck"),
+        {
+            "checker",
+            "timeoutSeconds",
+            "startedAtUnixMs",
+            "elapsedMs",
+            "exitCode",
+            "timedOut",
+            "stdout",
+            "stderr",
+        },
+        "prepared trusted-check record",
+    )
+    if (
+        record.get("schemaVersion") != 1
+        or record.get("status") != "trusted_check_passed"
+        or record.get("claim") != contract["claim"]
+        or checkpoint.get("round") != contract["round"]
+        or checkpoint.get("sequence") != contract["sequence"]
+        or not isinstance(checkpoint.get("problem"), dict)
+        or checkpoint["problem"].get("sha256")
+        != contract["checkpointSha256"]
+    ):
+        raise RecoveryError("prepared recovery identity differs from source checkpoint")
+    checker = validate_case_trusted_checker(case_dir, authority)
+    for container, field, expected_path, description in (
+        (source_failure, "runRecord", contract["runRecordPath"], "source run record"),
+        (source_failure, "stderr", contract["stderrPath"], "source stderr"),
+        (checkpoint, "problem", contract["problemPath"], "checkpoint Problem.v"),
+        (checkpoint, "request", contract["requestPath"], "checkpoint request"),
+        (
+            checkpoint,
+            "invocation",
+            contract["invocationPath"],
+            "checkpoint invocation",
+        ),
+        (checkpoint, "audit", contract["auditPath"], "checkpoint audit"),
+        (
+            staging_workspace,
+            "manifest",
+            recovery_root / "staging-manifest.json",
+            "staging manifest",
+        ),
+        (trusted, "checker", checker, "trusted checker"),
+        (
+            trusted,
+            "stdout",
+            recovery_root / "trusted-check.stdout.txt",
+            "trusted-check stdout",
+        ),
+        (
+            trusted,
+            "stderr",
+            recovery_root / "trusted-check.stderr.txt",
+            "trusted-check stderr",
+        ),
+    ):
+        bound_path = verify_binding(case_dir, container.get(field), description)
+        if bound_path.resolve() != expected_path.resolve():
+            raise RecoveryError(f"prepared {description} path drifted")
+    elapsed_ms = require_nonnegative_integer(
+        trusted.get("elapsedMs"), "prepared trusted-check elapsedMs"
+    )
+    require_nonnegative_integer(
+        trusted.get("startedAtUnixMs"), "prepared trusted-check startedAtUnixMs"
+    )
+    if (
+        trusted.get("timeoutSeconds") != timeout_seconds
+        or trusted.get("exitCode") != 0
+        or trusted.get("timedOut") is not False
+    ):
+        raise RecoveryError("prepared trusted check was not accepted")
+    # elapsedMs includes process/pipe reaping after the trusted check has
+    # already produced its status. Scheduler or descendant-pipe delay is
+    # warning telemetry for the runner, not authority that can invalidate an
+    # independently successful certificate.
+    staging_relative = RECOVERY_RELATIVE / "staging-workspace"
+    if staging_workspace.get("path") != staging_relative.as_posix():
+        raise RecoveryError("prepared staging workspace path is not canonical")
+    staging_root = case_dir / staging_relative
+    manifest = read_object(
+        case_dir / staging_workspace["manifest"]["path"],
+        "staging manifest",
+    )
+    formal = case_dir / "proof-stage/formal-sql"
+    cache = validated_trusted_cache(
+        case_dir / "proof-stage/proof-agent/trusted-diagnostic-cache", formal
+    )
+    order_path = regular_file(
+        recovery_root / "proof-module-order.txt",
+        "prepared proof-module ORDER",
+    )
+    validate_staging_workspace(
+        staging_root,
+        manifest,
+        contract["problemPath"],
+        formal,
+        cache,
+        order_path,
+    )
+    validate_staged_context(staging_root, contract["contextBindings"])
+    published = record.get("publishedProblem")
+    if published != {
+        "path": "proof-stage/formal-sql/Problem.v",
+        "sha256": contract["checkpointSha256"],
+        "bytes": contract["problemPath"].stat().st_size,
+    }:
+        raise RecoveryError("prepared published Problem.v binding is malformed")
+    return record
+
+
+def checkpoint_contract(case_dir: Path) -> dict[str, Any]:
+    report_path = regular_file(case_dir / "report.json", "solver report")
+    stage_report_path = regular_file(
+        case_dir / "proof-stage/report.json", "proof-stage report"
+    )
+    report = read_object(report_path, "solver report")
+    stage_report = read_object(stage_report_path, "proof-stage report")
+    old_result = read_object(case_dir / "runner-result.json", "runner case result")
+    proof = report.get("proof")
+    if not isinstance(proof, dict) or proof != stage_report:
+        raise RecoveryError("root and proof-stage reports do not carry the same proof record")
+    if (
+        report.get("outcome") != "equivalence_verification_incomplete"
+        or proof.get("backendStatus") != "proof_agent_failed"
+        or proof.get("verificationMode") != "outcome_unconditional"
+        or proof.get("deterministicTailRecovery") is not None
+    ):
+        raise RecoveryError("case is not an unrecovered outcome-unconditional agent failure")
+    rounds = proof.get("proofAgentRounds")
+    if not isinstance(rounds, list) or not rounds or not all(
+        isinstance(record, dict) for record in rounds
+    ):
+        raise RecoveryError("proof report has no complete round array")
+    final_round = rounds[-1]
+    if proof.get("proofAgent") != final_round:
+        raise RecoveryError("proofAgent does not identify the terminal proof round")
+    if not RUNNER["terminal_round_has_unavailable_session"](final_round):
+        raise RecoveryError("terminal round is not the recognized export/session failure")
+    round_index = final_round.get("round")
+    if round_index != len(rounds):
+        raise RecoveryError("terminal proof round number is not consecutive")
+    round_root = case_dir / f"proof-stage/proof-agent/rounds/{round_index:02d}"
+    context_bindings = validate_formal_context(
+        case_dir, proof, old_result.get("inputFiles")
+    )
+    validate_case_semantic_authority(
+        case_dir, proof, old_result, context_bindings
+    )
+    context = proof["proofAgentConfiguration"]["context"]
+    round_context_path = strict_case_path(
+        case_dir,
+        f"proof-stage/proof-agent/rounds/{round_index:02d}/checked-workspace/context-manifest.json",
+        "terminal round context manifest",
+    )
+    if (
+        final_round.get("contextManifestSha256") != context["manifestSha256"]
+        or sha256_file(round_context_path) != context["manifestSha256"]
+    ):
+        raise RecoveryError("terminal proof round differs from the formal context authority")
+    run_record_path = regular_file(round_root / "run.json", "proof-agent run record")
+    run_record = read_object(run_record_path, "proof-agent run record")
+    RUNNER["validate_failed_round_run_record_binding"](
+        final_round, run_record, "terminal recovery round"
+    )
+    stderr_path = regular_file(round_root / "stderr.txt", "proof-agent stderr")
+    if EXPORT_FAILURE_MARKER not in stderr_path.read_text(
+        encoding="utf-8", errors="strict"
+    ):
+        raise RecoveryError("terminal stderr is not a Docker export failure")
+
+    checkpoint_sha256 = final_round.get("updatedProblemCompileCheckpointSha256")
+    if not isinstance(checkpoint_sha256, str) or len(checkpoint_sha256) != 64:
+        raise RecoveryError("terminal round has no retained Problem.v checkpoint")
+    invocations = final_round.get("diagnosticCheckerInvocations")
+    if not isinstance(invocations, list):
+        raise RecoveryError("terminal round has no diagnostic telemetry")
+    matches = [
+        invocation
+        for invocation in invocations
+        if isinstance(invocation, dict)
+        and invocation.get("candidateSha256") == checkpoint_sha256
+        and invocation.get("mode") == "problem"
+        and invocation.get("candidatePath") == "Problem.v"
+        and invocation.get("compilePassed") is True
+        and invocation.get("problemCompilePassed") is True
+        and invocation.get("compileCheckpointAdvanced") is True
+        and invocation.get("exitCode") == 0
+        and invocation.get("timedOut") is False
+    ]
+    if len(matches) != 1:
+        raise RecoveryError("checkpoint is not uniquely bound to one accepted problem diagnostic")
+    invocation = matches[0]
+    sequence = invocation.get("sequence")
+    if (
+        isinstance(sequence, bool)
+        or not isinstance(sequence, int)
+        or sequence < 1
+        or sequence > len(invocations)
+        or invocations[sequence - 1] != invocation
+    ):
+        raise RecoveryError("checkpoint diagnostic sequence is invalid")
+    diagnostic_root = round_root / f"interactive-diagnostics/{sequence:02d}"
+    problem_path = regular_file(
+        diagnostic_root / "checked-workspace/Problem.v", "checkpoint Problem.v"
+    )
+    request_path = regular_file(diagnostic_root / "request.json", "checkpoint request")
+    invocation_path = regular_file(
+        diagnostic_root / "invocation.json", "checkpoint invocation"
+    )
+    audit_path = regular_file(diagnostic_root / "audit.json", "checkpoint audit")
+    if sha256_file(problem_path) != checkpoint_sha256:
+        raise RecoveryError("checkpoint Problem.v digest differs from retained hash")
+    if read_object(invocation_path, "checkpoint invocation") != invocation:
+        raise RecoveryError("checkpoint invocation artifact differs from telemetry")
+    request = read_object(request_path, "checkpoint request")
+    RUNNER["validate_diagnostic_request_v2"](
+        request,
+        mode="problem",
+        candidate_path="Problem.v",
+        purpose=invocation.get("purpose"),
+        candidate_sha256=checkpoint_sha256,
+        candidate_bytes=problem_path.stat().st_size,
+        requested_timeout_seconds=invocation.get("requestedTimeoutSeconds"),
+        description="deterministic-tail checkpoint request",
+    )
+    RUNNER["validate_diagnostic_agent_audit"](
+        read_object(audit_path, "checkpoint audit"),
+        expected_passed=True,
+        description="deterministic-tail checkpoint audit",
+    )
+    problem_text = problem_path.read_text(encoding="utf-8", errors="strict")
+    claim = (
+        "equivalence"
+        if RUNNER["problem_declares_equivalence_claim"](problem_text)
+        else (
+            "formal_countermodel"
+            if RUNNER["problem_declares_formal_countermodel_claim"](problem_text)
+            else None
+        )
+    )
+    if claim is None or not RUNNER["problem_declares_final_theorem"](
+        problem_text, "outcome-unconditional"
+    ):
+        raise RecoveryError("checkpoint lacks the unique required claim/final theorem")
+    return {
+        "report": report,
+        "proof": proof,
+        "rounds": rounds,
+        "finalRound": final_round,
+        "round": round_index,
+        "sequence": sequence,
+        "checkpointSha256": checkpoint_sha256,
+        "claim": claim,
+        "problemPath": problem_path,
+        "requestPath": request_path,
+        "invocationPath": invocation_path,
+        "auditPath": audit_path,
+        "runRecordPath": run_record_path,
+        "stderrPath": stderr_path,
+        "contextBindings": context_bindings,
+        "contextManifestSha256": context["manifestSha256"],
+        "inputFiles": old_result.get("inputFiles"),
+        "runnerResult": old_result,
+    }
+
+
+def prepare_case(
+    case_dir: Path,
+    timeout_seconds: int,
+    authority: RecoveryAuthority | None = None,
+) -> dict[str, Any]:
+    authority = recovery_authority_for_case(case_dir, authority)
+    if timeout_seconds != authority.configuration["proofAgent"][
+        "trustedCheckTimeoutSeconds"
+    ]:
+        raise RecoveryError("requested recovery timeout differs from the preserved run")
+    contract = checkpoint_contract(case_dir)
+    recovery_root = case_dir / RECOVERY_RELATIVE
+    if recovery_root.exists() or recovery_root.is_symlink():
+        record = verify_prepared_case(case_dir, timeout_seconds, authority)
+        return {
+            "caseId": case_dir.name,
+            "checkpointSha256": contract["checkpointSha256"],
+            "round": contract["round"],
+            "sequence": contract["sequence"],
+            "trustedCheckElapsedMs": record["trustedCheck"]["elapsedMs"],
+            "status": "already_prepared",
+        }
+    proof_stage = regular_file(case_dir / "proof-stage/report.json", "proof report").parent
+    temporary_root = Path(
+        tempfile.mkdtemp(prefix=".deterministic-tail-recovery.", dir=proof_stage)
+    )
+    try:
+        staging = temporary_root / "staging-workspace"
+        staging.mkdir(mode=0o700)
+        formal = case_dir / "proof-stage/formal-sql"
+        cache_path = case_dir / "proof-stage/proof-agent/trusted-diagnostic-cache"
+        trusted_cache = validated_trusted_cache(cache_path, formal)
+        stage_recovery_workspace(
+            staging, formal, contract["problemPath"], trusted_cache
+        )
+        validate_staged_context(staging, contract["contextBindings"])
+        checker = validate_case_trusted_checker(case_dir, authority)
+        environment = {
+            "PATH": "/Anaconda/bin:/usr/bin:/bin",
+            "HOME": "/nonexistent",
+            "LC_ALL": "C",
+            "LANG": "C",
+            "LOGOS_REPO_ROOT": str(authority.proof_authority_root),
+            "LOGOS_PROOF_WORKDIR": str(staging),
+            "LOGOS_TRUSTED_ROCQ_CACHE_DIR": str(cache_path),
+            "LOGOS_ROCQ_OPAM_SWITCH": str(authority.rocq_opam_switch),
+        }
+        command = [
+            "/usr/bin/timeout",
+            "--signal=TERM",
+            "--kill-after=5s",
+            f"{timeout_seconds}s",
+            "/usr/bin/bash",
+            str(checker),
+        ]
+        started_at_unix_ms = time.time_ns() // 1_000_000
+        started = time.monotonic()
+        completed = subprocess.run(
+            command,
+            cwd=authority.proof_authority_root,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=timeout_seconds + 10,
+        )
+        elapsed_ms = round((time.monotonic() - started) * 1000)
+        atomic_write(temporary_root / "trusted-check.stdout.txt", completed.stdout)
+        atomic_write(temporary_root / "trusted-check.stderr.txt", completed.stderr)
+        if completed.returncode != 0:
+            raise RecoveryError(
+                f"trusted checker failed with {completed.returncode}: "
+                + completed.stderr.decode("utf-8", errors="replace")[-2000:]
+            )
+        # The checker validates the cache itself, but compare the complete
+        # canonical closure again before preserving ORDER as recovery evidence.
+        # ORDER is intentionally added only after final mode exits because it
+        # is cache metadata, not a compilable workspace module.
+        current_cache = validated_trusted_cache(cache_path, formal)
+        if current_cache != trusted_cache:
+            raise RecoveryError("trusted diagnostic cache changed during recovery")
+        current_context = validate_formal_context(
+            case_dir,
+            contract["proof"],
+            contract["inputFiles"],
+        )
+        if current_context != contract["contextBindings"]:
+            raise RecoveryError("proof context changed during recovery")
+        validate_case_semantic_authority(
+            case_dir,
+            contract["proof"],
+            contract["runnerResult"],
+            contract["contextBindings"],
+        )
+        validate_staged_context(staging, contract["contextBindings"])
+        order_path = persist_staging_module_order(temporary_root, trusted_cache)
+        manifest = staging_manifest_document(
+            staging,
+            contract["checkpointSha256"],
+            trusted_cache,
+            order_path,
+        )
+        validate_staging_workspace(
+            staging,
+            manifest,
+            contract["problemPath"],
+            formal,
+            trusted_cache,
+            order_path,
+        )
+        atomic_write_json(temporary_root / "staging-manifest.json", manifest)
+
+        future_root = recovery_root
+        future_staging = future_root / "staging-workspace"
+        future_stdout = future_root / "trusted-check.stdout.txt"
+        future_stderr = future_root / "trusted-check.stderr.txt"
+        future_manifest = future_root / "staging-manifest.json"
+        published_problem = formal / "Problem.v"
+        record = {
+            "schemaVersion": 1,
+            "status": "trusted_check_passed",
+            "recoveredAt": RUNNER["iso_now"](),
+            "claim": contract["claim"],
+            "sourceFailure": {
+                "round": contract["round"],
+                "agentExitCode": contract["finalRound"].get("exitCode"),
+                "agentError": contract["finalRound"].get("error"),
+                "agentUsageError": contract["finalRound"].get("usageError"),
+                "runRecord": relative_binding(case_dir, contract["runRecordPath"]),
+                "stderr": relative_binding(case_dir, contract["stderrPath"]),
+            },
+            "checkpoint": {
+                "round": contract["round"],
+                "sequence": contract["sequence"],
+                "problem": relative_binding(case_dir, contract["problemPath"]),
+                "request": relative_binding(case_dir, contract["requestPath"]),
+                "invocation": relative_binding(case_dir, contract["invocationPath"]),
+                "audit": relative_binding(case_dir, contract["auditPath"]),
+            },
+            "stagingWorkspace": {
+                "path": future_staging.relative_to(case_dir).as_posix(),
+                "manifest": {
+                    "path": future_manifest.relative_to(case_dir).as_posix(),
+                    "sha256": sha256_file(temporary_root / "staging-manifest.json"),
+                    "bytes": (temporary_root / "staging-manifest.json").stat().st_size,
+                },
+            },
+            "trustedCheck": {
+                "checker": relative_binding(case_dir, checker),
+                "timeoutSeconds": timeout_seconds,
+                "startedAtUnixMs": started_at_unix_ms,
+                "elapsedMs": elapsed_ms,
+                "exitCode": completed.returncode,
+                "timedOut": completed.returncode in (124, 137),
+                "stdout": {
+                    "path": future_stdout.relative_to(case_dir).as_posix(),
+                    "sha256": sha256_file(temporary_root / "trusted-check.stdout.txt"),
+                    "bytes": (temporary_root / "trusted-check.stdout.txt").stat().st_size,
+                },
+                "stderr": {
+                    "path": future_stderr.relative_to(case_dir).as_posix(),
+                    "sha256": sha256_file(temporary_root / "trusted-check.stderr.txt"),
+                    "bytes": (temporary_root / "trusted-check.stderr.txt").stat().st_size,
+                },
+            },
+            "publishedProblem": {
+                "path": published_problem.relative_to(case_dir).as_posix(),
+                "sha256": contract["checkpointSha256"],
+                "bytes": contract["problemPath"].stat().st_size,
+            },
+        }
+        atomic_write_json(temporary_root / "prepared-recovery.json", record)
+        os.replace(temporary_root, recovery_root)
+        verify_prepared_case(case_dir, timeout_seconds, authority)
+        return {
+            "caseId": case_dir.name,
+            "checkpointSha256": contract["checkpointSha256"],
+            "round": contract["round"],
+            "sequence": contract["sequence"],
+            "trustedCheckElapsedMs": elapsed_ms,
+            "status": "prepared",
+        }
+    except BaseException:
+        shutil.rmtree(temporary_root, ignore_errors=True)
+        raise
+
+
+def resolve_display_path(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    if path.parts and path.parts[0] == "Logos":
+        return WORKFLOW_ROOT / path
+    return LOGOS_ROOT / path
+
+
+def config_and_case(
+    summary: dict[str, Any],
+    old_result: dict[str, Any],
+    authority: RecoveryAuthority | None = None,
+) -> tuple[Any, Any]:
+    configuration = summary.get("configuration")
+    if authority is None:
+        run_dir_value = summary.get("runDir")
+        if not isinstance(run_dir_value, str) or not run_dir_value:
+            raise RecoveryError("runner summary has no runDir")
+        authority = load_recovery_authority(resolve_display_path(run_dir_value), summary)
+    if configuration != authority.configuration:
+        raise RecoveryError("runner summary configuration differs from recovery authority")
+    proof_agent = configuration.get("proofAgent")
+    sql = configuration.get("sqlEnvironment")
+    if not isinstance(proof_agent, dict) or not isinstance(sql, dict):
+        raise RecoveryError("runner summary configuration is incomplete")
+    case_id = old_result.get("caseId")
+    input_files = old_result.get("inputFiles")
+    if not isinstance(case_id, str) or not isinstance(input_files, dict):
+        raise RecoveryError("runner case result lacks frozen input bindings")
+    if case_id not in summary.get("cases", []):
+        raise RecoveryError("runner case result is outside the preserved cohort")
+    for name in ("schema", "source", "target", "metadata"):
+        binding = input_files.get(name)
+        if not isinstance(binding, dict) or not isinstance(binding.get("path"), str):
+            raise RecoveryError(f"runner case result lacks frozen {name} binding")
+    input_dir = resolve_display_path(old_result["inputDir"])
+    metadata_path = resolve_display_path(input_files["metadata"]["path"])
+    if metadata_path.resolve() != (input_dir / "metadata.json").resolve():
+        raise RecoveryError("runner metadata binding identifies another case")
+    regular_file(metadata_path, "selected case metadata")
+    if input_files["metadata"].get("sha256") != sha256_file(metadata_path):
+        raise RecoveryError("selected case metadata digest changed")
+    metadata = read_object(metadata_path, "selected case metadata")
+    flat_case_id = metadata.get("flatCaseId")
+    if not isinstance(flat_case_id, str) or not flat_case_id:
+        raise RecoveryError("selected case metadata has no semantic flatCaseId")
+    case = RUNNER["BenchmarkCase"](
+        case_id=case_id,
+        cohort=case_id.split("__", 1)[0],
+        input_dir=input_dir,
+        relative_dir=input_dir.name,
+        schema=resolve_display_path(input_files["schema"]["path"]),
+        source=resolve_display_path(input_files["source"]["path"]),
+        target=resolve_display_path(input_files["target"]["path"]),
+        source_benchmark=metadata.get("sourceBenchmark", old_result.get("benchmark")),
+        source_case=metadata.get("sourceCase"),
+        flat_case_id=flat_case_id,
+    )
+    isolation = configuration.get("caseProcessIsolation")
+    if not isinstance(isolation, dict):
+        raise RecoveryError("runner summary has no case-process isolation authority")
+    bootstrap_binding = isolation.get("bootstrap")
+    supervisor_binding = isolation.get("supervisor")
+    if not isinstance(bootstrap_binding, dict) or not isinstance(
+        supervisor_binding, dict
+    ):
+        raise RecoveryError("case-process snapshot bindings are malformed")
+    bootstrap_relative = bootstrap_binding.get("relativePath")
+    supervisor_relative = supervisor_binding.get("relativePath")
+    if not isinstance(bootstrap_relative, str) or not isinstance(
+        supervisor_relative, str
+    ):
+        raise RecoveryError("case-process snapshot paths are malformed")
+    case_process_bootstrap = authority.run_dir / bootstrap_relative
+    case_process_supervisor = authority.run_dir / supervisor_relative
+    try:
+        observed_isolation = RUNNER["case_process_isolation_record"](
+            case_process_bootstrap,
+            case_process_supervisor,
+            authority.run_dir,
+        )
+    except Exception as error:
+        raise RecoveryError(
+            f"cannot validate case-process snapshots: {error}"
+        ) from error
+    if observed_isolation != isolation:
+        raise RecoveryError("case-process isolation authority drifted")
+    config = RUNNER["RunConfig"](
+        solver_bin=resolve_display_path(configuration["solverBin"]),
+        case_process_bootstrap=case_process_bootstrap,
+        case_process_supervisor=case_process_supervisor,
+        case_process_isolation=isolation,
+        proof_authority_root=authority.proof_authority_root,
+        run_dir=authority.run_dir,
+        case_timeout_seconds=configuration["caseTimeoutSeconds"],
+        termination_grace_seconds=configuration["terminationGraceSeconds"],
+        verification_mode=configuration["verificationMode"],
+        postgres_url=None,
+        sql_time_zone=sql["timeZone"],
+        sql_default_collation=sql["defaultCollation"],
+        sql_character_classification=sql["characterClassification"],
+        sql_locale_provider=sql["localeProvider"],
+        sql_server_encoding=sql["serverEncoding"],
+        solver_args=tuple(configuration["solverArgs"]),
+        proof_agent_memory_limit_mib=summary["proofAgentMemoryLimitMiB"],
+        proof_agent_storage_limit_mib=summary["proofAgentStorageLimitMiB"],
+        statement_timeout_seconds=summary["statementTimeoutSeconds"],
+        max_counterexample_rounds=summary["maxCounterexampleRounds"],
+        proof_check_timeout_seconds=summary["proofCheckTimeoutSeconds"],
+        proof_docker_image=summary.get(
+            "proofDockerImageRequested", summary["proofDockerImage"]
+        ),
+        proof_docker_image_effective=summary["proofDockerImageEffective"],
+        proof_docker_image_identity=proof_agent["dockerImage"],
+        proof_rocq_opam_switch=authority.rocq_opam_switch,
+        allow_framework_source_drift=(
+            configuration["frameworkSourceTreeDigestPolicy"] == "record-only"
+        ),
+        framework_source_tree=configuration["frameworkSourceTree"],
+        input_manifest=configuration["inputManifest"],
+        input_files={case_id: input_files},
+        solver_binary=configuration["solverBinary"],
+        rocq_authority_snapshot=authority.rocq_authority_snapshot,
+        trusted_stack=authority.trusted_stack,
+        frontend_stack=configuration["frontendStack"],
+        codex_provider=configuration["codexProvider"],
+        postgres_server_profile=configuration["postgresServerProfile"],
+        codex_runtime_home=authority.run_dir / "runtime/unused-recovery-codex-home",
+        cohort16_gate=configuration.get("cohort16Gate"),
+        frozen_benchmark=configuration.get("frozenBenchmark"),
+        rbot_authority=configuration.get("rbotAuthority"),
+        model=configuration["model"],
+        reasoning_effort=configuration["reasoningEffort"],
+    )
+    return config, case
+
+
+def recovery_publication_paths(
+    case_dir: Path, recovery_root: Path
+) -> tuple[tuple[Path, str], ...]:
+    return (
+        (case_dir / "proof-stage/formal-sql/Problem.v", "Problem.v"),
+        (recovery_root / "recovery.json", "recovery.json"),
+        (case_dir / "proof-stage/report.json", "proof-stage-report.json"),
+        (case_dir / "report.json", "report.json"),
+        (case_dir / "runner-result.json", "runner-result.json"),
+        (case_dir / "status.json", "status.json"),
+        (case_dir / "time.txt", "time.txt"),
+        (case_dir / "usage.json", "usage.json"),
+    )
+
+
+def revalidation_transaction_paths(case_dir: Path) -> tuple[tuple[Path, str], ...]:
+    return (
+        (case_dir / "runner-result.json", "runner-result.json"),
+        (case_dir / "status.json", "status.json"),
+        (case_dir / "time.txt", "time.txt"),
+        (case_dir / "usage.json", "usage.json"),
+    )
+
+
+def validate_current_completed_case(
+    case_dir: Path,
+    summary: dict[str, Any],
+    authority: RecoveryAuthority,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Revalidate the current report/result through the runner's trusted policy."""
+
+    report = read_object(case_dir / "report.json", "committed solver report")
+    result = read_object(case_dir / "runner-result.json", "committed runner result")
+    if (
+        result.get("caseId") != case_dir.name
+        or result.get("status") != "completed"
+        or not RUNNER["completed_return_code_is_coherent"](result)
+    ):
+        raise RecoveryError("committed runner result is not coherently completed")
+    config, case = config_and_case(summary, result, authority)
+    metrics = RUNNER["proof_metrics_from_report"](report, case, config, case_dir)
+    if result.get("proofMetrics") != metrics:
+        raise RecoveryError("committed runner proof metrics drifted")
+    RUNNER["validate_completed_report"](report, result, case_dir, case, config)
+    expected_evidence = {
+        "path": RUNNER["workspace_display_path"](case_dir / "report.json"),
+        "present": True,
+        "sha256": sha256_file(case_dir / "report.json"),
+    }
+    if result.get("reportEvidence") != expected_evidence:
+        raise RecoveryError("committed runner report evidence drifted")
+    return result, report
+
+
+def validate_committed_revalidation(
+    case_dir: Path,
+    summary: dict[str, Any],
+    authority: RecoveryAuthority,
+) -> dict[str, Any]:
+    transaction_root = (
+        case_dir / "proof-stage/deterministic-runner-revalidation-transaction"
+    )
+    evidence_root = case_dir / "proof-stage/deterministic-runner-revalidation"
+    journal = require_exact_object(
+        read_object(transaction_root / "journal.json", "revalidation journal"),
+        {"schemaVersion", "status", "caseId", "committedAt"},
+        "committed revalidation journal",
+    )
+    if (
+        journal.get("schemaVersion") != 1
+        or journal.get("status") != "committed"
+        or journal.get("caseId") != case_dir.name
+        or not isinstance(journal.get("committedAt"), str)
+        or not journal["committedAt"]
+    ):
+        raise RecoveryError("committed revalidation journal is malformed")
+    evidence = require_exact_object(
+        read_object(evidence_root / "revalidation.json", "revalidation evidence"),
+        {
+            "schemaVersion",
+            "status",
+            "validatedAt",
+            "report",
+            "problem",
+            "priorResultSha256",
+            "publishedResult",
+        },
+        "committed revalidation evidence",
+    )
+    if (
+        evidence.get("schemaVersion") != 1
+        or evidence.get("status") != "accepted"
+        or not isinstance(evidence.get("validatedAt"), str)
+        or not evidence["validatedAt"]
+    ):
+        raise RecoveryError("committed revalidation evidence is malformed")
+    if verify_binding(case_dir, evidence["report"], "revalidated report") != (
+        case_dir / "report.json"
+    ).resolve():
+        raise RecoveryError("revalidation report binding identifies another artifact")
+    if verify_binding(case_dir, evidence["problem"], "revalidated problem") != (
+        case_dir / "proof-stage/formal-sql/Problem.v"
+    ).resolve():
+        raise RecoveryError("revalidation problem binding identifies another artifact")
+    if verify_binding(
+        case_dir, evidence["publishedResult"], "revalidated result"
+    ) != (case_dir / "runner-result.json").resolve():
+        raise RecoveryError("revalidation result binding identifies another artifact")
+    prior_result = regular_file(
+        transaction_root / "pre-state/runner-result.json",
+        "pre-revalidation runner result",
+    )
+    if evidence.get("priorResultSha256") != sha256_file(prior_result):
+        raise RecoveryError("revalidation prior-result binding drifted")
+    result, _ = validate_current_completed_case(case_dir, summary, authority)
+    return result
+
+
+def recover_interrupted_revalidation(
+    case_dir: Path,
+    summary: dict[str, Any] | None = None,
+    authority: RecoveryAuthority | None = None,
+) -> str | None:
+    transaction_root = (
+        case_dir / "proof-stage/deterministic-runner-revalidation-transaction"
+    )
+    evidence_root = case_dir / "proof-stage/deterministic-runner-revalidation"
+    if not transaction_root.exists() and not transaction_root.is_symlink():
+        return None
+    if transaction_root.is_symlink() or not transaction_root.is_dir():
+        raise RecoveryError("revalidation transaction root is not a real directory")
+    journal_path = transaction_root / "journal.json"
+    if not journal_path.exists() and not journal_path.is_symlink():
+        # No result mutation begins until the committing journal is durable.
+        # A crash here leaves only an unused backup, which can be archived and
+        # retried without touching the live case.
+        os.replace(
+            transaction_root,
+            transaction_root.with_name(
+                transaction_root.name + "-abandoned-" + str(time.time_ns())
+            ),
+        )
+        return None
+    journal = read_object(journal_path, "revalidation transaction journal")
+    status = journal.get("status")
+    if status == "committed":
+        if summary is None or authority is None:
+            raise RecoveryError(
+                "committed revalidation requires preserved runner authority"
+            )
+        validate_committed_revalidation(case_dir, summary, authority)
+        return "committed"
+    if status == "rolled_back":
+        os.replace(
+            transaction_root,
+            transaction_root.with_name(
+                transaction_root.name + "-rolled-back-" + str(time.time_ns())
+            ),
+        )
+        return None
+    if (
+        status != "committing"
+        or journal.get("schemaVersion") != 1
+        or journal.get("caseId") != case_dir.name
+    ):
+        raise RecoveryError("revalidation transaction cannot be recovered")
+    backup_root = transaction_root / "pre-state"
+    if backup_root.is_symlink() or not backup_root.is_dir():
+        raise RecoveryError("revalidation transaction has no real pre-state backup")
+    for path, name in revalidation_transaction_paths(case_dir):
+        backup = backup_root / name
+        if backup.exists() or backup.is_symlink():
+            regular_file(backup, f"revalidation pre-state {name}")
+            if path.is_dir() and not path.is_symlink():
+                raise RecoveryError(f"revalidation destination became a directory: {path}")
+            atomic_write(path, backup.read_bytes())
+        else:
+            if path.is_dir() and not path.is_symlink():
+                raise RecoveryError(f"new revalidation destination is a directory: {path}")
+            path.unlink(missing_ok=True)
+    if evidence_root.exists() or evidence_root.is_symlink():
+        if evidence_root.is_symlink() or not evidence_root.is_dir():
+            raise RecoveryError("partial revalidation evidence is not a real directory")
+        shutil.rmtree(evidence_root)
+    atomic_write_json(
+        journal_path,
+        {
+            "schemaVersion": 1,
+            "status": "rolled_back",
+            "caseId": case_dir.name,
+            "rolledBackAt": RUNNER["iso_now"](),
+            "recoveredAfterInterruptedCommit": True,
+        },
+    )
+    return "rolled_back"
+
+
+def validate_committed_publication(
+    case_dir: Path,
+    recovery_root: Path,
+    summary: dict[str, Any],
+    authority: RecoveryAuthority,
+    journal: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    journal = journal or read_object(
+        recovery_root / "publication-journal.json", "publication journal"
+    )
+    journal = require_exact_object(
+        journal,
+        {
+            "schemaVersion",
+            "status",
+            "caseId",
+            "checkpointSha256",
+            "formalModulesExisted",
+            "committedAt",
+            "publishedProblem",
+            "publishedRecovery",
+            "publishedProofReport",
+            "publishedReport",
+            "publishedResult",
+        },
+        "committed publication journal",
+    )
+    if (
+        journal.get("schemaVersion") != 3
+        or journal.get("status") != "committed"
+        or journal.get("caseId") != case_dir.name
+        or not isinstance(journal.get("formalModulesExisted"), bool)
+        or not isinstance(journal.get("committedAt"), str)
+        or not journal["committedAt"]
+    ):
+        raise RecoveryError("committed publication journal is malformed")
+    expected_paths = {
+        "publishedProblem": case_dir / "proof-stage/formal-sql/Problem.v",
+        "publishedRecovery": recovery_root / "recovery.json",
+        "publishedProofReport": case_dir / "proof-stage/report.json",
+        "publishedReport": case_dir / "report.json",
+        "publishedResult": case_dir / "runner-result.json",
+    }
+    for key, expected in expected_paths.items():
+        if verify_binding(case_dir, journal[key], key) != expected.resolve():
+            raise RecoveryError(f"committed publication {key} identifies another artifact")
+    recovery = read_object(recovery_root / "recovery.json", "published recovery")
+    result, report = validate_current_completed_case(case_dir, summary, authority)
+    proof = report.get("proof")
+    if (
+        recovery.get("status") != "published"
+        or not isinstance(proof, dict)
+        or proof.get("deterministicTailRecovery") != recovery
+        or read_object(case_dir / "proof-stage/report.json", "published proof report")
+        != proof
+        or journal.get("checkpointSha256")
+        != recovery.get("publishedProblem", {}).get("sha256")
+    ):
+        raise RecoveryError("committed publication recovery evidence drifted")
+    return result
+
+
+def recover_interrupted_publication(
+    case_dir: Path,
+    recovery_root: Path,
+    summary: dict[str, Any] | None = None,
+    authority: RecoveryAuthority | None = None,
+) -> str | None:
+    """Idempotently roll back a crash-stopped committing transaction."""
+    backup_root = recovery_root / "pre-publication"
+    journal_path = recovery_root / "publication-journal.json"
+    if not backup_root.exists() and not backup_root.is_symlink():
+        if journal_path.exists() or journal_path.is_symlink():
+            journal = read_object(journal_path, "publication journal")
+            if journal.get("status") == "committing":
+                raise RecoveryError(
+                    "committing publication journal has no pre-publication backup"
+                )
+            if journal.get("status") == "committed":
+                if summary is None or authority is None:
+                    raise RecoveryError(
+                        "committed publication requires preserved runner authority"
+                    )
+                validate_committed_publication(
+                    case_dir, recovery_root, summary, authority, journal
+                )
+                return "committed"
+            if journal.get("status") != "rolled_back":
+                raise RecoveryError("publication journal has an invalid terminal status")
+        return None
+    if backup_root.is_symlink() or not backup_root.is_dir():
+        raise RecoveryError("pre-publication backup is not a real directory")
+    if not journal_path.exists() and not journal_path.is_symlink():
+        # No case file is changed until after the committing journal is
+        # durable, so this is an abandoned pre-commit backup, not a partial
+        # publication. Preserve it as audit evidence and start cleanly.
+        os.replace(
+            backup_root,
+            recovery_root / ("pre-publication-abandoned-" + str(time.time_ns())),
+        )
+        return
+    journal = read_object(journal_path, "publication journal")
+    status = journal.get("status")
+    if status == "committed":
+        if summary is None or authority is None:
+            raise RecoveryError(
+                "committed publication requires preserved runner authority"
+            )
+        validate_committed_publication(
+            case_dir, recovery_root, summary, authority, journal
+        )
+        return "committed"
+    if status == "rolled_back":
+        return None
+    if (
+        status != "committing"
+        or journal.get("schemaVersion") not in (2, 3)
+        or journal.get("caseId") != case_dir.name
+        or not isinstance(journal.get("formalModulesExisted"), bool)
+    ):
+        raise RecoveryError("publication journal cannot be recovered deterministically")
+
+    for path, name in recovery_publication_paths(case_dir, recovery_root):
+        backup = backup_root / name
+        if backup.exists() or backup.is_symlink():
+            regular_file(backup, f"pre-publication backup {name}")
+            if path.is_dir() and not path.is_symlink():
+                raise RecoveryError(
+                    f"publication destination became a directory: {path}"
+                )
+            atomic_write(path, backup.read_bytes())
+        else:
+            if path.is_dir() and not path.is_symlink():
+                raise RecoveryError(
+                    f"new publication destination became a directory: {path}"
+                )
+            path.unlink(missing_ok=True)
+
+    formal_modules = case_dir / "proof-stage/formal-sql/ProofModules"
+    if journal["formalModulesExisted"] is False and (
+        formal_modules.exists() or formal_modules.is_symlink()
+    ):
+        if formal_modules.is_symlink() or not formal_modules.is_dir():
+            raise RecoveryError("newly published ProofModules is not a real directory")
+        shutil.rmtree(formal_modules)
+    for path in recovery_root.glob(".recovery-module-publication.*"):
+        if path.is_symlink() or not path.is_dir():
+            raise RecoveryError("stale recovery module stage is not a real directory")
+        shutil.rmtree(path)
+    atomic_write_json(
+        journal_path,
+        {
+            "schemaVersion": 3,
+            "status": "rolled_back",
+            "caseId": case_dir.name,
+            "checkpointSha256": journal.get("checkpointSha256"),
+            "formalModulesExisted": journal["formalModulesExisted"],
+            "rolledBackAt": RUNNER["iso_now"](),
+            "recoveredAfterInterruptedCommit": True,
+        },
+    )
+    return "rolled_back"
+
+
+def publish_case(
+    case_dir: Path,
+    summary: dict[str, Any],
+    *,
+    allow_live: bool = False,
+    authority: RecoveryAuthority | None = None,
+) -> dict[str, Any]:
+    if allow_live:
+        raise RecoveryError(
+            "live recovery publication is unsupported; prepare while live and publish after the runner exits"
+        )
+    authority = recovery_authority_for_case(case_dir, authority)
+    if summary.get("configuration") != authority.configuration:
+        raise RecoveryError("publication summary differs from recovery authority")
+    if summary.get("status") == "running":
+        raise RecoveryError("refusing to publish while the benchmark runner is live")
+    recovery_root = case_dir / RECOVERY_RELATIVE
+    recovered_transaction = recover_interrupted_publication(
+        case_dir, recovery_root, summary, authority
+    )
+    if recovered_transaction == "committed":
+        validate_committed_publication(
+            case_dir, recovery_root, summary, authority
+        )
+        recovery = read_object(recovery_root / "recovery.json", "published recovery")
+        return {
+            "caseId": case_dir.name,
+            "checkpointSha256": recovery["publishedProblem"]["sha256"],
+            "trustedCheckElapsedMs": recovery["trustedCheck"]["elapsedMs"],
+            "status": "already_published",
+            "recoveredCommittedTransaction": True,
+        }
+    regular_file(
+        recovery_root / "prepared-recovery.json", "prepared recovery record"
+    )
+    record = verify_prepared_case(
+        case_dir, summary.get("proofCheckTimeoutSeconds"), authority
+    )
+    if record.get("status") != "trusted_check_passed":
+        raise RecoveryError("prepared recovery has already been consumed or is invalid")
+    old_report = read_object(case_dir / "report.json", "solver report")
+    old_stage_report = read_object(case_dir / "proof-stage/report.json", "proof report")
+    old_result = read_object(case_dir / "runner-result.json", "runner case result")
+    contract = checkpoint_contract(case_dir)
+    if record["checkpoint"]["problem"]["sha256"] != contract["checkpointSha256"]:
+        raise RecoveryError("prepared recovery checkpoint drifted before publication")
+    record = dict(record)
+    record["status"] = "published"
+    claim = record["claim"]
+    certification = (
+        "OUTCOME-UNCONDITIONAL"
+        if claim == "equivalence"
+        else "FORMAL-COUNTERMODEL"
+    )
+    status_reason = (
+        "FormalSQL/Rocq recovered an audited OUTCOME-UNCONDITIONAL "
+        "certificate from the exact host-broker checkpoint"
+        if claim == "equivalence"
+        else (
+            "FormalSQL/Rocq recovered an audited FORMAL-COUNTERMODEL "
+            "certificate from the exact host-broker checkpoint"
+        )
+    )
+    new_proof = dict(old_stage_report)
+    new_proof.update(
+        {
+            "backendStatus": "proof_complete",
+            "statusReason": status_reason,
+            "certification": certification,
+            "proofSearchTimedOut": False,
+            "elapsedMs": old_stage_report.get("elapsedMs", 0)
+            + record["trustedCheck"]["elapsedMs"],
+            "deterministicTailRecovery": record,
+        }
+    )
+    new_report = dict(old_report)
+    counterexample = old_report.get("counterexample")
+    if claim == "formal_countermodel":
+        context = new_proof["proofAgentConfiguration"]["context"]
+        counterexample = {
+            "kind": "formalSqlCountermodel",
+            "problemPath": new_proof["proofWorkspace"]["problemPath"],
+            "goalPath": new_proof["proofWorkspace"]["goalPath"],
+            "problemSha256": record["publishedProblem"]["sha256"],
+            "contextManifestSha256": context["manifestSha256"],
+            "authorityClosureSha256": contract["finalRound"][
+                "authorityClosureSha256"
+            ],
+            "trustedCheckExitCode": 0,
+            "theorem": "generated_verification_certificate",
+        }
+    new_report.update(
+        {
+            "outcome": (
+                "outcome_unconditional"
+                if claim == "equivalence"
+                else "not_equivalent"
+            ),
+            "reason": new_proof["statusReason"],
+            "proof": new_proof,
+            "counterexample": counterexample,
+            "elapsedMs": old_report.get("elapsedMs", 0)
+            + record["trustedCheck"]["elapsedMs"],
+        }
+    )
+
+    formal_problem = case_dir / "proof-stage/formal-sql/Problem.v"
+    formal_workspace = formal_problem.parent
+    trusted_cache = validated_trusted_cache(
+        case_dir / "proof-stage/proof-agent/trusted-diagnostic-cache",
+        formal_workspace,
+    )
+    staged_problem = recovery_root / "staging-workspace/Problem.v"
+    staged_modules = recovery_root / "staging-workspace/ProofModules"
+    formal_modules = formal_workspace / "ProofModules"
+    formal_modules_existed = formal_modules.exists() or formal_modules.is_symlink()
+    if formal_modules_existed:
+        validate_formal_proof_modules(formal_workspace, trusted_cache)
+    begin_pending_reconciliation(authority.run_dir, summary, [case_dir.name])
+    backup_root = recovery_root / "pre-publication"
+    if backup_root.exists() or backup_root.is_symlink():
+        prior_journal_path = recovery_root / "publication-journal.json"
+        prior_journal = read_object(
+            prior_journal_path, "prior publication journal"
+        )
+        if prior_journal.get("status") != "rolled_back" or backup_root.is_symlink():
+            raise RecoveryError("pre-publication backup already exists")
+        archived_backup = recovery_root / (
+            "pre-publication-rolled-back-" + str(time.time_ns())
+        )
+        os.replace(backup_root, archived_backup)
+    backup_root.mkdir(mode=0o700)
+    published_paths = recovery_publication_paths(case_dir, recovery_root)
+    existed: dict[Path, bool] = {}
+    for path, name in published_paths:
+        existed[path] = path.exists()
+        if path.exists():
+            shutil.copyfile(path, backup_root / name)
+    recovery_record_path = recovery_root / "recovery.json"
+    journal_path = recovery_root / "publication-journal.json"
+    atomic_write_json(
+        journal_path,
+        {
+            "schemaVersion": 3,
+            "status": "committing",
+            "caseId": case_dir.name,
+            "checkpointSha256": contract["checkpointSha256"],
+            "formalModulesExisted": formal_modules_existed,
+        },
+    )
+    modules_published = False
+    module_stage_parent: Path | None = None
+    try:
+        if formal_modules_existed:
+            validate_formal_proof_modules(formal_workspace, trusted_cache)
+        else:
+            module_stage_parent = Path(
+                tempfile.mkdtemp(
+                    prefix=".recovery-module-publication.", dir=recovery_root
+                )
+            )
+            module_stage = module_stage_parent / "ProofModules"
+            module_stage.mkdir(mode=0o700)
+            for name in trusted_cache.order:
+                shutil.copyfile(
+                    regular_file(
+                        staged_modules / name, f"staged proof module {name}"
+                    ),
+                    module_stage / name,
+                )
+            validate_formal_proof_modules(module_stage_parent, trusted_cache)
+            os.replace(module_stage, formal_modules)
+            modules_published = True
+        validate_formal_proof_modules(formal_workspace, trusted_cache)
+        atomic_write(formal_problem, staged_problem.read_bytes())
+        atomic_write_json(recovery_record_path, record)
+        atomic_write_json(case_dir / "proof-stage/report.json", new_proof)
+        atomic_write_json(case_dir / "report.json", new_report)
+
+        config, case = config_and_case(summary, old_result, authority)
+        new_result = dict(old_result)
+        for key in (
+            "runnerError",
+            "reportError",
+            "reportCoherenceError",
+            "usageError",
+            "reportUsageError",
+        ):
+            new_result.pop(key, None)
+        new_result.update(
+            {
+                "status": "completed",
+                "returnCode": 0,
+                "elapsedMs": old_result.get("elapsedMs", 0)
+                + record["trustedCheck"]["elapsedMs"],
+                "outcome": new_report["outcome"],
+                "reason": new_report["reason"],
+                "backendStatus": new_proof["backendStatus"],
+                "certification": new_proof["certification"],
+                "usageComplete": new_proof.get("usageComplete", False),
+                "counterexamplePresent": new_report.get("counterexample") is not None,
+                "llmUsage": RUNNER["validate_llm_usage"](
+                    new_report.get("llmUsage")
+                ),
+            }
+        )
+        new_result["proofMetrics"] = RUNNER["proof_metrics_from_report"](
+            new_report, case, config, case_dir
+        )
+        RUNNER["validate_completed_report"](
+            new_report, new_result, case_dir, case, config
+        )
+        new_result["reportEvidence"] = {
+            "path": RUNNER["workspace_display_path"](case_dir / "report.json"),
+            "present": True,
+            "sha256": sha256_file(case_dir / "report.json"),
+        }
+        RUNNER["write_case_result"](config, case, new_result)
+        atomic_write_json(
+            journal_path,
+            {
+                "schemaVersion": 3,
+                "status": "committed",
+                "caseId": case_dir.name,
+                "checkpointSha256": contract["checkpointSha256"],
+                "formalModulesExisted": formal_modules_existed,
+                "committedAt": RUNNER["iso_now"](),
+                "publishedProblem": relative_binding(case_dir, formal_problem),
+                "publishedRecovery": relative_binding(
+                    case_dir, recovery_record_path
+                ),
+                "publishedProofReport": relative_binding(
+                    case_dir, case_dir / "proof-stage/report.json"
+                ),
+                "publishedReport": relative_binding(
+                    case_dir, case_dir / "report.json"
+                ),
+                "publishedResult": relative_binding(
+                    case_dir, case_dir / "runner-result.json"
+                ),
+            },
+        )
+    except BaseException:
+        if modules_published and formal_modules.is_dir() and not formal_modules.is_symlink():
+            shutil.rmtree(formal_modules)
+        for path, name in published_paths:
+            backup = backup_root / name
+            if existed[path]:
+                atomic_write(path, backup.read_bytes())
+            else:
+                path.unlink(missing_ok=True)
+        atomic_write_json(
+            journal_path,
+            {
+                "schemaVersion": 3,
+                "status": "rolled_back",
+                "caseId": case_dir.name,
+                "checkpointSha256": contract["checkpointSha256"],
+                "formalModulesExisted": formal_modules_existed,
+                "rolledBackAt": RUNNER["iso_now"](),
+            },
+        )
+        raise
+    finally:
+        if module_stage_parent is not None:
+            shutil.rmtree(module_stage_parent, ignore_errors=True)
+    return {
+        "caseId": case_dir.name,
+        "checkpointSha256": contract["checkpointSha256"],
+        "trustedCheckElapsedMs": record["trustedCheck"]["elapsedMs"],
+        "status": "published",
+    }
+
+
+def revalidate_certified_case(
+    case_dir: Path,
+    summary: dict[str, Any],
+    *,
+    allow_live: bool = False,
+    authority: RecoveryAuthority | None = None,
+) -> dict[str, Any]:
+    if allow_live:
+        raise RecoveryError(
+            "live recovery publication is unsupported; revalidate after the runner exits"
+        )
+    authority = recovery_authority_for_case(case_dir, authority)
+    if summary.get("configuration") != authority.configuration:
+        raise RecoveryError("revalidation summary differs from recovery authority")
+    if summary.get("status") == "running":
+        raise RecoveryError("refusing to revalidate while the benchmark runner is live")
+    recovered_transaction = recover_interrupted_revalidation(
+        case_dir, summary, authority
+    )
+    if recovered_transaction == "committed":
+        result = validate_committed_revalidation(case_dir, summary, authority)
+        return {
+            "caseId": case_dir.name,
+            "status": "revalidated",
+            "trustedCheckElapsedMs": result["proofMetrics"][
+                "finalProofCheckElapsedMs"
+            ],
+            "recoveredCommittedTransaction": True,
+        }
+    report = read_object(case_dir / "report.json", "solver report")
+    proof = report.get("proof")
+    old_result = read_object(case_dir / "runner-result.json", "runner case result")
+    if (
+        not isinstance(proof, dict)
+        or proof.get("backendStatus") != "proof_complete"
+        or old_result.get("status") != "failed"
+        or old_result.get("returnCode") != 0
+        or not isinstance(old_result.get("reportCoherenceError"), str)
+    ):
+        raise RecoveryError("case is not a misclassified existing certificate")
+    config, case = config_and_case(summary, old_result, authority)
+    new_result = dict(old_result)
+    for key in (
+        "runnerError",
+        "reportError",
+        "reportCoherenceError",
+        "usageError",
+        "reportUsageError",
+    ):
+        new_result.pop(key, None)
+    new_result.update(
+        {
+            "status": "completed",
+            "returnCode": 0,
+            "outcome": report.get("outcome"),
+            "reason": report.get("reason"),
+            "backendStatus": proof.get("backendStatus"),
+            "certification": proof.get("certification"),
+            "usageComplete": proof.get("usageComplete", False),
+            "counterexamplePresent": report.get("counterexample") is not None,
+            "llmUsage": RUNNER["validate_llm_usage"](report.get("llmUsage")),
+        }
+    )
+    new_result["proofMetrics"] = RUNNER["proof_metrics_from_report"](
+        report, case, config, case_dir
+    )
+    RUNNER["validate_completed_report"](report, new_result, case_dir, case, config)
+    new_result["reportEvidence"] = {
+        "path": RUNNER["workspace_display_path"](case_dir / "report.json"),
+        "present": True,
+        "sha256": sha256_file(case_dir / "report.json"),
+    }
+    evidence_root = case_dir / "proof-stage/deterministic-runner-revalidation"
+    if evidence_root.exists() or evidence_root.is_symlink():
+        raise RecoveryError("runner revalidation evidence already exists")
+    transaction_root = (
+        case_dir / "proof-stage/deterministic-runner-revalidation-transaction"
+    )
+    if transaction_root.exists() or transaction_root.is_symlink():
+        raise RecoveryError("revalidation transaction root already exists")
+    begin_pending_reconciliation(authority.run_dir, summary, [case_dir.name])
+    backup_root = transaction_root / "pre-state"
+    backup_root.mkdir(parents=True, mode=0o700)
+    for path, name in revalidation_transaction_paths(case_dir):
+        if path.exists() or path.is_symlink():
+            regular_file(path, f"pre-revalidation {name}")
+            shutil.copyfile(path, backup_root / name)
+    atomic_write_json(
+        transaction_root / "journal.json",
+        {
+            "schemaVersion": 1,
+            "status": "committing",
+            "caseId": case_dir.name,
+        },
+    )
+    try:
+        RUNNER["write_case_result"](config, case, new_result)
+        evidence_root.mkdir(mode=0o700)
+        atomic_write_json(
+            evidence_root / "revalidation.json",
+            {
+                "schemaVersion": 1,
+                "status": "accepted",
+                "validatedAt": RUNNER["iso_now"](),
+                "report": relative_binding(case_dir, case_dir / "report.json"),
+                "problem": relative_binding(
+                    case_dir, case_dir / "proof-stage/formal-sql/Problem.v"
+                ),
+                "priorResultSha256": sha256_file(
+                    backup_root / "runner-result.json"
+                ),
+                "publishedResult": relative_binding(
+                    case_dir, case_dir / "runner-result.json"
+                ),
+            },
+        )
+        atomic_write_json(
+            transaction_root / "journal.json",
+            {
+                "schemaVersion": 1,
+                "status": "committed",
+                "caseId": case_dir.name,
+                "committedAt": RUNNER["iso_now"](),
+            },
+        )
+    except BaseException:
+        recover_interrupted_revalidation(case_dir)
+        raise
+    return {
+        "caseId": case_dir.name,
+        "status": "revalidated",
+        "trustedCheckElapsedMs": new_result["proofMetrics"][
+            "finalProofCheckElapsedMs"
+        ],
+    }
+
+
+def begin_pending_reconciliation(
+    run_dir: Path,
+    summary: dict[str, Any],
+    requested_case_ids: list[str],
+) -> None:
+    """Make the run summary fail closed before any case result is promoted."""
+
+    path = run_dir / "deterministic-tail-pending-reconciliation.json"
+    summary_path = run_dir / "runner-summary.json"
+    current = read_object(summary_path, "runner summary before recovery publication")
+    if current.get("status") == "running":
+        raise RecoveryError("refusing to interrupt a summary owned by a live runner")
+    if current.get("configuration") != summary.get("configuration"):
+        raise RecoveryError("current runner summary configuration drifted")
+    if any(not isinstance(case_id, str) or not case_id for case_id in requested_case_ids):
+        raise RecoveryError("pending reconciliation case IDs are malformed")
+    existing: dict[str, Any] | None = None
+    if path.is_file() and not path.is_symlink():
+        existing = read_object(path, "pending reconciliation manifest")
+        if existing.get("status") == "reconciled":
+            os.replace(
+                path,
+                path.with_name(
+                    path.stem + "-reconciled-" + str(time.time_ns()) + path.suffix
+                ),
+            )
+            existing = None
+        elif (
+            existing.get("schemaVersion") != 2
+            or existing.get("status") != "pending"
+            or not isinstance(existing.get("caseIds"), list)
+        ):
+            raise RecoveryError("pending reconciliation manifest is malformed")
+    case_ids = set(existing.get("caseIds", []) if existing is not None else [])
+    case_ids.update(requested_case_ids)
+    original_status = (
+        existing.get("originalSummaryStatus")
+        if existing is not None
+        else current.get("status")
+    )
+    original_integrity = (
+        existing.get("originalIntegrityVerification")
+        if existing is not None
+        else current.get("integrityVerification")
+    )
+    original_digest = (
+        existing.get("summarySha256BeforeInterruption")
+        if existing is not None
+        else sha256_file(summary_path)
+    )
+    atomic_write_json(
+        path,
+        {
+            "schemaVersion": 2,
+            "status": "pending",
+            "updatedAt": RUNNER["iso_now"](),
+            "originalSummaryStatus": original_status,
+            "originalIntegrityVerification": original_integrity,
+            "summarySha256BeforeInterruption": original_digest,
+            "caseIds": sorted(case_ids),
+        },
+    )
+    interrupted = dict(current)
+    interrupted_at = RUNNER["iso_now"]()
+    interrupted["status"] = "interrupted"
+    interrupted["updatedAt"] = interrupted_at
+    interrupted["integrityVerification"] = {
+        "verified": False,
+        "verifiedAt": interrupted_at,
+        "error": "deterministic-tail case publication pending reconciliation",
+    }
+    interrupted["integrityError"] = (
+        "deterministic-tail case publication pending reconciliation"
+    )
+    atomic_write_json(summary_path, interrupted)
+
+
+def reconstruct_run_integrity_authority(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    authority: RecoveryAuthority,
+    postgres_url: str | None,
+) -> tuple[Path, list[Any], Any]:
+    case_ids = summary.get("cases")
+    if not isinstance(case_ids, list) or not case_ids:
+        raise RecoveryError("cannot reconstruct integrity for an empty case cohort")
+    by_case = {
+        row.get("caseId"): row
+        for row in results
+        if isinstance(row, dict) and isinstance(row.get("caseId"), str)
+    }
+    if set(by_case) != set(case_ids):
+        raise RecoveryError("cannot reconstruct integrity with missing case results")
+    cases = []
+    input_files: dict[str, dict[str, Any]] = {}
+    base_config = None
+    comparable_config = None
+    for case_id in case_ids:
+        config, case = config_and_case(summary, by_case[case_id], authority)
+        candidate = dataclasses.replace(config, input_files={})
+        if comparable_config is None:
+            comparable_config = candidate
+            base_config = config
+        elif candidate != comparable_config:
+            raise RecoveryError("reconstructed per-case runner configurations differ")
+        cases.append(case)
+        input_files[case_id] = by_case[case_id]["inputFiles"]
+    assert base_config is not None
+    postgres_record = summary["configuration"].get("postgresUrl")
+    if not isinstance(postgres_record, dict) or not isinstance(
+        postgres_record.get("configured"), bool
+    ):
+        raise RecoveryError("runner PostgreSQL authority record is malformed")
+    if postgres_record["configured"]:
+        effective_url = postgres_url or os.environ.get("LOGOS_POSTGRES_URL")
+        if (
+            not isinstance(effective_url, str)
+            or not effective_url
+            or hashlib.sha256(effective_url.encode()).hexdigest()
+            != postgres_record.get("sha256")
+        ):
+            raise RecoveryError(
+                "recovery integrity verification requires the original PostgreSQL URL"
+            )
+    else:
+        if postgres_url is not None:
+            raise RecoveryError("PostgreSQL URL supplied for an unconfigured run")
+        effective_url = None
+    config = dataclasses.replace(
+        base_config,
+        input_files=input_files,
+        postgres_url=effective_url,
+    )
+    return resolve_display_path(summary["inputRoot"]), cases, config
+
+
+def reconcile_summary(
+    run_dir: Path,
+    summary: dict[str, Any],
+    authority: RecoveryAuthority | None = None,
+    postgres_url: str | None = None,
+) -> dict[str, Any]:
+    if summary.get("status") == "running":
+        raise RecoveryError("refusing to reconcile a summary owned by a live runner")
+    case_ids = summary.get("cases")
+    if not isinstance(case_ids, list) or not all(isinstance(value, str) for value in case_ids):
+        raise RecoveryError("runner summary case list is malformed")
+    results = []
+    for case_id in case_ids:
+        path = run_dir / "cases" / case_id / "runner-result.json"
+        if path.is_file() and not path.is_symlink():
+            results.append(read_object(path, f"runner result for {case_id}"))
+    order = {case_id: index for index, case_id in enumerate(case_ids)}
+    results.sort(key=lambda row: (order.get(row.get("caseId"), len(order)), str(row.get("caseId"))))
+    document = dict(summary)
+    document["updatedAt"] = RUNNER["iso_now"]()
+    document["results"] = results
+    document["counts"] = RUNNER["result_counts"](results, len(case_ids))
+    document["llmUsage"] = RUNNER["aggregate_usage"](results)
+    document["usageComplete"] = (
+        len(results) == len(case_ids)
+        and all(row.get("usageComplete", "llmUsage" in row) for row in results)
+    )
+    document["deterministicTailRecovery"] = {
+        "schemaVersion": 1,
+        "publishedCaseIds": sorted(
+            row["caseId"]
+            for row in results
+            if isinstance(row.get("proofMetrics"), dict)
+            and (
+                run_dir
+                / "cases"
+                / row["caseId"]
+                / "proof-stage/deterministic-tail-recovery/recovery.json"
+            ).is_file()
+        ),
+    }
+    if authority is None:
+        authority = load_recovery_authority(run_dir, summary)
+    try:
+        input_root, cases, config = reconstruct_run_integrity_authority(
+            summary, results, authority, postgres_url
+        )
+        integrity = RUNNER["verify_run_integrity"](
+            input_root, cases, config, results
+        )
+    except Exception as error:
+        failed_at = RUNNER["iso_now"]()
+        document["status"] = "interrupted"
+        document["integrityVerification"] = {
+            "verified": False,
+            "verifiedAt": failed_at,
+            "error": str(error),
+        }
+        document["integrityError"] = str(error)
+        atomic_write_json(run_dir / "runner-summary.json", document)
+        raise
+    document["status"] = "complete"
+    document["integrityVerification"] = integrity
+    document.pop("integrityError", None)
+    atomic_write_json(run_dir / "runner-summary.json", document)
+    pending = run_dir / "deterministic-tail-pending-reconciliation.json"
+    if pending.is_file() and not pending.is_symlink():
+        pending_record = read_object(pending, "pending reconciliation manifest")
+        pending_record["status"] = "reconciled"
+        pending_record["reconciledAt"] = RUNNER["iso_now"]()
+        pending_record["summarySha256"] = sha256_file(
+            run_dir / "runner-summary.json"
+        )
+        atomic_write_json(pending, pending_record)
+    return document
+
+
+def wait_and_reconcile(
+    run_dir: Path, jobs: int, postgres_url: str | None = None
+) -> dict[str, Any]:
+    """Wait for the runner writer, then recover any later eligible failures."""
+    while True:
+        summary = read_object(run_dir / "runner-summary.json", "runner summary")
+        if summary.get("status") != "running":
+            break
+        time.sleep(30)
+
+    timeout_seconds = summary.get("proofCheckTimeoutSeconds")
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int):
+        raise RecoveryError("runner summary proof-check timeout is invalid")
+    authority = load_recovery_authority(run_dir, summary)
+    failed_case_dirs = []
+    for case_id in summary.get("cases", []):
+        case_dir = run_dir / "cases" / case_id
+        result_path = case_dir / "runner-result.json"
+        if not result_path.is_file() or result_path.is_symlink():
+            continue
+        result = read_object(result_path, "runner case result")
+        if result.get("status") == "failed":
+            failed_case_dirs.append(case_dir)
+
+    prepared: list[dict[str, Any]] = []
+    eligible = []
+    for case_dir in failed_case_dirs:
+        try:
+            checkpoint_contract(case_dir)
+            eligible.append(case_dir)
+        except (RecoveryError, RUNNER["RunnerError"]):
+            continue
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+        futures = {
+            executor.submit(
+                prepare_case, case_dir, timeout_seconds, authority
+            ): case_dir
+            for case_dir in eligible
+        }
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                prepared.append(future.result())
+            except (RecoveryError, RUNNER["RunnerError"]) as error:
+                prepared.append(
+                    {
+                        "caseId": futures[future].name,
+                        "status": "failed",
+                        "reason": str(error),
+                    }
+                )
+
+    published: list[dict[str, Any]] = []
+    for case_dir in failed_case_dirs:
+        try:
+            if (case_dir / RECOVERY_RELATIVE / "prepared-recovery.json").is_file():
+                published.append(
+                    publish_case(case_dir, summary, authority=authority)
+                )
+                continue
+            report_path = case_dir / "report.json"
+            if report_path.is_file() and not report_path.is_symlink():
+                report = read_object(report_path, "solver report")
+                if report.get("proof", {}).get("backendStatus") == "proof_complete":
+                    published.append(
+                        revalidate_certified_case(
+                            case_dir, summary, authority=authority
+                        )
+                    )
+        except (RecoveryError, RUNNER["RunnerError"]) as error:
+            published.append(
+                {
+                    "caseId": case_dir.name,
+                    "status": "failed",
+                    "reason": str(error),
+                }
+            )
+    reconciled = reconcile_summary(
+        run_dir,
+        read_object(run_dir / "runner-summary.json", "runner summary"),
+        authority,
+        postgres_url,
+    )
+    return {
+        "prepared": prepared,
+        "published": published,
+        "counts": reconciled.get("counts"),
+        "summaryStatus": reconciled.get("status"),
+    }
+
+
+def selected_case_dirs(run_dir: Path, selectors: list[str]) -> list[Path]:
+    roots = []
+    for selector in selectors:
+        names = [selector]
+        if selector.isdigit():
+            names.insert(0, f"nonwetune-flat__verieql-calcite__calcite-{selector}")
+        found = next(
+            (run_dir / "cases" / name for name in names if (run_dir / "cases" / name).is_dir()),
+            None,
+        )
+        if found is None:
+            raise RecoveryError(f"unknown case selector: {selector}")
+        roots.append(found)
+    if len({path.resolve() for path in roots}) != len(roots):
+        raise RecoveryError("duplicate case selector")
+    return roots
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-dir", type=Path, required=True)
+    parser.add_argument("--case", action="append", default=[])
+    parser.add_argument("--all-eligible", action="store_true")
+    parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--postgres-url")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--prepare", action="store_true")
+    actions.add_argument("--publish", action="store_true")
+    actions.add_argument("--publish-live-cases", action="store_true")
+    actions.add_argument("--wait-and-reconcile", action="store_true")
+    return parser
+
+
+def main() -> int:
+    args = argument_parser().parse_args()
+    run_dir = args.run_dir.resolve()
+    summary = read_object(run_dir / "runner-summary.json", "runner summary")
+    if args.publish_live_cases:
+        raise RecoveryError(
+            "--publish-live-cases is unsafe without runner coordination; prepare now and publish after the runner exits"
+        )
+    if args.wait_and_reconcile:
+        if args.case or args.all_eligible:
+            raise RecoveryError(
+                "--wait-and-reconcile does not accept case selectors"
+            )
+        if args.jobs < 1:
+            raise RecoveryError("--jobs must be positive")
+        print(
+            json.dumps(
+                wait_and_reconcile(run_dir, args.jobs, args.postgres_url), indent=2
+            )
+        )
+        return 0
+    authority = load_recovery_authority(run_dir, summary)
+    if bool(args.case) == bool(args.all_eligible):
+        raise RecoveryError("supply either --case or --all-eligible")
+    if args.all_eligible:
+        case_dirs = sorted(
+            (
+                path
+                for path in (run_dir / "cases").iterdir()
+                if path.is_dir()
+                and (
+                    (path / "proof-stage/deterministic-tail-recovery/prepared-recovery.json").is_file()
+                    or (
+                        (path / "runner-result.json").is_file()
+                        and read_object(
+                            path / "runner-result.json", "runner case result"
+                        ).get("status")
+                        == "failed"
+                    )
+                )
+            ),
+            key=lambda path: path.name,
+        )
+    else:
+        case_dirs = selected_case_dirs(run_dir, args.case)
+    timeout_seconds = summary.get("proofCheckTimeoutSeconds")
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int):
+        raise RecoveryError("runner summary proof-check timeout is invalid")
+    if args.jobs < 1:
+        raise RecoveryError("--jobs must be positive")
+
+    if args.prepare:
+        skipped = []
+        eligible = []
+        for case_dir in case_dirs:
+            try:
+                checkpoint_contract(case_dir)
+                eligible.append(case_dir)
+            except (RecoveryError, RUNNER["RunnerError"]) as error:
+                if not args.all_eligible:
+                    raise
+                skipped.append(
+                    {
+                        "caseId": case_dir.name,
+                        "status": "skipped",
+                        "reason": str(error),
+                    }
+                )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(
+                    prepare_case, case_dir, timeout_seconds, authority
+                ): case_dir
+                for case_dir in eligible
+            }
+            results = list(skipped)
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    results.append(future.result())
+                except (RecoveryError, RUNNER["RunnerError"]) as error:
+                    if not args.all_eligible:
+                        raise
+                    results.append(
+                        {
+                            "caseId": futures[future].name,
+                            "status": "failed",
+                            "reason": str(error),
+                        }
+                    )
+    else:
+        live_publication = False
+        if summary.get("status") == "running":
+            raise RecoveryError(
+                "the live runner owns runner-summary.json; prepare now and publish after it exits"
+            )
+        results = []
+        for case_dir in case_dirs:
+            try:
+                if (case_dir / RECOVERY_RELATIVE / "prepared-recovery.json").is_file():
+                    results.append(
+                        publish_case(
+                            case_dir,
+                            summary,
+                            allow_live=live_publication,
+                            authority=authority,
+                        )
+                    )
+                else:
+                    report = read_object(case_dir / "report.json", "solver report")
+                    if report.get("proof", {}).get("backendStatus") != "proof_complete":
+                        raise RecoveryError("case has no prepared tail or existing certificate")
+                    results.append(
+                        revalidate_certified_case(
+                            case_dir,
+                            summary,
+                            allow_live=live_publication,
+                            authority=authority,
+                        )
+                    )
+            except (RecoveryError, RUNNER["RunnerError"]) as error:
+                if not args.all_eligible:
+                    raise
+                results.append(
+                    {
+                        "caseId": case_dir.name,
+                        "status": "skipped",
+                        "reason": str(error),
+                    }
+                )
+        published_results = [
+            result
+            for result in results
+            if result.get("status") in {"published", "revalidated"}
+        ]
+        summary = reconcile_summary(
+            run_dir, summary, authority, args.postgres_url
+        )
+    print(json.dumps({"results": sorted(results, key=lambda row: row["caseId"])}, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (RecoveryError, RUNNER["RunnerError"]) as error:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(2)

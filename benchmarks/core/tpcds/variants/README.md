@@ -33,6 +33,15 @@ dsqgen -PATH_SEP / \
 
 For each pair, the base query uses `query_templates/queryN.tpl` and the rewrite uses `query_variants/queryNa.tpl`.
 
+The kit's `ansi.tpl` is a generation profile, not a claim of strict ISO SQL:
+it emits `TOP`, and `query036`, `query070`, and `query086` reference the
+same-level `lochierarchy` output alias inside an `ORDER BY CASE` expression.
+Calcite expands that alias, while PostgreSQL and T-SQL require an alias to
+stand alone there. The generated PostgreSQL profile therefore substitutes the
+exact `GROUPING(...) + GROUPING(...)` expression at those three sort sites.
+The raw materialized queries remain unchanged, and each generated
+`metadata.json` records the rewrite as `postgres_order_alias_expression`.
+
 ## Notes
 
 These are official TPC-DS query variants, not solver-normalized inputs. Many cases include SQL features such as `TOP`, `ROLLUP`, `GROUPING`, window functions, `FULL OUTER JOIN`, and `INTERSECT`. Solver runners should record these feature tags and may need dialect normalization before invoking SQLSolver or QED.

@@ -1,0 +1,51 @@
+# Logos core regression cohort: 16 cases spanning query size and semantic area.
+# Keep exact aliases stable. Update this list only when a case is deliberately
+# replaced and document the replacement in benchmarks/scripts/README.md.
+
+# Small: schema constraints and SQL three-valued predicate reasoning.
+nonwetune-flat__verieql-calcite__calcite-83
+
+# Small: deterministic ordered output-type mismatch (NUMERIC versus BIGINT).
+nonwetune-flat__verieql-calcite__calcite-104
+
+# Small: nested CASE, NULL tests, and IN normalization.
+nonwetune-flat__verieql-calcite__calcite-376
+
+# Small: exact ORDER BY and FETCH 0 list semantics.
+nonwetune-flat__verieql-calcite__calcite-383
+
+# Small: UNION ALL with an empty branch.
+nonwetune-flat__verieql-literature__sqlrewrites-unionEmpty-37
+
+# Small: CROSS JOIN distribution over UNION ALL under bag semantics.
+nonwetune-flat__verieql-literature__sqlrewrites-productDistributesOverUnion-30
+
+# Medium: EXISTS lowering through VALUES and a relational witness.
+nonwetune-flat__verieql-calcite__calcite-29
+
+# Medium: WHERE/HAVING movement, COUNT, and key-derived cardinality.
+nonwetune-flat__verieql-calcite__calcite-148
+
+# Medium: LEFT JOIN elimination with COUNT(DISTINCT ...).
+nonwetune-flat__verieql-calcite__calcite-159
+
+# Medium: FULL OUTER JOIN and grouped projection normalization.
+nonwetune-flat__verieql-calcite__calcite-193
+
+# Medium: explicit character typmods, casts, joins, and filtering.
+nonwetune-flat__verieql-calcite__calcite-233
+
+# Medium: join-to-correlated-EXISTS rewriting.
+nonwetune-flat__verieql-calcite__calcite-349
+
+# Medium: WeTune multi-table rewrite with PK/FK/UNIQUE sidecar constraints.
+wetune-issues__31
+
+# Large: DSB CTEs, grouping, CASE, exact NUMERIC arithmetic, and ordering.
+nonwetune-flat__rbot-dsb__query031
+
+# Large: TPC-H correlated EXISTS/NOT EXISTS, grouping, and top-k ordering.
+nonwetune-flat__rbot-tpch__query21
+
+# Large: TPC-DS CTE/UNION/ROLLUP, temporal arithmetic, NUMERIC, and top-k.
+nonwetune-flat__tpcds-variants__query005
