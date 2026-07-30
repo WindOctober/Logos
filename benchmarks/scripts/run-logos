@@ -424,9 +424,9 @@ TRUSTED_STACK_SCRIPT_PROJECTIONS = (
 
 SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH = "scripts/logos_source_tree_digest.py"
 SOURCE_TREE_DIGEST_HELPER_SHA256 = (
-    "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55"
+    "a2b651399e0103adac71a11822803979c535ac8bc897479a54c4366bd5e44b81"
 )
-SOURCE_TREE_DIGEST_HELPER_BYTES = 7_880
+SOURCE_TREE_DIGEST_HELPER_BYTES = 8_009
 
 
 def load_source_tree_digest_helper() -> types.ModuleType:
@@ -478,6 +478,43 @@ source_tree_manifest_bytes = _SOURCE_TREE_DIGEST_HELPER.canonical_bytes
 source_tree_manifest_sha256 = _SOURCE_TREE_DIGEST_HELPER.manifest_sha256
 sha256_file = _SOURCE_TREE_DIGEST_HELPER.sha256_file
 sha256_text = _SOURCE_TREE_DIGEST_HELPER.sha256_text
+
+
+def load_launch_runner_record() -> dict[str, Any]:
+    """Capture the runner bytes attributed to this already-loaded interpreter."""
+
+    path = Path(os.path.abspath(__file__))
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(path, flags)
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size <= 0:
+            raise RuntimeError("launch runner is not a nonempty regular file")
+        with os.fdopen(descriptor, "rb", closefd=True) as stream:
+            descriptor = -1
+            payload = stream.read()
+            after = os.fstat(stream.fileno())
+    except OSError as error:
+        raise RuntimeError(f"cannot capture launch runner bytes: {error}") from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if (
+        len(payload) != before.st_size
+        or after.st_size != before.st_size
+        or after.st_mtime_ns != before.st_mtime_ns
+        or after.st_ctime_ns != before.st_ctime_ns
+    ):
+        raise RuntimeError("launch runner changed during initial byte capture")
+    return {
+        "path": str(path),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload),
+    }
+
+
+RUNNER_LAUNCH_RECORD = load_launch_runner_record()
 
 INPUT_USD_PER_MILLION_TOKENS = 5.0
 CACHED_INPUT_USD_PER_MILLION_TOKENS = 0.5
@@ -721,6 +758,11 @@ def main() -> int:
         solver_source_bin = resolve_path(args.solver_bin)
         requested_proof_rocq_opam_switch = resolve_path(args.proof_rocq_opam_switch)
         run_dir = prepare_run_dir(args.run_dir, resume=args.resume)
+        framework_source_tree = framework_source_tree_record(
+            run_dir,
+            resume=args.resume,
+            allow_drift=args.allow_framework_source_drift,
+        )
         if not args.resume and not args.no_build:
             build_solver()
         if not args.resume:
@@ -754,11 +796,6 @@ def main() -> int:
             case_process_bootstrap,
             case_process_supervisor,
             run_dir,
-        )
-        framework_source_tree = framework_source_tree_record(
-            run_dir,
-            resume=args.resume,
-            allow_drift=args.allow_framework_source_drift,
         )
         rocq_runtime_snapshot = pin_trusted_rocq_runtime(
             requested_proof_rocq_opam_switch,
@@ -2769,9 +2806,11 @@ def validate_framework_source_tree_helper_binding(
         if isinstance(value, dict)
         and value.get("path") == SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH
     ]
-    if len(matches) > 1:
-        raise RunnerError("framework source manifest repeats the source digest helper")
-    if matches and (
+    if len(matches) != 1:
+        raise RunnerError(
+            "framework source manifest must bind the source digest helper exactly once"
+        )
+    if (
         matches[0].get("kind") != "file"
         or matches[0].get("sha256") != SOURCE_TREE_DIGEST_HELPER_SHA256
         or matches[0].get("bytes") != SOURCE_TREE_DIGEST_HELPER_BYTES
@@ -2799,6 +2838,13 @@ def framework_source_tree_summary(
         runner_entry.get("sha256"), str
     ):
         raise RunnerError("framework source manifest does not bind run-logos")
+    if (
+        runner_entry["sha256"] != RUNNER_LAUNCH_RECORD["sha256"]
+        or runner_entry.get("bytes") != RUNNER_LAUNCH_RECORD["bytes"]
+    ):
+        raise RunnerError(
+            "framework source manifest runner differs from the launch runner bytes"
+        )
     helper_binding = validate_framework_source_tree_helper_binding(manifest)
     formal_sql = next(
         (
@@ -15492,6 +15538,11 @@ def cleanup_short_diagnostic_socket_dirs(
         os.close(root_fd)
 
 
+def docker_diagnostic_reports_missing_container(diagnostic: str) -> bool:
+    normalized = diagnostic.casefold()
+    return "no such object" in normalized or "no such container" in normalized
+
+
 def cleanup_case_proof_containers(
     case_dir: Path,
     *,
@@ -15721,18 +15772,14 @@ def cleanup_case_proof_containers(
                 ) from error
             inspect_diagnostic = inspected.stderr.decode("utf-8", errors="replace")
             not_found = inspected.returncode != 0 and (
-                "No such object" in inspect_diagnostic
-                or "No such container" in inspect_diagnostic
+                docker_diagnostic_reports_missing_container(inspect_diagnostic)
             )
             if not_found and time.monotonic() < inspect_deadline:
                 time.sleep(PROOF_CONTAINER_INSPECT_RETRY_SECONDS)
                 continue
             break
         if inspected.returncode != 0:
-            if (
-                "No such object" not in inspect_diagnostic
-                and "No such container" not in inspect_diagnostic
-            ):
+            if not docker_diagnostic_reports_missing_container(inspect_diagnostic):
                 raise RunnerError(
                     f"cannot inspect managed proof-agent container {name}: {inspect_diagnostic.strip()}"
                 )
@@ -15768,7 +15815,9 @@ def cleanup_case_proof_containers(
                     f"cannot remove managed proof-agent container {fields[0]}: {error}"
                 ) from error
             diagnostic = completed.stderr.decode("utf-8", errors="replace")
-            if completed.returncode != 0 and "No such container" not in diagnostic:
+            if completed.returncode != 0 and not (
+                docker_diagnostic_reports_missing_container(diagnostic)
+            ):
                 raise RunnerError(
                     f"cannot remove managed proof-agent container {fields[0]}: {diagnostic.strip()}"
                 )

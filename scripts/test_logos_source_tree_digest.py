@@ -131,6 +131,45 @@ class SourceTreeDigestTests(unittest.TestCase):
                 entries[relative]["sha256"], sha256_file(CLI.parents[1] / relative)
             )
 
+    def test_missing_authority_path_is_bound_and_clean_bindings_do_not_mark_dirty(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(prefix="logos-authority-digest-") as temporary:
+            repository = Path(temporary)
+            git(repository, "init", "--quiet")
+            git(repository, "config", "user.name", "Digest Fixture")
+            git(repository, "config", "user.email", "digest@example.invalid")
+            runner = repository / "benchmarks/scripts/run-logos"
+            helper = repository / "scripts/logos_source_tree_digest.py"
+            runner.parent.mkdir(parents=True)
+            helper.parent.mkdir(parents=True)
+            runner.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            helper.write_text("VALUE = 1\n", encoding="utf-8")
+            git(repository, "add", ".")
+            git(repository, "commit", "--quiet", "-m", "authority fixture")
+
+            clean = build_manifest(repository)["repository"]
+            clean_entries = {entry["path"]: entry for entry in clean["entries"]}
+            self.assertFalse(clean["dirty"])
+            self.assertEqual(clean_entries["benchmarks/scripts/run-logos"]["kind"], "file")
+            self.assertEqual(
+                clean_entries["scripts/logos_source_tree_digest.py"]["kind"], "file"
+            )
+
+            helper.unlink()
+            missing = build_manifest(repository)["repository"]
+            missing_entries = {
+                entry["path"]: entry for entry in missing["entries"]
+            }
+            self.assertTrue(missing["dirty"])
+            self.assertEqual(
+                missing_entries["scripts/logos_source_tree_digest.py"],
+                {
+                    "path": "scripts/logos_source_tree_digest.py",
+                    "kind": "missing",
+                },
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

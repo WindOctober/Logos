@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import json
 import os
@@ -2238,6 +2239,13 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             run.assert_not_called()
             self.assertTrue(host_tmp.is_dir())
 
+    def test_missing_container_diagnostic_matching_is_case_insensitive(self) -> None:
+        matches = self.runner["docker_diagnostic_reports_missing_container"]
+        self.assertTrue(matches("Error: No such object: logos-proof-deadbeef"))
+        self.assertTrue(matches("error: no such container: logos-proof-deadbeef"))
+        self.assertFalse(matches("error: no such image: logos-proof-deadbeef"))
+        self.assertFalse(matches("permission denied"))
+
     def test_launcher_and_outer_cleanup_refuse_cid_without_identity(self) -> None:
         launcher_path = (
             RUNNER.parents[2]
@@ -2437,7 +2445,7 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                 ["docker", "inspect"],
                 1,
                 b"",
-                f"Error: No such object: {name}\n".encode("ascii"),
+                f"error: no such object: {name}\n".encode("ascii"),
             )
             container_id = "1" * 64
             visible = subprocess.CompletedProcess(
@@ -6549,9 +6557,9 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             {
                 "path": "scripts/logos_source_tree_digest.py",
                 "sha256": (
-                    "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55"
+                    "a2b651399e0103adac71a11822803979c535ac8bc897479a54c4366bd5e44b81"
                 ),
-                "bytes": 7880,
+                "bytes": 8009,
                 "executionPolicy": "exact-bytes-loaded-before-module-execution-v1",
             },
         )
@@ -6963,6 +6971,56 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             ).allow_framework_source_drift
         )
 
+    def test_framework_source_precedes_build_and_binds_loaded_runner_bytes(self) -> None:
+        namespace = runpy.run_path(str(RUNNER), run_name="runner_launch_binding_test")
+        manifest = namespace["build_source_tree_manifest"](namespace["LOGOS_ROOT"])
+        manifest_path = self.root / "launch-framework-source-tree-manifest.json"
+        manifest_path.write_bytes(namespace["source_tree_manifest_bytes"](manifest))
+        digest = namespace["source_tree_manifest_sha256"](manifest)
+        summary = namespace["framework_source_tree_summary"](
+            manifest, manifest_path, digest
+        )
+        self.assertEqual(
+            summary["runnerScriptSha256"],
+            namespace["RUNNER_LAUNCH_RECORD"]["sha256"],
+        )
+
+        tampered = json.loads(json.dumps(manifest))
+        runner_entry = next(
+            entry
+            for entry in tampered["repository"]["entries"]
+            if entry.get("path") == "benchmarks/scripts/run-logos"
+        )
+        runner_entry["sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            namespace["RunnerError"], "runner differs from the launch runner bytes"
+        ):
+            namespace["framework_source_tree_summary"](
+                tampered, manifest_path, "0" * 64
+            )
+
+        module = ast.parse(RUNNER.read_text(encoding="utf-8"))
+        main_node = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef) and node.name == "main"
+        )
+        call_lines = {
+            call.func.id: call.lineno
+            for call in ast.walk(main_node)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id
+            in {"framework_source_tree_record", "build_solver", "prepare_frontend_stack"}
+        }
+        self.assertLess(
+            call_lines["framework_source_tree_record"], call_lines["build_solver"]
+        )
+        self.assertLess(
+            call_lines["framework_source_tree_record"],
+            call_lines["prepare_frontend_stack"],
+        )
+
     def test_record_only_resume_rejects_mutable_digest_helper_before_execution(
         self,
     ) -> None:
@@ -7032,12 +7090,19 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                                 "path": "scripts/logos_source_tree_digest.py",
                                 "kind": "file",
                                 "sha256": "0" * 64,
-                                "bytes": 7880,
+                                "bytes": 8009,
                             }
                         ]
                     }
                 }
             )
+        for entries in ([], [namespace["source_tree_digest_helper_record"]()] * 2):
+            with self.assertRaisesRegex(
+                namespace["RunnerError"], "source digest helper exactly once"
+            ):
+                namespace["validate_framework_source_tree_helper_binding"](
+                    {"repository": {"entries": entries}}
+                )
 
     def test_solver_binary_is_pinned_to_run_private_snapshot(self) -> None:
         namespace = runpy.run_path(str(RUNNER))

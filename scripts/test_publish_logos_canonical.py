@@ -37,8 +37,8 @@ SCOPE = (
 INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/sqlsolver"
 SOURCE_TREE_DIGEST_HELPER_RECORD = {
     "path": "scripts/logos_source_tree_digest.py",
-    "sha256": "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55",
-    "bytes": 7880,
+    "sha256": "a2b651399e0103adac71a11822803979c535ac8bc897479a54c4366bd5e44b81",
+    "bytes": 8009,
     "executionPolicy": "exact-bytes-loaded-before-module-execution-v1",
 }
 INPUT_MANIFEST_ALGORITHM = "logos-frozen-input-manifest-v1"
@@ -2198,8 +2198,24 @@ class CanonicalPublisherTest(unittest.TestCase):
         )
         cls.source_file = cls.source_root / "source.py"
         cls.source_file.write_text("value = 1\n", encoding="utf-8")
+        bound_source_paths = (
+            "scripts/logos_source_tree_digest.py",
+            "benchmarks/scripts/run-logos",
+        )
+        for relative in bound_source_paths:
+            destination = cls.source_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(LOGOS_ROOT / relative, destination)
         subprocess.run(
-            ["git", "-C", str(cls.source_root), "add", "source.py"], check=True
+            [
+                "git",
+                "-C",
+                str(cls.source_root),
+                "add",
+                "source.py",
+                *bound_source_paths,
+            ],
+            check=True,
         )
         subprocess.run(
             [

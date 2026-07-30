@@ -124,7 +124,12 @@ def source_path_record(repository: Path, relative: str) -> dict[str, Any]:
     return {"path": relative, "kind": "other"}
 
 
-def repository_manifest(repository: Path, workspace_relative: str) -> dict[str, Any]:
+def repository_manifest(
+    repository: Path,
+    workspace_relative: str,
+    *,
+    always_bound_paths: tuple[str, ...] = (),
+) -> dict[str, Any]:
     repository = repository.resolve()
     head = git_output(repository, "rev-parse", "HEAD").decode("ascii").strip()
     changed = set(
@@ -152,11 +157,8 @@ def repository_manifest(repository: Path, workspace_relative: str) -> dict[str, 
             .split("\0"),
         )
     )
-    changed.update(
-        relative
-        for relative in ALWAYS_BOUND_PATHS
-        if (repository / relative).is_file()
-    )
+    dirty_paths = set(changed)
+    changed.update(always_bound_paths)
     entries = [
         source_path_record(repository, path)
         for path in sorted(changed)
@@ -195,7 +197,7 @@ def repository_manifest(repository: Path, workspace_relative: str) -> dict[str, 
         "path": workspace_relative,
         "head": head,
         "dirty": bool(
-            entries
+            any(not excluded(path) for path in dirty_paths)
             or any(
                 value.get("dirty") or value.get("head") != value.get("indexObject")
                 for value in submodules
@@ -218,7 +220,11 @@ def build_manifest(
             "names": sorted(EXCLUDED_NAMES),
             "suffixes": list(EXCLUDED_SUFFIXES),
         },
-        "repository": repository_manifest(repository, workspace_relative),
+        "repository": repository_manifest(
+            repository,
+            workspace_relative,
+            always_bound_paths=ALWAYS_BOUND_PATHS,
+        ),
     }
 
 
