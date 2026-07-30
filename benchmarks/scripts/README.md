@@ -33,9 +33,13 @@ Logos/benchmarks/scripts/run-logos \
   --cohort16-gate-summary Logos/var/logos-solver/<gate-run>/runner-summary.json
 ```
 
-The runner rejects a frozen full launch with any different concurrency,
-timeout, verification mode, missing gate, or pipeline-short-circuiting solver
-argument. Selectors may still be used for controlled cohorts and local diagnostics.
+The canonical gated launch remains fixed at 32 workers. An explicitly ungated
+throughput campaign may instead use 32 or 64 workers together with
+`--allow-ungated-full-run` and the required 4-hour case timeout. The 64-worker
+mode is recorded as noncanonical and is not accepted by the canonical publisher.
+The runner rejects any other concurrency, timeout, verification mode, missing
+gate/override, or pipeline-short-circuiting solver argument. Selectors may still
+be used for controlled cohorts and local diagnostics.
 
 Run one case, one source benchmark, or an explicit case batch with:
 
