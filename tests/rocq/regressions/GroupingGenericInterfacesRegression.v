@@ -1,7 +1,8 @@
 From SQLFS Require Import
   Env FlatData ListPermut OrderedSet Partition SqlQuerySemantics
   SqlQuerySyntax.
-From Logos.FormalSQL Require Import GroupingRewriteFacts.
+From Logos.FormalSQL Require Import
+  GroupedFilterOutcomeFacts GroupingRewriteFacts.
 From Stdlib Require Import List Sorting.Permutation.
 
 Import ListNotations.
@@ -50,6 +51,23 @@ Proof.
   exact partition_factored_key_refinement_Forall2.
 Qed.
 
+(** Lock the representation-independent canonical-row bridge used when a
+    projection or rename is moved across a bag-reset operator. *)
+Theorem canonical_rows_map_factor_permutation_regression :
+  forall (T : Tuple.Rcd) (A : Type)
+      (first second : A -> tuple T) (rename : tuple T -> tuple T),
+    (forall left right,
+      Oeset.compare (OTuple T) left right = Eq ->
+      Oeset.compare (OTuple T) (rename left) (rename right) = Eq) ->
+    (forall item, rename (first item) = second item) ->
+    forall rows,
+      Oeset.permut (OTuple T)
+        (@query_canonical_rows T (map second rows))
+        (map rename (@query_canonical_rows T (map first rows))).
+Proof.
+  exact query_canonical_rows_map_factor_permut.
+Qed.
+
 Section QueryGroupingInterfaces.
 
 Context {T : Tuple.Rcd}.
@@ -66,6 +84,17 @@ Theorem query_make_groups_map_heterogeneous_regression :
         (OrderedSet.mk_olists (OVal T)) keyA rows).
 Proof.
   exact (@query_make_groups_map_heterogeneous T).
+Qed.
+
+(** Lock the arity-independent GROUP BY reordering bridge.  This replaces
+    case-local proofs that expanded a fixed two-, four-, or five-column key. *)
+Theorem query_make_groups_group_terms_permutation_regression :
+  forall env rows left_terms right_terms,
+    Sorting.Permutation.Permutation left_terms right_terms ->
+    @query_make_groups T env rows left_terms =
+    @query_make_groups T env rows right_terms.
+Proof.
+  exact (@query_make_groups_group_terms_Permutation T).
 Qed.
 
 Theorem query_make_groups_factored_refinement_regression :
@@ -125,6 +154,38 @@ Proof.
   exact (@query_make_groups_member_exact_key_filter T).
 Qed.
 
+Theorem query_make_groups_lookup_key_exact_regression :
+  forall env group_terms rows key,
+    group_terms <> nil ->
+    filter
+      (fun members =>
+        match members with
+        | nil => false
+        | row :: _ =>
+            Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+              (query_grouping_key env group_terms row) key
+        end)
+      (@query_make_groups T env rows group_terms) =
+    match
+      filter
+        (fun row =>
+          Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+            (query_grouping_key env group_terms row) key)
+        rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [rev
+          (filter
+            (fun row =>
+              Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+                (query_grouping_key env group_terms row) key)
+            rows)]
+    end.
+Proof.
+  exact (@query_make_groups_lookup_key_exact T).
+Qed.
+
 Theorem query_make_groups_member_key_filter_permutation_regression :
   forall env rows group_terms group row,
     group_terms <> nil ->
@@ -155,13 +216,30 @@ Check query_make_groups_matching_one_key_exact.
 Check query_make_groups_members_same_key_nonempty.
 Check partition_member_exact_key_filter.
 Check query_grouping_head_key.
+Check rows_permut_implies_bag_eq.
+Check rows_reverse_permut_congr.
+Check eval_groups_global_true_outcome_exact.
+Check group_projection_permutation_stable.
+Check eval_group_bag_global_true_success_for_representative.
+Check eval_group_bag_global_true_success_exists.
+Check eval_group_bag_global_true_success_bag_unique_if_stable.
 
 Print Assumptions list_permut_eq_bridge_regression.
 Print Assumptions partition_map_heterogeneous_regression.
 Print Assumptions partition_factored_key_refinement_regression.
+Print Assumptions canonical_rows_map_factor_permutation_regression.
 Print Assumptions query_make_groups_map_heterogeneous_regression.
+Print Assumptions query_make_groups_group_terms_permutation_regression.
 Print Assumptions query_make_groups_factored_refinement_regression.
 Print Assumptions query_make_groups_selected_members_regression.
 Print Assumptions query_make_groups_member_exact_key_filter_regression.
+Print Assumptions query_make_groups_lookup_key_exact_regression.
 Print Assumptions query_make_groups_member_key_filter_permutation_regression.
 Print Assumptions query_make_groups_global_shape_regression.
+Print Assumptions rows_permut_implies_bag_eq.
+Print Assumptions rows_reverse_permut_congr.
+Print Assumptions eval_groups_global_true_outcome_exact.
+Print Assumptions group_projection_permutation_stable.
+Print Assumptions eval_group_bag_global_true_success_for_representative.
+Print Assumptions eval_group_bag_global_true_success_exists.
+Print Assumptions eval_group_bag_global_true_success_bag_unique_if_stable.

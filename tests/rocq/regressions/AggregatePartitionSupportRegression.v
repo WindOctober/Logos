@@ -34,11 +34,57 @@ Proof.
   now apply aggregate_input_values_preserves_Forall.
 Qed.
 
+Theorem count_star_permutation_regression :
+  forall left right,
+    Permutation left right ->
+    interp_aggregate AggregateCountStar left =
+    interp_aggregate AggregateCountStar right /\
+    aggregate_local_runtime_error AggregateCountStar left =
+    aggregate_local_runtime_error AggregateCountStar right.
+Proof.
+  intros left right Hpermutation; split.
+  - now apply interp_aggregate_count_star_permutation.
+  - now apply aggregate_count_star_local_runtime_error_permutation.
+Qed.
+
 Theorem nonnull_count_length_regression :
   Forall (fun value => is_null_value value = false) values ->
   non_null_count values = Z.of_nat (length values).
 Proof.
   apply non_null_count_eq_length_of_Forall_nonnull.
+Qed.
+
+Theorem aggregate_sum_int32_nonnull_regression :
+  forall quantifier,
+    values <> [] ->
+    Forall
+      (fun value =>
+        is_int32_value value = true /\ is_null_value value = false)
+      values ->
+    aggregate_local_runtime_error
+      (AggregateCall AggregateSumInt32 quantifier) values = None ->
+    is_null_value
+      (interp_aggregate
+        (AggregateCall AggregateSumInt32 quantifier) values) = false.
+Proof.
+  intro quantifier.
+  exact
+    (aggregate_sum_int32_nonnull_of_nonempty_runtime_safe quantifier values).
+Qed.
+
+Theorem aggregate_sum_numeric_nonnull_regression :
+  forall quantifier,
+    values <> [] ->
+    Forall
+      (fun value =>
+        is_numeric_value value = true /\ is_null_value value = false)
+      values ->
+    is_null_value
+      (interp_aggregate
+        (AggregateCall AggregateSumNumeric quantifier) values) = false.
+Proof.
+  intro quantifier.
+  exact (aggregate_sum_numeric_nonnull_of_nonempty quantifier values).
 Qed.
 
 End AggregateSelection.
@@ -157,7 +203,10 @@ End GroupingSetSchedulerContracts.
 
 Print Assumptions aggregate_distinct_input_Permutation_of_NoDup_support.
 Print Assumptions aggregate_input_values_preserves_Forall.
+Print Assumptions count_star_permutation_regression.
 Print Assumptions non_null_count_eq_length_of_Forall_nonnull.
+Print Assumptions aggregate_sum_int32_nonnull_regression.
+Print Assumptions aggregate_sum_numeric_nonnull_regression.
 Print Assumptions partition_keys_Permutation_of_NoDup_support.
 Check grouping_set_exact_outcome_at.
 Check eval_grouping_sets_outcome_Forall2_congr.

@@ -62,6 +62,10 @@ Local Abbreviation eval_formula :=
   (@eval_formula_expr_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
 
+Local Abbreviation eval_exists :=
+  (@eval_query_exists_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null).
+
 Local Abbreviation formula_env_equiv :=
   (@formula_expr_env_outcome_equiv T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
@@ -151,8 +155,8 @@ Qed.
 Theorem exists_environment_congruence_regression :
   forall left_env right_env subquery,
     (forall outcome,
-      eval_query left_env subquery outcome <->
-      eval_query right_env subquery outcome) ->
+      eval_exists left_env subquery outcome <->
+      eval_exists right_env subquery outcome) ->
     forall outcome,
       eval_formula left_env (FExpr_Exists subquery) outcome <->
       eval_formula right_env (FExpr_Exists subquery) outcome.
@@ -162,7 +166,9 @@ Qed.
 
 Theorem exists_constructor_environment_regression :
   forall left_env right_env subquery,
-    query_env_equiv left_env right_env subquery ->
+    (forall outcome,
+      eval_exists left_env subquery outcome <->
+      eval_exists right_env subquery outcome) ->
     formula_env_equiv left_env right_env (FExpr_Exists subquery).
 Proof.
   intros; now apply formula_expr_exists_env_congr.
@@ -252,3 +258,7 @@ Print Assumptions heterogeneous_empty_decision_permut_regression.
 Print Assumptions list_existsb_rel_permut_regression.
 Print Assumptions oeset_empty_decision_permut_regression.
 Print Assumptions same_bag_empty_decision_regression.
+Check quantified_rows_truth_congr_of_bag_eq.
+Check formula_quant_acceptance_exact_of_fixed_truth.
+Print Assumptions quantified_rows_truth_congr_of_bag_eq.
+Print Assumptions formula_quant_acceptance_exact_of_fixed_truth.

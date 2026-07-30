@@ -5,14 +5,14 @@
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteSet FiniteBag FiniteCollection
   OrderedSet Join Env Formula Bool3 Projection SqlOutcome SqlQuerySyntax SqlQuerySemantics
-  SqlQueryWellFormed SqlBagAbstraction SqlQueryFacts SqlErrorSemantics
+  SqlQueryWellFormed SqlBagAbstraction SqlQueryFacts SqlQueryContexts SqlErrorSemantics
   SchemaConstraints.
 From Logos.FormalSQL Require Import
   TNullSyntax QueryTNullSyntax SchemaCardinality QueryCardinality
   CardinalityCombinators
   OrderedQueryFacts
   AggregateRuntimeFacts GroupingRewriteFacts RelationalAlgebraFacts
-  GroupedFilterOutcomeFacts NumericRegroupFacts.
+  GroupedFilterOutcomeFacts NumericRegroupFacts RenameTransportFacts.
 From Stdlib Require Import List Lia NArith SetoidList SetoidPermutation.
 
 Import ListNotations.
@@ -84,6 +84,472 @@ Definition TNullBagEq (left right : TNullRowBag) : Prop :=
 Definition TNullRowsBag (rows : list TNullRow) : TNullRowBag :=
   rows_bag TNull rows.
 
+(** Deterministic proof assembly for the common case in which both queries
+    have the same order-sensitive unary context around a smaller rewrite.
+    Each branch applies one already-proved congruence theorem and strictly
+    descends into its child; it performs no evaluator unfolding or proof
+    search.  A projection's runtime-safety side condition is closed only when
+    it is definitionally [None], and otherwise remains visible to the caller.
+
+    Deliberately absent are binary operators, filters, groups, and windows:
+    their congruence rules carry semantic side conditions that must not be
+    guessed by a structural tactic. *)
+Local Ltac logos_internal_close_projection_safety :=
+  lazymatch goal with
+  | |- forall row,
+      @eval_select_list_runtime_error ?T ?symbol_runtime_error
+        ?aggregate_runtime_error (env_t ?T ?env row) ?select_list = None =>
+      intro row; reflexivity
+  end.
+
+(** A Project fixes its own output signature, so equal outer signatures do
+    not imply that its children have equal ordered signatures.  Enter the
+    stronger child-outcome congruence only when that alignment is already
+    static or follows from an exact outcome-equivalence fact in the context.
+    This is a search gate only: it constructs no semantic evidence and closes
+    no proof obligation. *)
+Local Ltac logos_internal_require_child_output_alignment
+    T relname basesort instance unknown symbol_runtime_error
+    aggregate_runtime_error value_is_null env left right :=
+  first
+    [ let Houtputs := constr:(eq_refl :
+        @query_expr_outputs T relname left =
+        @query_expr_outputs T relname right) in
+      idtac
+    | match goal with
+      | Houtputs :
+          @query_expr_outputs T relname left =
+          @query_expr_outputs T relname right |- _ => idtac
+      end
+    | match goal with
+      | H : @query_expr_outcome_equiv T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null env
+          ?known_left ?known_right |- _ =>
+          let Houtputs := constr:((proj1 H) :
+            @query_expr_outputs T relname left =
+            @query_expr_outputs T relname right) in
+          idtac
+      end ].
+
+Local Ltac logos_internal_lift_shared_outcome :=
+  lazymatch goal with
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Project ?T ?relname ?select_list ?left)
+      (@QExpr_Project ?T ?relname ?select_list ?right) =>
+      logos_internal_require_child_output_alignment
+        T relname basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null env left right;
+      eapply query_expr_project_outcome_equiv_congr_safe;
+      [ try logos_internal_lift_shared_outcome
+      | try logos_internal_close_projection_safety ]
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_OrderBy ?T ?relname ?keys ?left)
+      (@QExpr_OrderBy ?T ?relname ?keys ?right) =>
+      apply query_expr_order_by_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Offset ?T ?relname ?count ?left)
+      (@QExpr_Offset ?T ?relname ?count ?right) =>
+      apply query_expr_offset_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Fetch ?T ?relname ?count ?left)
+      (@QExpr_Fetch ?T ?relname ?count ?right) =>
+      apply query_expr_fetch_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Distinct ?T ?relname ?left)
+      (@QExpr_Distinct ?T ?relname ?right) =>
+      apply query_expr_distinct_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | |- @query_expr_outcome_equiv
+      TNull relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (RankExpr ?partition_keys ?order_keys ?rank_attribute ?left)
+      (RankExpr ?partition_keys ?order_keys ?rank_attribute ?right) =>
+      unfold RankExpr;
+      apply query_expr_rank_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Rank ?T ?relname
+        ?partition_keys ?order_keys ?rank_attribute ?rank_value ?left)
+      (@QExpr_Rank ?T ?relname
+        ?partition_keys ?order_keys ?rank_attribute ?rank_value ?right) =>
+      apply query_expr_rank_outcome_equiv_congr;
+      try logos_internal_lift_shared_outcome
+  | _ => idtac
+  end.
+
+(** Structural success and safety constructors for operators with genuinely
+    compositional contracts.  FILTER is entered only through an exact
+    acceptance hypothesis already present in the proof context; JOIN, GROUP,
+    RANK, and WINDOW remain semantic boundaries.  Non-definitional projection
+    safety likewise remains an ordinary goal. *)
+Local Ltac logos_internal_prove_query_success :=
+  first [ assumption | lazymatch goal with
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Table ?T ?relname ?outputs ?table) =>
+      apply query_table_has_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Values ?T ?relname ?outputs ?values) =>
+      apply query_expr_values_has_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Project ?T ?relname ?select_list ?input) =>
+      eapply query_expr_project_has_success_safe;
+      [ try logos_internal_close_projection_safety
+      | try logos_internal_prove_query_success ]
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Filter ?T ?relname ?formula ?input) =>
+      eapply query_expr_filter_has_success_exact;
+      [ try eassumption
+      | try logos_internal_prove_query_success ]
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Distinct ?T ?relname ?input) =>
+      apply query_expr_distinct_has_success;
+      try logos_internal_prove_query_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_OrderBy ?T ?relname ?keys ?input) =>
+      apply query_expr_order_by_has_success;
+      try logos_internal_prove_query_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Offset ?T ?relname ?count ?input) =>
+      apply query_expr_offset_has_success;
+      try logos_internal_prove_query_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Fetch ?T ?relname ?count ?input) =>
+      apply query_expr_fetch_has_success;
+      try logos_internal_prove_query_success
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Set ?T ?relname ?operation ?left ?right) =>
+      apply query_expr_set_has_success;
+      [ try logos_internal_prove_query_success
+      | try logos_internal_prove_query_success ]
+  | |- @query_expr_has_success
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_CrossJoin ?T ?relname ?left ?right) =>
+      apply query_expr_cross_join_has_success;
+      [ try logos_internal_prove_query_success
+      | try logos_internal_prove_query_success ]
+  | |- exists rows,
+      @eval_query_expr_outcome
+        ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        ?query (SqlSuccess rows) =>
+      change (@query_expr_has_success
+        T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env query);
+      try logos_internal_prove_query_success
+  | _ => fail 0 "semantic operator boundary"
+  end ].
+
+Local Ltac logos_internal_prove_query_runtime_safe :=
+  first [ assumption | lazymatch goal with
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Table ?T ?relname ?outputs ?table) =>
+      apply query_expr_table_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Values ?T ?relname ?outputs ?values) =>
+      apply query_expr_values_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Project ?T ?relname ?select_list ?input) =>
+      eapply query_expr_project_runtime_safe;
+      [ try logos_internal_close_projection_safety
+      | try logos_internal_prove_query_runtime_safe ]
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Filter ?T ?relname ?formula ?input) =>
+      eapply query_expr_filter_runtime_safe_exact;
+      [ try eassumption
+      | try logos_internal_prove_query_runtime_safe ]
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Distinct ?T ?relname ?input) =>
+      apply query_expr_distinct_runtime_safe;
+      try logos_internal_prove_query_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_OrderBy ?T ?relname ?keys ?input) =>
+      apply query_expr_order_by_runtime_safe;
+      try logos_internal_prove_query_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Offset ?T ?relname ?count ?input) =>
+      apply query_expr_offset_runtime_safe;
+      try logos_internal_prove_query_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Fetch ?T ?relname ?count ?input) =>
+      apply query_expr_fetch_runtime_safe;
+      try logos_internal_prove_query_runtime_safe
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Set ?T ?relname ?operation ?left ?right) =>
+      apply query_expr_set_runtime_safe;
+      [ try logos_internal_prove_query_runtime_safe
+      | try logos_internal_prove_query_runtime_safe ]
+  | |- @query_expr_runtime_safe
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_CrossJoin ?T ?relname ?left ?right) =>
+      apply query_expr_cross_join_runtime_safe;
+      [ try logos_internal_prove_query_runtime_safe
+      | try logos_internal_prove_query_runtime_safe ]
+  | |- forall error,
+      ~ @eval_query_expr_outcome
+        ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        ?query (SqlError error) =>
+      change (@query_expr_runtime_safe
+        T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env query);
+      try logos_internal_prove_query_runtime_safe
+  | _ => fail 0 "semantic operator boundary"
+  end ].
+
+Local Ltac logos_internal_prove_query_outcome :=
+  first [ assumption | lazymatch goal with
+  | |- exists outcome,
+      @eval_query_expr_outcome
+        ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        ?query outcome =>
+      lazymatch query with
+      | @QExpr_Error ?T ?relname ?outputs ?error =>
+          apply query_expr_error_has_outcome
+      | @QExpr_Table ?T ?relname ?outputs ?table =>
+          apply query_expr_table_has_outcome
+      | @QExpr_Values ?T ?relname ?outputs ?values =>
+          apply query_expr_values_has_outcome
+      | @QExpr_Project ?T ?relname ?select_list ?input =>
+          eapply query_expr_project_has_outcome_safe;
+          [ try logos_internal_close_projection_safety
+          | try logos_internal_prove_query_outcome ]
+      | @QExpr_Filter ?T ?relname ?formula ?input =>
+          eapply query_expr_filter_has_outcome_exact;
+          [ try eassumption
+          | try logos_internal_prove_query_outcome ]
+      | @QExpr_Distinct ?T ?relname ?input =>
+          apply query_expr_distinct_has_outcome;
+          try logos_internal_prove_query_outcome
+      | @QExpr_OrderBy ?T ?relname ?keys ?input =>
+          apply query_expr_order_by_has_outcome;
+          try logos_internal_prove_query_outcome
+      | @QExpr_Offset ?T ?relname ?count ?input =>
+          apply query_expr_offset_has_outcome;
+          try logos_internal_prove_query_outcome
+      | @QExpr_Fetch ?T ?relname ?count ?input =>
+          apply query_expr_fetch_has_outcome;
+          try logos_internal_prove_query_outcome
+      | @QExpr_Set ?T ?relname ?operation ?left ?right =>
+          apply query_expr_set_has_outcome;
+          [ try logos_internal_prove_query_outcome
+          | try logos_internal_prove_query_outcome ]
+      | @QExpr_CrossJoin ?T ?relname ?left ?right =>
+          apply query_expr_cross_join_has_outcome;
+          [ try logos_internal_prove_query_outcome
+          | try logos_internal_prove_query_outcome ]
+      | _ => fail 0 "semantic operator boundary"
+      end
+  | _ => fail 0 "expected raw outcome inhabitation"
+  end ].
+
+(** The executable closure certificate recognizes every bag reset under a
+    finite Project/RowMap/Filter stack.  [reflexivity] evaluates only that
+    small syntax classifier; it never evaluates rows or a query instance. *)
+Local Ltac logos_internal_prove_bag_closed :=
+  eapply query_expr_permutation_closure_certified_bag_closed;
+  reflexivity.
+
+(** Pure error-forwarding operators form a terminating rewrite system: every
+    rewrite removes one AST constructor.  Projection is omitted because its
+    local safety premise must be supplied explicitly.  This intentionally
+    avoids a global hint database and runs only when explicitly requested. *)
+Local Ltac logos_internal_normalize_forwarded_errors :=
+  first
+    [ lazymatch goal with
+      | |- forall error,
+          @eval_query_expr_outcome
+            ?T ?relname ?basesort ?instance ?unknown
+            ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+            ?left (SqlError error) <->
+          @eval_query_expr_outcome
+            ?T ?relname ?basesort ?instance ?unknown
+            ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+            ?right (SqlError error) =>
+          intro error
+      end
+    | idtac ];
+  repeat first
+    [ rewrite eval_query_expr_distinct_error_iff
+    | rewrite eval_query_expr_order_by_error_iff
+    | rewrite eval_query_expr_offset_error_iff
+    | rewrite eval_query_expr_fetch_error_iff ].
+
+Local Ltac logos_internal_normalize_forwarded_errors_in H :=
+  repeat first
+    [ rewrite eval_query_expr_distinct_error_iff in H
+    | rewrite eval_query_expr_order_by_error_iff in H
+    | rewrite eval_query_expr_offset_error_iff in H
+    | rewrite eval_query_expr_fetch_error_iff in H ].
+
+(** Peel a successful observation through a maximal unary evaluator chain.
+    Each inversion is an exact iff theorem; the tactic stops before binary or
+    aggregate operators instead of multiplying semantic branches.  Fresh
+    [input_rows], [Hchild], and operator-local hypotheses remain in the
+    context for the caller's actual row argument. *)
+Local Ltac logos_internal_peel_transparent_success H :=
+  lazymatch type of H with
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Project ?T ?relname ?select_list ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_project_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hproject := fresh "Hproject" in
+      destruct H as [input_rows [Hchild Hproject]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_RowMap ?T ?relname ?outputs ?row_map ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_row_map_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hrow_map := fresh "Hrow_map" in
+      destruct H as [input_rows [Hchild Hrow_map]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Filter ?T ?relname ?formula ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_filter_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hfilter := fresh "Hfilter" in
+      destruct H as [input_rows [Hchild Hfilter]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Distinct ?T ?relname ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_distinct_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hdistinct := fresh "Hdistinct" in
+      destruct H as [input_rows [Hchild Hdistinct]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_OrderBy ?T ?relname ?keys ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_order_by_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Horder := fresh "Horder" in
+      destruct H as [input_rows [Hchild Horder]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Offset ?T ?relname ?count ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_offset_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hoffset := fresh "Hoffset" in
+      destruct H as [input_rows [Hchild Hoffset]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Fetch ?T ?relname ?count ?input)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_fetch_success_iff in H;
+      let input_rows := fresh "input_rows" in
+      let Hchild := fresh "Hchild" in
+      let Hfetch := fresh "Hfetch" in
+      destruct H as [input_rows [Hchild Hfetch]];
+      logos_internal_peel_transparent_success Hchild
+  | @eval_query_expr_outcome
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      (@QExpr_Table ?T ?relname ?outputs ?table)
+      (SqlSuccess ?output) =>
+      apply eval_query_expr_table_success_iff in H
+  | _ => idtac
+  end.
+
+(** Shallow assembly of the standard bag-closed outcome bridge.  The
+    dispatcher may choose it only when both query terms reduce to the trusted
+    structural closure certificate.  Consequently a generic ordered outcome
+    goal is never weakened merely because this tactic was tried. *)
+Local Ltac logos_internal_begin_bag_outcome :=
+  lazymatch goal with
+  | |- @query_expr_outcome_equiv
+      ?T ?relname ?basesort ?instance ?unknown
+      ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+      ?left ?right =>
+      let Hleft := constr:(eq_refl :
+        query_expr_permutation_closure_certified left = true) in
+      let Hright := constr:(eq_refl :
+        query_expr_permutation_closure_certified right = true) in
+      eapply query_bag_closed_outcome_equiv_of_success_bags;
+      try solve
+        [ assumption
+        | reflexivity
+        | logos_internal_prove_bag_closed ]
+  | _ => fail 0 "expected certified bag-closed outcome equivalence"
+  end.
+
 (** A runtime-safe scalar predicate supplies the exact TRUE/non-TRUE
     acceptance contract required by the generic JOIN evaluator.  This bridge
     preserves the underlying Bool3 result: FALSE and UNKNOWN are identified
@@ -136,10 +602,230 @@ Definition TNullQueryExprOutcomeEq
     (left right : TNullQueryExpr) : Prop :=
   query_expr_outcome_equiv_in_env db env left right.
 
+(** Compact observation-certificate vocabulary shared by equivalence and
+    counterexample proofs.  These are transparent aliases of the exact
+    ordered-row relation and the authoritative query evaluator. *)
+Definition TNullRowsObservationEq
+    (left right : list TNullRow) : Prop :=
+  @ordered_rows_equiv TNull left right.
+
+Definition TNullQueryExprObservationFunctional
+    (db : TNullDatabase) (env : TNullEnvironment)
+    (query : TNullQueryExpr) : Prop :=
+  successful_relation_functional TNullRowsObservationEq
+    (TNullQueryExprOutcome db env query).
+
+Definition TNullQuerySuccessBag
+    (db : TNullDatabase) (env : TNullEnvironment)
+    (query : TNullQueryExpr) (bag : TNullRowBag) : Prop :=
+  @query_success_bags TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env query bag.
+
+Definition TNullQuerySuccessBagFunctional
+    (db : TNullDatabase) (env : TNullEnvironment)
+    (query : TNullQueryExpr) : Prop :=
+  forall first second,
+    TNullQuerySuccessBag db env query first ->
+    TNullQuerySuccessBag db env query second ->
+    TNullBagEq first second.
+
+Definition TNullQueryExprOutcomeSeparation
+    (db : TNullDatabase) (env : TNullEnvironment)
+    (left right : TNullQueryExpr) : Prop :=
+  outcome_relation_separation TNullRowsObservationEq
+    (TNullQueryExprOutcome db env left)
+    (TNullQueryExprOutcome db env right).
+
+(** A directional FormalSQL countermodel refutes query outcome equivalence;
+    no choice of a single representative execution is trusted. *)
+Lemma tnull_query_expr_outcome_separation_sound :
+  forall db env left right,
+    TNullQueryExprOutcomeSeparation db env left right ->
+    ~ TNullQueryExprOutcomeEq db env left right.
+Proof.
+intros db env left right Hseparation Hequivalent.
+destruct Hequivalent as [_ Hobservations].
+apply
+  (@outcome_relation_separation_sound
+    (list TNullRow) TNullRowsObservationEq
+    (TNullQueryExprOutcome db env left)
+    (TNullQueryExprOutcome db env right) Hseparation).
+exact Hobservations.
+Qed.
+
+(** One successful observation separates two relational query evaluators when
+    every successful observation on the opposite side has a different row
+    count.  Ordered-row equivalence preserves length, so no opposite success
+    can match the witness.  Error outcomes remain in both relations and are
+    neither discarded nor assumed absent. *)
+Lemma tnull_query_expr_outcome_separation_of_left_success_length_difference :
+  forall db env left right left_rows,
+    TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+    (forall right_rows,
+      TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+      List.length left_rows <> List.length right_rows) ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right left_rows Hleft Hdifferent.
+eapply OutcomeSeparationLeftSuccess; [exact Hleft |].
+intros right_rows Hright Hequivalent.
+apply (Hdifferent right_rows Hright).
+unfold TNullRowsObservationEq in Hequivalent.
+now apply ordered_rows_equiv_length in Hequivalent.
+Qed.
+
+Lemma tnull_query_expr_outcome_separation_of_right_success_length_difference :
+  forall db env left right right_rows,
+    TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+    (forall left_rows,
+      TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+      List.length left_rows <> List.length right_rows) ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right right_rows Hright Hdifferent.
+eapply OutcomeSeparationRightSuccess; [exact Hright |].
+intros left_rows Hleft Hequivalent.
+apply (Hdifferent left_rows Hleft).
+unfold TNullRowsObservationEq in Hequivalent.
+now apply ordered_rows_equiv_length in Hequivalent.
+Qed.
+
+Lemma tnull_query_expr_outcome_separation_of_right_functional_observation_difference :
+  forall db env left right left_rows right_rows,
+    TNullQueryExprObservationFunctional db env right ->
+    TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+    TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+    ~ TNullRowsObservationEq left_rows right_rows ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right left_rows right_rows
+  Hfunctional Hleft Hright Hdifferent.
+eapply OutcomeSeparationLeftSuccess; [exact Hleft |].
+intros candidate Hcandidate Hequivalent.
+apply Hdifferent.
+eapply ordered_rows_equiv_trans; [exact Hequivalent |].
+exact (Hfunctional candidate right_rows Hcandidate Hright).
+Qed.
+
+Lemma tnull_query_expr_outcome_separation_of_left_functional_observation_difference :
+  forall db env left right left_rows right_rows,
+    TNullQueryExprObservationFunctional db env left ->
+    TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+    TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+    ~ TNullRowsObservationEq left_rows right_rows ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right left_rows right_rows
+  Hfunctional Hleft Hright Hdifferent.
+eapply OutcomeSeparationRightSuccess; [exact Hright |].
+intros candidate Hcandidate Hequivalent.
+apply Hdifferent.
+eapply ordered_rows_equiv_trans.
+- apply ordered_rows_equiv_sym.
+  exact (Hfunctional candidate left_rows Hcandidate Hleft).
+- exact Hequivalent.
+Qed.
+
+(** A concrete bag difference is a relational countermodel only when the
+    opposite success-bag relation is functional.  This bridge packages that
+    universal argument while retaining errors as separate outcomes. *)
+Lemma tnull_query_expr_outcome_separation_of_right_functional_bag_difference :
+  forall db env left right left_rows right_rows,
+    TNullQuerySuccessBagFunctional db env right ->
+    TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+    TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+    ~ TNullBagEq (TNullRowsBag left_rows) (TNullRowsBag right_rows) ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right left_rows right_rows
+  Hfunctional Hleft Hright Hdifferent.
+eapply OutcomeSeparationLeftSuccess; [exact Hleft |].
+intros candidate Hcandidate Hequivalent.
+unfold TNullBagEq, TNullRowsBag in Hdifferent.
+apply Hdifferent.
+eapply bag_eq_trans.
+- apply (@ordered_rows_equiv_implies_bag_eq TNull left_rows candidate).
+  exact Hequivalent.
+- apply Hfunctional.
+  + unfold TNullQuerySuccessBag, query_success_bags, alpha.
+    exists candidate; split; [exact Hcandidate | apply bag_eq_refl].
+  + unfold TNullQuerySuccessBag, query_success_bags, alpha.
+    exists right_rows; split; [exact Hright | apply bag_eq_refl].
+Qed.
+
+Lemma tnull_query_expr_outcome_separation_of_left_functional_bag_difference :
+  forall db env left right left_rows right_rows,
+    TNullQuerySuccessBagFunctional db env left ->
+    TNullQueryExprOutcome db env left (SqlSuccess left_rows) ->
+    TNullQueryExprOutcome db env right (SqlSuccess right_rows) ->
+    ~ TNullBagEq (TNullRowsBag left_rows) (TNullRowsBag right_rows) ->
+    TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+intros db env left right left_rows right_rows
+  Hfunctional Hleft Hright Hdifferent.
+eapply OutcomeSeparationRightSuccess; [exact Hright |].
+intros candidate Hcandidate Hequivalent.
+unfold TNullBagEq, TNullRowsBag in Hdifferent.
+apply Hdifferent.
+eapply bag_eq_trans.
+- apply bag_eq_sym, Hfunctional.
+  + unfold TNullQuerySuccessBag, query_success_bags, alpha.
+    exists candidate; split; [exact Hcandidate | apply bag_eq_refl].
+  + unfold TNullQuerySuccessBag, query_success_bags, alpha.
+    exists left_rows; split; [exact Hleft | apply bag_eq_refl].
+- apply (@ordered_rows_equiv_implies_bag_eq TNull candidate right_rows).
+  exact Hequivalent.
+Qed.
+
 Definition TNullQueryProgramOutcomeEq
     (db : TNullDatabase) (env : TNullEnvironment)
     (left right : TNullQueryProgram) : Prop :=
   query_program_outcome_equiv_in_env db env left right.
+
+(** A separated statement refutes any program equivalence whose head contains
+    that statement.  This is the minimal program lift needed by generated
+    countermodels; it does not inspect or constrain the remaining statements. *)
+Lemma tnull_query_program_head_separation_sound :
+  forall db env left right left_tail right_tail,
+    TNullQueryExprOutcomeSeparation db env left right ->
+    ~ TNullQueryProgramOutcomeEq db env
+        (left :: left_tail) (right :: right_tail).
+Proof.
+intros db env left right left_tail right_tail Hseparation Hprogram.
+apply (tnull_query_expr_outcome_separation_sound
+  db env left right Hseparation).
+exact (proj1 Hprogram).
+Qed.
+
+(** The same statement-local certificate may occur after any equally long
+    pair of program prefixes.  No property of those prefixes is required:
+    pointwise program equivalence would itself expose equivalence at the
+    separated statement. *)
+Lemma tnull_query_program_prefix_separation_sound :
+  forall db env left_prefix right_prefix left right left_tail right_tail,
+    length left_prefix = length right_prefix ->
+    TNullQueryExprOutcomeSeparation db env left right ->
+    ~ TNullQueryProgramOutcomeEq db env
+        (left_prefix ++ left :: left_tail)
+        (right_prefix ++ right :: right_tail).
+Proof.
+intros db env left_prefix.
+induction left_prefix as [| left_head left_prefix IH];
+  intros [| right_head right_prefix] left right left_tail right_tail
+    Hlength Hseparation Hprogram;
+  cbn in Hlength; try discriminate.
+- cbn in Hprogram.
+  apply (tnull_query_expr_outcome_separation_sound
+    db env left right Hseparation).
+  exact (proj1 Hprogram).
+- injection Hlength as Hlength.
+  cbn in Hprogram.
+  destruct Hprogram as [_ Hprogram].
+  eapply IH; eassumption.
+Qed.
 
 Definition TNullEvalGroupsOutcome
     (db : TNullDatabase) (env : TNullEnvironment)
@@ -406,6 +1092,55 @@ intros env select attribute row; split.
   rewrite Habsent in Hpresent; discriminate.
 Qed.
 
+(** Every output of [SelectColumns] has a canonical first-match lookup.  This
+    needs no uniqueness premise: repeated occurrences of the same column have
+    the same output attribute and the same direct expression. *)
+Lemma tnull_select_columns_lookup_output :
+  forall columns attribute,
+    attribute inS
+      (@Projection.select_list_sort TNull (SelectColumns columns)) ->
+    TNullSelectLookup (SelectColumns columns) attribute =
+      Some (AExpr (Dot attribute)).
+Proof.
+intros columns attribute Houtput.
+destruct (TNullSelectLookup (SelectColumns columns) attribute)
+  as [expression|] eqn:Hlookup.
+- assert (Hselected :
+    In (attribute, expression)
+      (map (@Projection.pair_of_select TNull)
+        (map SelectColumn columns))).
+  {
+    unfold TNullSelectLookup, SelectColumns,
+      Projection.pairs_of_selects in Hlookup.
+    exact (Oset.find_some _ _ _ Hlookup).
+  }
+  rewrite map_map, in_map_iff in Hselected.
+  destruct Hselected as [column [Hpair Hcolumn]].
+  unfold SelectColumn in Hpair; cbn in Hpair.
+  injection Hpair as Hattribute Hexpression.
+  subst attribute expression.
+  f_equal.
+  destruct column; reflexivity.
+- exfalso.
+  unfold SelectColumns, SelectList, Projection.select_list_sort,
+    Projection.select_list_outputs in Houtput.
+  rewrite Fset.mem_mk_set, Oset.mem_bool_true_iff,
+    map_map, in_map_iff in Houtput.
+  destruct Houtput as [column [Hattribute Hcolumn]].
+  cbn [SelectColumn] in Hattribute.
+  subst attribute.
+  unfold TNullSelectLookup, SelectColumns,
+    Projection.pairs_of_selects in Hlookup.
+  unfold SelectList, SelectColumn, SelectAs in Hlookup.
+  cbn in Hlookup.
+  apply (Oset.find_none_alt (OAtt TNull) (ColumnAttribute column)
+    (map (@Projection.pair_of_select TNull)
+      (map SelectColumn columns)) Hlookup).
+  rewrite !map_map, in_map_iff.
+  exists column; split; [|exact Hcolumn].
+  unfold SelectColumn; cbn; reflexivity.
+Qed.
+
 (** A lookup-selected direct reference reads the source cell whenever that
     source label is present on the input row.  Source presence remains
     explicit because an absent reference is resolved through the outer
@@ -478,6 +1213,33 @@ rewrite
     env second middle target (TNullProjectRow env first row)
     Hsecond Hmiddle).
 now apply tnull_select_lookup_direct_value.
+Qed.
+
+(** Cell-level composition of two direct projections without assuming that
+    the original source label belongs to the input row.  The first projection
+    evaluates the source expression in the authoritative row-extended
+    environment, so an absent source continues to use SQL's correlated outer
+    lookup.  It then materializes that exact value under [middle], which makes
+    the second direct lookup local rather than correlated. *)
+Lemma tnull_select_lookup_direct_compose_interp_value :
+  forall env first second source middle target row,
+    TNullSelectLookup first middle = Some (AExpr (Dot source)) ->
+    TNullSelectLookup second target = Some (AExpr (Dot middle)) ->
+    TNullRowValue
+      (TNullProjectRow env second (TNullProjectRow env first row)) target =
+    Interp.interp_aggterm TNull (env_t TNull env row)
+      (AExpr (Dot source)).
+Proof.
+intros env first second source middle target row Hfirst Hsecond.
+pose proof
+  (tnull_select_lookup_retained
+    env first middle (AExpr (Dot source)) row Hfirst)
+  as [Hmiddle Hvalue].
+rewrite
+  (tnull_select_lookup_direct_value
+    env second middle target (TNullProjectRow env first row)
+    Hsecond Hmiddle).
+exact Hvalue.
 Qed.
 
 (** Constant-producing projections compose through a later direct reference
@@ -1458,6 +2220,484 @@ intros env columns; split.
     exact IH.
 Qed.
 
+(** Conservative local-safety solver for the two common total fragments in
+    generated SELECT/GROUP terms.  Closed generated expressions are first
+    checked by definitional equality; the only symbolic fallback recognizes
+    direct-column lists, whose soundness lemmas are proved immediately above.
+    Arithmetic, casts, aggregates, and predicates are never guessed safe. *)
+Local Ltac logos_internal_solve_local_safety :=
+  first
+    [ lazymatch goal with
+      | |- @group_keys_runtime_error TNull
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          ?env (map DotColumn ?columns) ?rows = None =>
+          apply tnull_direct_columns_group_keys_runtime_safe
+      | |- @eval_select_list_aggregate_runtime_error TNull
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          ?env (SelectColumns ?columns) = None =>
+          exact (proj1
+            (tnull_direct_columns_group_select_runtime_safe env columns))
+      | |- @eval_select_list_runtime_error TNull
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          ?env (SelectColumns ?columns) = None =>
+          exact (proj2
+            (tnull_direct_columns_group_select_runtime_safe env columns))
+      end
+    | reflexivity ].
+
+Local Ltac logos_internal_solve_select_safety :=
+  first
+    [ assumption
+    | let row := fresh "row" in
+      intro row; logos_internal_solve_local_safety ].
+
+(** Deterministic assembly inside the possible-success-bag abstraction.
+    Every recursive branch removes one query constructor.  Reset operators
+    reuse their existing congruence laws; Project, Filter, and RowMap expose
+    only their genuine local semantic contracts.  ORDER BY may be forgotten
+    here because it preserves the complete bag, but OFFSET/FETCH are entered
+    only when both children have a computable permutation-closure certificate.
+    This tactic never proves error equivalence or turns ORDER BY into a
+    BagClosed query. *)
+Local Ltac logos_internal_lift_success_bags :=
+  lazymatch goal with
+  | |- rel_equiv ?relation ?relation =>
+      apply rel_equiv_refl
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?single ?input))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?outer
+          (@QExpr_Project ?T ?relname ?inner ?input))) =>
+      eapply query_project_success_bags_fusion_safe;
+      [ try logos_internal_solve_select_safety
+      | try logos_internal_solve_select_safety
+      | try logos_internal_solve_select_safety
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?outer
+          (@QExpr_Project ?T ?relname ?inner ?input)))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?single ?input)) =>
+      apply rel_equiv_sym;
+      eapply query_project_success_bags_fusion_safe;
+      [ try logos_internal_solve_select_safety
+      | try logos_internal_solve_select_safety
+      | try logos_internal_solve_select_safety
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?select_list ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?select_list ?right)) =>
+      eapply query_project_success_bags_congr_safe;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try logos_internal_solve_select_safety ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?left_select ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Project ?T ?relname ?right_select ?right)) =>
+      eapply query_project_success_bags_congr_extensional_safe;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try logos_internal_solve_select_safety
+      | try logos_internal_solve_select_safety
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_RowMap ?T ?relname ?outputs ?row_map ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_RowMap ?T ?relname ?outputs ?row_map ?right)) =>
+      eapply query_row_map_success_bags_congr_of_contract;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_RowMap ?T ?relname ?left_outputs ?left_map ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_RowMap ?T ?relname ?right_outputs ?right_map ?right)) =>
+      eapply query_row_map_success_bags_congr_extensional_of_contract;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Filter ?T ?relname ?formula ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Filter ?T ?relname ?formula ?right)) =>
+      eapply query_filter_success_bags_congr_of_contract;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Filter ?T ?relname ?left_formula ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Filter ?T ?relname ?right_formula ?right)) =>
+      eapply query_filter_success_bags_congr_of_contract;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Set ?T ?relname ?operation ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Set ?T ?relname ?operation ?left' ?right')) =>
+      eapply query_set_success_bags_congr;
+      [ first [assumption | apply Fset.equal_refl]
+      | first [assumption | apply Fset.equal_refl]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Set ?T ?relname ?left_operation ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Set ?T ?relname ?right_operation ?left' ?right')) =>
+      eapply query_set_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_NaturalJoin ?T ?relname ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_NaturalJoin ?T ?relname ?left' ?right')) =>
+      eapply query_natural_join_actual_success_bags_congr;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_CrossJoin ?T ?relname ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_CrossJoin ?T ?relname ?left' ?right')) =>
+      eapply query_cross_join_actual_success_bags_congr;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Join ?T ?relname ?kind ?predicate ?matched ?left_select
+          ?right_select ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Join ?T ?relname ?kind ?predicate ?matched ?left_select
+          ?right_select ?left' ?right')) =>
+      eapply query_join_success_bags_congr;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Join ?T ?relname ?left_kind ?left_predicate ?left_matched
+          ?left_left_select ?left_right_select ?left ?right))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Join ?T ?relname ?right_kind ?right_predicate ?right_matched
+          ?right_left_select ?right_right_select ?left' ?right')) =>
+      eapply query_join_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Group ?T ?relname ?select_list ?terms ?having ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Group ?T ?relname ?select_list ?terms ?having ?right)) =>
+      eapply query_group_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Group ?T ?relname ?left_select ?left_terms ?left_having ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Group ?T ?relname ?right_select ?right_terms ?right_having
+          ?right)) =>
+      eapply query_group_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_GroupingSets ?T ?relname ?sets ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_GroupingSets ?T ?relname ?sets ?right)) =>
+      eapply query_grouping_sets_actual_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_GroupingSets ?T ?relname ?left_sets ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_GroupingSets ?T ?relname ?right_sets ?right)) =>
+      eapply query_grouping_sets_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Rank ?T ?relname ?partition ?order ?attribute ?rank_value
+          ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Rank ?T ?relname ?partition ?order ?attribute ?rank_value
+          ?right)) =>
+      eapply query_rank_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Rank ?T ?relname ?left_partition ?left_order ?left_attribute
+          ?left_value ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Rank ?T ?relname ?right_partition ?right_order ?right_attribute
+          ?right_value ?right)) =>
+      eapply query_rank_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Window ?T ?relname ?partition ?order ?items ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Window ?T ?relname ?partition ?order ?items ?right)) =>
+      eapply query_window_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Window ?T ?relname ?left_partition ?left_order ?left_items
+          ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Window ?T ?relname ?right_partition ?right_order ?right_items
+          ?right)) =>
+      eapply query_window_success_bags_congr_extensional;
+      [ first [assumption | reflexivity | logos_internal_lift_success_bags]
+      | try assumption ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Distinct ?T ?relname ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Distinct ?T ?relname ?right)) =>
+      eapply query_distinct_actual_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_OrderBy ?T ?relname ?left_keys ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_OrderBy ?T ?relname ?right_keys ?right)) =>
+      eapply query_order_by_success_bags_congr;
+      first [assumption | reflexivity | logos_internal_lift_success_bags]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Offset ?T ?relname ?count ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Offset ?T ?relname ?count ?right)) =>
+      let Hleft := constr:(eq_refl :
+        query_expr_permutation_closure_certified left = true) in
+      let Hright := constr:(eq_refl :
+        query_expr_permutation_closure_certified right = true) in
+      eapply query_offset_success_bags_congr_closed;
+      [ eapply query_expr_permutation_closure_certified_bag_closed; exact Hleft
+      | eapply query_expr_permutation_closure_certified_bag_closed; exact Hright
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Fetch ?T ?relname ?count ?left))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Fetch ?T ?relname ?count ?right)) =>
+      let Hleft := constr:(eq_refl :
+        query_expr_permutation_closure_certified left = true) in
+      let Hright := constr:(eq_refl :
+        query_expr_permutation_closure_certified right = true) in
+      eapply query_fetch_success_bags_congr_closed;
+      [ eapply query_expr_permutation_closure_certified_bag_closed; exact Hleft
+      | eapply query_expr_permutation_closure_certified_bag_closed; exact Hright
+      | first [assumption | reflexivity | logos_internal_lift_success_bags] ]
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Values ?T ?relname ?left_outputs ?left_values))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Values ?T ?relname ?right_outputs ?right_values)) =>
+      eapply query_values_success_bags_congr;
+      try assumption
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Table ?T ?relname ?left_outputs ?left_table))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Table ?T ?relname ?right_outputs ?right_table)) =>
+      eapply query_table_success_bags_congr;
+      try assumption
+  | |- rel_equiv
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Error ?T ?relname ?left_outputs ?left_error))
+      (@query_success_bags ?T ?relname ?basesort ?instance ?unknown
+        ?symbol_runtime_error ?aggregate_runtime_error ?value_is_null ?env
+        (@QExpr_Error ?T ?relname ?right_outputs ?right_error)) =>
+      intro; split; intro Hsuccess;
+      exfalso; eapply query_error_success_bags_empty; eassumption
+  | _ => fail 0 "semantic success-bag boundary"
+  end.
+
+(** One goal-directed public automation interface.  The branch order is part
+    of its contract.  A shared exact context first gets a transactional fast
+    path, used only when existing facts close every resulting goal.  Otherwise
+    a structurally certified bag boundary takes precedence over a stronger
+    child ordered-equivalence obligation; non-certified ordered contexts are
+    then peeled exactly.  Constructor-local branches follow.  Every recursive
+    structural branch strictly removes a query constructor; error normalization
+    removes a forwarding constructor; the bag bridge cannot recur on any
+    subgoal it creates. *)
+Local Ltac logos_internal_dispatch_goal :=
+  first
+    [ solve [assumption]
+    | solve [reflexivity]
+    | solve [intro; reflexivity]
+    | solve
+        [ progress logos_internal_lift_shared_outcome;
+          first
+            [ assumption
+            | reflexivity
+            | logos_internal_solve_local_safety ] ]
+    | logos_internal_begin_bag_outcome;
+      try logos_internal_dispatch_goal
+    | progress logos_internal_lift_success_bags;
+      try logos_internal_dispatch_goal
+    | progress logos_internal_lift_shared_outcome;
+      try logos_internal_dispatch_goal
+    | logos_internal_prove_query_success;
+      try logos_internal_dispatch_goal
+    | logos_internal_prove_query_runtime_safe;
+      try logos_internal_dispatch_goal
+    | logos_internal_prove_query_outcome;
+      try logos_internal_dispatch_goal
+    | logos_internal_prove_bag_closed
+    | progress logos_internal_normalize_forwarded_errors;
+      try logos_internal_dispatch_goal
+    | logos_internal_solve_local_safety
+    | fail 1
+        "logos: deterministic structural automation reached a semantic boundary"
+    ].
+
+(** Report only the kind of semantic fact left after one deterministic
+    structural pass.  The labels are intentionally finite and do not print
+    the goal term: generated queries can be very large, and the caller needs
+    a stable contract class rather than another expansion of the evaluator.
+    This tactic proves nothing. *)
+Local Ltac logos_internal_report_residual :=
+  lazymatch goal with
+  | |- TNullQuerySuccessBagFunctional _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "success-bag-functionality"
+  | |- TNullQueryExprObservationFunctional _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "success-observation-functionality"
+  | |- TNullQueryExprOutcomeSeparation _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "unmatched-outcome-separation"
+  | |- @project_success_bag_extensional_contract
+      _ _ _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "reachable-project-bag-map"
+  | |- @project_fusion_success_bag_contract
+      _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "reachable-project-fusion-bag-map"
+  | |- @filter_success_bag_contract _ _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "filter-acceptance-contract"
+  | |- @row_map_success_bag_contract _ _ =>
+      idtac "LOGOS-RESIDUAL:" "row-map-total-proper-contract"
+  | |- @row_map_success_bag_extensional_contract
+      _ _ _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "row-map-extensional-contract"
+  | |- forall row,
+      @eval_select_list_runtime_error _ _ _ _ _ = None =>
+      idtac "LOGOS-RESIDUAL:" "local-select-safety"
+  | |- rel_equiv
+      (@query_success_bags _ _ _ _ _ _ _ _ _ _) _ =>
+      idtac "LOGOS-RESIDUAL:" "success-bag-equivalence"
+  | |- exists outcome,
+      @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ outcome =>
+      idtac "LOGOS-RESIDUAL:" "outcome-inhabitation"
+  | |- @query_expr_has_success _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "success-inhabitation"
+  | |- @query_expr_runtime_safe _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "runtime-safety"
+  | |- @query_expr_outputs _ _ _ = @query_expr_outputs _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "ordered-output-signature-equality"
+  | |- @query_expr_outcome_equiv _ _ _ _ _ _ _ _ _ _ _ =>
+      idtac "LOGOS-RESIDUAL:" "ordered-outcome-semantic-boundary"
+  | |- forall error, _ <-> _ =>
+      idtac "LOGOS-RESIDUAL:" "exact-error-equivalence"
+  | |- _ =>
+      idtac "LOGOS-RESIDUAL:" "unclassified-semantic"
+  end.
+
+(** Public normalization is deliberately non-probing: run the strict
+    dispatcher once on the focused goal and report every residual it creates.
+    Standard goal selectors (for example [all: logos]) apply the same pass to
+    an existing goal set.  Unsupported goals are left byte-for-byte as proof
+    obligations.  Consequently [solve [logos]] is still the strict closure
+    check, while callers no longer need [try logos] merely to discover the
+    structural residual. *)
+Local Ltac logos_internal_normalize_and_report :=
+  first [ logos_internal_dispatch_goal | idtac ];
+  logos_internal_report_residual.
+
+(** Agent-facing surface: [logos.] dispatches from the goal shape, while
+    [logos in H.] peels a successful evaluator hypothesis or normalizes an
+    exact forwarded-error hypothesis through its maximal transparent unary
+    prefix.  All implementation tactics above are local to this module and
+    are not choices exposed to generated developments. *)
+Tactic Notation "logos" := logos_internal_normalize_and_report.
+Tactic Notation "logos" "in" hyp(H) :=
+  first
+    [ progress (logos_internal_peel_transparent_success H)
+    | progress (logos_internal_normalize_forwarded_errors_in H)
+    | fail 1
+        "logos in: expected a transparent query success/error hypothesis"
+    ].
+
 (** A direct-column SELECT is an exact, order-preserving pointwise map and
     cannot fail locally.  This specializes the generic projection evaluator
     without making any claim about errors produced by an enclosing child
@@ -1563,7 +2803,7 @@ Lemma tnull_direct_columns_group_bag_has_success :
 Proof.
 intros db env columns rows.
 set (groups :=
-  @query_make_groups TNull env (query_canonical_rows rows)
+  @query_make_groups TNull env rows
     (map DotColumn columns)).
 set (outputs :=
   map
@@ -1642,13 +2882,13 @@ inversion Herror; subst.
         env (map DotColumn columns) _ = Some _ |- _ =>
       pose proof
         (@tnull_direct_columns_group_keys_runtime_safe
-          env (query_canonical_rows representative) columns) as Hnone;
+          env representative columns) as Hnone;
       congruence
   end.
 - assert (Hsafe : forall group,
     In group
       (@query_make_groups TNull env
-        (query_canonical_rows representative) (map DotColumn columns)) ->
+        representative (map DotColumn columns)) ->
     @eval_select_list_aggregate_runtime_error TNull
       NullValues.interp_scalar_operator_runtime_error
       NullValues.interp_aggregate_runtime_error
@@ -1688,7 +2928,7 @@ inversion Herror; subst.
         NullValues.interp_aggregate_runtime_error NullValues.is_null_value
         env (SelectColumns columns) (map DotColumn columns) FExpr_True
         (@query_make_groups TNull env
-          (query_canonical_rows representative) (map DotColumn columns))
+          representative (map DotColumn columns))
         (SqlError error) |- _ =>
       pose proof
         (proj1
@@ -1698,7 +2938,7 @@ inversion Herror; subst.
             NullValues.interp_aggregate_runtime_error NullValues.is_null_value
             env (SelectColumns columns) (map DotColumn columns) FExpr_True
             (@query_make_groups TNull env
-              (query_canonical_rows representative) (map DotColumn columns))
+              representative (map DotColumn columns))
             Hsafe (SqlError error)) Hgroups) as Hsuccess;
       discriminate
   end.
@@ -1917,6 +3157,146 @@ unfold TNullProjectRow, projected_tuple.
 now apply tnull_projection_envs_eq_of_select_items.
 Qed.
 
+(** Projected rows are extensionally equal when their SELECT lists expose the
+    same output-label set and every observable output cell agrees.  The
+    projection-label theorem discharges all tuple-construction plumbing; a
+    caller may establish the cell equalities with first-match lookup lemmas
+    without pairing or unfolding unrelated SELECT items. *)
+Lemma tnull_projection_rows_eq_of_output_values :
+  forall env left_select right_select left_row right_row,
+    TNullAttributeSetEq
+      (@Projection.select_list_sort TNull left_select)
+      (@Projection.select_list_sort TNull right_select) ->
+    (forall attribute,
+      attribute inS (@Projection.select_list_sort TNull left_select) ->
+      TNullRowValue (TNullProjectRow env left_select left_row) attribute =
+      TNullRowValue (TNullProjectRow env right_select right_row) attribute) ->
+    TNullRowEq
+      (TNullProjectRow env left_select left_row)
+      (TNullProjectRow env right_select right_row).
+Proof.
+intros env [left_items] [right_items] left_row right_row Hlabels Hvalues.
+apply tnull_row_eq_of_labels_and_values.
+- unfold TNullAttributeSetEq in Hlabels |- *.
+  rewrite Fset.equal_spec in Hlabels |- *.
+  intro attribute.
+  unfold TNullRowLabels, TNullProjectRow, projected_tuple.
+  rewrite (Fset.mem_eq_2 _ _ _
+    (@Projection.labels_projection TNull
+      (env_t TNull env left_row) left_items)).
+  rewrite (Fset.mem_eq_2 _ _ _
+    (@Projection.labels_projection TNull
+      (env_t TNull env right_row) right_items)).
+  exact (Hlabels attribute).
+- intros attribute Hpresent.
+  apply Hvalues.
+  unfold TNullRowLabels, TNullProjectRow, projected_tuple in Hpresent.
+  rewrite (Fset.mem_eq_2 _ _ _
+    (@Projection.labels_projection TNull
+      (env_t TNull env left_row) left_items)) in Hpresent.
+  exact Hpresent.
+Qed.
+
+(** A single direct projection agrees with a two-stage direct projection when
+    both expose the same output labels and every observable target follows a
+    source-to-middle-to-target lookup chain.  No source-presence premise is
+    required: the single projection and the inner projection evaluate the
+    same source expression in the same row-extended environment, including
+    its correlated outer-environment fallback. *)
+Lemma tnull_direct_projection_fusion_row_eq :
+  forall env single outer inner,
+    TNullAttributeSetEq
+      (@Projection.select_list_sort TNull single)
+      (@Projection.select_list_sort TNull outer) ->
+    (forall target,
+      target inS (@Projection.select_list_sort TNull single) ->
+      exists source middle,
+        TNullSelectLookup single target = Some (AExpr (Dot source)) /\
+        TNullSelectLookup inner middle = Some (AExpr (Dot source)) /\
+        TNullSelectLookup outer target = Some (AExpr (Dot middle))) ->
+    forall row,
+      TNullRowEq
+        (TNullProjectRow env single row)
+        (TNullProjectRow env outer (TNullProjectRow env inner row)).
+Proof.
+intros env single outer inner Houtputs Hlookups row.
+apply tnull_projection_rows_eq_of_output_values; [exact Houtputs |].
+intros target Htarget.
+destruct (Hlookups target Htarget)
+  as [source [middle [Hsingle [Hinner Houter]]]].
+pose proof
+  (proj2
+    (tnull_select_lookup_retained
+      env single target (AExpr (Dot source)) row Hsingle))
+  as Hsingle_value.
+pose proof
+  (tnull_select_lookup_direct_compose_interp_value
+    env inner outer source middle target row Hinner Houter)
+  as Hcomposed_value.
+rewrite Hsingle_value, Hcomposed_value.
+reflexivity.
+Qed.
+
+(** Direct-column projection fusion reduces entirely to two static set facts:
+    the single and outer projections expose the same labels, and every label
+    read by the outer projection is produced by the inner projection.  The
+    coverage premise prevents an absent inner label from falling through to a
+    correlated outer environment. *)
+Lemma tnull_select_columns_projection_fusion_row_eq :
+  forall env single outer inner,
+    TNullAttributeSetEq
+      (@Projection.select_list_sort TNull (SelectColumns single))
+      (@Projection.select_list_sort TNull (SelectColumns outer)) ->
+    (@Projection.select_list_sort TNull (SelectColumns outer)) subS
+      (@Projection.select_list_sort TNull (SelectColumns inner)) ->
+    forall row,
+      TNullRowEq
+        (TNullProjectRow env (SelectColumns single) row)
+        (TNullProjectRow env (SelectColumns outer)
+          (TNullProjectRow env (SelectColumns inner) row)).
+Proof.
+intros env single outer inner Houtputs Hcoverage row.
+apply tnull_projection_rows_eq_of_output_values; [exact Houtputs |].
+intros attribute Hsingle.
+assert (Houter :
+  attribute inS
+    (@Projection.select_list_sort TNull (SelectColumns outer))).
+{
+  unfold TNullAttributeSetEq in Houtputs.
+  rewrite Fset.equal_spec in Houtputs.
+  rewrite <- (Houtputs attribute).
+  exact Hsingle.
+}
+assert (Hinner :
+  attribute inS
+    (@Projection.select_list_sort TNull (SelectColumns inner))).
+{
+  rewrite Fset.subset_spec in Hcoverage.
+  exact (Hcoverage attribute Houter).
+}
+pose proof
+  (tnull_select_columns_lookup_output single attribute Hsingle)
+  as Hsingle_lookup.
+pose proof
+  (tnull_select_columns_lookup_output outer attribute Houter)
+  as Houter_lookup.
+pose proof
+  (tnull_select_columns_lookup_output inner attribute Hinner)
+  as Hinner_lookup.
+pose proof
+  (proj2
+    (tnull_select_lookup_retained
+      env (SelectColumns single) attribute (AExpr (Dot attribute))
+      row Hsingle_lookup)) as Hsingle_value.
+pose proof
+  (tnull_select_lookup_direct_compose_interp_value
+    env (SelectColumns inner) (SelectColumns outer)
+    attribute attribute attribute row Hinner_lookup Houter_lookup)
+  as Hdouble_value.
+rewrite Hsingle_value, Hdouble_value.
+reflexivity.
+Qed.
+
 (** Direct projection against a separately named expected schema.  The two
     label equalities keep the empty/renamed-column cases explicit. *)
 Lemma tnull_direct_projection_row_eq_on_expected_labels :
@@ -2038,6 +3418,35 @@ eapply bag_eq_trans.
 - apply tnull_bag_map_ext.
   intros row Hrow; now apply Hrows.
 - apply bag_eq_sym, tnull_projection_bag_map_compose.
+Qed.
+
+(** A total row-level single-versus-double projection law is a sufficient,
+    query-independent witness for the existing reachable-bag fusion contract.
+    This optional bridge is deliberately stronger than the contract: callers
+    that know equality only on reachable rows should prove the original
+    contract directly rather than being forced through this theorem. *)
+Lemma tnull_project_fusion_success_bag_contract_of_row_eq :
+  forall db env single outer inner input,
+    (forall row,
+      TNullRowEq
+        (TNullProjectRow env single row)
+        (TNullProjectRow env outer (TNullProjectRow env inner row))) ->
+    @project_fusion_success_bag_contract TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env single outer inner input.
+Proof.
+intros db env single outer inner input Hrows input_bag _.
+change
+  (TNullBagEq
+    (TNullBagMap (fun row => TNullProjectRow env single row) input_bag)
+    (TNullBagMap
+      (fun row => TNullProjectRow env outer row)
+      (TNullBagMap
+        (fun row => TNullProjectRow env inner row) input_bag))).
+apply tnull_single_double_projection_bag_eq.
+intros row _; apply Hrows.
 Qed.
 
 (** Projecting any two rows through the same SELECT list produces the same

@@ -2,7 +2,7 @@
 
 Route here for: UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE.
 
-This focused catalog contains 97 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 99 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `andb3_unknown_iff`
 
@@ -14,7 +14,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -35,7 +35,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -56,7 +56,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -75,7 +75,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -94,7 +94,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -113,7 +113,7 @@ Applicability: Use when the goal or a hypothesis matches the `value_bool_to_bool
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -132,7 +132,7 @@ Applicability: Use when the goal or a hypothesis matches the `bool3_to_value_boo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -151,7 +151,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -170,7 +170,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -190,7 +190,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -210,7 +210,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -231,7 +231,7 @@ Applicability: Use when the goal or a hypothesis matches the `default_value_is_t
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 52), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `schema conformance`, `typing`
 
@@ -250,7 +250,7 @@ Applicability: Use when the goal or a hypothesis matches the `default_value_pres
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -269,7 +269,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_and_bo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -289,7 +289,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_or_boo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -309,7 +309,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_not_bo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -329,7 +329,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -350,7 +350,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -371,7 +371,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -394,7 +394,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -415,7 +415,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -436,7 +436,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -459,7 +459,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -479,7 +479,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -499,7 +499,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -519,7 +519,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_and_wr
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -538,7 +538,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_or_wro
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -557,7 +557,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_bool_not_wr
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -576,7 +576,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about sc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 42)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
 
@@ -597,7 +597,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about sc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 42)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
 
@@ -618,7 +618,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about sc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 42)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
 
@@ -638,7 +638,7 @@ Applicability: Use when the goal or a hypothesis matches the `is_null_value_true
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`, `BIGINT`, `int64`, `floating point`, `special value`, `string`, `VARCHAR`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -670,7 +670,7 @@ Applicability: Use when the goal or a hypothesis matches the `strict_binary_pred
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -691,7 +691,7 @@ Applicability: Use when the goal or a hypothesis matches the `strict_binary_pred
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -712,7 +712,7 @@ Applicability: Use when the goal or a hypothesis matches the `strict_binary_pred
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -732,7 +732,7 @@ Applicability: Use when the goal or a hypothesis matches the `strict_binary_pred
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -754,7 +754,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_w
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -774,7 +774,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -794,7 +794,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -814,7 +814,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -834,7 +834,7 @@ Applicability: Use in either direction to invert or construct a goal about SQL N
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -854,7 +854,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -874,7 +874,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -893,7 +893,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -912,7 +912,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_e
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `filter` (rank 2), `scalar` (rank 0)
+Cross-index: `filter`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `filter`, `WHERE`, `predicate`, `Bool3`
 
@@ -935,7 +935,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -955,7 +955,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -975,7 +975,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -995,7 +995,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -1015,7 +1015,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1035,7 +1035,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1055,7 +1055,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1075,7 +1075,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1095,7 +1095,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1116,7 +1116,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_i
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1137,7 +1137,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_is_not_dist
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `DISTINCT`, `duplicate elimination`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -1158,7 +1158,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_is_not_dist
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `DISTINCT`, `duplicate elimination`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -1179,7 +1179,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_is_not_dist
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `DISTINCT`, `duplicate elimination`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
 
@@ -1199,7 +1199,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `DISTINCT`, `duplicate elimination`, `predicate`, `Bool3`
 
@@ -1222,7 +1222,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `DISTINCT`, `duplicate elimination`, `predicate`, `Bool3`
 
@@ -1246,7 +1246,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1265,7 +1265,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1284,7 +1284,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1304,7 +1304,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1314,9 +1314,33 @@ Lemma interp_case_values_true_branch_if : forall condition then_value rest,
   interp_case_values (condition :: then_value :: rest) = then_value.
 ```
 
+## `interp_case_is_not_null_identity`
+
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:837`](../ScalarPredicateFacts.v#L837)
+
+Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
+
+Applicability: Use when the goal or a hypothesis matches the `interp_case_is_not_null_identity` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `scalar`
+
+Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
+
+```rocq
+Lemma interp_case_is_not_null_identity : forall value fallback,
+  is_null_value value = false ->
+  interp_case_values
+    [interp_scalar_operator
+       (ScalarPredicateValue PredicateIsNotNull) [value];
+     value;
+     fallback] = value.
+```
+
 ## `interp_case_values_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:835`](../ScalarPredicateFacts.v#L835)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:855`](../ScalarPredicateFacts.v#L855)
 
 Purpose/direction: States the interp case values skip nontrue law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1324,7 +1348,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1337,7 +1361,7 @@ Lemma interp_case_values_skip_nontrue : forall condition then_value rest,
 
 ## `interp_case_values_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:848`](../ScalarPredicateFacts.v#L848)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:868`](../ScalarPredicateFacts.v#L868)
 
 Purpose/direction: States the interp case values skip prefix law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1345,7 +1369,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1357,7 +1381,7 @@ Lemma interp_case_values_skip_prefix : forall prefix suffix,
 
 ## `interp_case_values_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:859`](../ScalarPredicateFacts.v#L859)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:879`](../ScalarPredicateFacts.v#L879)
 
 Purpose/direction: States the interp case values first true law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1365,7 +1389,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_case_values
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1380,7 +1404,7 @@ Lemma interp_case_values_first_true :
 
 ## `case_runtime_error_empty`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:871`](../ScalarPredicateFacts.v#L871)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1388,7 +1412,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1399,7 +1423,7 @@ Lemma case_runtime_error_empty :
 
 ## `case_runtime_error_else`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:877`](../ScalarPredicateFacts.v#L877)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:897`](../ScalarPredicateFacts.v#L897)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1407,7 +1431,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1418,7 +1442,7 @@ Lemma case_runtime_error_else : forall else_error else_value,
 
 ## `case_runtime_error_condition_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:883`](../ScalarPredicateFacts.v#L883)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:903`](../ScalarPredicateFacts.v#L903)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1426,7 +1450,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1439,7 +1463,7 @@ Lemma case_runtime_error_condition_error : forall error condition then_error
 
 ## `case_runtime_error_true_branch`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:911`](../ScalarPredicateFacts.v#L911)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1447,7 +1471,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1458,9 +1482,35 @@ Lemma case_runtime_error_true_branch : forall condition then_error then_value re
     ((None, condition) :: (then_error, then_value) :: rest) = then_error.
 ```
 
+## `case_runtime_error_is_not_null_identity`
+
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:920`](../ScalarPredicateFacts.v#L920)
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for SQL NULL and three-valued behavior.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL NULL and three-valued behavior.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma case_runtime_error_is_not_null_identity :
+  forall value fallback value_error fallback_error,
+    is_null_value value = false ->
+    case_runtime_error
+      [(None,
+          interp_scalar_operator
+            (ScalarPredicateValue PredicateIsNotNull) [value]);
+       (value_error, value);
+       (fallback_error, fallback)] = value_error.
+```
+
 ## `case_runtime_error_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:900`](../ScalarPredicateFacts.v#L900)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:940`](../ScalarPredicateFacts.v#L940)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1468,7 +1518,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1482,7 +1532,7 @@ Lemma case_runtime_error_skip_nontrue : forall condition then_error then_value r
 
 ## `case_runtime_error_skipped_arm_irrelevant`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:914`](../ScalarPredicateFacts.v#L914)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:954`](../ScalarPredicateFacts.v#L954)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1490,7 +1540,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1506,7 +1556,7 @@ Lemma case_runtime_error_skipped_arm_irrelevant :
 
 ## `case_runtime_error_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:928`](../ScalarPredicateFacts.v#L928)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:968`](../ScalarPredicateFacts.v#L968)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1514,7 +1564,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1526,7 +1576,7 @@ Lemma case_runtime_error_skip_prefix : forall prefix suffix,
 
 ## `case_runtime_error_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:939`](../ScalarPredicateFacts.v#L939)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:979`](../ScalarPredicateFacts.v#L979)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1534,7 +1584,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1550,7 +1600,7 @@ Lemma case_runtime_error_first_true :
 
 ## `case_runtime_error_some_member`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:952`](../ScalarPredicateFacts.v#L952)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1558,7 +1608,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1571,7 +1621,7 @@ Lemma case_runtime_error_some_member : forall observations error,
 
 ## `case_runtime_error_none_of_all_none`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:978`](../ScalarPredicateFacts.v#L978)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1018`](../ScalarPredicateFacts.v#L1018)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for scalar-predicate semantics.
 
@@ -1579,7 +1629,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1591,7 +1641,7 @@ Lemma case_runtime_error_none_of_all_none : forall observations,
 
 ## `interp_scalar_case_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1032`](../ScalarPredicateFacts.v#L1032)
 
 Purpose/direction: States the interp scalar case values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1599,7 +1649,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_scalar_case
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`
 
@@ -1610,7 +1660,7 @@ Lemma interp_scalar_case_values : forall values,
 
 ## `interp_scalar_case_runtime_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:998`](../ScalarPredicateFacts.v#L998)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1038`](../ScalarPredicateFacts.v#L1038)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1618,7 +1668,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1630,7 +1680,7 @@ Lemma interp_scalar_case_runtime_error : forall observations,
 
 ## `interp_predicate_lt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1005`](../ScalarPredicateFacts.v#L1005)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
 
 Purpose/direction: States the interp predicate strict-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1638,7 +1688,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_l
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1651,7 +1701,7 @@ Lemma interp_predicate_lt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_lte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1015`](../ScalarPredicateFacts.v#L1015)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
 
 Purpose/direction: States the interp predicate lte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1659,7 +1709,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_l
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1672,7 +1722,7 @@ Lemma interp_predicate_lte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1025`](../ScalarPredicateFacts.v#L1025)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
 
 Purpose/direction: States the interp predicate strict-lower-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1680,7 +1730,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_g
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1693,7 +1743,7 @@ Lemma interp_predicate_gt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1035`](../ScalarPredicateFacts.v#L1035)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1075`](../ScalarPredicateFacts.v#L1075)
 
 Purpose/direction: States the interp predicate gte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1701,7 +1751,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_g
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1714,7 +1764,7 @@ Lemma interp_predicate_gte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1085`](../ScalarPredicateFacts.v#L1085)
 
 Purpose/direction: States the interp predicate equality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1722,7 +1772,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_e
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1735,7 +1785,7 @@ Lemma interp_predicate_eq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_neq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1095`](../ScalarPredicateFacts.v#L1095)
 
 Purpose/direction: States the interp predicate disequality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1743,7 +1793,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_n
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1756,7 +1806,7 @@ Lemma interp_predicate_neq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_neq_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1105`](../ScalarPredicateFacts.v#L1105)
 
 Purpose/direction: States the interp predicate equality disequality dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1764,7 +1814,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_e
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1777,7 +1827,7 @@ Lemma interp_predicate_eq_neq_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1076`](../ScalarPredicateFacts.v#L1076)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1785,7 +1835,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1798,7 +1848,7 @@ Lemma interp_predicate_lt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_lte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1086`](../ScalarPredicateFacts.v#L1086)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1806,7 +1856,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1819,7 +1869,7 @@ Lemma interp_predicate_lte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_gt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1096`](../ScalarPredicateFacts.v#L1096)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1827,7 +1877,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1840,7 +1890,7 @@ Lemma interp_predicate_gt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_gte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1106`](../ScalarPredicateFacts.v#L1106)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1146`](../ScalarPredicateFacts.v#L1146)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1848,7 +1898,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1861,7 +1911,7 @@ Lemma interp_predicate_gte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_eq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1156`](../ScalarPredicateFacts.v#L1156)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1869,7 +1919,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1882,7 +1932,7 @@ Lemma interp_predicate_eq_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_neq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1166`](../ScalarPredicateFacts.v#L1166)
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1890,7 +1940,7 @@ Applicability: Use in either direction to invert or construct a goal about scala
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1903,7 +1953,7 @@ Lemma interp_predicate_neq_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_lt_gte_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1176`](../ScalarPredicateFacts.v#L1176)
 
 Purpose/direction: States the interp predicate strict-bound gte dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1911,7 +1961,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_l
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1924,7 +1974,7 @@ Lemma interp_predicate_lt_gte_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lte_gt_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1147`](../ScalarPredicateFacts.v#L1147)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1187`](../ScalarPredicateFacts.v#L1187)
 
 Purpose/direction: States the interp predicate lte strict-lower-bound dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1932,7 +1982,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_predicate_l
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`
 
@@ -1945,7 +1995,7 @@ Lemma interp_predicate_lte_gt_dual_on_ordered_values : forall left right orderin
 
 ## `interp_ordered_comparison_congr`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1158`](../ScalarPredicateFacts.v#L1158)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1198`](../ScalarPredicateFacts.v#L1198)
 
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
@@ -1953,7 +2003,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about sc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 42)
+Cross-index: `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `equivalence`, `congruence`
 
@@ -1969,7 +2019,7 @@ Lemma interp_ordered_comparison_congr :
 
 ## `scalar_predicate_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1173`](../ScalarPredicateFacts.v#L1173)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1213`](../ScalarPredicateFacts.v#L1213)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1977,7 +2027,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1990,7 +2040,7 @@ Lemma scalar_predicate_runtime_error_is_children : forall predicate observations
 
 ## `scalar_boolean_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1183`](../ScalarPredicateFacts.v#L1183)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1223`](../ScalarPredicateFacts.v#L1223)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1998,7 +2048,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for scalar-p
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `scalar predicate semantics`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 

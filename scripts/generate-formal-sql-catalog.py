@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -21,6 +22,128 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 THEORIES = ROOT / "theories/FormalSQL"
 CATALOG = THEORIES / "catalog"
+GENERIC_RENAMING_SOURCES = (
+    ROOT / "vendor/FormalSQL/src/data/sql/SqlRenameFacts.v",
+    ROOT / "vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v",
+)
+GENERIC_RENAMING_MODULES = frozenset(path.name for path in GENERIC_RENAMING_SOURCES)
+GENERIC_QUERY_CONTEXT_SOURCES = (
+    ROOT / "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v",
+)
+GENERIC_QUERY_CONTEXT_MODULES = frozenset(
+    path.name for path in GENERIC_QUERY_CONTEXT_SOURCES
+)
+QUERY_SYNTAX_SOURCE = ROOT / "vendor/FormalSQL/src/data/sql/SqlQuerySyntax.v"
+QUERY_LEAF_CONSTRUCTORS = frozenset({"QExpr_Error", "QExpr_Values", "QExpr_Table"})
+GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES = frozenset(
+    {
+        "query_expr_set_global_typed_congr",
+        "query_expr_natural_join_global_typed_congr",
+        "query_expr_cross_join_global_typed_congr",
+        "query_expr_join_global_typed_congr",
+        "query_expr_project_global_typed_congr",
+        "query_expr_scalar_project_global_typed_congr",
+        "query_expr_row_map_global_typed_congr",
+        "query_expr_filter_global_typed_congr",
+        "query_expr_scalar_filter_global_typed_congr",
+        "query_expr_group_global_typed_congr",
+        "query_expr_scalar_group_global_typed_congr",
+        "query_expr_grouping_sets_global_typed_congr",
+        "query_expr_rank_global_typed_congr",
+        "query_expr_window_global_typed_congr",
+        "query_expr_distinct_global_typed_congr",
+        "query_expr_order_by_global_typed_congr",
+        "query_expr_offset_global_typed_congr",
+        "query_expr_fetch_global_typed_congr",
+    }
+)
+RELATIONAL_QUERY_CONGRUENCES = frozenset(
+    {
+        "query_expr_set_global_typed_congr",
+        "query_expr_natural_join_global_typed_congr",
+        "query_expr_cross_join_global_typed_congr",
+        "query_expr_join_global_typed_congr",
+        "query_expr_project_global_typed_congr",
+        "query_expr_scalar_project_global_typed_congr",
+        "query_expr_row_map_global_typed_congr",
+        "query_expr_filter_global_typed_congr",
+        "query_expr_scalar_filter_global_typed_congr",
+        "query_expr_filter_global_typed_acceptance_congr",
+    }
+)
+GROUPING_QUERY_CONGRUENCES = frozenset(
+    {
+        "query_expr_group_global_typed_congr",
+        "query_expr_scalar_group_global_typed_congr",
+        "query_expr_grouping_sets_global_typed_congr",
+    }
+)
+ORDERED_QUERY_CONGRUENCES = frozenset(
+    {
+        "query_expr_rank_global_typed_congr",
+        "query_expr_window_global_typed_congr",
+        "query_expr_distinct_global_typed_congr",
+        "query_expr_order_by_global_typed_congr",
+        "query_expr_offset_global_typed_congr",
+        "query_expr_fetch_global_typed_congr",
+    }
+)
+GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS = frozenset(
+    {
+        "QExpr_Error_rename_transport",
+        "QExpr_Values_rename_transport",
+        "QExpr_Table_rename_transport",
+        "QExpr_Set_rename_transport",
+        "QExpr_NaturalJoin_rename_transport",
+        "QExpr_CrossJoin_rename_transport",
+        "QExpr_Join_rename_transport",
+        "QExpr_Project_rename_transport",
+        "QExpr_RowMap_rename_transport",
+        "QExpr_Filter_rename_transport",
+        "QExpr_Group_rename_transport",
+        "QExpr_GroupingSets_rename_transport",
+        "QExpr_Rank_rename_transport",
+        "QExpr_Window_rename_transport",
+        "QExpr_Distinct_rename_transport",
+        "QExpr_OrderBy_rename_transport",
+        "QExpr_Offset_rename_transport",
+        "QExpr_Fetch_rename_transport",
+    }
+)
+GENERIC_RENAMING_DIMENSION_ENTRIES = frozenset(
+    {
+        "rename_tuple_identity",
+        "rename_tuple_composition",
+        "rename_tuple_labels_transport",
+        "rename_tuple_lookup_transport",
+        "rename_tuple_equivalence_iff",
+        "attribute_rename_collision_rejects_injectivity",
+        "rows_rename_sound_firstn",
+        "rows_rename_sound_skipn",
+        "rename_rows_permutation_transport",
+        "rename_bag_multiplicity_transport",
+        "query_rows_bag_rename_rows",
+        "query_bag_source_local_rename_transport",
+        "rename_query_outcome_error",
+        "query_formula_outcome_rename_compatible_success_iff",
+        "query_rename_context_chain_transport",
+        "tnull_query_renaming_context_chain_transport",
+    }
+)
+OUTPUT_ONLY_RENAMING_ADAPTER_ENTRIES = frozenset(
+    {
+        "row_map_rows_output_rename",
+        "query_output_rename_adapter_outputs",
+        "eval_query_output_rename_adapter_success_iff",
+        "eval_query_output_rename_adapter_error_iff",
+    }
+)
+MAPPED_SCHEMA_OBSERVATION_ENTRIES = frozenset(
+    {
+        "query_mapped_schema_outcome_equiv_mapped_schema",
+        "query_rename_transport_under_implies_mapped_schema_outcome_equiv",
+    }
+)
 
 DECLARATION = re.compile(
     r"(?m)^[ \t]*(Lemma|Theorem|Corollary)[ \t]+([A-Za-z_][A-Za-z0-9_']*)\b"
@@ -57,6 +180,31 @@ DOMAINS: dict[str, dict[str, object]] = {
         "topics": ("query syntax", "projection", "tuple", "TNull", "bridge"),
         "route": "query-level nullable syntax adapters, tuple projection, attribute lookup",
     },
+    "renaming-transport.md": {
+        "title": "Attribute and query renaming transport",
+        "modules": (
+            "RenameTransportFacts.v",
+            "SqlRenameFacts.v",
+            "SqlQueryRenameTransport.v",
+        ),
+        "topics": (
+            "rename",
+            "renaming",
+            "alias",
+            "alpha-renaming",
+            "projection",
+            "join",
+            "transport",
+        ),
+        "route": "collision-safe tuple, row, outcome, and compositional query alpha-renaming",
+        "ownership": (
+            "The semantics-generic implementation is owned by "
+            "[`SqlRenameFacts.v`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v) "
+            "and [`SqlQueryRenameTransport.v`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v). "
+            "`RenameTransportFacts.v` contains only TNull type/typmod adapters and proof-agent entry points; "
+            "its query facade accepts a textual `string -> string` name map and cannot change typmods."
+        ),
+    },
     "numeric-primitives.md": {
         "title": "NUMERIC primitive semantics",
         "modules": ("NumericFacts.v",),
@@ -85,6 +233,9 @@ DOMAINS: dict[str, dict[str, object]] = {
         "title": "Bags, occurrences, projection, and relational algebra",
         "modules": (
             "RelationalAlgebraFacts.v",
+            "OuterJoinFilterFacts.v",
+            "SemijoinCompositionFacts.v",
+            "FilterFkEliminationFacts.v",
             "ProofAgentFacade.v",
         ),
         "topics": ("bag", "list", "occurrence", "projection", "join", "set operation"),
@@ -92,7 +243,10 @@ DOMAINS: dict[str, dict[str, object]] = {
     },
     "ordered-observation.md": {
         "title": "Ordered observations and slicing",
-        "modules": ("OrderedQueryFacts.v",),
+        "modules": (
+            "OrderedQueryFacts.v",
+            "OrderedObservationTransportFacts.v",
+        ),
         "topics": ("order by", "ordered observation", "offset", "fetch", "distinct"),
         "route": "exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT",
     },
@@ -100,6 +254,7 @@ DOMAINS: dict[str, dict[str, object]] = {
         "title": "Aggregates, modifiers, grouping, and aggregate errors",
         "modules": (
             "AggregateRuntimeFacts.v",
+            "AggregateOutcomeBridgeFacts.v",
             "GroupingRewriteFacts.v",
             "GroupedFilterOutcomeFacts.v",
         ),
@@ -115,13 +270,18 @@ DOMAINS: dict[str, dict[str, object]] = {
     },
     "subquery-predicates.md": {
         "title": "Predicate subqueries and correlation",
-        "modules": ("SubqueryFacts.v",),
+        "modules": (
+            "SubqueryFacts.v",
+            "MembershipCompositionFacts.v",
+            "CorrelatedMembershipFacts.v",
+            "MembershipJoinCompositionFacts.v",
+        ),
         "topics": ("subquery", "EXISTS", "IN", "quantified predicate", "correlation"),
         "route": "EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/formula goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality",
     },
     "schema-integrity.md": {
         "title": "Schema conformance and integrity constraints",
-        "modules": ("SchemaCardinality.v", "IntegrityFacts.v"),
+        "modules": ("SchemaCardinality.v", "IntegrityFacts.v", "WitnessFacts.v"),
         "topics": (
             "schema",
             "not null",
@@ -140,7 +300,11 @@ DOMAINS: dict[str, dict[str, object]] = {
     },
     "runtime-verification-rewrite.md": {
         "title": "Runtime outcomes, verification modes, and rewrite specifications",
-        "modules": ("VerificationConditions.v",),
+        "modules": (
+            "VerificationConditions.v",
+            "CountermodelFacts.v",
+            "SqlQueryContexts.v",
+        ),
         "topics": (
             "runtime error",
             "outcome",
@@ -153,14 +317,18 @@ DOMAINS: dict[str, dict[str, object]] = {
     },
 }
 
-# Routes are a deliberately small cross-index over the primary semantic cards.
-# A declaration may occur in several routes, but its exact statement occurs in
-# only one primary card.  This keeps bounded searches useful without copying
-# large cards or introducing a second source of theorem statements.
+# Routes are a deliberately small, unranked cross-index over the primary
+# semantic cards. A declaration may occur in several routes, but its exact
+# statement occurs in only one primary card. Stable pagination exposes every
+# matching declaration without copying statements between cards.
 ROUTES: dict[str, dict[str, str]] = {
+    "renaming": {
+        "title": "attribute and query renaming transport",
+        "description": "collision-safe tuple, row, outcome, and nested query alpha-renaming",
+    },
     "facade": {
         "title": "high-level TNull proof facade",
-        "description": "first-stop compositional wrappers over generated TNull query terms",
+        "description": "compositional wrappers over generated TNull query terms",
     },
     "outcome": {
         "title": "query outcome equivalence",
@@ -208,9 +376,8 @@ ROUTES: dict[str, dict[str, str]] = {
     },
 }
 
-INDEX_PREVIEW_ROUTES = ("facade", "outcome", "grouping", "runtime")
-INDEX_PREVIEW_PER_ROUTE = 5
-MAX_INDEX_BYTES = 12 * 1024
+CATALOG_PAGE_SIZE = 32
+MAX_INDEX_BYTES = 32 * 1024
 
 # A domain anchor describes why the entry lives in its focused document without
 # claiming every feature handled by that document.  Entry-specific aliases are
@@ -218,6 +385,7 @@ MAX_INDEX_BYTES = 12 * 1024
 DOMAIN_ENTRY_TOPICS: dict[str, str] = {
     "null-predicates.md": "scalar predicate semantics",
     "query-syntax-bridges.md": "query syntax bridge",
+    "renaming-transport.md": "renaming transport and alpha-renaming",
     "numeric-primitives.md": "numeric semantics",
     "numeric-derived.md": "numeric and cast semantics",
     "bitwise.md": "bitwise semantics",
@@ -270,6 +438,10 @@ CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 # compact alias cap.  These keys are semantic classifications, not substring
 # matches over arbitrary binders or error constructors.
 FEATURE_TOPIC_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "renaming",
+        ("rename", "renaming", "alias", "alpha-renaming", "transport"),
+    ),
     (
         "scalar_subquery",
         (
@@ -340,6 +512,321 @@ FEATURE_TOPIC_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("non_equivalence", ("non-equivalence", "mismatch witness")),
     ("equivalence", ("equivalence", "congruence")),
 )
+
+# These interfaces encode distinctions that constructor tokens alone cannot
+# recover.  In particular, SQL NOT does not complement a filter-acceptance bit
+# when the underlying three-valued truth is UNKNOWN.
+DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
+    "existsb_support_rel": ("support", "duplicate-insensitive existence"),
+    "in_rows_acceptance_support_rel": (
+        "IN", "semantic tuple equality", "duplicate-insensitive support"
+    ),
+    "in_rows_acceptance_append": ("IN", "UNION", "filter acceptance"),
+    "formula_truth_exact_acceptance_exact": (
+        "exact Bool3 truth", "UNKNOWN", "runtime error"
+    ),
+    "formula_not_truth_exact": ("SQL NOT", "exact Bool3 truth", "UNKNOWN"),
+    "formula_not_acceptance_exact": ("SQL NOT", "UNKNOWN", "filter acceptance"),
+    "formula_in_truth_exact": ("IN", "exact Bool3 truth", "UNKNOWN"),
+    "formula_in_acceptance_exact": ("IN", "UNKNOWN", "filter acceptance"),
+    "formula_not_in_acceptance_exact_of_fixed_truth": (
+        "NOT IN", "exact Bool3 truth", "UNKNOWN", "runtime error"
+    ),
+    "formula_exists_truth_exact": ("EXISTS", "exact Bool3 truth", "empty input"),
+    "formula_not_exists_acceptance_exact": (
+        "NOT EXISTS", "empty input", "runtime error"
+    ),
+    "tnull_in_rows_unknown_iff": (
+        "IN", "UNKNOWN", "semantic tuple equality", "duplicates"
+    ),
+    "tnull_in_rows_semantic_cases": (
+        "IN", "empty input", "TRUE FALSE UNKNOWN", "duplicates"
+    ),
+    "tnull_not_in_rows_acceptance_iff_all_false": (
+        "NOT IN", "UNKNOWN", "all comparisons FALSE", "empty input"
+    ),
+    "tnull_not_in_rows_acceptance_iff_no_true_or_unknown": (
+        "NOT IN", "anti existence", "NULL marker", "UNKNOWN"
+    ),
+    "tnull_formula_not_in_accepts_exact_of_all_false": (
+        "NOT IN", "correlation", "exact acceptance", "runtime error"
+    ),
+    "tnull_formula_not_in_rejects_exact_of_true_match": (
+        "NOT IN", "TRUE match", "exact rejection", "runtime error"
+    ),
+    "tnull_formula_not_in_rejects_exact_of_unknown_without_match": (
+        "NOT IN", "UNKNOWN without match", "exact rejection", "runtime error"
+    ),
+    "formula_in_union_all_acceptance_exact": (
+        "IN", "UNION ALL", "correlation", "filter acceptance", "runtime error"
+    ),
+    "query_distinct_rows_support_rel": (
+        "DISTINCT", "semantic support", "duplicates", "IN"
+    ),
+    "in_rows_acceptance_distinct": (
+        "IN", "DISTINCT", "filter acceptance", "duplicate-insensitive"
+    ),
+    "query_join_sources_member_iff": (
+        "inner join", "outer join", "semi join", "anti join", "scheduler"
+    ),
+    "query_join_sources_support_rel": (
+        "join", "support", "matched and unmatched branches"
+    ),
+    "query_join_sources_projected_support_rel": (
+        "join", "projection", "reached source", "support"
+    ),
+    "list_support_rel_filter_transport": (
+        "filter", "support", "properness", "reachable representatives"
+    ),
+    "eval_groups_all_rejected_outcome_exact": (
+        "HAVING", "empty result", "evaluation reachability", "runtime error"
+    ),
+    "tnull_group_count_star_value_runtime_exact": (
+        "COUNT star", "group cardinality", "BIGINT overflow", "runtime error"
+    ),
+    "count_star_value_local_error_exact_of_equal_length": (
+        "COUNT star", "equal cardinality", "BIGINT overflow", "local error"
+    ),
+    "count_star_value_runtime_error_exact_of_equal_observation_length": (
+        "COUNT star", "equal cardinality", "runtime error", "observations"
+    ),
+    "count_star_count_all_nonnull_value_local_error_exact": (
+        "COUNT star", "COUNT expression", "NOT NULL", "local error"
+    ),
+    "count_star_count_all_nonnull_value_runtime_error_exact": (
+        "COUNT star", "COUNT expression", "NOT NULL", "runtime error"
+    ),
+    "formula_pred_outcome_equiv_of_argument_observations": (
+        "predicate", "aggregate observation", "Bool3", "runtime error"
+    ),
+    "tnull_group_count_star_projection_eq_of_equal_length": (
+        "COUNT star", "group projection", "equal cardinality", "semantic row equality"
+    ),
+    "tnull_count_star_group_observation_equiv_of_equal_length": (
+        "COUNT star", "group outcome", "HAVING", "equal cardinality"
+    ),
+    "tnull_count_star_groups_outcome_equiv_of_Forall2_observations": (
+        "COUNT star", "group scheduler", "first error", "duplicate groups"
+    ),
+    "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length": (
+        "COUNT star", "TRUE HAVING", "group cardinality", "runtime error"
+    ),
+    "formula_and_redundant_right_acceptance_exact": (
+        "SQL AND", "redundant conjunct", "eager evaluation", "runtime error"
+    ),
+    "integer_stats_fold_interval_invariant": (
+        "aggregate fold", "interval invariant", "integer statistics"
+    ),
+    "integer_stats_initial_interval_bounds": (
+        "aggregate fold", "interval bounds", "integer statistics"
+    ),
+    "bounded_integer_stats_sum_positive": (
+        "aggregate sum", "positivity", "integer statistics"
+    ),
+    "full_outer_filter_to_left_outer_exact": (
+        "full join", "left join", "null rejection", "multiplicity"
+    ),
+    "left_right_outer_scheduler_swap_Permutation": (
+        "left join", "right join", "transpose", "multiplicity"
+    ),
+    "left_outer_null_reject_to_inner_exact": (
+        "left join", "inner join", "null rejection", "multiplicity"
+    ),
+    "position_rows_from_values": ("position", "window prefix", "duplicates"),
+    "position_rows_from_nth_error": ("position", "indexed lookup", "window"),
+    "position_rows_from_filter_le_prefix": (
+        "position", "prefix", "ROWS frame", "duplicates"
+    ),
+    "partition_runs_by_compare_exact_well_formed": (
+        "partition", "peer ties", "semantic comparator", "window"
+    ),
+    "rows_key_aligned_length": ("ordered alignment", "order key", "position"),
+    "rows_key_aligned_firstn": ("ordered alignment", "FETCH", "ties"),
+    "rows_key_aligned_skipn": ("ordered alignment", "OFFSET", "ties"),
+    "rows_key_aligned_filter": (
+        "ordered alignment", "filter observation", "peer ties"
+    ),
+    "rows_key_aligned_total_map_transport": (
+        "ordered alignment", "total projection", "order key"
+    ),
+    "prefix_scan_observation_peer_transport": (
+        "window prefix", "peer permutation", "filter observation", "ties"
+    ),
+    "prefix_scan_outcome_peer_transport_iff": (
+        "window prefix", "peer permutation", "runtime error", "exact outcome"
+    ),
+    "partitioned_prefix_scan_observation_peer_transport": (
+        "partitioned window", "peer permutation", "prefix reset", "filter observation"
+    ),
+    "partitioned_prefix_scan_outcome_peer_transport_iff": (
+        "partitioned window", "peer permutation", "runtime error", "exact outcome"
+    ),
+    "order_by_rows_total_map_preimage": (
+        "ORDER BY", "total functional map", "legal ties", "multiplicity"
+    ),
+    "total_map_order_fetch_observation_iff": (
+        "ORDER BY", "FETCH", "total functional map", "all legal observations"
+    ),
+    "total_map_order_fetch_outcome_observation_iff": (
+        "ORDER BY", "FETCH", "runtime error", "all legal observations"
+    ),
+    "query_expr_join_no_error_of_acceptance_projection_exact": (
+        "join", "exact acceptance", "projection safety", "runtime error"
+    ),
+    "partial_semijoin_projection_support_rel": (
+        "semijoin", "join projection", "support", "DISTINCT", "duplicates"
+    ),
+    "exact_extrema_aggregate_support_equiv": (
+        "MIN", "MAX", "duplicate-insensitive support", "runtime boundary"
+    ),
+    "fold_nonempty_support_equiv": (
+        "associative commutative idempotent fold", "support", "duplicates"
+    ),
+    "exact_extrema_aggregate_permutation": (
+        "MIN", "MAX", "permutation", "C collation"
+    ),
+    "exact_extrema_aggregate_duplicate_block": (
+        "MIN", "MAX", "idempotence", "duplicate block"
+    ),
+    "first_runtime_error_duplicate_block": (
+        "runtime error", "evaluation order", "duplicate block"
+    ),
+    "first_observation_error_duplicate_block": (
+        "runtime error", "evaluation order", "duplicate block"
+    ),
+    "exact_extrema_aggregate_runtime_error_duplicate_block": (
+        "MIN", "MAX", "runtime error", "duplicate block"
+    ),
+    "numeric_round_quot_nonnegative_half_ulp": (
+        "NUMERIC rounding", "half ULP", "nonnegative"
+    ),
+    "numeric_pg_div_scale_display_valid": (
+        "NUMERIC division", "display scale", "runtime boundary"
+    ),
+    "numeric_of_scaled_compare_lt": (
+        "NUMERIC comparison", "cross scale", "strict order"
+    ),
+    "numeric_round_to_scale_nonnegative_half_ulp": (
+        "NUMERIC rounding", "display scale", "half ULP"
+    ),
+    "finite_numeric_division_result_rounding": (
+        "NUMERIC division", "rounding", "selected scale"
+    ),
+    "finite_numeric_division_strict_margin": (
+        "NUMERIC division", "strict margin", "runtime error"
+    ),
+    "finite_numeric_division_runtime_error_zero_divisor": (
+        "NUMERIC division", "DivisionByZero", "runtime error"
+    ),
+    "finite_numeric_division_runtime_error_invalid_scale": (
+        "NUMERIC division", "NumericValueOutOfRange", "display scale"
+    ),
+    "finite_numeric_division_runtime_error_missing_result": (
+        "NUMERIC division", "NumericValueOutOfRange", "runtime error"
+    ),
+    "finite_numeric_division_runtime_error_result_out_of_range": (
+        "NUMERIC division", "NumericValueOutOfRange", "runtime error"
+    ),
+    "numeric_sqrt_at_scale_half_ulp_shape": (
+        "NUMERIC square root", "half ULP", "midpoint"
+    ),
+    "numeric_integer_stddev_samp_positive_success_iff": (
+        "STDDEV_SAMP", "NUMERIC square root", "selected scale"
+    ),
+    "int32_avg_numeric_with_scale_success_iff": (
+        "AVG", "NUMERIC division", "selected scale"
+    ),
+    "numeric_of_scaled_compare_not_gt": (
+        "NUMERIC comparison", "cross scale", "not greater", "equality preserved"
+    ),
+    "interp_direct_attribute_in_env_t_absent": (
+        "correlation", "environment shadowing", "attribute lookup"
+    ),
+    "correlated_inner_guard_relation_of_outer_match": (
+        "correlation", "inner guard", "outer match", "semantic tuple equality"
+    ),
+    "NoDupA_bidirectionally_related_members_eq": (
+        "semantic support", "duplicate elimination", "NoDupA"
+    ),
+    "key_unique_self_filter_existsb_exact": (
+        "unique key", "self membership", "semantic tuple equality"
+    ),
+    "primary_key_self_filter_existsb_exact": (
+        "primary key", "self membership", "NOT NULL"
+    ),
+    "tnull_primary_key_self_in_rows_acceptance_exact": (
+        "primary key", "IN", "self membership", "UNKNOWN"
+    ),
+    "tnull_primary_key_self_in_rows_true": (
+        "primary key", "IN", "exact TRUE", "correlation"
+    ),
+    "formula_in_distinct_acceptance_exact_of_inner": (
+        "IN", "DISTINCT", "correlation", "runtime error"
+    ),
+    "query_expr_project_filter_runtime_safe_exact": (
+        "filter", "projection", "runtime safety", "evaluation reachability"
+    ),
+    "join_matched_rows_filter_inputs_exact": (
+        "inner join", "filter movement", "multiplicity", "total predicate"
+    ),
+    "inner_filter_to_input_filters_exact": (
+        "inner join", "filter pushdown", "exact list", "properness"
+    ),
+    "join_left_guard_reached_iff_of_witness": (
+        "join", "left guard", "reachability", "self witness"
+    ),
+    "join_right_guard_reached_iff_of_witness": (
+        "join", "right guard", "reachability", "self witness"
+    ),
+    "join_self_guard_reachability_exact": (
+        "self join", "filter movement", "evaluation reachability"
+    ),
+    "join_matched_rows_member_of_accepted_cell": (
+        "join", "accepted cell", "reached occurrence", "multiplicity"
+    ),
+    "query_filter_success_bags_of_stable_total_acceptance": (
+        "filter", "stable total acceptance", "success bag", "non volatility"
+    ),
+    "query_filter_error_iff_of_stable_total_acceptance": (
+        "filter", "stable total acceptance", "runtime error", "reachability"
+    ),
+    "eval_filter_rows_uniform_error_of_reached_member": (
+        "filter", "reached occurrence", "exact error category", "evaluation order"
+    ),
+    "eval_filter_rows_error_category_of_reached_categories": (
+        "filter", "error category", "reached rows", "evaluation order"
+    ),
+    "eval_filter_rows_success_excludes_reached_exact_error": (
+        "filter", "success exclusion", "reached error", "evaluation order"
+    ),
+    "eval_filter_rows_reached_uniform_error_exact": (
+        "filter", "exact error only", "reached occurrence", "runtime outcome"
+    ),
+    "eval_filter_rows_uniform_error_of_join_witness": (
+        "join", "filter", "witness reachability", "exact error category"
+    ),
+    "eval_filter_rows_uniform_error_of_self_match": (
+        "self join", "filter", "self witness", "exact error category"
+    ),
+    "nonnull_foreign_key_direct_accept_has_middle": (
+        "foreign key", "NOT NULL", "middle elimination", "existence"
+    ),
+    "nonnull_foreign_key_no_middle_rejects_direct": (
+        "foreign key", "NOT NULL", "null rejection", "middle elimination"
+    ),
+    "join_matched_rows_empty_of_rejection": (
+        "join", "null rejection", "empty branch", "multiplicity"
+    ),
+    "middle_padding_downstream_empty": (
+        "left join", "NULL padding", "null rejection", "middle elimination"
+    ),
+    "filtered_payload_erasure_permut": (
+        "filter", "payload erasure", "multiplicity", "semantic relation"
+    ),
+    "query_expr_outcome_equiv_of_shared_exact_error": (
+        "exact error only", "error category", "success exclusion", "query outcome"
+    ),
+}
 
 
 def sentence_end(text: str, start: int) -> int:
@@ -426,6 +913,26 @@ def identifier_tokens(identifier: str) -> frozenset[str]:
     return frozenset(tokens)
 
 
+def camel_to_snake(identifier: str) -> str:
+    """Convert a closed QExpr constructor suffix to its theorem-name form."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", identifier).casefold()
+
+
+def expected_query_constructor_congruences() -> frozenset[str]:
+    """Derive the non-leaf congruence family from authoritative query syntax."""
+    constructors = frozenset(
+        re.findall(
+            r"(?m)^[ \t]*\|[ \t]+(QExpr_[A-Za-z][A-Za-z0-9_]*)\b",
+            QUERY_SYNTAX_SOURCE.read_text(encoding="utf-8"),
+        )
+    )
+    return frozenset(
+        f"query_expr_{camel_to_snake(constructor.removeprefix('QExpr_'))}"
+        "_global_typed_congr"
+        for constructor in constructors - QUERY_LEAF_CONSTRUCTORS
+    )
+
+
 def semantic_features(
     domain_name: str, module: str, name: str, statement: str
 ) -> frozenset[str]:
@@ -451,6 +958,19 @@ def semantic_features(
         folded_prefixes = tuple(prefix.casefold() for prefix in prefixes)
         return any(
             identifier.startswith(folded_prefixes) for identifier in folded_identifiers
+        )
+
+    if domain_name == "renaming-transport.md" or tokens & {
+        "rename",
+        "renaming",
+    }:
+        features.add("renaming")
+    if name == "tnull_query_renaming_context_chain_transport":
+        # This is the generic closure entry point for arbitrarily nested paired
+        # query contexts.  Keep attribute-observing operators findable even
+        # though their constructors are abstracted behind the context relation.
+        features.update(
+            ("projection", "join", "grouping", "order_by", "window", "bag")
         )
 
     if (
@@ -596,6 +1116,8 @@ def semantic_features(
         features.update(("row", "projection"))
     if name == "tnull_project_rows_select_columns_success":
         features.update(("projection", "runtime"))
+    if name == "tnull_select_columns_lookup_output":
+        features.add("projection")
     if name == "tnull_query_expr_project_select_columns_error_iff":
         features.update(("outcome", "projection", "runtime"))
     if "order_by" in normalized_name or has_identifier("QExpr_OrderBy"):
@@ -605,8 +1127,8 @@ def semantic_features(
     if tokens & {"fetch", "limit", "firstn"} or has_identifier("QExpr_Fetch"):
         features.add("fetch")
     if (
-        module == "OrderedQueryFacts.v"
-        and bool(tokens & {"window", "rank", "partition"})
+        module in {"OrderedQueryFacts.v", "OrderedObservationTransportFacts.v"}
+        and bool(tokens & {"window", "rank", "partition", "prefix", "peer"})
     ) or has_identifier("QExpr_Window", "QExpr_Rank"):
         features.add("window")
 
@@ -725,6 +1247,12 @@ def semantic_features(
         "QueryExprOutcomeEquiv",
         "QueryExprGlobalOutcomeEquiv",
         "QueryExprGlobalTypedOutcomeEquiv",
+        "query_expr_outcome_equiv",
+        "query_expr_global_outcome_equiv",
+        "query_expr_global_typed_outcome_equiv",
+        "formula_expr_global_outcome_equiv",
+        "formula_expr_global_filter_outcome_equiv",
+        "formula_expr_global_group_outcome_equiv",
         "eval_group_bag",
         "eval_group_bag_outcome",
     ):
@@ -788,11 +1316,14 @@ def semantic_features(
     return frozenset(features)
 
 
-def topics_for(domain_name: str, features: frozenset[str]) -> list[str]:
+def topics_for(
+    name: str, domain_name: str, features: frozenset[str]
+) -> list[str]:
     topics = [DOMAIN_ENTRY_TOPICS[domain_name]]
     for feature, aliases in FEATURE_TOPIC_ALIASES:
         if feature in features:
             topics.extend(aliases)
+    topics.extend(DECLARATION_TOPIC_ALIASES.get(name, ()))
     # Stable, case-insensitive de-duplication keeps aliases compact while the
     # semantic order above preserves all join-kind and scalar-cardinality routes.
     seen: set[str] = set()
@@ -802,7 +1333,7 @@ def topics_for(domain_name: str, features: frozenset[str]) -> list[str]:
         if key not in seen:
             seen.add(key)
             result.append(topic)
-    return result[:20]
+    return result
 
 
 def declaration_domain(
@@ -818,6 +1349,29 @@ def declaration_domain(
     """
     ordered_features = {"order_by", "offset", "fetch", "window", "distinct"}
     relational_features = {"projection", "filter", "join", "bag", "multiplicity"}
+
+    # These two authoritative FormalSQL modules form one theorem layer.  Keep
+    # every declaration on its focused card even when a name also mentions a
+    # bag, ordered observation, or runtime outcome; cross-routes still expose
+    # those secondary uses without hiding the renaming API across cards.
+    if module in GENERIC_RENAMING_MODULES:
+        return "renaming-transport.md"
+
+    # FormalSQL owns the complete typed-outcome constructor congruence family.
+    # Route each operator beside the corresponding Logos proof layer while
+    # retaining the arbitrary-context theorem on the runtime/outcome card.
+    if module in GENERIC_QUERY_CONTEXT_MODULES:
+        if name in RELATIONAL_QUERY_CONGRUENCES or name.startswith(
+            ("eval_filter_rows_", "eval_join_")
+        ):
+            return "relational-algebra.md"
+        if name in GROUPING_QUERY_CONGRUENCES or name.startswith(
+            ("eval_groups_", "eval_group_bag_")
+        ):
+            return "aggregate-grouping.md"
+        if name in ORDERED_QUERY_CONGRUENCES:
+            return "ordered-observation.md"
+        return "runtime-verification-rewrite.md"
 
     if module == "NumericRegroupFacts.v" and name.startswith(BAG_ALGEBRA_PREFIXES):
         return "relational-algebra.md"
@@ -842,7 +1396,7 @@ def declaration_domain(
             return "runtime-verification-rewrite.md"
         return "relational-algebra.md"
 
-    if module == "OrderedQueryFacts.v":
+    if module in {"OrderedQueryFacts.v", "OrderedObservationTransportFacts.v"}:
         if name == "query_expr_union_success_Forall":
             # UNION is a bag-resetting set operator.  The declaration happens
             # to live beside ordered-query lifts, but its public contract is
@@ -901,8 +1455,23 @@ def semantic_routes(
         # decision.  Make that cross-domain use explicit instead of leaving
         # it stranded in the scalar card.
         selected.update(("filter", "join"))
-    if module == "ProofAgentFacade.v":
+    if name in {
+        "eval_group_bag_global_true_success_exists",
+        "eval_group_bag_global_true_success_bag_unique_if_stable",
+    }:
+        # Global GROUP BY is the result-producing core of a scalar aggregate
+        # subquery, so expose its representative-independent singleton theorem
+        # on the scalar route as well as the grouping and bag routes.
+        selected.add("scalar")
+    if name == "query_canonical_rows_map_factor_permut":
+        # This is the semantic boundary used by projection/alias renaming at
+        # bag-reset operators, even though its generic name mentions neither
+        # one concrete constructor nor one generated rename.
+        selected.update(("renaming", "projection", "bag"))
+    if module in {"ProofAgentFacade.v", "RenameTransportFacts.v"}:
         selected.add("facade")
+    if "renaming" in features:
+        selected.add("renaming")
     if name.startswith("tnull_select_lookup_"):
         # These facade declarations expose FormalSQL projection's targeted
         # first-match cell interface even though their stable public names do
@@ -961,348 +1530,10 @@ def semantic_routes(
     return tuple(route for route in ROUTES if route in selected)
 
 
-ROUTE_PRIMARY_DOMAIN: dict[str, str] = {
-    "outcome": "runtime-verification-rewrite.md",
-    "grouping": "aggregate-grouping.md",
-    "runtime": "runtime-verification-rewrite.md",
-    "projection": "relational-algebra.md",
-    "filter": "relational-algebra.md",
-    "join": "relational-algebra.md",
-    "bag": "relational-algebra.md",
-    "ordered": "ordered-observation.md",
-    "cardinality": "cardinality-composition.md",
-    "schema": "schema-integrity.md",
-}
-
-# Lower rank is a better first read.  These are semantic name families, never
-# benchmark or generated-schema identifiers.  They favor compositional query
-# bridges over low-level implementation facts within the same source tier.
-ROUTE_NAME_PRIORITY: dict[str, tuple[str, ...]] = {
-    "facade": (
-        "outcome_eq_of",
-        "query_bag_eq",
-        "having_key",
-        "runtime_error_none",
-        "total_functional",
-        "bag_congr",
-        "row_eq",
-    ),
-    "outcome": (
-        "outcome_eq_of",
-        "outcome_equiv_of",
-        "outcome_equiv_congr",
-        "bag_equiv_safe",
-        "outcome_equiv",
-    ),
-    "grouping": (
-        "having_key",
-        "groups_true_outcome",
-        "make_groups",
-        "grouping_sets",
-        "group_outcome",
-        "grouping",
-        "aggregate",
-    ),
-    "runtime": (
-        "outcome_eq_of",
-        "runtime_error_none",
-        "runtime_error_congr",
-        "safe_success",
-        "runtime_safe",
-        "_error_iff",
-    ),
-    "projection": (
-        "direct_table_projection",
-        "query_bag_eq",
-        "bag_congr",
-        "row_eq",
-    ),
-    "filter": (
-        "having_key",
-        "acceptance_exact",
-        "bag_congr",
-        "always_true",
-        "filter",
-        "sigma",
-    ),
-    "join": ("total_functional", "cross_join", "join"),
-    "bag": (
-        "query_bag_eq",
-        "bag_congr",
-        "bag_eq",
-        "permut",
-    ),
-    "ordered": ("outcome_equiv", "order_by", "offset", "fetch", "ordered_rows"),
-    "cardinality": ("int32", "length_le", "cardinality", "length"),
-    "schema": ("primary_key", "unique", "foreign_key", "schema"),
-    "scalar": ("outcome", "runtime", "congr", "iff"),
-}
-
-# A few cross-domain interfaces need to survive the small per-route retrieval
-# quota.  The overrides are exact, generic declaration names: they describe
-# reusable semantic interfaces, never a generated schema or benchmark shape.
-EXACT_ROUTE_RANKS: dict[tuple[str, str], int] = {
-    ("in_rows_acceptance_existsb", "filter"): 0,
-    ("in_rows_acceptance_existsb", "join"): 0,
-    ("in_rows_acceptance_existsb", "scalar"): 2,
-    ("eval_grouping_sets_outcome_Forall2_congr", "outcome"): 0,
-    ("eval_grouping_sets_outcome_Forall2_congr", "grouping"): 0,
-    ("eval_grouping_sets_outcome_Forall2_congr", "runtime"): 0,
-    ("eval_grouping_sets_success_fold_iff", "grouping"): 2,
-    ("eval_grouping_sets_error_prefix_iff", "grouping"): 4,
-    ("eval_grouping_sets_error_prefix_iff", "runtime"): 4,
-    ("aggregate_distinct_input_Permutation_of_NoDup_support", "grouping"): 6,
-    ("aggregate_distinct_input_Permutation_of_NoDup_support", "bag"): 8,
-    ("partition_keys_Permutation_of_NoDup_support", "grouping"): 8,
-    ("partition_keys_Permutation_of_NoDup_support", "bag"): 10,
-    ("aggregate_input_values_preserves_Forall", "grouping"): 10,
-    ("non_null_count_eq_length_of_Forall_nonnull", "grouping"): 12,
-    ("non_null_count_eq_length_of_Forall_nonnull", "cardinality"): 8,
-    ("query_bag_filter_union", "filter"): 4,
-    ("query_bag_filter_union", "bag"): 12,
-    ("query_bag_map_union", "bag"): 12,
-    ("query_bag_map_congr", "bag"): 12,
-    ("query_bag_filter_commute", "filter"): 6,
-    ("query_bag_filter_commute", "bag"): 14,
-    ("query_bag_filter_map_fusion", "filter"): 2,
-    ("query_bag_filter_map_fusion", "bag"): 10,
-    ("query_bag_map_pairwise_equiv_of_cardinal", "bag"): 18,
-    ("query_bag_map_pairwise_equiv_of_cardinal", "cardinality"): 10,
-    ("query_cross_join_bag_singleton_right_map", "join"): 10,
-    ("query_cross_join_bag_singleton_right_map", "bag"): 14,
-    ("eval_groups_success_Forall_projection", "grouping"): 6,
-    ("eval_groups_success_Forall_projection", "projection"): 10,
-    ("eval_group_bag_success_occurrence_property", "grouping"): 8,
-    ("eval_group_bag_success_occurrence_property", "bag"): 12,
-    ("query_make_groups_emit_NoDupA_of_key_reflection", "grouping"): 10,
-    ("eval_group_bag_global_success_duplicate_free", "grouping"): 12,
-    ("eval_group_bag_global_success_duplicate_free", "bag"): 14,
-    ("eval_groups_having_key_conj_filter_exact", "grouping"): 6,
-    ("eval_groups_having_key_conj_filter_exact", "filter"): 8,
-    ("query_make_groups_filter_by_key_exact", "grouping"): 8,
-    ("query_make_groups_filter_by_key_exact", "filter"): 10,
-    ("bag_occurrences_disjoint_of_boolean_separator", "bag"): 12,
-    ("bag_filter_congr_on_support", "bag"): 20,
-    ("query_expr_filter_outcome_congr_extensional", "filter"): 0,
-    ("query_expr_filter_outcome_congr_extensional", "outcome"): 10,
-    ("query_expr_filter_outcome_congr_extensional", "runtime"): 10,
-    ("interp_predicate_eq_true_is_true_acceptance", "filter"): 2,
-    ("interp_predicate_eq_true_is_true_acceptance", "scalar"): 0,
-    ("eval_filter_rows_ordered_outcome_congr", "filter"): 8,
-    ("eval_filter_rows_ordered_outcome_congr", "outcome"): 16,
-    ("eval_filter_rows_ordered_outcome_congr", "runtime"): 16,
-    ("query_expr_project_success_Forall", "projection"): 8,
-    ("tnull_projection_envs_eq_of_select_items", "facade"): 2,
-    ("tnull_projection_envs_eq_of_select_items", "projection"): 0,
-    ("query_expr_union_success_Forall", "bag"): 8,
-    ("query_expr_cross_join_success_Forall", "join"): 8,
-    ("query_expr_cross_join_success_Forall", "bag"): 10,
-    (
-        "tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows",
-        "grouping",
-    ): 0,
-    ("tnull_closed_group_sum_numeric_dot_value_runtime_exact", "grouping"): 2,
-    ("tnull_closed_group_sum_numeric_dot_value_runtime_exact", "runtime"): 8,
-    (
-        "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact",
-        "grouping",
-    ): 14,
-    (
-        "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact",
-        "runtime",
-    ): 18,
-    ("query_expr_table_success_rows_absent_attribute", "schema"): 0,
-    ("query_expr_table_success_rows_present_conform_attribute", "schema"): 2,
-    ("query_same_rows_as_conforming_table_absent_attribute", "schema"): 4,
-    ("query_same_rows_as_conforming_table_present_attribute", "schema"): 6,
-    ("eval_join_row_conditions_acceptance_exact", "join"): 6,
-    ("eval_join_row_conditions_acceptance_exact", "outcome"): 14,
-    ("eval_join_row_conditions_acceptance_exact", "runtime"): 14,
-    ("eval_join_conditions_acceptance_exact", "join"): 4,
-    ("eval_join_conditions_acceptance_exact", "outcome"): 10,
-    ("eval_join_conditions_acceptance_exact", "runtime"): 10,
-    ("project_join_sources_outcome_exact_map", "join"): 4,
-    ("project_join_sources_outcome_exact_map", "outcome"): 10,
-    ("project_join_sources_outcome_exact_map", "runtime"): 10,
-    ("project_join_sources_outcome_exact_map", "projection"): 4,
-    ("eval_join_bag_safe_of_acceptance_projection_exact", "join"): 0,
-    ("eval_join_bag_safe_of_acceptance_projection_exact", "outcome"): 2,
-    ("eval_join_bag_safe_of_acceptance_projection_exact", "runtime"): 2,
-    ("eval_join_bag_safe_of_acceptance_projection_exact", "projection"): 6,
-    ("eval_join_bag_safe_of_acceptance_projection_exact", "bag"): 6,
-    ("eval_group_bag_exact_rows_permut_equiv", "bag"): 18,
-    ("eval_group_bag_exact_rows_permut_equiv", "grouping"): 8,
-    ("eval_groups_acceptance_outcome_exact", "grouping"): 18,
-    ("eval_groups_acceptance_outcome_exact", "outcome"): 20,
-    ("eval_groups_acceptance_outcome_exact", "runtime"): 22,
-    ("formula_conj_acceptance_exact", "scalar"): 20,
-    ("group_filter_map_permutation", "grouping"): 14,
-    ("map_left_join_functional_permut", "join"): 10,
-    ("query_make_groups_permut_nonempty", "grouping"): 12,
-    ("query_make_groups_projected_bag_eq_of_support_rel", "grouping"): 4,
-    ("query_make_groups_projected_bag_eq_of_support_rel", "bag"): 6,
-    ("query_canonical_rows_length", "grouping"): 16,
-    ("query_expr_cross_join_outcome_equiv_congr", "join"): 22,
-    ("query_expr_cross_join_union_right_equiv_safe", "join"): 20,
-    ("query_expr_cross_join_union_right_equiv_safe", "outcome"): 22,
-    ("query_expr_cross_join_union_right_outcome_equiv_safe", "join"): 20,
-    ("query_expr_outcome_equiv_implies_success_bags", "bag"): 22,
-    ("query_expr_filter_bag_closed_exact", "filter"): 2,
-    ("query_expr_filter_bag_closed_exact", "bag"): 6,
-    ("query_expr_project_bag_closed_safe", "projection"): 2,
-    ("query_expr_project_bag_closed_safe", "bag"): 6,
-    ("query_expr_project_outcome_equiv_congr_safe", "projection"): 22,
-    ("query_project_success_bags_safe", "projection"): 6,
-    ("query_table_success_bags_functional", "bag"): 22,
-    ("tnull_direct_projection_alias_value", "projection"): 4,
-    ("tnull_join_condition_pred_acceptance_exact_safe", "facade"): 0,
-    ("tnull_join_condition_pred_acceptance_exact_safe", "runtime"): 4,
-    ("tnull_join_condition_pred_acceptance_exact_safe", "filter"): 6,
-    ("tnull_join_condition_pred_acceptance_exact_safe", "join"): 2,
-    ("tnull_row_eq_refl", "facade"): 8,
-    ("tnull_row_eq_refl", "projection"): 10,
-    ("tnull_row_eq_sym", "facade"): 8,
-    ("tnull_row_eq_sym", "projection"): 10,
-    ("tnull_row_eq_trans", "facade"): 2,
-    ("tnull_row_eq_trans", "projection"): 4,
-    ("tnull_select_lookup_some_iff_projected_label", "facade"): 6,
-    ("tnull_select_lookup_some_iff_projected_label", "projection"): 4,
-    (
-        "tnull_select_lookup_none_iff_projected_label_absent",
-        "facade",
-    ): 6,
-    (
-        "tnull_select_lookup_none_iff_projected_label_absent",
-        "projection",
-    ): 4,
-    ("tnull_project_rows_select_columns_success", "facade"): 4,
-    ("tnull_project_rows_select_columns_success", "runtime"): 8,
-    ("tnull_project_rows_select_columns_success", "projection"): 2,
-    ("tnull_query_expr_project_select_columns_error_iff", "facade"): 4,
-    ("tnull_query_expr_project_select_columns_error_iff", "outcome"): 4,
-    ("tnull_query_expr_project_select_columns_error_iff", "runtime"): 4,
-    ("tnull_query_expr_project_select_columns_error_iff", "projection"): 6,
-    ("tnull_select_lookup_retained", "facade"): 4,
-    ("tnull_select_lookup_retained", "projection"): 2,
-    ("tnull_select_lookup_direct_value", "facade"): 6,
-    ("tnull_select_lookup_direct_value", "projection"): 4,
-    ("tnull_select_lookup_constant_value", "facade"): 8,
-    ("tnull_select_lookup_constant_value", "projection"): 6,
-    ("tnull_select_lookup_direct_compose", "facade"): 2,
-    ("tnull_select_lookup_direct_compose", "projection"): 2,
-    ("tnull_select_lookup_constant_direct_compose", "facade"): 2,
-    ("tnull_select_lookup_constant_direct_compose", "projection"): 2,
-    ("eval_group_bag_true_projected_support_equiv", "grouping"): 4,
-    ("eval_group_bag_true_projected_support_equiv", "outcome"): 8,
-    (
-        "query_expr_group_outcome_equiv_of_supported_child_outcomes",
-        "grouping",
-    ): 4,
-    (
-        "query_expr_group_outcome_equiv_of_supported_child_outcomes",
-        "outcome",
-    ): 4,
-    (
-        "tnull_eval_group_bag_direct_columns_true_equiv_of_projection_support",
-        "grouping",
-    ): 2,
-    (
-        "tnull_eval_group_bag_direct_columns_true_equiv_of_projection_support",
-        "outcome",
-    ): 4,
-    ("tnull_eval_group_bag_direct_columns_true_no_error", "facade"): 2,
-    ("tnull_eval_group_bag_direct_columns_true_no_error", "outcome"): 4,
-    ("tnull_eval_group_bag_direct_columns_true_no_error", "grouping"): 2,
-    ("tnull_eval_group_bag_direct_columns_true_no_error", "runtime"): 2,
-    ("tnull_eval_group_bag_direct_columns_true_no_error", "bag"): 8,
-    (
-        "tnull_direct_columns_group_outcome_equiv_of_projected_support",
-        "facade",
-    ): 0,
-    (
-        "tnull_direct_columns_group_outcome_equiv_of_projected_support",
-        "grouping",
-    ): 0,
-    (
-        "tnull_direct_columns_group_outcome_equiv_of_projected_support",
-        "outcome",
-    ): 0,
-    (
-        "tnull_direct_columns_group_outcome_equiv_of_projected_support",
-        "runtime",
-    ): 4,
-    ("tnull_direct_columns_group_projection_support_rel", "grouping"): 6,
-    ("tnull_direct_columns_group_projection_support_rel", "projection"): 8,
-    ("tnull_direct_columns_group_projection_support_rel", "bag"): 10,
-    (
-        "tnull_direct_columns_group_rows_bag_eq_of_projection_support",
-        "grouping",
-    ): 2,
-    (
-        "tnull_direct_columns_group_rows_bag_eq_of_projection_support",
-        "projection",
-    ): 16,
-    (
-        "tnull_direct_columns_group_rows_bag_eq_of_projection_support",
-        "bag",
-    ): 2,
-    ("list_support_rel_compose", "bag"): 8,
-    ("list_support_rel_map_transport", "projection"): 10,
-    ("list_support_rel_map_transport", "bag"): 12,
-    ("list_support_rel_map_iff", "projection"): 12,
-    ("list_support_rel_map_iff", "bag"): 14,
-    ("list_support_rel_unmap_left", "projection"): 14,
-    ("list_support_rel_unmap_left", "bag"): 16,
-    ("list_support_rel_map_left_with_witness", "projection"): 14,
-    ("list_support_rel_map_left_with_witness", "bag"): 16,
-    ("tnull_map_left_join_functional_permut", "facade"): 6,
-    ("tnull_map_left_join_functional_permut", "join"): 8,
-}
-
-
-def route_rank(
-    route: str,
-    domain_name: str,
-    module: str,
-    kind: str,
-    name: str,
-) -> int:
-    """Rank a declaration inside one semantic route using stable public shape."""
-    exact_rank = EXACT_ROUTE_RANKS.get((name, route))
-    if exact_rank is not None:
-        return exact_rank
-    if module == "ProofAgentFacade.v":
-        rank = 16
-    elif ROUTE_PRIMARY_DOMAIN.get(route) == domain_name:
-        rank = 36
-    else:
-        rank = 52
-
-    normalized = name.casefold()
-    for priority, marker in enumerate(ROUTE_NAME_PRIORITY.get(route, ())):
-        if marker in normalized:
-            rank -= max(2, 14 - 2 * priority)
-            break
-    if kind == "Theorem":
-        rank -= 2
-    elif kind == "Corollary":
-        rank -= 1
-    return max(0, rank)
-
-
-def ranked_entries_for_route(
-    entries: list[dict[str, object]], route: str
-) -> list[dict[str, object]]:
-    return sorted(
-        (entry for entry in entries if route in entry["routes"]),  # type: ignore[operator]
-        key=lambda entry: (
-            int(entry["routeRanks"][route]),  # type: ignore[index]
-            str(entry["name"]).casefold(),
-        ),
-    )
-
 
 def semantic_subject(domain_name: str, features: frozenset[str]) -> str:
+    if domain_name == "renaming-transport.md":
+        return "collision-safe attribute and query renaming transport"
     if "scalar_subquery" in features:
         return "SINGLE_VALUE scalar-subquery cardinality"
     if "scalar_subquery_bridge" in features:
@@ -1398,11 +1629,432 @@ def is_non_equivalence_law(name: str) -> bool:
 def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
     subject = semantic_subject(domain_name, features)
     name_tokens = identifier_tokens(name)
+    if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
+        operator = name.removeprefix("QExpr_").removesuffix("_rename_transport")
+        return (
+            f"Provides the constructor-local renaming transport theorem for "
+            f"`QExpr_{operator}`, preserving mapped schemas and exact successful/error "
+            "observations under every displayed semantic side condition."
+        )
+    if name in OUTPUT_ONLY_RENAMING_ADAPTER_ENTRIES:
+        return (
+            "Characterizes the output-boundary RowMap adapter that relabels only "
+            "successful result tuples and preserves child errors; it is not a full "
+            "query alpha-renaming theorem."
+        )
+    if name in MAPPED_SCHEMA_OBSERVATION_ENTRIES:
+        return (
+            "Connects constructor-certified transport to exact mapped-schema "
+            "observations; this relation alone does not certify renamed operator metadata."
+        )
+    if name == "tnull_attribute_name_renaming_type_preserving":
+        return (
+            "Shows that name-only TNull attribute renaming preserves the exact "
+            "SQL value type, including every textual, decimal, and temporal typmod."
+        )
+    if name == "tnull_attribute_name_renaming_value_conforms":
+        return (
+            "Preserves and reflects TNull value conformance under name-only "
+            "attribute renaming, including NULL payloads and constrained types."
+        )
+    if name == "tnull_rows_name_renaming_type_safe":
+        return (
+            "Discharges actual successful-row type/typmod safety for every row "
+            "under the name-only TNull attribute adapter."
+        )
+    if name == "tnull_tuple_conforms_sort_renaming_transport":
+        return (
+            "Transports tuple/schema conformance through name-only renaming under "
+            "injectivity on the source sort, rejecting attribute collisions."
+        )
+    if name in {
+        "tnull_rows_renaming_firstn_transport",
+        "tnull_rows_renaming_skipn_transport",
+    }:
+        return (
+            "Commutes exact row-wise renaming with the displayed ordered slice, "
+            "preserving row order and duplicate occurrences."
+        )
+    if name == "tnull_query_mapped_schema_outcome_equiv_mapped_schema":
+        return (
+            "Extracts the ordered name-only mapped output schema from exact TNull observations; "
+            "this observational relation is neither full alpha-renaming nor ordinary same-schema equivalence."
+        )
+    if name == "tnull_query_renaming_context_chain_transport":
+        return (
+            "Closes a proved name-only renaming transport under an arbitrary list of "
+            "paired query contexts, retaining typmods, operator metadata, and outcomes."
+        )
+    if name == "query_bag_reset_success_permutation_closed":
+        return (
+            "Establishes concrete-row permutation closure for successful "
+            "observations at any constructor classified as a bag reset."
+        )
+    if name in {
+        "query_project_preserves_success_permutation_closed",
+        "query_row_map_preserves_success_permutation_closed",
+        "query_filter_preserves_success_permutation_closed",
+    }:
+        operator = {
+            "query_project_preserves_success_permutation_closed": "projection",
+            "query_row_map_preserves_success_permutation_closed": "row mapping",
+            "query_filter_preserves_success_permutation_closed": "filtering",
+        }[name]
+        return (
+            f"Transports concrete-row permutation closure of successful "
+            f"observations through pointwise {operator}."
+        )
+    if name == "query_structural_successes_bag_closed":
+        return (
+            "Turns the syntax-directed reset/Project/Filter/RowMap certificate "
+            "into observation-level BagClosed for successful rows."
+        )
     if name == "in_rows_acceptance_existsb":
         return (
             "Reduces only the TRUE-acceptance observation of SQL IN over a row "
             "bag to an ordinary Boolean existence test, retaining the underlying "
             "FALSE/UNKNOWN distinction."
+        )
+    if name == "existsb_support_rel":
+        return (
+            "Shows that a Boolean existence observation is invariant under "
+            "bidirectional relational support when the tested predicates agree "
+            "on related representatives; multiplicity is intentionally ignored."
+        )
+    if name == "in_rows_acceptance_support_rel":
+        return (
+            "Transports only SQL IN TRUE-acceptance across duplicate-insensitive "
+            "support correspondence under FormalSQL semantic tuple equality."
+        )
+    if name == "in_rows_acceptance_append":
+        return (
+            "Distributes SQL IN TRUE-acceptance over appended candidate lists as "
+            "Boolean OR without equating the underlying FALSE and UNKNOWN truths."
+        )
+    if name == "formula_truth_exact_acceptance_exact":
+        return (
+            "Projects an inhabited, unique exact Bool3 success with no reachable "
+            "runtime error to its SQL TRUE-acceptance bit."
+        )
+    if name == "formula_not_truth_exact":
+        return (
+            "Transports an inhabited, error-free exact Bool3 observation through "
+            "SQL NOT; in particular, UNKNOWN remains UNKNOWN."
+        )
+    if name == "formula_not_acceptance_exact":
+        return (
+            "Derives exact acceptance for SQL NOT from the stronger exact-truth "
+            "contract, without complementing a FALSE/UNKNOWN acceptance bit."
+        )
+    if name == "formula_in_truth_exact":
+        return (
+            "Builds exact tuple-valued IN truth from runtime-safe arguments, an "
+            "inhabited child, fixed Bool3 truth across every child success, and no errors."
+        )
+    if name == "formula_in_acceptance_exact":
+        return (
+            "Builds exact tuple-valued IN acceptance from pointwise SQL equality "
+            "decisions while retaining empty inputs, duplicates, UNKNOWN, and errors."
+        )
+    if name == "formula_not_in_acceptance_exact_of_fixed_truth":
+        return (
+            "Builds NOT IN acceptance only from fixed exact IN truth, applying SQL "
+            "negation before TRUE projection so UNKNOWN is never accepted."
+        )
+    if name == "formula_exists_truth_exact":
+        return (
+            "Builds the exact two-valued EXISTS truth from inhabited child outcomes "
+            "that all agree on emptiness and from exclusion of every child error."
+        )
+    if name == "formula_not_exists_acceptance_exact":
+        return (
+            "Characterizes NOT EXISTS acceptance as child emptiness while preserving "
+            "the fixed correlated environment and excluding every child runtime error."
+        )
+    if name == "tnull_in_rows_unknown_iff":
+        return (
+            "Characterizes TNull IN UNKNOWN as at least one UNKNOWN candidate "
+            "comparison and no TRUE candidate, over the canonical bag representative."
+        )
+    if name == "tnull_in_rows_semantic_cases":
+        return (
+            "Partitions TNull IN into empty/FALSE, TRUE-match, UNKNOWN-without-match, "
+            "and nonempty-all-FALSE cases without replacing SQL tuple comparison by Rocq equality."
+        )
+    if name in {
+        "tnull_not_in_rows_acceptance_iff_all_false",
+        "tnull_not_in_rows_acceptance_iff_no_true_or_unknown",
+    }:
+        return (
+            "Characterizes TNull NOT IN acceptance by all candidate comparisons being "
+            "FALSE, equivalently by absence of both a TRUE match and an UNKNOWN comparison."
+        )
+    if name in {
+        "tnull_formula_not_in_accepts_exact_of_all_false",
+        "tnull_formula_not_in_rejects_exact_of_true_match",
+        "tnull_formula_not_in_rejects_exact_of_unknown_without_match",
+    }:
+        return (
+            "Lifts the displayed TNull NOT IN semantic case to exact formula acceptance "
+            "at one correlated environment, retaining argument and child error premises."
+        )
+    if name == "formula_in_union_all_acceptance_exact":
+        return (
+            "Builds exact correlated IN acceptance over UNION ALL as the Boolean OR "
+            "of fixed branch decisions while retaining duplicate candidates and requiring "
+            "both branch error relations to be empty."
+        )
+    if name == "query_distinct_rows_support_rel":
+        return (
+            "Relates every legal DISTINCT output representative bidirectionally to "
+            "the input's semantic row support without preserving duplicate counts."
+        )
+    if name == "in_rows_acceptance_distinct":
+        return (
+            "Shows SQL IN TRUE-acceptance is unchanged by DISTINCT candidate "
+            "elimination while leaving the underlying row multiplicities distinct."
+        )
+    if name == "query_join_sources_member_iff":
+        return (
+            "Characterizes scheduler-source membership for every native join kind, "
+            "keeping matched, unmatched-left, unmatched-right, semi, and anti "
+            "reachability distinct."
+        )
+    if name == "query_join_sources_support_rel":
+        return (
+            "Transports bidirectional source support across all six native join "
+            "constructors under exact match-decision correspondence."
+        )
+    if name == "query_join_sources_projected_support_rel":
+        return (
+            "Lifts all-kind join-source support through reached-only emitters, "
+            "without claiming multiplicity, ordering, or runtime-error equivalence."
+        )
+    if name == "list_support_rel_filter_transport":
+        return (
+            "Transports bidirectional relational support through two total filters "
+            "whose decisions agree only on actually related representatives."
+        )
+    if name == "eval_groups_all_rejected_outcome_exact":
+        return (
+            "Characterizes an all-rejected HAVING schedule as exact empty success "
+            "while retaining reached SELECT/HAVING aggregate finalization and "
+            "excluding HAVING runtime errors."
+        )
+    if name == "tnull_group_count_star_value_runtime_exact":
+        return (
+            "Computes one TNull group COUNT-star value and both aggregate/full "
+            "runtime checks exactly from the group's mathematical cardinality."
+        )
+    if name in {
+        "count_star_value_local_error_exact_of_equal_length",
+        "count_star_value_runtime_error_exact_of_equal_observation_length",
+    }:
+        return (
+            "Shows equal occurrence cardinality gives the same COUNT-star value and "
+            "exact BIGINT overflow/error observation, without an in-range premise."
+        )
+    if name in {
+        "count_star_count_all_nonnull_value_local_error_exact",
+        "count_star_count_all_nonnull_value_runtime_error_exact",
+    }:
+        return (
+            "Relates COUNT-star to COUNT ALL over an equally long reached expression "
+            "list under explicit non-NULL and, for full outcomes, child-safety premises."
+        )
+    if name == "formula_pred_outcome_equiv_of_argument_observations":
+        return (
+            "Transports full predicate-formula outcomes from equality of reached "
+            "argument values and first runtime errors, retaining FALSE versus UNKNOWN."
+        )
+    if name == "tnull_group_count_star_projection_eq_of_equal_length":
+        return (
+            "Derives semantic equality of one-column COUNT-star group projections "
+            "from equal group cardinality, independent of the output alias."
+        )
+    if name == "tnull_count_star_group_observation_equiv_of_equal_length":
+        return (
+            "Builds one exact COUNT-star group execution relation from equal cardinality "
+            "and explicit aggregate/HAVING outcome correspondence."
+        )
+    if name in {
+        "tnull_count_star_groups_outcome_equiv_of_Forall2_observations",
+        "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length",
+    }:
+        return (
+            "Lifts pointwise equal-cardinality COUNT-star observations through the "
+            "ordered group scheduler, preserving duplicate groups and the first error."
+        )
+    if name == "formula_and_redundant_right_acceptance_exact":
+        return (
+            "Eliminates an acceptance-redundant eager right conjunct only after "
+            "both sides have exact error-free acceptance and right acceptance is "
+            "proved whenever the left guard accepts."
+        )
+    if name in {
+        "integer_stats_fold_interval_invariant",
+        "integer_stats_initial_interval_bounds",
+    }:
+        return (
+            "Preserves symbolic lower-sum and upper-square interval bounds through "
+            "the exact logical integer-statistics fold."
+        )
+    if name == "bounded_integer_stats_sum_positive":
+        return (
+            "Derives strict positivity of the logical integer-statistics sum from "
+            "a positive symbolic lower bound and a nonempty fold count."
+        )
+    if name == "full_outer_filter_to_left_outer_exact":
+        return (
+            "Rewrites a null-rejecting filter over the three FULL-join scheduler "
+            "branches to a LEFT join over the filtered left input, preserving "
+            "duplicate occurrences exactly."
+        )
+    if name == "left_right_outer_scheduler_swap_Permutation":
+        return (
+            "Shows exact occurrence permutation between LEFT and operand-swapped "
+            "RIGHT outer schedulers after transposing both match decisions and "
+            "matched-row emission."
+        )
+    if name == "left_outer_null_reject_to_inner_exact":
+        return (
+            "Removes exactly the NULL-padded branch of a LEFT outer scheduler "
+            "under an explicit rejecting consumer, retaining matched-row filtering "
+            "and duplicate occurrences."
+        )
+    if name in {
+        "position_rows_from_values",
+        "position_rows_from_nth_error",
+        "position_rows_from_filter_le_prefix",
+    }:
+        return (
+            "Characterizes zero-based positions and inclusive prefixes of an "
+            "arbitrary occurrence list, preserving empty inputs and duplicate rows."
+        )
+    if name == "partition_runs_by_compare_exact_well_formed":
+        return (
+            "Partitions an occurrence list into exact adjacent comparator-equal "
+            "runs and proves both concatenation and boundary inequality without "
+            "using Rocq equality on SQL rows."
+        )
+    if name in {
+        "rows_key_aligned_length",
+        "rows_key_aligned_firstn",
+        "rows_key_aligned_skipn",
+        "rows_key_aligned_filter",
+        "rows_key_aligned_total_map_transport",
+    }:
+        return (
+            "Transports heterogeneous relational order-key alignment through the "
+            "displayed positional or total deterministic list consumer."
+        )
+    if name == "prefix_scan_observation_peer_transport":
+        return (
+            "Transports the post-filter semantic row observation of a cumulative prefix "
+            "scan across every caller-certified adjacent peer permutation."
+        )
+    if name == "prefix_scan_outcome_peer_transport_iff":
+        return (
+            "Lifts peer-order prefix-observation transport to exact success/error outcomes "
+            "only after the two evaluation schedules' error categories are equated explicitly."
+        )
+    if name == "partitioned_prefix_scan_observation_peer_transport":
+        return (
+            "Applies tie-aware prefix-observation transport independently to aligned "
+            "partition blocks, resetting the cumulative prefix at each boundary."
+        )
+    if name == "partitioned_prefix_scan_outcome_peer_transport_iff":
+        return (
+            "Lifts aligned partition-block peer transport to exact outcome observations "
+            "under an explicit equality of the two schedules' runtime-error categories."
+        )
+    if name == "order_by_rows_total_map_preimage":
+        return (
+            "Pulls every legal ordered representative of a total mapped bag back to a "
+            "source ordering, preserving occurrences even when the map is non-injective."
+        )
+    if name == "total_map_order_fetch_observation_iff":
+        return (
+            "Equates all legal ORDER BY/FETCH observations before and after a total "
+            "semantic row map whose order-key comparison is preserved and reflected."
+        )
+    if name == "total_map_order_fetch_outcome_observation_iff":
+        return (
+            "Adds an explicit exact error relation to total-map ORDER BY/FETCH observation "
+            "transport; it does not infer error safety from the successful mapping law."
+        )
+    if name == "query_expr_join_no_error_of_acceptance_projection_exact":
+        return (
+            "Rules out every native join error after both children are error-free and every "
+            "reached condition and matched/padded projection has one exact success."
+        )
+    if name == "partial_semijoin_projection_support_rel":
+        return (
+            "Relates the support of surviving semijoin rows to the support of projected "
+            "matching join cells without assuming a functional match; repeated right "
+            "matches remain present on the join side."
+        )
+    if name in {
+        "fold_nonempty_support_equiv",
+        "exact_extrema_aggregate_permutation",
+        "exact_extrema_aggregate_support_equiv",
+        "exact_extrema_aggregate_duplicate_block",
+    }:
+        return (
+            "Makes the displayed associative/commutative/idempotent fold or exact "
+            "integral, NUMERIC, and C-collation textual extrema invariant under "
+            "permutation, support equivalence, or repeated input blocks."
+        )
+    if name in {
+        "first_runtime_error_duplicate_block",
+        "first_observation_error_duplicate_block",
+        "exact_extrema_aggregate_runtime_error_duplicate_block",
+    }:
+        return (
+            "Shows that repeating one reached input block preserves its left-biased "
+            "first runtime error, and packages that boundary for exact extrema aggregates."
+        )
+    if name in {
+        "numeric_round_quot_nonnegative_half_ulp",
+        "numeric_round_to_scale_nonnegative_half_ulp",
+        "numeric_sqrt_at_scale_half_ulp_shape",
+    }:
+        return (
+            "Exposes the exact nonnegative PostgreSQL NUMERIC rounding or square-"
+            "root midpoint branch together with its half-unit fixed-point bound."
+        )
+    if name in {
+        "numeric_pg_div_scale_display_valid",
+        "numeric_of_scaled_compare_lt",
+        "finite_numeric_division_result_rounding",
+        "finite_numeric_division_strict_margin",
+    }:
+        return (
+            "Connects PostgreSQL-selected NUMERIC division scale and rounding to "
+            "a fixed-point strict comparison, retaining the explicit half-ULP margin."
+        )
+    if name in {
+        "finite_numeric_division_runtime_error_zero_divisor",
+        "finite_numeric_division_runtime_error_invalid_scale",
+        "finite_numeric_division_runtime_error_missing_result",
+        "finite_numeric_division_runtime_error_result_out_of_range",
+    }:
+        return (
+            "Classifies the displayed finite NUMERIC division failure as the exact "
+            "PostgreSQL DivisionByZero or NumericValueOutOfRange category."
+        )
+    if name in {
+        "numeric_integer_stddev_samp_positive_success_iff",
+        "int32_avg_numeric_with_scale_success_iff",
+    }:
+        return (
+            "Decomposes the positive/nonempty integral aggregate finalizer into its "
+            "exact selected-scale NUMERIC division and, for STDDEV_SAMP, square-root path."
+        )
+    if name == "numeric_of_scaled_compare_not_gt":
+        return (
+            "Transports a non-strict cross-scale coefficient bound to a NUMERIC "
+            "comparison that cannot be Gt while preserving the observable Eq case."
         )
     if name == "eval_grouping_sets_outcome_Forall2_congr":
         return (
@@ -1516,6 +2168,41 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Shows that a direct-column query projection has exactly its child's "
             "error observations and introduces no projection-local error."
         )
+    if name == "tnull_select_lookup_direct_compose_interp_value":
+        return (
+            "Composes two first-match direct projection lookups while retaining "
+            "the original row-extended expression value, including correlated fallback."
+        )
+    if name == "tnull_projection_rows_eq_of_output_values":
+        return (
+            "Builds semantic equality of two projected rows from equality of their "
+            "output-label sets and every observable projected cell."
+        )
+    if name == "tnull_direct_projection_fusion_row_eq":
+        return (
+            "Fuses one direct projection with two direct projections from exact "
+            "source-to-middle-to-target first-match lookup chains."
+        )
+    if name == "tnull_select_columns_lookup_output":
+        return (
+            "Computes the exact first-match lookup of every present SelectColumns "
+            "output without requiring output uniqueness."
+        )
+    if name == "tnull_select_columns_projection_fusion_row_eq":
+        return (
+            "Fuses direct-column single and double projections from final-label "
+            "set equality and coverage of every outer label by the inner projection."
+        )
+    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
+        return (
+            "Lifts a total single-versus-double projection row law to the named "
+            "reachable-child-bag fusion contract without changing multiplicities."
+        )
+    if name == "query_project_success_bags_fusion_safe":
+        return (
+            "Uses three locally safe projections and their reachable-bag fusion "
+            "contract to equate the possible successful bags of one and two Projects."
+        )
     if name == "tnull_eval_group_bag_direct_columns_true_no_error":
         return (
             "Rules out every local group-bag error for direct-column GROUP BY "
@@ -1541,6 +2228,38 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Characterizes all-TRUE evaluation in each `group_env` exactly as "
             "the ordered projection map after all four per-group runtime checks, "
             "including as the group-processing component of a regrouping proof."
+        )
+    if name == "eval_groups_global_true_outcome_exact":
+        return (
+            "Specializes exact TRUE-HAVING group execution to SQL global "
+            "aggregation, including the singleton empty-input group."
+        )
+    if name == "query_canonical_rows_map_factor_permut":
+        return (
+            "Transports a projection or rename through canonical bag-row "
+            "selection up to semantic permutation, without exposing the bag "
+            "implementation's concrete sorting algorithm."
+        )
+    if name == "eval_group_bag_global_true_success_exists":
+        return (
+            "Constructs a successful global-aggregate bag outcome from explicit "
+            "aggregate-finalization and scalar-projection runtime safety."
+        )
+    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
+        return (
+            "Lifts safe global aggregation through the bag reset and proves a "
+            "representative-independent singleton result when the projection is "
+            "explicitly permutation-stable."
+        )
+    if name == "group_projection_permutation_stable":
+        return (
+            "Defines the semantic side condition under which a group projection "
+            "is invariant under permutation of its group members."
+        )
+    if name == "rows_permut_implies_bag_eq":
+        return (
+            "Converts semantic row permutation into equality of finite row bags, "
+            "the converse of the reset-boundary occurrence bridge."
         )
     if name == "eval_groups_acceptance_outcome_exact":
         return (
@@ -1680,6 +2399,133 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Identifies the exact projected join list with the pointwise mapped "
             "left input under total and at-most-one matching."
         )
+    if name == "interp_direct_attribute_in_env_t_absent":
+        return (
+            "Shows that an attribute absent from the current row of an environment "
+            "extension is resolved from the retained outer environment."
+        )
+    if name == "correlated_inner_guard_relation_of_outer_match":
+        return (
+            "Transports one reached outer-to-inner semantic match to the reversed "
+            "correlated guard while retaining row presence, shadowing, and symmetry premises."
+        )
+    if name == "NoDupA_bidirectionally_related_members_eq":
+        return (
+            "Identifies two represented occurrences only after NoDupA and both "
+            "directions of the caller-supplied semantic relation are proved."
+        )
+    if name in {
+        "key_unique_self_filter_existsb_exact",
+        "primary_key_self_filter_existsb_exact",
+    }:
+        return (
+            "Computes filtered self-membership from an actual semantic self witness "
+            "and occurrence-sensitive key uniqueness; the primary-key form also exposes NOT NULL."
+        )
+    if name in {
+        "tnull_primary_key_self_in_rows_acceptance_exact",
+        "tnull_primary_key_self_in_rows_true",
+    }:
+        return (
+            "Establishes TNull primary-key self-IN TRUE-acceptance from an actual "
+            "tuple-comparison witness, key reflection, and the complete projected NOT NULL fact."
+        )
+    if name == "formula_in_distinct_acceptance_exact_of_inner":
+        return (
+            "Lifts an exact correlated IN acceptance contract through DISTINCT "
+            "without claiming equality of the complete FALSE/UNKNOWN Bool3 result."
+        )
+    if name == "query_expr_project_filter_runtime_safe_exact":
+        return (
+            "Composes child, filter-formula, and reached-projection safety into exact "
+            "runtime safety for a Project over Filter without inferring safety from bags."
+        )
+    if name in {
+        "join_matched_rows_filter_inputs_exact",
+        "inner_filter_to_input_filters_exact",
+    }:
+        return (
+            "Factors stable total Boolean join acceptance into input guards and a "
+            "residual predicate while preserving the exact output list and duplicate occurrences."
+        )
+    if name in {
+        "join_left_guard_reached_iff_of_witness",
+        "join_right_guard_reached_iff_of_witness",
+        "join_self_guard_reachability_exact",
+    }:
+        return (
+            "Relates prefilter and post-join guard reachability only under the displayed "
+            "match witness; the self form supplies both directions for a reflexive match."
+        )
+    if name == "join_matched_rows_member_of_accepted_cell":
+        return (
+            "Shows that one accepted pair contributes its emitted occurrence to the "
+            "concrete matched-row scheduler without dropping duplicates."
+        )
+    if name == "query_filter_success_bags_of_stable_total_acceptance":
+        return (
+            "Characterizes successful filter bags by one stable total acceptance "
+            "callback only after exact per-row formula success and no-error are supplied."
+        )
+    if name == "query_filter_error_iff_of_stable_total_acceptance":
+        return (
+            "Characterizes filter errors under the same stable total acceptance "
+            "contract, retaining child errors and exact reached formula error categories."
+        )
+    if name == "eval_filter_rows_uniform_error_of_reached_member":
+        return (
+            "Constructs the sequential FILTER error from one reached bad occurrence "
+            "when every reached row succeeds or exposes that same category."
+        )
+    if name == "eval_filter_rows_error_category_of_reached_categories":
+        return (
+            "Shows that any FILTER error has the fixed category shared by every "
+            "reached formula-error observation."
+        )
+    if name == "eval_filter_rows_success_excludes_reached_exact_error":
+        return (
+            "Excludes every successful FILTER traversal when one reached occurrence "
+            "has no successful formula observation."
+        )
+    if name == "eval_filter_rows_reached_uniform_error_exact":
+        return (
+            "Packages FILTER error existence, success exclusion, and uniqueness of "
+            "the exact runtime category from explicit reached-row premises."
+        )
+    if name in {
+        "eval_filter_rows_uniform_error_of_join_witness",
+        "eval_filter_rows_uniform_error_of_self_match",
+    }:
+        return (
+            "Constructs the FILTER error derivation from a concrete accepted join "
+            "cell; the self form retains the explicit accepted diagonal witness."
+        )
+    if name in {
+        "nonnull_foreign_key_direct_accept_has_middle",
+        "nonnull_foreign_key_no_middle_rejects_direct",
+    }:
+        return (
+            "Lifts a conforming non-NULL foreign key to an explicit referenced middle "
+            "witness, or derives rejection when no such middle row exists."
+        )
+    if name in {
+        "join_matched_rows_empty_of_rejection",
+        "middle_padding_downstream_empty",
+    }:
+        return (
+            "Eliminates exactly the displayed rejected matched or NULL-padded branch "
+            "without moving SQL evaluations or changing duplicate multiplicity."
+        )
+    if name == "filtered_payload_erasure_permut":
+        return (
+            "Transports one filtered occurrence block across explicit predicate agreement "
+            "and a payload relation while preserving multiplicity."
+        )
+    if name == "query_expr_outcome_equiv_of_shared_exact_error":
+        return (
+            "Lifts two error-only query relations exposing the same unique category "
+            "to exact outcome equivalence after successful outcomes are excluded."
+        )
     if name == "eval_filter_rows_always_true_iff":
         return (
             "Characterizes successful filtering when every reached formula "
@@ -1770,11 +2616,425 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
 
 
 def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> str:
+    if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
+        specialized = {
+            "QExpr_Error_rename_transport":
+                "Use after proving the mapped, admissible endpoint-schema contract; the same opaque SQL error is retained exactly.",
+            "QExpr_Values_rename_transport":
+                "Use only when the target VALUES bag is the concrete renamed source bag and every represented source row satisfies collision/type safety.",
+            "QExpr_Table_rename_transport":
+                "Use with an explicitly transported table/database bag; changing only the scan output labels is not a table alpha-renaming.",
+            "QExpr_Set_rename_transport":
+                "Use after transporting both children and certifying schema comparison plus the exact UNION/INTERSECT/EXCEPT bag scheduler on actual rows.",
+            "QExpr_NaturalJoin_rename_transport":
+                "Use after transporting both children and proving the exact NULL-aware common-label join behavior, including actual cross-row collisions.",
+            "QExpr_CrossJoin_rename_transport":
+                "Use with disjoint admissible endpoint schemas and an exact local proof for left-biased tuple construction on all reachable row pairs.",
+            "QExpr_Join_rename_transport":
+                "Use only when predicate, all kind-dependent projections/aliases, both children, exact Bool3 outcomes, bags, and errors are transported together.",
+            "QExpr_Project_rename_transport":
+                "Use only with a local proof covering every selected expression, input reference, output alias, projection order, and runtime error.",
+            "QExpr_RowMap_rename_transport":
+                "Use with pointwise callback conjugacy plus cross-output collision/type safety for every successful source callback run.",
+            "QExpr_Filter_rename_transport":
+                "Use with exact formula outcomes in renamed row environments and the exact ordered filter scheduler; FALSE and UNKNOWN may not be exchanged.",
+            "QExpr_Group_rename_transport":
+                "Use with paired reachable group formation, exact HAVING Bool3/aggregate-error behavior, renamed keys/projection aliases, and the exact bag scheduler.",
+            "QExpr_GroupingSets_rename_transport":
+                "Use only after pairing every grouping-set branch, its projection/group metadata, output schema, bag results, and runtime errors.",
+            "QExpr_Rank_rename_transport":
+                "Use when partition/order keys and the fresh rank output alias are renamed together and the rank callback/error scheduler is preserved.",
+            "QExpr_Window_rename_transport":
+                "Use when partition/order keys, every window item and alias, ordered peer behavior, aggregate outcomes, and errors are transported together.",
+            "QExpr_Distinct_rename_transport":
+                "Use only under collision-reflecting child transport and the exact finite-bag duplicate-elimination compatibility premise.",
+            "QExpr_OrderBy_rename_transport":
+                "Use when each sort-key attribute, direction, NULL placement, comparator, nondeterministic tie order, and exact output order are preserved.",
+            "QExpr_Offset_rename_transport":
+                "Use after transporting the child and mapped endpoint schema; the proved `skipn` law preserves exact positions and multiplicity.",
+            "QExpr_Fetch_rename_transport":
+                "Use after transporting the child and mapped endpoint schema; the proved `firstn` law preserves exact positions and multiplicity.",
+        }
+        return specialized[name]
+    if name in OUTPUT_ONLY_RENAMING_ADAPTER_ENTRIES:
+        return (
+            "Use only at an output observation boundary.  It does not rename predicates, "
+            "projection inputs, group/join/sort/window metadata, aliases inside nested "
+            "operators, or correlated subqueries, so do not cite it as full alpha-renaming."
+        )
+    if name in MAPPED_SCHEMA_OBSERVATION_ENTRIES:
+        return (
+            "Use to package or project exact outcomes under a mapped ordered schema after "
+            "constructor-local transport has been proved.  Output-only relabeling can also "
+            "satisfy this observation, so it is not ordinary equivalence or full alpha-renaming."
+        )
+    if name in {
+        "tnull_attribute_name_renaming_type_preserving",
+        "tnull_attribute_name_renaming_value_conforms",
+        "tnull_rows_name_renaming_type_safe",
+    }:
+        return (
+            "Use only with `rename_tnull_attribute_name`, which changes the textual "
+            "name and leaves the complete SQL type/typmod constructor untouched."
+        )
+    if name == "tnull_tuple_conforms_sort_renaming_transport":
+        return (
+            "Use after proving injectivity on the relevant source sort.  A collision "
+            "between two represented attributes is deliberately not transportable."
+        )
+    if name in {
+        "tnull_rows_renaming_firstn_transport",
+        "tnull_rows_renaming_skipn_transport",
+    }:
+        return (
+            "Use for OFFSET/FETCH-style ordered slicing after establishing exact "
+            "pointwise row renaming; the conclusion is not merely bag equality."
+        )
+    if name == "tnull_query_mapped_schema_outcome_equiv_mapped_schema":
+        return (
+            "Use to recover the target schema from mapped-schema outcome equivalence.  "
+            "It is observational only; certify full alpha-renaming through constructor-local "
+            "metadata premises, while ordinary equivalence still requires unchanged labels."
+        )
+    if name == "tnull_query_renaming_context_chain_transport":
+        return (
+            "Use for any finite nesting after certifying every paired context with "
+            "its constructor-local transport rule.  Supply a textual `string -> string` "
+            "map; the facade lifts it without permitting a typmod change, while predicates, "
+            "projections, join/group/sort/window metadata, aliases, and schemas move together."
+        )
+    if name == "query_bag_reset_success_permutation_closed":
+        return (
+            "Use when `query_expr_order_behavior query = BagReset` computes or "
+            "is proved directly.  The conclusion concerns successful row lists "
+            "only; prove SQL errors separately."
+        )
+    if name in {
+        "query_project_preserves_success_permutation_closed",
+        "query_row_map_preserves_success_permutation_closed",
+        "query_filter_preserves_success_permutation_closed",
+    }:
+        return (
+            "Use with `ConcretePermutationClosed` for the child, not merely "
+            "`BagClosed`.  It reorders the same concrete row representatives "
+            "and makes no claim about error outcomes."
+        )
+    if name == "query_structural_successes_bag_closed":
+        return (
+            "Try first on a Project/Filter/RowMap stack above a bag reset; the "
+            "Boolean premise usually closes by reflexivity.  It intentionally "
+            "does not cross OrderBy, Offset, or Fetch, and errors remain separate."
+        )
     if name == "in_rows_acceptance_existsb":
         return (
             "Use after proving the per-candidate `Bool.is_true` decision.  The "
             "conclusion is suitable for WHERE or semijoin filtering only; it is "
             "not equality of the complete SQL Bool3 result."
+        )
+    if name == "existsb_support_rel":
+        return (
+            "Use only for a Boolean existence consumer after proving bidirectional "
+            "support and predicate properness.  It does not preserve counts, list "
+            "order, evaluation effects, or a three-valued predicate result."
+        )
+    if name in {
+        "in_rows_acceptance_support_rel",
+        "in_rows_acceptance_append",
+    }:
+        return (
+            "Use only at an IN TRUE-acceptance boundary after candidate-query "
+            "success/error behavior has been handled separately.  Do not use it "
+            "to prove full Bool3 equality, NOT IN, multiplicity, or ordered outcomes."
+        )
+    if name in {
+        "formula_truth_exact_acceptance_exact",
+        "formula_not_truth_exact",
+        "formula_not_acceptance_exact",
+    }:
+        return (
+            "Use only with the displayed exact-truth contract: it includes one "
+            "successful observation, uniqueness of the full Bool3 truth, and "
+            "exclusion of every runtime error at the same environment."
+        )
+    if name in {
+        "formula_in_truth_exact",
+        "formula_not_in_acceptance_exact_of_fixed_truth",
+    }:
+        return (
+            "Use after proving argument safety, child-success inhabitation, one "
+            "fixed full Bool3 IN truth across all legal child observations, and "
+            "absence of child errors; an acceptance bit alone cannot justify NOT IN."
+        )
+    if name == "formula_in_acceptance_exact":
+        return (
+            "Use at a filter/join acceptance boundary with the pointwise tuple-IN "
+            "decision and every displayed child/no-error premise; FALSE and UNKNOWN "
+            "may share rejection but remain distinct semantic truths."
+        )
+    if name in {
+        "formula_exists_truth_exact",
+        "formula_not_exists_acceptance_exact",
+    }:
+        return (
+            "Use at one fixed, possibly correlated environment after proving a child "
+            "success, agreement of every child success on emptiness, and exclusion "
+            "of every child runtime error."
+        )
+    if name in {
+        "tnull_in_rows_unknown_iff",
+        "tnull_in_rows_semantic_cases",
+        "tnull_not_in_rows_acceptance_iff_all_false",
+        "tnull_not_in_rows_acceptance_iff_no_true_or_unknown",
+    }:
+        return (
+            "Use at the TNull row-truth boundary over query_canonical_rows.  Empty "
+            "inputs and duplicate candidates remain represented, and UNKNOWN must "
+            "not be collapsed into FALSE when reasoning about NOT IN."
+        )
+    if name in {
+        "tnull_formula_not_in_accepts_exact_of_all_false",
+        "tnull_formula_not_in_rejects_exact_of_true_match",
+        "tnull_formula_not_in_rejects_exact_of_unknown_without_match",
+    }:
+        return (
+            "Use at one fixed correlated environment after proving argument safety, "
+            "child-success inhabitation, the displayed case for every legal child "
+            "success, and exclusion of every child error."
+        )
+    if name == "formula_in_union_all_acceptance_exact":
+        return (
+            "Use only for UNION ALL at one fixed correlated environment after proving "
+            "schema compatibility, argument safety, inhabited branch successes, fixed "
+            "per-branch TRUE-acceptance decisions, and absence of both branch errors.  "
+            "It is not a full Bool3 or UNION DISTINCT distribution theorem."
+        )
+    if name in {"query_distinct_rows_support_rel", "in_rows_acceptance_distinct"}:
+        return (
+            "Use only for duplicate-insensitive support or IN TRUE-acceptance.  DISTINCT "
+            "changes row multiplicity and may not be erased for COUNT, bags, exact ordered "
+            "results, or full FALSE/UNKNOWN truth without additional premises."
+        )
+    if name == "query_join_sources_member_iff":
+        return (
+            "Use on a concrete scheduler source list and inspect the constructor-"
+            "specific disjunct.  Semi and anti emit left sources for opposite "
+            "reachability decisions; outer unmatched branches are not symmetric aliases."
+        )
+    if name in {
+        "query_join_sources_support_rel",
+        "query_join_sources_projected_support_rel",
+    }:
+        return (
+            "Use after proving bidirectional input support and exact Boolean match "
+            "correspondence.  The projected form also requires both source inputs "
+            "to be reached before applying an emitter; prove bags, order, and errors separately."
+        )
+    if name == "query_expr_join_no_error_of_acceptance_projection_exact":
+        return (
+            "Use only after proving both children error-free, exact condition acceptance "
+            "for every row pair, and exact successful projection for every potentially "
+            "reached join source.  This proves safety, not bag or outcome equivalence."
+        )
+    if name == "partial_semijoin_projection_support_rel":
+        return (
+            "Use only at a support or duplicate-elimination boundary after relating every "
+            "accepted projected join cell to its surviving left row.  It intentionally does "
+            "not preserve multiplicity, order, SQL Bool3 evaluation, or runtime errors."
+        )
+    if name == "list_support_rel_filter_transport":
+        return (
+            "Use after proving support and decision properness on the support "
+            "relation.  It ignores multiplicity and does not model volatile or "
+            "runtime-error-producing SQL predicate evaluation."
+        )
+    if name == "eval_groups_all_rejected_outcome_exact":
+        return (
+            "Use only when SELECT and HAVING aggregate finalization succeeds for "
+            "every reached group and HAVING has one exact nontrue, error-free "
+            "decision.  Scalar SELECT projection is intentionally not a premise."
+        )
+    if name in {
+        "tnull_group_count_star_value_runtime_exact",
+        "count_star_value_local_error_exact_of_equal_length",
+        "count_star_value_runtime_error_exact_of_equal_observation_length",
+    }:
+        return (
+            "Use for COUNT-star cardinality transport without assuming the count is "
+            "inside BIGINT range.  Equal lengths preserve both the value placeholder "
+            "and the exact overflow category; child query errors remain separate."
+        )
+    if name in {
+        "count_star_count_all_nonnull_value_local_error_exact",
+        "count_star_count_all_nonnull_value_runtime_error_exact",
+    }:
+        return (
+            "Use only for AggregateAll after proving equal reached cardinality and "
+            "every expression value non-NULL.  The full runtime form also requires "
+            "each reached child observation to be error-free; DISTINCT is excluded."
+        )
+    if name == "formula_pred_outcome_equiv_of_argument_observations":
+        return (
+            "Use after proving equality of the complete reached argument-value list and "
+            "its left-biased first runtime error.  Acceptance equality alone is insufficient "
+            "because the theorem preserves the full Bool3 outcome."
+        )
+    if name in {
+        "tnull_group_count_star_projection_eq_of_equal_length",
+        "tnull_count_star_group_observation_equiv_of_equal_length",
+        "tnull_count_star_groups_outcome_equiv_of_Forall2_observations",
+        "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length",
+    }:
+        return (
+            "Use with equal cardinality for every paired reached group.  Arbitrary HAVING "
+            "requires exact aggregate and formula outcome correspondence; the TRUE-HAVING "
+            "specialization discharges only that predicate boundary.  The scheduler result "
+            "is semantic permutation, not a promoted exact ordered row list."
+        )
+    if name == "formula_and_redundant_right_acceptance_exact":
+        return (
+            "Use for guarded correlated predicates only after the inserted right "
+            "formula is exact and cannot error on every reached row.  FormalSQL is "
+            "eager, so a witness proved only on accepting guard rows is insufficient."
+        )
+    if name in {
+        "integer_stats_fold_interval_invariant",
+        "integer_stats_initial_interval_bounds",
+        "bounded_integer_stats_sum_positive",
+    }:
+        return (
+            "Use for the exact logical Z-valued statistics state under the displayed "
+            "symbolic interval/count hypotheses.  These bounds alone do not justify "
+            "NUMERIC division, square-root rounding, comparison, or runtime safety."
+        )
+    if name == "full_outer_filter_to_left_outer_exact":
+        return (
+            "Use only after matched and left-padded rows are proved to inherit one "
+            "left guard and every right-padded row is rejected.  At SQL level also "
+            "prove predicate totality, non-volatility, properness, and exact error equivalence."
+        )
+    if name == "left_right_outer_scheduler_swap_Permutation":
+        return (
+            "Use only after the target condition is the exact transpose and the "
+            "matched and padded projections agree through one common emitter.  "
+            "SQL condition/projection errors and semantic tuple equality remain separate."
+        )
+    if name == "left_outer_null_reject_to_inner_exact":
+        return (
+            "Use only when every padded-left row is rejected.  Moving the retained "
+            "matched-row filter or claiming SQL outcome equivalence additionally "
+            "requires totality, properness, non-volatility, and exact error premises."
+        )
+    if name in {
+        "position_rows_from_values",
+        "position_rows_from_nth_error",
+        "position_rows_from_filter_le_prefix",
+        "partition_runs_by_compare_exact_well_formed",
+    }:
+        return (
+            "Use as an intrinsic list/position or comparator-run fact.  Connect it "
+            "to QExpr_Rank/QExpr_Window only after proving the authoritative legal "
+            "ordering, aggregate/runtime-error, and BagClosed boundary premises."
+        )
+    if name in {
+        "rows_key_aligned_length",
+        "rows_key_aligned_firstn",
+        "rows_key_aligned_skipn",
+        "rows_key_aligned_filter",
+        "rows_key_aligned_total_map_transport",
+    }:
+        return (
+            "Use only with a semantic key relation.  Filter decisions must be "
+            "key-determined and maps total/deterministic; this interface does not "
+            "equate peer payload order, bags, volatile expressions, or SQL errors."
+        )
+    if name in {
+        "prefix_scan_observation_peer_transport",
+        "prefix_scan_outcome_peer_transport_iff",
+        "partitioned_prefix_scan_observation_peer_transport",
+        "partitioned_prefix_scan_outcome_peer_transport_iff",
+    }:
+        return (
+            "Use only after proving the adjacent-peer contract for every allowed swap: "
+            "the two affected post-filter observations and every later observed prefix "
+            "must agree semantically.  The outcome form additionally requires exact "
+            "error-category equivalence and does not equate hidden window rows."
+        )
+    if name in {
+        "order_by_rows_total_map_preimage",
+        "total_map_order_fetch_observation_iff",
+        "total_map_order_fetch_outcome_observation_iff",
+    }:
+        return (
+            "Use only with a semantic row map that preserves and reflects the complete "
+            "ORDER BY comparison, including NULL placement and ties.  The result ranges "
+            "over every legal representative; the outcome form still requires exact "
+            "child/join/projection/order error equivalence."
+        )
+    if name in {
+        "fold_nonempty_support_equiv",
+        "exact_extrema_aggregate_permutation",
+        "exact_extrema_aggregate_support_equiv",
+        "exact_extrema_aggregate_duplicate_block",
+        "exact_extrema_aggregate_runtime_error_duplicate_block",
+    }:
+        return (
+            "Use only for the explicitly enumerated exact MIN/MAX functions.  The "
+            "law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; "
+            "preserve child-error order through the separate runtime theorem."
+        )
+    if name in {
+        "first_runtime_error_duplicate_block",
+        "first_observation_error_duplicate_block",
+    }:
+        return (
+            "Use only for literal repetition of the same reached block in the same "
+            "prefix/suffix schedule.  Arbitrary support equivalence does not preserve "
+            "which SQL error is observed first."
+        )
+    if name in {
+        "numeric_round_quot_nonnegative_half_ulp",
+        "numeric_round_to_scale_nonnegative_half_ulp",
+        "numeric_sqrt_at_scale_half_ulp_shape",
+    }:
+        return (
+            "Use only under the displayed nonnegative input and scale premises.  "
+            "The coefficient shape is not itself a SQL comparison or runtime-safety result."
+        )
+    if name in {
+        "numeric_pg_div_scale_display_valid",
+        "numeric_of_scaled_compare_lt",
+        "finite_numeric_division_result_rounding",
+        "finite_numeric_division_strict_margin",
+    }:
+        return (
+            "Use with the exact selected-scale equation and explicit fixed-point "
+            "half-ULP margin.  Supply denominator nonzero, scale validity, and result "
+            "fit premises; do not infer them from rational order alone."
+        )
+    if name in {
+        "finite_numeric_division_runtime_error_zero_divisor",
+        "finite_numeric_division_runtime_error_invalid_scale",
+        "finite_numeric_division_runtime_error_missing_result",
+        "finite_numeric_division_runtime_error_result_out_of_range",
+    }:
+        return (
+            "Use for the exact displayed failure branch and preserve evaluation "
+            "reachability.  These categories are complementary to, not interchangeable "
+            "with, a generic no-error premise."
+        )
+    if name in {
+        "numeric_integer_stddev_samp_positive_success_iff",
+        "int32_avg_numeric_with_scale_success_iff",
+    }:
+        return (
+            "Use only after proving the positive sample numerator or nonempty AVG "
+            "fold/count premise.  Compose rounding, comparison, and runtime categories "
+            "through the separate NUMERIC interfaces."
+        )
+    if name == "numeric_of_scaled_compare_not_gt":
+        return (
+            "Use with nonnegative coefficients and the displayed cross-multiplied "
+            "non-strict bound.  The result excludes only Gt and deliberately retains Eq."
         )
     if name in {
         "eval_grouping_sets_outcome_Forall2_congr",
@@ -1888,6 +3148,44 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use to move an error observation across a `SelectColumns` query "
             "projection in either direction; no child error is discarded."
         )
+    if name == "tnull_select_lookup_direct_compose_interp_value":
+        return (
+            "Use when both SELECT stages have the displayed first-match direct "
+            "lookups.  No source-label presence premise is needed because the "
+            "conclusion preserves the original row-extended interpretation."
+        )
+    if name == "tnull_projection_rows_eq_of_output_values":
+        return (
+            "Use after proving exact equality of the two SELECT output-label sets "
+            "and equality of each cell observable through that set."
+        )
+    if name == "tnull_direct_projection_fusion_row_eq":
+        return (
+            "Applies to composition of one direct projection with a two-stage direct "
+            "projection after supplying the exact first-match lookup chains."
+        )
+    if name == "tnull_select_columns_lookup_output":
+        return (
+            "Use for a SelectColumns member instead of proving uniqueness or "
+            "manually reducing first-match lookup over a concrete list."
+        )
+    if name == "tnull_select_columns_projection_fusion_row_eq":
+        return (
+            "Applies when the compared projection composition uses SelectColumns; "
+            "it reduces the row law to output-set equality and outer-to-inner coverage."
+        )
+    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
+        return (
+            "Applies when the projection-composition row law is valid for every row. "
+            "A law restricted to reachable rows must instead discharge the original "
+            "reachable-bag contract."
+        )
+    if name == "query_project_success_bags_fusion_safe":
+        return (
+            "Use after proving all three SELECT lists locally safe and the named "
+            "fusion contract on every reachable child bag; errors and ordered "
+            "observations are outside this success-bag theorem."
+        )
     if name == "tnull_eval_group_bag_direct_columns_true_no_error":
         return (
             "Use after a child bag has been supplied to discharge only the local "
@@ -1916,6 +3214,38 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use when every reached HAVING decision is exactly TRUE and each of "
             "the four displayed per-group checks is safe; the conclusion is an "
             "ordered map and keeps duplicate group occurrences."
+        )
+    if name == "eval_groups_global_true_outcome_exact":
+        return (
+            "Use for `GROUP BY [] HAVING TRUE` after proving aggregate finalization "
+            "and scalar projection runtime safety for the one global group."
+        )
+    if name == "query_canonical_rows_map_factor_permut":
+        return (
+            "Use when a schema-changing projection or alias rename is moved "
+            "across grouping, quantified predicates, or another canonical bag "
+            "representative boundary."
+        )
+    if name == "eval_group_bag_global_true_success_exists":
+        return (
+            "Use to discharge an outcome-inhabitation premise for a runtime-safe "
+            "`GROUP BY [] HAVING TRUE` or scalar aggregate subquery."
+        )
+    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
+        return (
+            "Use at a successful scalar/global aggregate subquery when the child "
+            "is represented as a bag and the actual aggregate projection has a "
+            "separate permutation-stability proof."
+        )
+    if name == "group_projection_permutation_stable":
+        return (
+            "Use as the explicit contract required before treating a grouping "
+            "projection as a function of only the input bag."
+        )
+    if name == "rows_permut_implies_bag_eq":
+        return (
+            "Use after a semantic list-permutation proof when the enclosing "
+            "constructor or equivalence goal expects finite-bag equality."
         )
     if name == "eval_groups_acceptance_outcome_exact":
         return (
@@ -2131,6 +3461,100 @@ def has_top_level_implication(statement: str) -> bool:
 
 
 def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
+    if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
+        common = (
+            "The displayed `query_rename_schema_compatible` premise retains ordered "
+            "mapped outputs, collision/type safety, and admissibility of both endpoints.  "
+        )
+        specialized = {
+            "QExpr_Error_rename_transport":
+                "No child or local premise is needed; the error value itself must be identical.",
+            "QExpr_Values_rename_transport":
+                "Keep `query_bag_source_rename_safe` and exact mapped-bag equality; declared outputs alone do not constrain malformed rows.",
+            "QExpr_Table_rename_transport":
+                "Keep actual table-bag safety and exact mapped equality between the two database scans.",
+            "QExpr_Set_rename_transport":
+                "Keep union-support injection, both child transports, and the binary local compatibility premise for actual representatives.",
+            "QExpr_NaturalJoin_rename_transport":
+                "Keep union-support injection, both child transports, and the NULL-aware binary local compatibility premise.",
+            "QExpr_CrossJoin_rename_transport":
+                "Keep union-support injection, both endpoint disjointness proofs, both child transports, and binary local compatibility.",
+            "QExpr_Join_rename_transport":
+                "Keep union-support injection, both child transports, exact predicate outcomes over joined row environments, and full binary local compatibility.",
+            "QExpr_Project_rename_transport":
+                "Keep child transport and the projection-local compatibility premise; output-only alias mapping does not prove input-expression transport.",
+            "QExpr_RowMap_rename_transport":
+                "Keep child transport, pointwise callback compatibility, and successful-output collision/type safety.",
+            "QExpr_Filter_rename_transport":
+                "Keep child transport, exact Bool3/error formula compatibility, and ordered unary local compatibility.",
+            "QExpr_Group_rename_transport":
+                "Keep child transport, reachable group-formation pairing, exact HAVING plus aggregate-precheck compatibility, and unary local compatibility.",
+            "QExpr_GroupingSets_rename_transport":
+                "Keep child transport and one exact unary local compatibility proof covering every grouping-set branch.",
+            "QExpr_Rank_rename_transport":
+                "Keep both key-list relations, mapped fresh output alias, child transport, and exact rank-local compatibility.",
+            "QExpr_Window_rename_transport":
+                "Keep both key-list relations, mapped item aliases, child transport, and exact window-local compatibility.",
+            "QExpr_Distinct_rename_transport":
+                "Keep source-sort injection, child transport, and exact duplicate-elimination local compatibility.",
+            "QExpr_OrderBy_rename_transport":
+                "Keep the complete sort-key relation, child transport, and exact order-producing local compatibility.",
+            "QExpr_Offset_rename_transport":
+                "Keep the child transport; the constructor-local `skipn` compatibility is proved by the library.",
+            "QExpr_Fetch_rename_transport":
+                "Keep the child transport; the constructor-local `firstn` compatibility is proved by the library.",
+        }
+        return common + specialized[name]
+    if name in OUTPUT_ONLY_RENAMING_ADAPTER_ENTRIES:
+        return (
+            "The adapter uses the existing `QExpr_RowMap` and maps successful rows only; "
+            "retain the exact child evaluation and error category.  No conclusion about "
+            "attribute-bearing metadata inside the child query follows."
+        )
+    if name in MAPPED_SCHEMA_OBSERVATION_ENTRIES:
+        return (
+            "Retain the full mapped-schema and exact success/error relation displayed.  "
+            "For alpha-renaming, separately derive it from the relevant `QExpr_*_rename_transport` "
+            "theorems and their metadata, collision, typing, and admissibility premises."
+        )
+    if name == "tnull_rows_name_renaming_type_safe":
+        return (
+            "No injectivity premise is needed for this actual-row type/typmod fact.  "
+            "Collision reflection remains a separate `rows_rename_collision_safe` obligation."
+        )
+    if name in {
+        "tnull_attribute_name_renaming_type_preserving",
+        "tnull_attribute_name_renaming_value_conforms",
+    }:
+        return (
+            "No injectivity premise is needed for this one-attribute fact, but the "
+            "renamer must be the displayed name-only TNull adapter."
+        )
+    if name == "tnull_tuple_conforms_sort_renaming_transport":
+        return (
+            "Retain tuple conformance and `attribute_rename_injective_on sort`; "
+            "without the latter, finite-map keys can collide and lose a value."
+        )
+    if name in {
+        "tnull_rows_renaming_firstn_transport",
+        "tnull_rows_renaming_skipn_transport",
+    }:
+        return (
+            "Supply the exact `rows_rename_equiv` relation.  It fixes pointwise "
+            "renamed representatives, list order, length, and duplicate positions."
+        )
+    if name == "tnull_query_mapped_schema_outcome_equiv_mapped_schema":
+        return (
+            "Supply a textual `string -> string` map and exact mapped-schema outcomes.  "
+            "The facade applies `rename_tnull_attribute_name`, so typmods cannot change, "
+            "but this premise alone does not certify predicate/key/subquery metadata."
+        )
+    if name == "tnull_query_renaming_context_chain_transport":
+        return (
+            "Supply a textual `string -> string` map, `Forall2` compatibility for the "
+            "complete left/right context lists, and a transport proof for the holes.  "
+            "The facade preserves typmods and infers no metadata premise from output-only renaming."
+        )
     if name == "eval_join_row_conditions_acceptance_exact":
         return (
             "Supply `join_condition_acceptance_exact_at` for every right-row "
@@ -2190,6 +3614,41 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "The projection must have the displayed direct-column form.  Preserve "
             "the exact child error and fixed database/environment in both directions."
         )
+    if name == "tnull_select_lookup_direct_compose_interp_value":
+        return (
+            "Both displayed lookup equalities are mandatory and use authoritative "
+            "first-match semantics; the theorem deliberately has no source-presence premise."
+        )
+    if name == "tnull_projection_rows_eq_of_output_values":
+        return (
+            "Retain exact output-label-set equality and cell equality for every "
+            "attribute in the left output set; neither premise follows from arity alone."
+        )
+    if name == "tnull_direct_projection_fusion_row_eq":
+        return (
+            "Retain equal final output-label sets and all three first-match lookup "
+            "equations for every observable target; repeated aliases cannot select a later item."
+        )
+    if name == "tnull_select_columns_lookup_output":
+        return (
+            "The attribute must belong to the displayed SelectColumns output set. "
+            "Repeated identical columns remain valid under first-match semantics."
+        )
+    if name == "tnull_select_columns_projection_fusion_row_eq":
+        return (
+            "Retain exact single/outer output-set equality and outer-to-inner set "
+            "coverage; coverage prevents correlated fallback for an absent inner label."
+        )
+    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
+        return (
+            "The displayed all-row semantic equality is a stronger sufficient "
+            "premise; the resulting contract still ranges only over reachable child bags."
+        )
+    if name == "query_project_success_bags_fusion_safe":
+        return (
+            "Keep all three per-row SELECT safety premises and the exact reachable-bag "
+            "fusion contract; the theorem does not establish error equivalence."
+        )
     if name == "tnull_eval_group_bag_direct_columns_true_no_error":
         return (
             "Keep all three displayed restrictions: direct-column SELECT, matching "
@@ -2212,6 +3671,34 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "aggregate safety, exact TRUE acceptance, and scalar SELECT safety; "
             "do not replace the resulting list map by a bag or set."
         )
+    if name == "eval_groups_global_true_outcome_exact":
+        return (
+            "Aggregate finalization and scalar SELECT evaluation must be safe in "
+            "the one environment formed from `rev rows`; HAVING is literally TRUE."
+        )
+    if name == "query_canonical_rows_map_factor_permut":
+        return (
+            "The representation map must respect semantic tuple equality, and "
+            "the displayed pointwise factor equation must hold for every source item."
+        )
+    if name == "eval_group_bag_global_true_success_exists":
+        return (
+            "Aggregate finalization and scalar SELECT evaluation must be safe for "
+            "every group list that the representative-saturated reset may choose."
+        )
+    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
+        return (
+            "Retain input-representative validity, aggregate and scalar SELECT "
+            "safety for every possible global group, explicit projection "
+            "permutation stability, and the successful reset outcome."
+        )
+    if name == "group_projection_permutation_stable":
+        return (
+            "This is a property to prove, not an unconditional theorem; floating-"
+            "point SUM/AVG generally do not satisfy it."
+        )
+    if name == "rows_permut_implies_bag_eq":
+        return "The two row lists must be semantically permuted under `OTuple`."
     if name == "eval_groups_acceptance_outcome_exact":
         return (
             "For every reached group retain SELECT and HAVING aggregate safety "
@@ -2390,6 +3877,18 @@ def validate_navigation(
     if not has_top_level_implication("Lemma premise : forall x, P x -> Q x."):
         raise ValueError("premise classifier missed a top-level antecedent")
 
+    if "lemma-catalog/" in index or "PRIMARY_CARD" in index:
+        raise ValueError("catalog index advertises an obsolete search path")
+    if len(index.encode("utf-8")) > MAX_INDEX_BYTES:
+        raise ValueError("catalog index compactness regression")
+    if ".[0:" in index:
+        raise ValueError("catalog index retained a silent top-k slice")
+    if index.count("{total: length") != 2:
+        raise ValueError("catalog index must expose totals for both paged searches")
+    for route in ROUTES:
+        if f"| `{route}` |" not in index:
+            raise ValueError(f"catalog index omits neutral route {route}")
+
     by_name = {str(entry["name"]): entry for entry in entries}
 
     def entry(name: str) -> dict[str, object]:
@@ -2413,7 +3912,6 @@ def validate_navigation(
         name: str,
         card: str,
         required_routes: set[str],
-        maximum_ranks: dict[str, int] | None = None,
     ) -> None:
         if primary(name) != card:
             raise ValueError(f"{name}: expected primary card {card}")
@@ -2422,10 +3920,6 @@ def validate_navigation(
             raise ValueError(
                 f"{name}: missing required routes {sorted(missing_routes)}"
             )
-        for route, maximum in (maximum_ranks or {}).items():
-            observed = int(entry(name)["routeRanks"][route])  # type: ignore[index]
-            if observed > maximum:
-                raise ValueError(f"{name}: {route} rank {observed} exceeds {maximum}")
 
     def require(name: str, *topics: str) -> None:
         missing = {topic.casefold() for topic in topics} - aliases(name)
@@ -2502,6 +3996,46 @@ def validate_navigation(
         )
     if not {"outcome", "runtime"} <= routes(ordered_outcome):
         raise ValueError(f"{ordered_outcome}: missing outcome/runtime cross-route")
+
+    # Every non-leaf query constructor has an authoritative exact typed-outcome
+    # congruence in FormalSQL.  Keep the family complete and searchable so an
+    # agent never re-proves a constructor lift by unfolding the evaluator.
+    expected_constructor_congruences = expected_query_constructor_congruences()
+    if GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES != expected_constructor_congruences:
+        raise ValueError(
+            "query syntax and constructor congruence inventory diverged: "
+            f"missing={sorted(expected_constructor_congruences - GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES)}, "
+            f"stale={sorted(GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES - expected_constructor_congruences)}"
+        )
+    missing_constructor_congruences = (
+        GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES - by_name.keys()
+    )
+    if missing_constructor_congruences:
+        raise ValueError(
+            "query constructor congruence coverage regressed: "
+            f"{sorted(missing_constructor_congruences)}"
+        )
+    for congruence in GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES:
+        if not {"outcome", "runtime"} <= routes(congruence):
+            raise ValueError(
+                f"{congruence}: missing outcome/runtime constructor routes"
+            )
+        if str(entry(congruence)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{congruence}: constructor congruence is not FormalSQL-owned"
+            )
+    require_route_contract(
+        "query_expr_context_global_congr",
+        "runtime-verification-rewrite.md",
+        {"outcome", "runtime"},
+    )
+    require_route_contract(
+        "query_context_global_congr",
+        "runtime-verification-rewrite.md",
+        {"outcome", "runtime"},
+    )
     grouped_facade = "tnull_eval_groups_having_key_conj_filter_exact"
     if primary(grouped_facade) != "aggregate-grouping.md" or not {
         "facade",
@@ -2524,23 +4058,125 @@ def validate_navigation(
         "query_expr_filter_outcome_congr_extensional",
         "relational-algebra.md",
         {"outcome", "runtime", "filter"},
-        {"filter": 0, "outcome": 10, "runtime": 10},
     )
     require_route_contract(
         "eval_filter_rows_ordered_outcome_congr",
         "relational-algebra.md",
         {"outcome", "runtime", "filter"},
-        {"filter": 8, "outcome": 16, "runtime": 16},
     )
     require_route_contract(
         "interp_predicate_eq_true_is_true_acceptance",
         "null-predicates.md",
         {"filter", "scalar"},
-        {"filter": 2, "scalar": 0},
     )
     row_facade = "tnull_row_eq_of_labels_and_values"
     if not {"facade", "projection"} <= routes(row_facade):
         raise ValueError(f"{row_facade}: row-extensionality route regressed")
+
+    renaming_entries = {
+        "tnull_attribute_name_renaming_type_preserving",
+        "tnull_attribute_name_renaming_value_conforms",
+        "tnull_rows_name_renaming_type_safe",
+        "tnull_tuple_conforms_sort_renaming_transport",
+        "tnull_rows_renaming_firstn_transport",
+        "tnull_rows_renaming_skipn_transport",
+        "tnull_query_mapped_schema_outcome_equiv_mapped_schema",
+        "tnull_query_renaming_context_chain_transport",
+    }
+    for renaming_entry in renaming_entries:
+        require_route_contract(
+            renaming_entry,
+            "renaming-transport.md",
+            {"renaming", "facade"},
+        )
+        require(
+            renaming_entry,
+            "rename",
+            "renaming",
+            "alias",
+            "alpha-renaming",
+            "transport",
+        )
+    for generic_entry in (
+        GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS
+        | GENERIC_RENAMING_DIMENSION_ENTRIES
+    ):
+        require_route_contract(
+            generic_entry,
+            "renaming-transport.md",
+            {"renaming"},
+        )
+        require(
+            generic_entry,
+            "rename",
+            "renaming",
+            "alias",
+            "alpha-renaming",
+            "transport",
+        )
+        generic_source = str(entry(generic_entry)["source"])
+        if not (
+            generic_source.startswith("vendor/FormalSQL/src/data/sql/")
+            or generic_source == "theories/FormalSQL/RenameTransportFacts.v"
+        ):
+            raise ValueError(
+                f"{generic_entry}: unexpected renaming source {generic_source}"
+            )
+    for constructor_entry, operator_route in {
+        "QExpr_Project_rename_transport": "projection",
+        "QExpr_Join_rename_transport": "join",
+    }.items():
+        require_route_contract(
+            constructor_entry,
+            "renaming-transport.md",
+            {"renaming", operator_route},
+        )
+
+    for observation_only in OUTPUT_ONLY_RENAMING_ADAPTER_ENTRIES:
+        require_route_contract(
+            observation_only,
+            "renaming-transport.md",
+            {"renaming"},
+        )
+        if "not a full query alpha-renaming" not in str(
+            entry(observation_only)["summary"]
+        ):
+            raise ValueError(
+                f"{observation_only}: output-only alpha-renaming warning regressed"
+            )
+    for mapped_observation in MAPPED_SCHEMA_OBSERVATION_ENTRIES:
+        require_route_contract(
+            mapped_observation,
+            "renaming-transport.md",
+            {"renaming"},
+        )
+        if "does not certify renamed operator metadata" not in str(
+            entry(mapped_observation)["summary"]
+        ):
+            raise ValueError(
+                f"{mapped_observation}: mapped-schema observation warning regressed"
+            )
+    require_route_contract(
+        "tnull_query_renaming_context_chain_transport",
+        "renaming-transport.md",
+        {"renaming", "facade", "grouping", "projection", "join", "bag", "ordered"},
+    )
+    for query_facade in {
+        "tnull_query_mapped_schema_outcome_equiv_mapped_schema",
+        "tnull_query_renaming_context_chain_transport",
+    }:
+        if "(rename_name : string -> string)" not in str(entry(query_facade)["statement"]):
+            raise ValueError(f"{query_facade}: TNull facade is not name-only")
+    if "rename_tnull_attribute_name rename_name" not in str(
+        entry("tnull_query_mapped_schema_outcome_equiv_mapped_schema")["statement"]
+    ):
+        raise ValueError("TNull mapped-schema facade bypasses the typmod-preserving adapter")
+    renaming_document = documents["renaming-transport.md"]
+    for generic_source in ("SqlRenameFacts.v", "SqlQueryRenameTransport.v"):
+        if generic_source not in renaming_document:
+            raise ValueError(
+                f"renaming catalog omits FormalSQL ownership source: {generic_source}"
+            )
 
     # Generic JOIN execution interfaces keep exact Bool3 acceptance, branch
     # projection, and error scheduling explicit.  They must remain reachable
@@ -2553,25 +4189,21 @@ def validate_navigation(
             row_acceptance,
             "relational-algebra.md",
             {"outcome", "runtime", "join"},
-            {"join": 6, "outcome": 14, "runtime": 14},
         )
     require_route_contract(
         "project_join_sources_outcome_exact_map",
         "relational-algebra.md",
         {"outcome", "runtime", "projection", "join"},
-        {"join": 4, "projection": 4, "outcome": 10, "runtime": 10},
     )
     require_route_contract(
         "eval_join_bag_safe_of_acceptance_projection_exact",
         "relational-algebra.md",
         {"outcome", "runtime", "projection", "join", "bag"},
-        {"join": 0, "outcome": 2, "runtime": 2, "projection": 6, "bag": 6},
     )
     require_route_contract(
         "tnull_join_condition_pred_acceptance_exact_safe",
         "runtime-verification-rewrite.md",
         {"facade", "runtime", "filter", "join", "scalar"},
-        {"facade": 0, "join": 2, "runtime": 4, "filter": 6},
     )
 
     for row_law in {"tnull_row_eq_refl", "tnull_row_eq_sym", "tnull_row_eq_trans"}:
@@ -2579,7 +4211,6 @@ def validate_navigation(
             row_law,
             "relational-algebra.md",
             {"facade", "projection"},
-            {"facade": 8, "projection": 10},
         )
     for lookup_presence in {
         "tnull_select_lookup_some_iff_projected_label",
@@ -2589,25 +4220,21 @@ def validate_navigation(
             lookup_presence,
             "relational-algebra.md",
             {"facade", "projection"},
-            {"facade": 6, "projection": 4},
         )
     require_route_contract(
         "tnull_project_rows_select_columns_success",
         "relational-algebra.md",
         {"facade", "runtime", "projection"},
-        {"facade": 4, "runtime": 8, "projection": 2},
     )
     require_route_contract(
         "tnull_query_expr_project_select_columns_error_iff",
         "runtime-verification-rewrite.md",
         {"facade", "outcome", "runtime", "projection"},
-        {"facade": 4, "outcome": 4, "runtime": 4, "projection": 6},
     )
     require_route_contract(
         "tnull_eval_group_bag_direct_columns_true_no_error",
         "aggregate-grouping.md",
         {"facade", "outcome", "grouping", "runtime", "bag"},
-        {"facade": 2, "outcome": 4, "grouping": 2, "runtime": 2, "bag": 8},
     )
 
     # Exact acceptance and grouping interfaces must remain reachable through
@@ -2616,31 +4243,51 @@ def validate_navigation(
         "formula_conj_acceptance_exact",
         "aggregate-grouping.md",
         {"grouping", "filter", "scalar"},
-        {"grouping": 34, "filter": 38, "scalar": 20},
     )
     require_route_contract(
         "formula_exists_acceptance_exact",
         "subquery-predicates.md",
         {"filter", "runtime", "scalar"},
-        {"filter": 38},
     )
     require_route_contract(
         "eval_groups_true_outcome_exact",
         "aggregate-grouping.md",
         {"outcome", "grouping", "runtime"},
-        {"grouping": 22},
+    )
+    require_route_contract(
+        "eval_groups_global_true_outcome_exact",
+        "aggregate-grouping.md",
+        {"outcome", "grouping", "runtime"},
+    )
+    require_route_contract(
+        "query_canonical_rows_map_factor_permut",
+        "aggregate-grouping.md",
+        {"grouping", "bag", "renaming", "projection"},
+    )
+    require_route_contract(
+        "eval_group_bag_global_true_success_exists",
+        "aggregate-grouping.md",
+        {"outcome", "grouping", "runtime", "scalar"},
+    )
+    require_route_contract(
+        "eval_group_bag_global_true_success_bag_unique_if_stable",
+        "aggregate-grouping.md",
+        {"outcome", "grouping", "bag", "scalar"},
+    )
+    require_route_contract(
+        "rows_permut_implies_bag_eq",
+        "aggregate-grouping.md",
+        {"bag"},
     )
     require_route_contract(
         "eval_groups_acceptance_outcome_exact",
         "aggregate-grouping.md",
         {"outcome", "grouping", "runtime"},
-        {"outcome": 20, "grouping": 18, "runtime": 22},
     )
     require_route_contract(
         "bag_filter_congr_on_support",
         "relational-algebra.md",
         {"filter", "bag"},
-        {"filter": 38, "bag": 20},
     )
     for union_bag_law in BAG_ALGEBRA_DECLARATIONS:
         require_route_contract(
@@ -2652,25 +4299,21 @@ def validate_navigation(
         "query_expr_project_success_Forall",
         "relational-algebra.md",
         {"projection"},
-        {"projection": 8},
     )
     require_route_contract(
         "tnull_projection_envs_eq_of_select_items",
         "relational-algebra.md",
         {"facade", "projection"},
-        {"facade": 2, "projection": 0},
     )
     require_route_contract(
         "query_expr_union_success_Forall",
         "relational-algebra.md",
         {"bag"},
-        {"bag": 8},
     )
     require_route_contract(
         "query_expr_cross_join_success_Forall",
         "relational-algebra.md",
         {"join", "bag"},
-        {"join": 8, "bag": 10},
     )
     for scheduler, required_routes in (
         ("eval_grouping_sets_outcome_Forall2_congr", {"outcome", "grouping", "runtime"}),
@@ -2681,19 +4324,16 @@ def validate_navigation(
             scheduler,
             "aggregate-grouping.md",
             required_routes,
-            {route: 4 for route in required_routes},
         )
     require_route_contract(
         "aggregate_distinct_input_Permutation_of_NoDup_support",
         "aggregate-grouping.md",
         {"grouping", "bag"},
-        {"grouping": 6, "bag": 8},
     )
     require_route_contract(
         "partition_keys_Permutation_of_NoDup_support",
         "aggregate-grouping.md",
         {"grouping", "bag"},
-        {"grouping": 8, "bag": 10},
     )
     for bag_law, required_routes in (
         ("query_bag_filter_union", {"filter", "bag"}),
@@ -2713,157 +4353,141 @@ def validate_navigation(
         "in_rows_acceptance_existsb",
         "subquery-predicates.md",
         {"filter", "join", "scalar"},
-        {"filter": 0, "join": 0, "scalar": 2},
     )
     require_route_contract(
         "tnull_direct_projection_alias_value",
         "relational-algebra.md",
         {"facade", "projection"},
-        {"facade": 16, "projection": 4},
+    )
+    require_route_contract(
+        "tnull_select_columns_lookup_output",
+        "relational-algebra.md",
+        {"facade", "projection"},
+    )
+    require_route_contract(
+        "tnull_select_columns_projection_fusion_row_eq",
+        "relational-algebra.md",
+        {"facade", "projection"},
     )
     require_route_contract(
         "tnull_select_lookup_direct_compose",
         "relational-algebra.md",
         {"facade", "projection"},
-        {"facade": 2, "projection": 2},
     )
     require_route_contract(
         "tnull_select_lookup_constant_direct_compose",
         "relational-algebra.md",
         {"facade", "projection"},
-        {"facade": 2, "projection": 2},
     )
     require_route_contract(
         "database_conforms_schema_primary_key",
         "schema-integrity.md",
         {"schema"},
-        {"schema": 30},
     )
     require_route_contract(
         "query_same_rows_as_conforming_table_present_attribute",
         "cardinality-composition.md",
         {"cardinality", "schema"},
-        {"schema": 6},
     )
     require_route_contract(
         "query_expr_table_success_rows_present_conform_attribute",
         "cardinality-composition.md",
         {"cardinality", "schema"},
-        {"schema": 2},
     )
     require_route_contract(
         "query_same_rows_as_conforming_table_absent_attribute",
         "cardinality-composition.md",
         {"cardinality", "schema"},
-        {"schema": 4},
     )
     require_route_contract(
         "query_expr_table_success_rows_absent_attribute",
         "cardinality-composition.md",
         {"cardinality", "schema"},
-        {"schema": 0},
     )
     require_route_contract(
         "database_conforms_schema_foreign_key_nonnull_referenced",
         "schema-integrity.md",
         {"schema"},
-        {"schema": 30},
     )
     require_route_contract(
         "eval_group_bag_exact_rows_permut_equiv",
         "aggregate-grouping.md",
         {"grouping", "bag"},
-        {"grouping": 8, "bag": 18},
     )
     require_route_contract(
         "tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows",
         "numeric-derived.md",
         {"grouping", "bag", "scalar"},
-        {"grouping": 0},
     )
     require_route_contract(
         "tnull_closed_group_sum_numeric_dot_value_runtime_exact",
         "numeric-derived.md",
         {"grouping", "runtime", "scalar"},
-        {"grouping": 2, "runtime": 8},
     )
     require_route_contract(
         "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact",
         "numeric-derived.md",
         {"grouping", "runtime", "scalar"},
-        {"grouping": 14, "runtime": 18},
     )
     require_route_contract(
         "query_make_groups_permut_nonempty",
         "aggregate-grouping.md",
         {"grouping"},
-        {"grouping": 12},
     )
     require_route_contract(
         "query_make_groups_projected_bag_eq_of_support_rel",
         "aggregate-grouping.md",
         {"grouping", "bag"},
-        {"grouping": 4, "bag": 6},
     )
     require_route_contract(
         "tnull_direct_columns_group_projection_support_rel",
         "aggregate-grouping.md",
         {"facade", "grouping", "projection", "bag"},
-        {"grouping": 6, "projection": 8, "bag": 10},
     )
     require_route_contract(
         "tnull_direct_columns_group_rows_bag_eq_of_projection_support",
         "aggregate-grouping.md",
         {"facade", "grouping", "projection", "bag"},
-        {"grouping": 2, "projection": 16, "bag": 2},
     )
     require_route_contract(
         "eval_group_bag_true_projected_support_equiv",
         "aggregate-grouping.md",
         {"outcome", "grouping", "bag"},
-        {"outcome": 8, "grouping": 4},
     )
     require_route_contract(
         "query_expr_group_outcome_equiv_of_supported_child_outcomes",
         "aggregate-grouping.md",
         {"outcome", "grouping"},
-        {"outcome": 4, "grouping": 4},
     )
     require_route_contract(
         "tnull_direct_columns_group_outcome_equiv_of_projected_support",
         "aggregate-grouping.md",
         {"facade", "outcome", "grouping", "runtime"},
-        {"facade": 0, "outcome": 0, "grouping": 0, "runtime": 4},
     )
     require_route_contract(
         "list_support_rel_compose",
         "relational-algebra.md",
         {"bag"},
-        {"bag": 8},
     )
     require_route_contract(
         "list_support_rel_map_left_with_witness",
         "relational-algebra.md",
         {"projection", "bag"},
-        {"projection": 14, "bag": 16},
     )
     require_route_contract(
         "group_filter_map_permutation",
         "aggregate-grouping.md",
         {"grouping", "filter", "bag"},
-        {"grouping": 14},
     )
     require_route_contract(
         "query_canonical_rows_length",
         "cardinality-composition.md",
         {"grouping", "cardinality"},
-        {"grouping": 16, "cardinality": 28},
     )
     require_route_contract(
         "query_make_groups_constant_nonempty_key",
         "aggregate-grouping.md",
         {"grouping"},
-        {"grouping": 24},
     )
 
     # Fixed-environment bag-reset congruence retains exact child-error order;
@@ -2872,7 +4496,6 @@ def validate_navigation(
         "query_expr_outcome_equiv_implies_success_bags",
         "relational-algebra.md",
         {"outcome", "runtime", "bag"},
-        {"bag": 22},
     )
     require_route_contract(
         "eval_query_expr_set_error_iff",
@@ -2893,7 +4516,6 @@ def validate_navigation(
         "query_expr_cross_join_outcome_equiv_congr",
         "runtime-verification-rewrite.md",
         {"outcome", "runtime", "join"},
-        {"join": 22},
     )
 
     # Projection/UNION ALL interfaces expose the correct bag layer while the
@@ -2902,19 +4524,41 @@ def validate_navigation(
         "query_project_success_bags_safe",
         "relational-algebra.md",
         {"runtime", "projection", "bag"},
-        {"projection": 22},
     )
     require_route_contract(
         "query_expr_project_bag_closed_safe",
         "runtime-verification-rewrite.md",
         {"runtime", "projection", "bag"},
-        {"projection": 2, "bag": 6},
     )
     require_route_contract(
         "query_expr_filter_bag_closed_exact",
         "relational-algebra.md",
         {"filter", "bag"},
-        {"filter": 2, "bag": 6},
+    )
+    require_route_contract(
+        "query_structural_successes_bag_closed",
+        "relational-algebra.md",
+        {"bag"},
+    )
+    require_route_contract(
+        "query_bag_reset_success_permutation_closed",
+        "relational-algebra.md",
+        {"bag"},
+    )
+    require_route_contract(
+        "query_project_preserves_success_permutation_closed",
+        "relational-algebra.md",
+        {"projection", "bag"},
+    )
+    require_route_contract(
+        "query_row_map_preserves_success_permutation_closed",
+        "relational-algebra.md",
+        {"projection", "bag"},
+    )
+    require_route_contract(
+        "query_filter_preserves_success_permutation_closed",
+        "relational-algebra.md",
+        {"filter", "bag"},
     )
     require_route_contract(
         "query_project_bag_congr",
@@ -2925,13 +4569,11 @@ def validate_navigation(
         "query_table_success_bags_functional",
         "relational-algebra.md",
         {"bag"},
-        {"bag": 24},
     )
     require_route_contract(
         "query_cross_join_union_right_success_bags",
         "relational-algebra.md",
         {"join", "bag"},
-        {"join": 22},
     )
     for distribution in {
         "query_expr_cross_join_union_right_equiv_safe",
@@ -2941,35 +4583,47 @@ def validate_navigation(
             distribution,
             "runtime-verification-rewrite.md",
             {"outcome", "runtime", "join", "bag"},
-            {"join": 22},
         )
     require_route_contract(
         "query_expr_project_outcome_equiv_congr_safe",
         "runtime-verification-rewrite.md",
         {"outcome", "runtime", "projection"},
-        {"projection": 22},
     )
 
+    expected_entry_keys = {
+        "name",
+        "kind",
+        "source",
+        "line",
+        "sourceDomain",
+        "semanticDomain",
+        "catalog",
+        "routes",
+        "summary",
+        "topics",
+        "statement",
+    }
     for value in entries:
+        if set(value) != expected_entry_keys:
+            raise ValueError(
+                f"{value.get('name', '<unnamed>')}: unexpected catalog entry fields "
+                f"{sorted(set(value) - expected_entry_keys)}; missing "
+                f"{sorted(expected_entry_keys - set(value))}"
+            )
         value_routes = list(value["routes"])  # type: ignore[arg-type]
-        route_ranks = dict(value["routeRanks"])  # type: ignore[arg-type]
         if value["semanticDomain"] != value["catalog"]:
             raise ValueError(f"{value['name']}: semantic/catalog domains disagree")
         if value["sourceDomain"] not in DOMAINS:
             raise ValueError(f"{value['name']}: unknown source domain")
         if value_routes != [route for route in ROUTES if route in value_routes]:
             raise ValueError(f"{value['name']}: cross-routes are not deterministic")
-        if set(value_routes) != set(route_ranks):
-            raise ValueError(f"{value['name']}: route/rank keys disagree")
-        if int(value["rank"]) != min(route_ranks.values(), default=100):
-            raise ValueError(f"{value['name']}: aggregate rank disagrees with routes")
         if "admissibility" in value_routes:
             raise ValueError(
                 f"{value['name']}: instance admissibility leaked into catalog"
             )
         if "admissible" in identifier_tokens(str(value["name"])) and value_routes:
             raise ValueError(
-                f"{value['name']}: admissibility constructor entered ranked navigation"
+                f"{value['name']}: admissibility constructor entered catalog navigation"
             )
     empty_routes = [
         route
@@ -2986,6 +4640,11 @@ def validate_navigation(
         raise ValueError("catalog retained a generic fallback applicability sentence")
 
     for phrase in (
+        "rename",
+        "renaming",
+        "alias",
+        "alpha-renaming",
+        "transport",
         "outer join",
         "semi join",
         "anti join",
@@ -3041,12 +4700,6 @@ def validate_navigation(
             f"{sorted(union_features)}"
         )
 
-    if len(index.encode("utf-8")) > MAX_INDEX_BYTES:
-        raise ValueError("catalog index compactness regression")
-    if "ProofAgentFacade.v" not in index or "OrderedQueryFacts.v" not in index:
-        raise ValueError("compact outcome decision route omits a generic source module")
-
-
 def source_domain(module: str) -> tuple[str, dict[str, object]]:
     matches = [
         (filename, domain)
@@ -3060,12 +4713,22 @@ def source_domain(module: str) -> tuple[str, dict[str, object]]:
     return matches[0]
 
 
+def catalog_source_href(source: str) -> str:
+    """Return a card-relative link for either Logos or vendored FormalSQL."""
+    return Path(os.path.relpath(ROOT / source, CATALOG)).as_posix()
+
+
 def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
     entries: list[dict[str, object]] = []
     by_domain: dict[str, list[dict[str, object]]] = {name: [] for name in DOMAINS}
     seen: set[str] = set()
     normalized_statements: dict[str, str] = {}
-    for path in sorted(THEORIES.glob("*.v")):
+    public_sources = [
+        *THEORIES.glob("*.v"),
+        *GENERIC_RENAMING_SOURCES,
+        *GENERIC_QUERY_CONTEXT_SOURCES,
+    ]
+    for path in sorted(public_sources):
         source_domain_name, _ = source_domain(path.name)
         for raw in extract_declarations(path):
             name = str(raw["name"])
@@ -3097,12 +4760,8 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                 source_domain_name, path.name, name, source_features
             )
             features = semantic_features(domain_name, path.name, name, statement)
-            topics = topics_for(domain_name, features)
+            topics = topics_for(name, domain_name, features)
             routes = semantic_routes(domain_name, path.name, name, features)
-            route_ranks = {
-                route: route_rank(route, domain_name, path.name, str(raw["kind"]), name)
-                for route in routes
-            }
             entry = {
                 "name": name,
                 "kind": raw["kind"],
@@ -3112,8 +4771,6 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                 "semanticDomain": domain_name,
                 "catalog": domain_name,
                 "routes": list(routes),
-                "routeRanks": route_ranks,
-                "rank": min(route_ranks.values(), default=100),
                 "summary": summary_for(name, domain_name, features),
                 "topics": topics,
                 "statement": statement,
@@ -3139,10 +4796,13 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
             + ". Source declarations are authoritative; every statement below is verbatim and has no proof body.",
             "",
         ]
+        if "ownership" in domain:
+            lines.extend([str(domain["ownership"]), ""])
         for entry in values:
             source = str(entry["source"])
             line = int(entry["line"])
             module = Path(source).name
+            source_href = catalog_source_href(source)
             statement = str(entry["statement"])
             topics = list(entry["topics"])
             features = semantic_features(
@@ -3150,7 +4810,7 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
             )
             cross_index = (
                 ", ".join(
-                    f"`{route}` (rank {entry['routeRanks'][route]})"  # type: ignore[index]
+                    f"`{route}`"
                     for route in entry["routes"]  # type: ignore[union-attr]
                 )
                 or "primary card only"
@@ -3159,7 +4819,7 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                 [
                     f"## `{entry['name']}`",
                     "",
-                    f"Source: [`{source}:{line}`](../{module}#L{line})",
+                    f"Source: [`{source}:{line}`]({source_href}#L{line})",
                     "",
                     f"Purpose/direction: {entry['summary']}",
                     "",
@@ -3182,40 +4842,23 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
     index_lines = [
         "# FormalSQL reusable lemma catalog",
         "",
-        "This is a compact navigation index. The Rocq source is authoritative; `manifest.json` contains the exact declaration statements plus deterministic primary-domain, cross-route, and route-rank metadata. Lower rank means a better first read.",
+        "This is a compact, unranked navigation index. The Rocq source is authoritative; `manifest.json` contains each exact declaration statement plus deterministic source, primary-domain, cross-route, and topic metadata.",
         "",
-        "Do not open a whole domain card. Pick one route, take at most eight ranked results, then open only the exact declaration block in its primary card (or its authoritative source line). The catalog is not an admissibility prover: use the generated `Queries.v` admissibility certificates for the concrete instance.",
+        "Routes and topics are neutral filters, not proof plans. No declaration receives a relevance score or preferred position. Search results below are ordered only by source path, source line, and declaration name; use the reported total and explicit pages to inspect every match.",
         "",
-        "## Fast routes",
+        "The catalog is not an admissibility prover: use the generated `Queries.v` admissibility certificates for the concrete instance.",
         "",
+        "## Neutral routes",
+        "",
+        "| Route | Scope |",
+        "|---|---|",
     ]
-    for route in INDEX_PREVIEW_ROUTES:
-        route_spec = ROUTES[route]
-        index_lines.extend(
-            [
-                f"### `{route}` — {route_spec['title']}",
-                "",
-                str(route_spec["description"]).capitalize() + ".",
-                "",
-                "| Rank | Declaration | Primary card |",
-                "|---:|---|---|",
-            ]
+    for route, route_spec in ROUTES.items():
+        index_lines.append(
+            f"| `{route}` | {str(route_spec['description']).capitalize()}. |"
         )
-        for entry in ranked_entries_for_route(entries, route)[:INDEX_PREVIEW_PER_ROUTE]:
-            index_lines.append(
-                f"| {entry['routeRanks'][route]} | `{entry['name']}` | "  # type: ignore[index]
-                f"[{entry['catalog']}]({entry['catalog']}) |"
-            )
-        index_lines.append("")
     index_lines.extend(
         [
-            "## Decision tree",
-            "",
-            "1. For an error-preserving query goal, inspect the ranked `facade` results and then `outcome`; this cross-index includes generic bridges from `ProofAgentFacade.v` and `OrderedQueryFacts.v`.",
-            "2. For GROUP BY/HAVING or SINGLE_VALUE, inspect `grouping`; prefer a facade wrapper before lower-level grouping internals.",
-            "3. For a separate safety premise, inspect `runtime`; do not identify a runtime error with NULL or empty success.",
-            "4. For the smallest differing relational operator, use `projection`, `filter`, `join`, `bag`, `ordered`, or `cardinality` through the bounded query below.",
-            "5. For a scalar or schema obligation, use `scalar` or `schema`. Use `query-syntax-bridges.md` only for a tuple/syntax adapter.",
             "",
             "## Primary semantic cards",
             "",
@@ -3230,30 +4873,49 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
     index_lines.extend(
         [
             "",
-            "## Bounded ranked search",
+            "## Stable paged search",
+            "",
+            "Run these commands from the Logos repository root. Each query reports the total number of matches and returns one explicit page; increase `page` until `offset >= total` rather than treating the first page as a shortlist.",
             "",
             "```bash",
-            "route=outcome",
-            "jq --arg route \"$route\" '[.entries[] | select(.routes | index($route))] | sort_by([.routeRanks[$route], .name]) | .[:8] | map({name, rank: .routeRanks[$route], catalog, source, line, summary})' lemma-catalog/manifest.json",
-            "jq --arg re 'projection|cross join' '[.entries[] | select((.topics | join(\" \")) | test($re; \"i\"))] | sort_by([.rank, .name]) | .[:8] | map({name, rank, routes, catalog, source, line})' lemma-catalog/manifest.json",
-            "rg -n -A 35 '^## `DECLARATION_NAME`$' lemma-catalog/PRIMARY_CARD.md",
+            "catalog=theories/FormalSQL/catalog",
+            'route="${ROUTE:?set ROUTE to one manifest route}"',
+            'page="${PAGE:-0}"',
+            f'page_size="${{PAGE_SIZE:-{CATALOG_PAGE_SIZE}}}"',
+            "offset=$((page * page_size))",
+            'jq --arg route "$route" --argjson offset "$offset" --argjson page_size "$page_size" \'',
+            "  [.entries[] | select(.routes | index($route))]",
+            "  | sort_by([.source, .line, .name])",
+            "  | {total: length, offset: $offset, pageSize: $page_size,",
+            "     entries: .[$offset:($offset + $page_size)]",
+            "       | map({name, routes, catalog, source, line, summary})}",
+            '\' "$catalog/manifest.json"',
+            "",
+            'pattern="${PATTERN:?set PATTERN to a declaration-name or topic regex}"',
+            'jq --arg re "$pattern" --argjson offset "$offset" --argjson page_size "$page_size" \'',
+            '  [.entries[] | select((.topics | join(" ")) | test($re; "i"))]',
+            "  | sort_by([.source, .line, .name])",
+            "  | {total: length, offset: $offset, pageSize: $page_size,",
+            "     entries: .[$offset:($offset + $page_size)]",
+            "       | map({name, routes, catalog, source, line})}",
+            '\' "$catalog/manifest.json"',
+            "",
+            'name="${DECLARATION:?set DECLARATION to an exact declaration name}"',
+            'card=$(jq -r --arg name "$name" \'.entries[] | select(.name == $name) | .catalog\' "$catalog/manifest.json")',
+            'heading=$(printf \'## `%s`\' "$name")',
+            'rg -n -F -A 35 "$heading" "$catalog/$card"',
             "```",
             "",
-            "Stop after two bounded searches for one obstacle. Keep every NULL, bag/list, order, schema, typmod, collation/timezone, cardinality, and runtime premise visible. Unsupported semantics remain fail-closed.",
+            "Keep every NULL, bag/list, order, schema, typmod, collation/timezone, cardinality, and runtime premise visible. Unsupported semantics remain fail-closed.",
             "",
         ]
     )
     manifest = {
-        "schemaVersion": 2,
-        "ranking": "lower-is-preferred; deterministic public declaration shape only",
+        "schemaVersion": 3,
         "routes": ROUTES,
         "entries": entries,
     }
     index = "\n".join(index_lines)
-    if len(index.encode("utf-8")) > MAX_INDEX_BYTES:
-        raise ValueError(
-            f"initial catalog index is {len(index.encode('utf-8'))} bytes, exceeding {MAX_INDEX_BYTES}"
-        )
     validate_navigation(entries, documents, index)
     return manifest, documents, index
 

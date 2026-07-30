@@ -2,13 +2,14 @@
 (** Type-level regression checks for the unified proof-agent facade.         **)
 (******************************************************************************)
 
-From SQLFS Require Import SqlSyntax GenericInstance Values Bool3 FTuples FiniteSet FiniteBag FiniteCollection OrderedSet SqlBagAbstraction
-  SqlErrorSemantics SqlOutcome SqlQuerySyntax SqlQuerySemantics
-  SchemaConstraints.
+From SQLFS Require Import SqlSyntax GenericInstance Values Bool3 Env FTuples FiniteSet FiniteBag FiniteCollection OrderedSet SqlBagAbstraction
+  SqlErrorSemantics SqlOutcome SqlOrder SqlQuerySyntax SqlQuerySemantics
+  SqlQueryFacts SqlQueryContexts SchemaConstraints.
 From Logos.FormalSQL Require Import
   TNullSyntax QueryTNullSyntax SchemaCardinality QueryCardinality
   CardinalityCombinators OrderedQueryFacts
-  GroupingRewriteFacts RelationalAlgebraFacts NumericRegroupFacts
+  GroupingRewriteFacts RelationalAlgebraFacts GroupedFilterOutcomeFacts
+  NumericRegroupFacts
   ProofAgentFacade.
 From Stdlib Require Import List String NArith SetoidList Lia.
 
@@ -61,6 +62,683 @@ exact projection_composition.
 Qed.
 
 End FacadeRegression.
+
+Section ObservationCertificateRegression.
+
+Variable db : TNullDatabase.
+Variable env : TNullEnvironment.
+Variables left right : TNullQueryExpr.
+Variables left_rows right_rows : list TNullRow.
+
+(** Functionality is stated modulo SQL's exact ordered-row observation, not
+    Leibniz equality of the tuple representation. *)
+Hypothesis left_functional :
+  forall first second,
+    TNullQueryExprOutcome db env left (SqlSuccess first) ->
+    TNullQueryExprOutcome db env left (SqlSuccess second) ->
+    TNullRowsObservationEq first second.
+
+Example tnull_observation_functionality_regression :
+  TNullQueryExprObservationFunctional db env left.
+Proof.
+exact left_functional.
+Qed.
+
+Hypothesis left_witness :
+  TNullQueryExprOutcome db env left (SqlSuccess left_rows).
+
+Hypothesis right_bag_functional :
+  TNullQuerySuccessBagFunctional db env right.
+Hypothesis left_witness_separates :
+  forall candidate,
+    TNullQueryExprOutcome db env right (SqlSuccess candidate) ->
+    ~ TNullRowsObservationEq left_rows candidate.
+
+(** The witness is compared with every legal right success.  This remains a
+    valid certificate even when either query has several possible lists. *)
+Example tnull_left_success_separation_regression :
+  TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+eapply OutcomeSeparationLeftSuccess.
+- exact left_witness.
+- exact left_witness_separates.
+Qed.
+
+Hypothesis right_witness :
+  TNullQueryExprOutcome db env right (SqlSuccess right_rows).
+Hypothesis right_witness_separates :
+  forall candidate,
+    TNullQueryExprOutcome db env left (SqlSuccess candidate) ->
+    ~ TNullRowsObservationEq candidate right_rows.
+
+Example tnull_right_success_separation_regression :
+  TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+eapply OutcomeSeparationRightSuccess.
+- exact right_witness.
+- exact right_witness_separates.
+Qed.
+
+Variable observed_error : sql_runtime_error.
+Hypothesis left_error_witness :
+  TNullQueryExprOutcome db env left (SqlError observed_error).
+Hypothesis right_lacks_left_error :
+  ~ TNullQueryExprOutcome db env right (SqlError observed_error).
+
+Example tnull_left_error_separation_regression :
+  TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+eapply OutcomeSeparationLeftError;
+  eassumption.
+Qed.
+
+Hypothesis right_error_witness :
+  TNullQueryExprOutcome db env right (SqlError observed_error).
+Hypothesis left_lacks_right_error :
+  ~ TNullQueryExprOutcome db env left (SqlError observed_error).
+
+Example tnull_right_error_separation_regression :
+  TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+eapply OutcomeSeparationRightError;
+  eassumption.
+Qed.
+
+Example tnull_separation_refutes_outcome_equivalence_regression :
+  ~ TNullQueryExprOutcomeEq db env left right.
+Proof.
+apply tnull_query_expr_outcome_separation_sound.
+exact tnull_left_success_separation_regression.
+Qed.
+
+Hypothesis observed_bags_differ :
+  ~ TNullBagEq (TNullRowsBag left_rows) (TNullRowsBag right_rows).
+
+Example tnull_functional_bag_difference_separation_regression :
+  TNullQueryExprOutcomeSeparation db env left right.
+Proof.
+eapply tnull_query_expr_outcome_separation_of_right_functional_bag_difference;
+  eassumption.
+Qed.
+
+Variables left_tail right_tail : TNullQueryProgram.
+
+Example tnull_program_head_separation_regression :
+  ~ TNullQueryProgramOutcomeEq db env
+      (left :: left_tail) (right :: right_tail).
+Proof.
+apply tnull_query_program_head_separation_sound.
+exact tnull_left_success_separation_regression.
+Qed.
+
+Variables left_prefix right_prefix : TNullQueryProgram.
+Hypothesis prefixes_have_equal_length :
+  length left_prefix = length right_prefix.
+
+Example tnull_program_later_statement_separation_regression :
+  ~ TNullQueryProgramOutcomeEq db env
+      (left_prefix ++ left :: left_tail)
+      (right_prefix ++ right :: right_tail).
+Proof.
+eapply tnull_query_program_prefix_separation_sound.
+- exact prefixes_have_equal_length.
+- exact tnull_left_success_separation_regression.
+Qed.
+
+End ObservationCertificateRegression.
+
+Section ProjectionFusionContractBridgeRegression.
+
+Variable db : TNullDatabase.
+Variable env : TNullEnvironment.
+Variables single outer inner : TNullSelectList.
+Variable input : TNullQueryExpr.
+
+Hypothesis total_projection_composition :
+  forall row,
+    TNullRowEq
+      (TNullProjectRow env single row)
+      (TNullProjectRow env outer (TNullProjectRow env inner row)).
+
+(** The optional all-row bridge discharges the named residual contract while
+    leaving its original reachable-bag formulation unchanged. *)
+Example tnull_project_fusion_contract_of_row_eq_regression :
+  @project_fusion_success_bag_contract TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env single outer inner input.
+Proof.
+apply tnull_project_fusion_success_bag_contract_of_row_eq.
+exact total_projection_composition.
+Qed.
+
+End ProjectionFusionContractBridgeRegression.
+
+Section DirectProjectionFusionBridgeRegression.
+
+Variable db : TNullDatabase.
+Variable env : TNullEnvironment.
+Variables single outer inner : TNullSelectList.
+Variable input : TNullQueryExpr.
+
+Hypothesis direct_fusion_outputs :
+  TNullAttributeSetEq
+    (@Projection.select_list_sort TNull single)
+    (@Projection.select_list_sort TNull outer).
+
+Hypothesis direct_fusion_lookups :
+  forall target,
+    target inS (@Projection.select_list_sort TNull single) ->
+    exists source middle,
+      TNullSelectLookup single target = Some (AExpr (Dot source)) /\
+      TNullSelectLookup inner middle = Some (AExpr (Dot source)) /\
+      TNullSelectLookup outer target = Some (AExpr (Dot middle)).
+
+(** The lookup contract has no row-label premise, so this quantifies over
+    rows where the source may be absent and correlated fallback is observable. *)
+Example tnull_direct_projection_fusion_row_regression :
+  forall row,
+    TNullRowEq
+      (TNullProjectRow env single row)
+      (TNullProjectRow env outer (TNullProjectRow env inner row)).
+Proof.
+apply tnull_direct_projection_fusion_row_eq;
+  assumption.
+Qed.
+
+(** The row law feeds the reusable residual bridge without reopening any
+    finite-bag representation or reachable-row side condition. *)
+Example tnull_direct_projection_fusion_contract_regression :
+  @project_fusion_success_bag_contract TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env single outer inner input.
+Proof.
+apply tnull_project_fusion_success_bag_contract_of_row_eq.
+apply tnull_direct_projection_fusion_row_eq;
+  assumption.
+Qed.
+
+Example tnull_select_columns_lookup_output_regression :
+  forall columns attribute,
+    attribute inS
+      (@Projection.select_list_sort TNull (SelectColumns columns)) ->
+    TNullSelectLookup (SelectColumns columns) attribute =
+      Some (AExpr (Dot attribute)).
+Proof.
+apply tnull_select_columns_lookup_output.
+Qed.
+
+Example tnull_select_columns_projection_fusion_regression :
+  forall env single outer inner,
+    TNullAttributeSetEq
+      (@Projection.select_list_sort TNull (SelectColumns single))
+      (@Projection.select_list_sort TNull (SelectColumns outer)) ->
+    (@Projection.select_list_sort TNull (SelectColumns outer)) subS
+      (@Projection.select_list_sort TNull (SelectColumns inner)) ->
+    forall row,
+      TNullRowEq
+        (TNullProjectRow env (SelectColumns single) row)
+        (TNullProjectRow env (SelectColumns outer)
+          (TNullProjectRow env (SelectColumns inner) row)).
+Proof.
+apply tnull_select_columns_projection_fusion_row_eq.
+Qed.
+
+End DirectProjectionFusionBridgeRegression.
+
+Section DeterministicAssemblyTacticRegression.
+
+Variable db : TNullDatabase.
+Variable env : TNullEnvironment.
+Variables left right : TNullQueryExpr.
+Variable select_list : TNullSelectList.
+Variable keys : list (sort_key TNull).
+
+Hypothesis core_equivalence :
+  TNullQueryExprOutcomeEq db env left right.
+Hypothesis select_list_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) select_list = None.
+
+(** The unified tactic removes identical unary structure and reuses explicit
+    core and projection-safety hypotheses already present in the context. *)
+Example shared_outcome_shell_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Project select_list
+      (QExpr_OrderBy keys
+        (QExpr_Fetch 2 (QExpr_Distinct left))))
+    (QExpr_Project select_list
+      (QExpr_OrderBy keys
+        (QExpr_Fetch 2 (QExpr_Distinct right)))).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+Qed.
+
+(** Definitionally safe projections do not leave a spurious side goal. *)
+Example definitional_projection_safety_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Project (SelectList []) left)
+    (QExpr_Project (SelectList []) right).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+Qed.
+
+(** A restoring Project can hide incompatible ordered child signatures.  In
+    the absence of a child alignment fact, [logos] must keep that outer
+    semantic boundary instead of speculatively descending to an impossible
+    child outcome-equivalence goal. *)
+Example restoring_project_does_not_force_child_signature_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Project (SelectList [])
+      (QExpr_OrderBy keys
+        (@QExpr_Table TNull relname
+          [AttrInt32 "left_only"] (Rel "left_table"))))
+    (QExpr_Project (SelectList [])
+      (QExpr_OrderBy keys
+        (@QExpr_Table TNull relname
+          [AttrInt32 "right_only"] (Rel "right_table")))).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+lazymatch goal with
+| |- @query_expr_outcome_equiv _ _ _ _ _ _ _ _ _
+      (QExpr_Project _ _) (QExpr_Project _ _) => idtac
+| _ => fail "logos crossed an unaligned restoring-Project boundary"
+end.
+Abort.
+
+(** DISTINCT is itself structurally bag-closed, but an already available exact
+    child equivalence is the cheaper proof.  The transactional fast path must
+    close this goal before the partial bag bridge commits. *)
+Example exact_core_precedes_bag_bridge_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Distinct left)
+    (QExpr_Distinct right).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+Qed.
+
+Variable rank_attribute : TNullAttribute.
+
+(** OFFSET and RANK exercise two other shared-shell branches.  RANK remains
+    error exact: its congruence theorem transports the modeled BIGINT embedding
+    failure rather than treating the operator as a pure list map. *)
+Example shared_rank_offset_shell_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Offset 1
+      (RankExpr [] keys rank_attribute left))
+    (QExpr_Offset 1
+      (RankExpr [] keys rank_attribute right)).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+Qed.
+
+Variables left_select right_select : TNullSelectList.
+Hypothesis extensional_outputs :
+  Projection.select_list_outputs left_select =
+  Projection.select_list_outputs right_select.
+Hypothesis left_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) left_select = None.
+Hypothesis right_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) right_select = None.
+Hypothesis extensional_projection :
+  forall input_rows row,
+    TNullQueryExprOutcome db env right (SqlSuccess input_rows) ->
+    In row input_rows ->
+    Oeset.compare (OTuple TNull)
+      (Projection.projection TNull (env_t TNull env row)
+        (@Projection.Select_List TNull left_select))
+      (Projection.projection TNull (env_t TNull env row)
+        (@Projection.Select_List TNull right_select)) = Eq.
+
+(** The generic extensional Project law changes both the child and the SELECT
+    list without encoding a nested-project rewrite shape. *)
+Example extensional_project_congruence_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Project left_select left)
+    (QExpr_Project right_select right).
+Proof.
+unfold TNullQueryExprOutcomeEq, TNullQueryExprOutcome,
+  query_expr_outcome_equiv_in_env, eval_query_expr_outcome_in_env in *.
+eapply query_expr_project_outcome_equiv_congr_extensional_safe;
+  eassumption.
+Qed.
+
+Variables outputs : list TNullAttribute.
+Variables first_table second_table : relname.
+
+Definition structurally_safe_query : TNullQueryExpr :=
+  QExpr_Project (SelectList [])
+    (QExpr_Offset 1
+      (QExpr_Fetch 2
+        (QExpr_OrderBy keys
+          (QExpr_Distinct
+            (QExpr_Set Union
+              (QExpr_Table outputs first_table)
+              (QExpr_Table outputs second_table)))))).
+
+Definition structurally_cross_query : TNullQueryExpr :=
+  QExpr_CrossJoin
+    (QExpr_Table outputs first_table)
+    (QExpr_Table outputs second_table).
+
+Definition structurally_reset_query : TNullQueryExpr :=
+  QExpr_Distinct (QExpr_Table outputs first_table).
+
+Definition structurally_error_query : TNullQueryExpr :=
+  QExpr_Fetch 2
+    (QExpr_Offset 1
+      (QExpr_OrderBy keys
+        (QExpr_Distinct
+          (QExpr_Error outputs (DataException DivisionByZero))))).
+
+Variable alternate_keys : list (sort_key TNull).
+
+Definition distinct_order_left : TNullQueryExpr :=
+  QExpr_Distinct
+    (QExpr_OrderBy keys (QExpr_Table outputs first_table)).
+
+Definition distinct_order_right : TNullQueryExpr :=
+  QExpr_Distinct
+    (QExpr_OrderBy alternate_keys (QExpr_Table outputs first_table)).
+
+Hypothesis distinct_order_success_bags :
+  rel_equiv
+    (@query_success_bags TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env distinct_order_left)
+    (@query_success_bags TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env distinct_order_right).
+
+(** DISTINCT resets the child order.  Even with different ORDER BY keys below
+    it, [logos] must choose the certified bag boundary before attempting the
+    strictly stronger child ordered-outcome congruence. *)
+Example bag_reset_precedes_shared_shell_regression :
+  TNullQueryExprOutcomeEq db env distinct_order_left distinct_order_right.
+Proof.
+unfold TNullQueryExprOutcomeEq, TNullQueryExprOutcome,
+  query_expr_outcome_equiv_in_env, eval_query_expr_outcome_in_env,
+  distinct_order_left, distinct_order_right in *.
+logos.
+Qed.
+
+(** Success and safety automation follows only operators with a proven
+    compositional contract and terminates at the two total table leaves. *)
+Example structural_success_regression :
+  @query_expr_has_success TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env structurally_safe_query.
+Proof.
+unfold structurally_safe_query.
+logos.
+Qed.
+
+Example structural_runtime_safety_regression :
+  @query_expr_runtime_safe TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env structurally_safe_query.
+Proof.
+unfold structurally_safe_query.
+logos.
+Qed.
+
+Example structural_outcome_regression :
+  exists outcome,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env structurally_safe_query outcome.
+Proof.
+unfold structurally_safe_query.
+logos.
+Qed.
+
+Example cross_join_success_regression :
+  @query_expr_has_success TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env structurally_cross_query.
+Proof.
+unfold structurally_cross_query.
+logos.
+Qed.
+
+Example cross_join_runtime_safety_regression :
+  @query_expr_runtime_safe TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env structurally_cross_query.
+Proof.
+unfold structurally_cross_query.
+logos.
+Qed.
+
+(** Outcome construction is not secretly success construction: an explicit
+    SQL error remains a valid inhabited outcome through transparent shells. *)
+Example structural_error_outcome_regression :
+  exists outcome,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env structurally_error_query outcome.
+Proof.
+unfold structurally_error_query.
+logos.
+Qed.
+
+(** The bag bridge leaves only success inhabitation as a semantic obligation
+    for this reflexive reset query; closure, bag relation, and errors are
+    discharged through their exact public interfaces. *)
+Example structural_bag_outcome_regression :
+  TNullQueryExprOutcomeEq db env
+    structurally_reset_query structurally_reset_query.
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env,
+  structurally_reset_query.
+logos.
+Qed.
+
+(** Project and Filter are transparent to the certified closure analysis;
+    CROSS JOIN supplies the inner bag reset. *)
+Example structural_bag_closed_regression :
+  BagClosed TNull
+    (fun rows =>
+      @eval_query_expr_outcome TNull relname
+        (@_basesort TNull db) (@_instance TNull db) unknown3
+        NullValues.interp_scalar_operator_runtime_error
+        NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+        env
+        (QExpr_Project (SelectList [])
+          (QExpr_Filter FExpr_True
+            (QExpr_CrossJoin
+              (QExpr_Table outputs first_table)
+              (QExpr_Table outputs second_table))))
+        (SqlSuccess rows)).
+Proof.
+logos.
+Qed.
+
+(** The public dispatcher removes a mechanical outer shell even when the
+    child is a semantic operator.  The caller supplies only the irreducible
+    FILTER fact; no separate "project success" tactic must be discovered. *)
+Hypothesis semantic_filter_success :
+  @query_expr_has_success TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env (QExpr_Filter FExpr_True (QExpr_Table outputs first_table)).
+
+Example structural_success_partial_peel_regression :
+  @query_expr_has_success TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env
+    (QExpr_Project (SelectList [])
+      (QExpr_Filter FExpr_True (QExpr_Table outputs first_table))).
+Proof.
+logos.
+Qed.
+
+Variable semantic_left semantic_right : TNullQueryExpr.
+Hypothesis semantic_core_outcome :
+  TNullQueryExprOutcomeEq db env semantic_left semantic_right.
+
+(** The same interface transports an exact semantic core through a shared
+    order-sensitive prefix and stops at the supplied core theorem. *)
+Example structural_shared_context_partial_peel_regression :
+  TNullQueryExprOutcomeEq db env
+    (QExpr_Project (SelectList []) (QExpr_Fetch 3
+      (QExpr_OrderBy keys semantic_left)))
+    (QExpr_Project (SelectList []) (QExpr_Fetch 3
+      (QExpr_OrderBy keys semantic_right))).
+Proof.
+unfold TNullQueryExprOutcomeEq, query_expr_outcome_equiv_in_env in *.
+logos.
+Qed.
+
+(** Error normalization removes only constructors whose exact error law has
+    no side condition. *)
+Example forwarded_error_normalization_regression :
+  forall error,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env (QExpr_Fetch 2 (QExpr_OrderBy keys (QExpr_Distinct left)))
+      (SqlError error) <->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env left (SqlError error).
+Proof.
+intro error.
+logos.
+Qed.
+
+Example forwarded_error_hypothesis_regression :
+  forall error,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env (QExpr_Fetch 2 (QExpr_OrderBy keys (QExpr_Distinct left)))
+      (SqlError error) ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env left (SqlError error).
+Proof.
+intros error Herror.
+logos in Herror.
+exact Herror.
+Qed.
+
+(** The inversion tactic consumes the unary Project/FETCH/ORDER BY/DISTINCT
+    prefix and intentionally stops at the binary SET node. *)
+Example transparent_success_inversion_regression :
+  forall output,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env structurally_safe_query (SqlSuccess output) ->
+    True.
+Proof.
+intros output Hsuccess.
+unfold structurally_safe_query in Hsuccess.
+logos in Hsuccess.
+exact I.
+Qed.
+
+Variable row_map : TNullRow -> sql_outcome TNullRow.
+
+(** RowMap and Filter are safe to invert through exact success iff laws, even
+    though neither is guessed by the success-construction tactic. *)
+Example row_map_filter_success_inversion_regression :
+  forall output,
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      env
+      (QExpr_RowMap outputs row_map
+        (QExpr_Filter FExpr_True
+          (QExpr_Table outputs first_table)))
+      (SqlSuccess output) ->
+    True.
+Proof.
+intros output Hsuccess.
+logos in Hsuccess.
+exact I.
+Qed.
+
+Variable columns : list ColumnRef.
+Variable rows : list TNullRow.
+
+Example direct_columns_local_safety_regression :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) (SelectColumns columns) = None.
+Proof.
+intro row.
+logos.
+Qed.
+
+Example direct_columns_aggregate_local_safety_regression :
+  @eval_select_list_aggregate_runtime_error TNull
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error
+    env (SelectColumns columns) = None.
+Proof.
+logos.
+Qed.
+
+Example direct_columns_group_keys_local_safety_regression :
+  @group_keys_runtime_error TNull
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error
+    env (map DotColumn columns) rows = None.
+Proof.
+logos.
+Qed.
+
+End DeterministicAssemblyTacticRegression.
 
 Section AliasProjectionRegression.
 
@@ -122,6 +800,19 @@ Hypothesis constant_first :
   TNullSelectLookup constant_first_list middle = Some (AExpr (Constant value)).
 Hypothesis direct_second :
   TNullSelectLookup second target = Some (AExpr (Dot middle)).
+
+(** No source-presence premise is in scope: the conclusion retains the
+    original expression interpretation, including correlated fallback. *)
+Example targeted_direct_projection_compose_interp_regression :
+  TNullRowValue
+    (TNullProjectRow env second
+      (TNullProjectRow env direct_first_list row)) target =
+  Interp.interp_aggterm TNull (env_t TNull env row)
+    (AExpr (Dot source)).
+Proof.
+eapply tnull_select_lookup_direct_compose_interp_value; eassumption.
+Qed.
+
 Hypothesis source_present : source inS TNullRowLabels row.
 
 (** The lookup-only interface does not inspect or normalize unrelated SELECT
@@ -653,8 +1344,384 @@ Proof. apply tnull_eval_group_bag_direct_columns_true_no_error. Qed.
 
 End FacadeEquivalenceAndSafetyRegression.
 
+Section SuccessBagAutomationRegression.
+
+Variable db : TNullDatabase.
+Variable env : TNullEnvironment.
+Variables left right fixed : TNullQueryExpr.
+Variables outputs alternate_outputs : list TNullAttribute.
+Variables left_values right_values : TNullRowBag.
+Variables left_table right_table : relname.
+Variables left_error right_error : sql_runtime_error.
+Variable columns : list ColumnRef.
+Variable formula : TNullFormulaExpr.
+Variable keep : TNullRow -> bool.
+Variable row_map : TNullRow -> sql_outcome TNullRow.
+Variable mapping : TNullRow -> TNullRow.
+Variables single_select outer_select inner_select : TNullSelectList.
+Variable rank_attribute : TNullAttribute.
+Variable rank_value : nat -> option TNullValue.
+Variable partition_keys order_keys alternate_keys : list (sort_key TNull).
+Variable window_items : list (query_window_item TNull).
+
+Local Definition test_success_bags (query : TNullQueryExpr) :=
+  @query_success_bags TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env query.
+
+Local Definition test_table_bag
+    (table_outputs : list TNullAttribute) (table : relname) : TNullRowBag :=
+  @query_table_bag TNull relname
+    (@_basesort TNull db) (@_instance TNull db) table_outputs table.
+
+Local Definition test_outcome_equiv (left_query right_query : TNullQueryExpr) :=
+  @query_expr_outcome_equiv TNull relname
+    (@_basesort TNull db) (@_instance TNull db) unknown3
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    env left_query right_query.
+
+Hypothesis child_bags :
+  rel_equiv (test_success_bags left) (test_success_bags right).
+
+Hypothesis child_sorts :
+  query_expr_sort left =S= query_expr_sort right.
+
+Hypothesis values_bags : TNullBagEq left_values right_values.
+
+Hypothesis table_bags :
+  TNullBagEq
+    (test_table_bag outputs left_table)
+    (test_table_bag alternate_outputs right_table).
+
+Hypothesis keep_proper :
+  forall first second,
+    TNullRowEq first second ->
+    keep first = keep second.
+
+Hypothesis formula_exact :
+  forall row,
+    @formula_acceptance_exact_at TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      (env_t TNull env row) formula (keep row).
+
+Hypothesis row_map_total :
+  @row_map_total_as TNull row_map mapping.
+
+Hypothesis mapping_proper :
+  @row_mapping_semantic_proper TNull mapping.
+
+Hypothesis single_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) single_select = None.
+
+Hypothesis outer_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) outer_select = None.
+
+Hypothesis inner_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) inner_select = None.
+
+Hypothesis project_fusion :
+  forall input_bag,
+    test_success_bags left input_bag ->
+    TNullBagEq
+      (query_project_bag env single_select input_bag)
+      (query_project_bag env outer_select
+        (query_project_bag env inner_select input_bag)).
+
+Example logos_project_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Project (SelectColumns columns) left))
+    (test_success_bags (QExpr_Project (SelectColumns columns) right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_project_fusion_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Project single_select left))
+    (test_success_bags
+      (QExpr_Project outer_select (QExpr_Project inner_select left))).
+Proof.
+unfold test_success_bags, TNullBagEq in *; logos.
+Qed.
+
+Example logos_project_fusion_success_bags_symmetric_regression :
+  rel_equiv
+    (test_success_bags
+      (QExpr_Project outer_select (QExpr_Project inner_select left)))
+    (test_success_bags (QExpr_Project single_select left)).
+Proof.
+unfold test_success_bags, TNullBagEq in *; logos.
+Qed.
+
+(** Without the semantic fusion fact, [logos.] deterministically exposes the
+    named residual rather than failing and forcing a [try logos] probe. *)
+Variables residual_single_select residual_outer_select residual_inner_select :
+  TNullSelectList.
+Hypothesis residual_single_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) residual_single_select = None.
+Hypothesis residual_outer_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) residual_outer_select = None.
+Hypothesis residual_inner_select_safe :
+  forall row,
+    @eval_select_list_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (env_t TNull env row) residual_inner_select = None.
+
+Goal rel_equiv
+  (test_success_bags (QExpr_Project residual_single_select left))
+  (test_success_bags
+    (QExpr_Project residual_outer_select
+      (QExpr_Project residual_inner_select left))).
+Proof.
+unfold test_success_bags in *.
+logos.
+lazymatch goal with
+| |- @project_fusion_success_bag_contract
+    _ _ _ _ _ _ _ _ env residual_single_select residual_outer_select
+    residual_inner_select left => idtac
+| |- _ => fail "logos did not expose the named projection-fusion residual"
+end.
+Abort.
+
+Example logos_row_map_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_RowMap outputs row_map left))
+    (test_success_bags (QExpr_RowMap outputs row_map right)).
+Proof.
+unfold test_success_bags in *; logos.
+exists mapping; now split.
+Qed.
+
+Example logos_filter_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Filter formula left))
+    (test_success_bags (QExpr_Filter formula right)).
+Proof.
+unfold test_success_bags in *; logos.
+exists keep; split; [exact keep_proper |].
+split; exact formula_exact.
+Qed.
+
+Example logos_set_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Set Union left fixed))
+    (test_success_bags (QExpr_Set Union right fixed)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_natural_join_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_NaturalJoin left fixed))
+    (test_success_bags (QExpr_NaturalJoin right fixed)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_cross_join_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_CrossJoin left fixed))
+    (test_success_bags (QExpr_CrossJoin right fixed)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_join_success_bags_regression :
+  rel_equiv
+    (test_success_bags
+      (QExpr_Join QueryJoinInner FExpr_True
+        (SelectList []) (SelectList []) (SelectList []) left fixed))
+    (test_success_bags
+      (QExpr_Join QueryJoinInner FExpr_True
+        (SelectList []) (SelectList []) (SelectList []) right fixed)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_group_success_bags_regression :
+  rel_equiv
+    (test_success_bags
+      (QExpr_Group (SelectList []) [] FExpr_True left))
+    (test_success_bags
+      (QExpr_Group (SelectList []) [] FExpr_True right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_grouping_sets_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_GroupingSets [] left))
+    (test_success_bags (QExpr_GroupingSets [] right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_rank_success_bags_regression :
+  rel_equiv
+    (test_success_bags
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value left))
+    (test_success_bags
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_window_success_bags_regression :
+  rel_equiv
+    (test_success_bags
+      (QExpr_Window partition_keys order_keys window_items left))
+    (test_success_bags
+      (QExpr_Window partition_keys order_keys window_items right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_distinct_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Distinct left))
+    (test_success_bags (QExpr_Distinct right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_order_by_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_OrderBy order_keys left))
+    (test_success_bags (QExpr_OrderBy alternate_keys right)).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_values_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Values outputs left_values))
+    (test_success_bags (QExpr_Values alternate_outputs right_values)).
+Proof.
+unfold test_success_bags, TNullBagEq in *; logos.
+Qed.
+
+Example logos_table_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Table outputs left_table))
+    (test_success_bags (QExpr_Table alternate_outputs right_table)).
+Proof.
+unfold test_success_bags, test_table_bag, TNullBagEq in *; logos.
+Qed.
+
+(** Positional consumers are accepted only when their children are already
+    certified permutation-closed. *)
+Example logos_offset_closed_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Offset 1 (QExpr_Distinct left)))
+    (test_success_bags (QExpr_Offset 1 (QExpr_Distinct right))).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Example logos_fetch_closed_success_bags_regression :
+  rel_equiv
+    (test_success_bags (QExpr_Fetch 1 (QExpr_Distinct left)))
+    (test_success_bags (QExpr_Fetch 1 (QExpr_Distinct right))).
+Proof.
+unfold test_success_bags in *; logos.
+Qed.
+
+Goal rel_equiv
+  (test_success_bags (QExpr_Offset 1 left))
+  (test_success_bags (QExpr_Offset 1 right)).
+Proof.
+unfold test_success_bags in *.
+Fail solve [logos].
+Abort.
+
+Goal rel_equiv
+  (test_success_bags (QExpr_Fetch 1 left))
+  (test_success_bags (QExpr_Fetch 1 right)).
+Proof.
+unfold test_success_bags in *.
+Fail solve [logos].
+Abort.
+
+(** Success-bag rules must not leak into error categories or the ordered root
+    observation. *)
+Goal test_outcome_equiv
+  (QExpr_Error outputs left_error)
+  (QExpr_Error outputs right_error).
+Proof.
+unfold test_outcome_equiv.
+Fail solve [logos].
+Abort.
+
+(** Unsupported propositions remain available to the caller, while the same
+    public invocation still closes another currently focused structural goal. *)
+Goal (True \/ True) /\
+  rel_equiv
+    (test_success_bags (QExpr_Offset 1 (QExpr_Distinct left)))
+    (test_success_bags (QExpr_Offset 1 (QExpr_Distinct right))).
+Proof.
+unfold test_success_bags in *.
+split; logos.
+left; exact I.
+Qed.
+
+Goal True \/ True.
+Proof.
+logos.
+left; exact I.
+Qed.
+
+Goal test_outcome_equiv
+  (QExpr_OrderBy order_keys (QExpr_Table outputs left_table))
+  (QExpr_OrderBy alternate_keys (QExpr_Table outputs left_table)).
+Proof.
+unfold test_outcome_equiv.
+Fail solve [logos].
+Abort.
+
+End SuccessBagAutomationRegression.
+
 (** These commands audit that the facade contributes no assumptions. *)
 Print Assumptions tnull_query_expr_error_regression.
+Print Assumptions tnull_observation_functionality_regression.
+Print Assumptions tnull_separation_refutes_outcome_equivalence_regression.
+Print Assumptions tnull_functional_bag_difference_separation_regression.
+Print Assumptions tnull_program_head_separation_regression.
+Print Assumptions outcome_relation_separation_sound.
+Print Assumptions
+  tnull_query_expr_outcome_separation_of_right_functional_observation_difference.
+Print Assumptions
+  tnull_query_expr_outcome_separation_of_left_functional_observation_difference.
+Print Assumptions
+  tnull_query_expr_outcome_separation_of_right_functional_bag_difference.
+Print Assumptions
+  tnull_query_expr_outcome_separation_of_left_functional_bag_difference.
+Print Assumptions tnull_query_program_head_separation_sound.
 Print Assumptions tnull_direct_projection_alias_value.
 Print Assumptions tnull_direct_projection_alias_retained.
 Print Assumptions tnull_direct_projection_alias_reflects_value.
@@ -662,12 +1729,18 @@ Print Assumptions tnull_select_lookup_retained.
 Print Assumptions tnull_select_lookup_some_iff_projected_label.
 Print Assumptions tnull_select_lookup_none_iff_projected_label_absent.
 Print Assumptions tnull_select_lookup_direct_compose.
+Print Assumptions tnull_select_lookup_direct_compose_interp_value.
 Print Assumptions tnull_select_lookup_constant_direct_compose.
 Print Assumptions
   tnull_projected_alias_int32_primary_key_matches_at_most_one.
 Print Assumptions projected_alias_primary_key_match_count_regression.
 Print Assumptions tnull_row_eq_of_labels_and_values.
+Print Assumptions tnull_projection_rows_eq_of_output_values.
+Print Assumptions tnull_direct_projection_fusion_row_eq.
+Print Assumptions tnull_select_columns_lookup_output.
+Print Assumptions tnull_select_columns_projection_fusion_row_eq.
 Print Assumptions tnull_single_double_projection_bag_eq.
+Print Assumptions tnull_project_fusion_success_bag_contract_of_row_eq.
 Print Assumptions map_left_join_functional_permut.
 Print Assumptions tnull_map_left_join_functional_permut.
 Print Assumptions query_join_left_functional_projection_bag_on_representatives.
@@ -698,3 +1771,15 @@ Print Assumptions tnull_query_expr_project_select_columns_error_iff.
 Print Assumptions tnull_eval_group_bag_direct_columns_true_no_error.
 Print Assumptions
   tnull_direct_columns_group_outcome_equiv_of_projected_support.
+Print Assumptions query_project_success_bags_congr_extensional_safe.
+Print Assumptions query_project_success_bags_fusion_safe.
+Print Assumptions query_filter_success_bags_congr_extensional_exact.
+Print Assumptions query_filter_success_bags_congr_of_contract.
+Print Assumptions query_row_map_success_bags_congr_extensional_total.
+Print Assumptions query_row_map_success_bags_congr_of_contract.
+Print Assumptions query_row_map_success_bags_congr_extensional_of_contract.
+Print Assumptions query_order_by_success_bags_congr.
+Print Assumptions query_offset_success_bags_congr_closed.
+Print Assumptions query_fetch_success_bags_congr_closed.
+Print Assumptions query_values_success_bags_congr.
+Print Assumptions query_table_success_bags_congr.

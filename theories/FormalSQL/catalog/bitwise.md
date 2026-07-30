@@ -14,7 +14,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_from_twos_co
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`
 
@@ -33,7 +33,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_from_twos_co
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`
 
@@ -52,7 +52,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_from_twos_co
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`
 
@@ -71,7 +71,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_from_twos_co
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`
 
@@ -90,7 +90,7 @@ Applicability: Use when the goal or a hypothesis matches the `bits_of_Z_land` di
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -111,7 +111,7 @@ Applicability: Use when the goal or a hypothesis matches the `bits_of_Z_lor` dir
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -132,7 +132,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_as_w
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -152,7 +152,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_as_wo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -172,7 +172,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_as_w
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -192,7 +192,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_as_wo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -212,7 +212,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_asso
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -232,7 +232,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_assoc
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -252,7 +252,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_asso
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -272,7 +272,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_assoc
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -292,7 +292,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_comm
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -311,7 +311,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_commu
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -330,7 +330,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_comm
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -349,7 +349,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_commu
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -368,7 +368,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_idem
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -386,7 +386,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_idemp
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -404,7 +404,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_idem
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -422,7 +422,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_idemp
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -440,7 +440,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_clos
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -459,7 +459,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_close
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -478,7 +478,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_clos
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -497,7 +497,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_close
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -516,7 +516,7 @@ Applicability: Use when the goal or a hypothesis matches the `combine_nullable_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -538,7 +538,7 @@ Applicability: Use when the goal or a hypothesis matches the `combine_nullable_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -559,7 +559,7 @@ Applicability: Use when the goal or a hypothesis matches the `fold_nullable_stat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -582,7 +582,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `scalar` (rank 52)
+Cross-index: `bag`, `scalar`
 
 Search aliases: `bitwise semantics`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -605,7 +605,7 @@ Applicability: Use when the goal or a hypothesis matches the `fold_nullable_stat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`
 
@@ -628,7 +628,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_fold
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -650,7 +650,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_fold_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`
 
@@ -672,7 +672,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_fold
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -694,7 +694,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_fold_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`
 
@@ -716,7 +716,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `scalar` (rank 52)
+Cross-index: `bag`, `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -737,7 +737,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `scalar` (rank 52)
+Cross-index: `bag`, `scalar`
 
 Search aliases: `bitwise semantics`, `INTEGER`, `int32`, `bitwise`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -758,7 +758,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `scalar` (rank 52)
+Cross-index: `bag`, `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -779,7 +779,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `scalar` (rank 52)
+Cross-index: `bag`, `scalar`
 
 Search aliases: `bitwise semantics`, `BIGINT`, `int64`, `bitwise`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -800,7 +800,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_fold
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `DISTINCT`, `duplicate elimination`, `INTEGER`, `int32`, `bitwise`
 
@@ -820,7 +820,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_fold_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `DISTINCT`, `duplicate elimination`, `INTEGER`, `int32`, `bitwise`
 
@@ -840,7 +840,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_fold
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `DISTINCT`, `duplicate elimination`, `BIGINT`, `int64`, `bitwise`
 
@@ -860,7 +860,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_fold_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `bitwise semantics`, `DISTINCT`, `duplicate elimination`, `BIGINT`, `int64`, `bitwise`
 

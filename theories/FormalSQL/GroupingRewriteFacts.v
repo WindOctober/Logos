@@ -3,12 +3,60 @@
 (******************************************************************************)
 
 From SQLFS Require Import
-  Env FiniteSet FlatData OrderedSet Partition SqlQuerySemantics
+  Env FiniteBag FiniteSet FlatData ListPermut OrderedSet Partition SqlQuerySemantics
   SqlQuerySyntax SqlQueryWellFormed.
 From Stdlib Require Import Bool List Sorting.Permutation.
 
 Import ListNotations.
 Import Tuple.
+
+(** Canonicalization changes only the semantic permutation chosen for a row
+    bag.  This statement intentionally avoids exposing a concrete finite-bag
+    implementation or a particular sorting algorithm. *)
+Lemma query_canonical_rows_permut :
+  forall (T : Tuple.Rcd) rows,
+    Oeset.permut (OTuple T) (@query_canonical_rows T rows) rows.
+Proof.
+intros T rows.
+apply Oeset.nb_occ_permut; intro row.
+unfold query_canonical_rows, query_rows_bag.
+rewrite <- Febag.nb_occ_elements.
+now rewrite Febag.nb_occ_mk_bag.
+Qed.
+
+(** Canonical representatives commute up to semantic permutation with a
+    representation change that is proper for tuple equality.  The pointwise
+    factor premise captures projection/renaming composition, while the proper
+    premise prevents the map from distinguishing two equivalent bag elements. *)
+Theorem query_canonical_rows_map_factor_permut :
+  forall (T : Tuple.Rcd) (A : Type)
+      (first second : A -> tuple T) (rename : tuple T -> tuple T),
+    (forall left right,
+      Oeset.compare (OTuple T) left right = Eq ->
+      Oeset.compare (OTuple T) (rename left) (rename right) = Eq) ->
+    (forall item, rename (first item) = second item) ->
+    forall rows,
+      Oeset.permut (OTuple T)
+        (@query_canonical_rows T (map second rows))
+        (map rename (@query_canonical_rows T (map first rows))).
+Proof.
+intros T A first second rename Hproper Hfactor rows.
+eapply ListPermut._permut_trans with (l2 := map second rows).
+- intros left middle right _ _ _ Hleft Hright.
+  eapply Oeset.compare_eq_trans; eassumption.
+- apply query_canonical_rows_permut.
+- assert (Hmapped : map second rows = map rename (map first rows)).
+  { rewrite map_map; apply map_ext; intro item; symmetry; apply Hfactor. }
+  rewrite Hmapped.
+  apply Oeset.permut_sym.
+  eapply ListPermut._permut_map
+    with
+      (R := fun left right => Oeset.compare (OTuple T) left right = Eq)
+      (R' := fun left right => Oeset.compare (OTuple T) left right = Eq)
+      (f1 := rename) (f2 := rename).
+  + intros left right _ _ Hequal; now apply Hproper.
+  + apply query_canonical_rows_permut.
+Qed.
 
 (** [Partition.partition] retains the first occurrence order of keys and the
     exact occurrence order chosen for every member list.  Filtering by a
@@ -182,6 +230,125 @@ Proof.
     apply Hremaining; now right.
   }
   exact (Hrec rows Hkeys nil).
+Qed.
+
+(** Two key functions induce the same partition members when they make the
+    same equality decision for every pair of input occurrences.  Stored key
+    values may differ: this is the representation-independent boundary needed
+    when a GROUP BY list is reordered or consistently renamed. *)
+Local Definition partition_key_alignment
+    {A Key : Type} (key_order : Oset.Rcd Key) (universe : list A)
+    (left_key right_key : A -> Key)
+    (left right : list (Key * list A)) : Prop :=
+  Forall2
+    (fun left_group right_group =>
+      exists representative,
+        In representative universe /\
+        fst left_group = left_key representative /\
+        fst right_group = right_key representative /\
+        snd left_group = snd right_group)
+    left right.
+
+Local Lemma partition_key_alignment_insert :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      universe (left_key right_key : A -> Key) row left right,
+    In row universe ->
+    (forall first second,
+      In first universe ->
+      In second universe ->
+      Oset.eq_bool key_order (left_key first) (left_key second) =
+      Oset.eq_bool key_order (right_key first) (right_key second)) ->
+    partition_key_alignment key_order universe left_key right_key left right ->
+    partition_key_alignment key_order universe left_key right_key
+      (@Partition.insert_in_partition A Key key_order
+        (left_key row) row left)
+      (@Partition.insert_in_partition A Key key_order
+        (right_key row) row right).
+Proof.
+  intros A Key key_order universe left_key right_key row left right
+    Hrow Hdecisions Haligned.
+  induction Haligned as
+    [|[left_stored left_members] [right_stored right_members]
+       left_tail right_tail Hhead Htail IH].
+  - cbn [Partition.insert_in_partition].
+    constructor.
+    + exists row; repeat split; assumption || reflexivity.
+    + constructor.
+  - destruct Hhead as
+      [representative
+        [Hrepresentative [Hleft_key [Hright_key Hmembers]]]].
+    cbn in Hleft_key, Hright_key, Hmembers.
+    subst left_stored right_stored right_members.
+    cbn [Partition.insert_in_partition].
+    rewrite (Hdecisions row representative Hrow Hrepresentative).
+    destruct
+      (Oset.eq_bool key_order
+        (right_key row) (right_key representative)).
+    + constructor.
+      * exists representative; repeat split; assumption || reflexivity.
+      * exact Htail.
+    + constructor.
+      * exists representative; repeat split; assumption || reflexivity.
+      * exact IH.
+Qed.
+
+Local Lemma partition_key_alignment_rec :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      universe rows (left_key right_key : A -> Key) left right,
+    Forall (fun row => In row universe) rows ->
+    (forall first second,
+      In first universe ->
+      In second universe ->
+      Oset.eq_bool key_order (left_key first) (left_key second) =
+      Oset.eq_bool key_order (right_key first) (right_key second)) ->
+    partition_key_alignment key_order universe left_key right_key left right ->
+    partition_key_alignment key_order universe left_key right_key
+      (@Partition.partition_rec A Key key_order left_key left rows)
+      (@Partition.partition_rec A Key key_order right_key right rows).
+Proof.
+  intros A Key key_order universe rows.
+  induction rows as [|row rows IH];
+    intros left_key right_key left right Hrows Hdecisions Haligned.
+  - exact Haligned.
+  - inversion Hrows as [|? ? Hrow Htail]; subst.
+    cbn [Partition.partition_rec].
+    apply IH; [exact Htail|exact Hdecisions|].
+    now apply partition_key_alignment_insert.
+Qed.
+
+Local Lemma partition_key_alignment_members :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      universe (left_key right_key : A -> Key) left right,
+    partition_key_alignment key_order universe left_key right_key left right ->
+    map snd left = map snd right.
+Proof.
+  intros A Key key_order universe left_key right_key left right Haligned.
+  induction Haligned as
+    [|left_group right_group left_tail right_tail
+       [representative [_ [_ [_ Hmembers]]]] Htail IH].
+  - reflexivity.
+  - cbn; now rewrite Hmembers, IH.
+Qed.
+
+Theorem partition_members_equal_of_key_decisions :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (left_key right_key : A -> Key) rows,
+    (forall first second,
+      In first rows ->
+      In second rows ->
+      Oset.eq_bool key_order (left_key first) (left_key second) =
+      Oset.eq_bool key_order (right_key first) (right_key second)) ->
+    map snd (@Partition.partition A Key key_order left_key rows) =
+    map snd (@Partition.partition A Key key_order right_key rows).
+Proof.
+  intros A Key key_order left_key right_key rows Hdecisions.
+  eapply (@partition_key_alignment_members
+    A Key key_order rows left_key right_key).
+  unfold Partition.partition.
+  apply partition_key_alignment_rec.
+  - apply Forall_forall; trivial.
+  - exact Hdecisions.
+  - constructor.
 Qed.
 
 (** FormalSQL's historical occurrence permutation specializes to Stdlib's
@@ -692,6 +859,111 @@ Definition query_grouping_key
 
 Arguments query_grouping_key {T} _ _ _.
 
+(** Applying the same permutation to two mapped lists preserves whether the
+    maps are equal.  This is stronger than ordinary [map] permutation: the
+    same positional rewrite is applied on both sides of the equality test. *)
+Local Lemma map_pair_equality_Permutation :
+  forall (Index Value : Type) (left right : list Index)
+      (first second : Index -> Value),
+    Sorting.Permutation.Permutation left right ->
+    (map first left = map second left <->
+     map first right = map second right).
+Proof.
+  intros Index Value left right first second Hpermutation.
+  induction Hpermutation.
+  - tauto.
+  - cbn; split; intro Hequal; injection Hequal as Hhead Htail.
+    + now rewrite Hhead, (proj1 IHHpermutation Htail).
+    + now rewrite Hhead, (proj2 IHHpermutation Htail).
+  - cbn; split; intro Hequal;
+      injection Hequal as Hfirst Hsecond Htail; congruence.
+  - tauto.
+Qed.
+
+Lemma query_grouping_key_decision_Permutation :
+  forall (T : Tuple.Rcd) (env : Env.env T) left_terms right_terms left right,
+    Sorting.Permutation.Permutation left_terms right_terms ->
+    Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (query_grouping_key env left_terms left)
+      (query_grouping_key env left_terms right) =
+    Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (query_grouping_key env right_terms left)
+      (query_grouping_key env right_terms right).
+Proof.
+  intros T env left_terms right_terms left right Hterms.
+  unfold query_grouping_key.
+  pose proof
+    (map_pair_equality_Permutation
+      (@aggterm T) (value T) left_terms right_terms
+      (fun term => interp_aggterm T (env_t T env left) term)
+      (fun term => interp_aggterm T (env_t T env right) term)
+      Hterms) as Hequality.
+  destruct
+    (Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (map (fun term => interp_aggterm T (env_t T env left) term) left_terms)
+      (map (fun term => interp_aggterm T (env_t T env right) term) left_terms))
+    eqn:Hleft;
+  destruct
+    (Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (map (fun term => interp_aggterm T (env_t T env left) term) right_terms)
+      (map (fun term => interp_aggterm T (env_t T env right) term) right_terms))
+    eqn:Hright; try reflexivity.
+  - apply Oset.eq_bool_true_iff in Hleft.
+    apply (proj1 Hequality) in Hleft.
+    apply (proj2
+      (Oset.eq_bool_true_iff (OrderedSet.mk_olists (OVal T)) _ _))
+      in Hleft.
+    congruence.
+  - apply Oset.eq_bool_true_iff in Hright.
+    apply (proj2 Hequality) in Hright.
+    apply (proj2
+      (Oset.eq_bool_true_iff (OrderedSet.mk_olists (OVal T)) _ _))
+      in Hright.
+    congruence.
+Qed.
+
+(** Reordering GROUP BY expressions changes only the representation of each
+    grouping key.  Every pair of rows receives the same equality decision, so
+    the partition contains exactly the same member lists, including duplicate
+    occurrences and the global-empty-group correction. *)
+Theorem query_make_groups_group_terms_Permutation :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows left_terms right_terms,
+    Sorting.Permutation.Permutation left_terms right_terms ->
+    @query_make_groups T env rows left_terms =
+    @query_make_groups T env rows right_terms.
+Proof.
+  intros T env rows left_terms right_terms Hterms.
+  destruct rows as [|row rows].
+  - destruct left_terms as [|left_term left_terms].
+    + apply Sorting.Permutation.Permutation_nil in Hterms.
+      subst right_terms; reflexivity.
+    + destruct right_terms as [|right_term right_terms].
+      * symmetry in Hterms.
+        apply Sorting.Permutation.Permutation_nil in Hterms.
+        discriminate.
+      * reflexivity.
+  - destruct left_terms as [|left_term left_terms];
+      destruct right_terms as [|right_term right_terms].
+    + reflexivity.
+    + apply Sorting.Permutation.Permutation_nil in Hterms; discriminate.
+    + symmetry in Hterms.
+      apply Sorting.Permutation.Permutation_nil in Hterms; discriminate.
+    + unfold query_make_groups, FlatData.make_groups.
+      apply partition_members_equal_of_key_decisions.
+      intros first second Hfirst Hsecond.
+      change
+        (Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+          (query_grouping_key env (left_term :: left_terms) first)
+          (query_grouping_key env (left_term :: left_terms) second) =
+         Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+          (query_grouping_key env (right_term :: right_terms) first)
+          (query_grouping_key env (right_term :: right_terms) second)).
+      exact
+        (query_grouping_key_decision_Permutation
+          T env (left_term :: left_terms) (right_term :: right_terms)
+          first second Hterms).
+Qed.
+
 (** Recover a fine grouping key from the representative at the head of a
     materialized group.  The empty branch is only a totality default; ordinary
     nonempty-key [query_make_groups] groups are nonempty. *)
@@ -1014,6 +1286,52 @@ Proof.
         (fun item =>
           keep (query_grouping_key env group_terms item)) rows)
       group_terms key Hterms Hconstant).
+Qed.
+
+(** Lookup form used by scalar-aggregate decorrelation.  Filtering the
+    materialized groups by one outer correlation key yields no group exactly
+    when no input row has that key; otherwise it yields the single group whose
+    members are the matching input occurrences.  The [rev] is the internal
+    partition accumulator order and can be discharged by permutation-stable
+    aggregate facts. *)
+Theorem query_make_groups_lookup_key_exact :
+  forall (T : Tuple.Rcd) (env : Env.env T) group_terms rows key,
+    group_terms <> nil ->
+    filter
+      (fun members =>
+        match members with
+        | nil => false
+        | row :: _ =>
+            Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+              (query_grouping_key env group_terms row) key
+        end)
+      (@query_make_groups T env rows group_terms) =
+    match
+      filter
+        (fun row =>
+          Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+            (query_grouping_key env group_terms row) key)
+        rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [rev
+          (filter
+            (fun row =>
+              Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+                (query_grouping_key env group_terms row) key)
+            rows)]
+    end.
+Proof.
+  intros T env group_terms rows key Hterms.
+  eapply (@query_make_groups_matching_one_key_exact
+    T env group_terms rows
+    (fun candidate =>
+      Oset.eq_bool (OrderedSet.mk_olists (OVal T)) candidate key)
+    key); [exact Hterms|].
+  intros row Hrow.
+  apply filter_In in Hrow as [_ Hkey].
+  now apply Oset.eq_bool_true_iff in Hkey.
 Qed.
 
 (** Every two members of an ordinary nonempty-key group have the same complete

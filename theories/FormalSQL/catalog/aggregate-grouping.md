@@ -2,7 +2,339 @@
 
 Route here for: COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality.
 
-This focused catalog contains 166 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 220 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+
+## `tnull_group_count_star_value_runtime_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:23`](../AggregateOutcomeBridgeFacts.v#L23)
+
+Purpose/direction: Computes one TNull group COUNT-star value and both aggregate/full runtime checks exactly from the group's mathematical cardinality.
+
+Applicability: Use for COUNT-star cardinality transport without assuming the count is inside BIGINT range.  Equal lengths preserve both the value placeholder and the exact overflow category; child query errors remain separate.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`, `COUNT star`, `group cardinality`, `BIGINT overflow`, `runtime error`
+
+```rocq
+Lemma tnull_group_count_star_value_runtime_exact :
+  forall env group_terms group,
+    Interp.interp_aggterm TNull
+      (Env.env_g TNull env (@Env.Group_By TNull group_terms) group)
+      ACountStar =
+      value_int64_checked (Z.of_nat (List.length group)) /\
+    @eval_aggterm_aggregate_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (Env.env_g TNull env (@Env.Group_By TNull group_terms) group)
+      ACountStar =
+      int64_result_runtime_error (Z.of_nat (List.length group)) /\
+    @eval_aggterm_runtime_error TNull
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      (Env.env_g TNull env (@Env.Group_By TNull group_terms) group)
+      ACountStar =
+      int64_result_runtime_error (Z.of_nat (List.length group)).
+```
+
+## `count_star_value_local_error_exact_of_equal_length`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:87`](../AggregateOutcomeBridgeFacts.v#L87)
+
+Purpose/direction: Shows equal occurrence cardinality gives the same COUNT-star value and exact BIGINT overflow/error observation, without an in-range premise.
+
+Applicability: Use for COUNT-star cardinality transport without assuming the count is inside BIGINT range.  Equal lengths preserve both the value placeholder and the exact overflow category; child query errors remain separate.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `COUNT star`, `equal cardinality`, `BIGINT overflow`, `local error`
+
+```rocq
+Theorem count_star_value_local_error_exact_of_equal_length :
+  forall left right,
+    List.length left = List.length right ->
+    interp_aggregate AggregateCountStar left =
+      interp_aggregate AggregateCountStar right /\
+    aggregate_local_runtime_error AggregateCountStar left =
+      aggregate_local_runtime_error AggregateCountStar right.
+```
+
+## `count_star_value_runtime_error_exact_of_equal_observation_length`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:108`](../AggregateOutcomeBridgeFacts.v#L108)
+
+Purpose/direction: Shows equal occurrence cardinality gives the same COUNT-star value and exact BIGINT overflow/error observation, without an in-range premise.
+
+Applicability: Use for COUNT-star cardinality transport without assuming the count is inside BIGINT range.  Equal lengths preserve both the value placeholder and the exact overflow category; child query errors remain separate.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `COUNT star`, `equal cardinality`, `runtime error`, `observations`
+
+```rocq
+Theorem count_star_value_runtime_error_exact_of_equal_observation_length :
+  forall left right,
+    List.length left = List.length right ->
+    interp_aggregate AggregateCountStar (observation_values left) =
+      interp_aggregate AggregateCountStar (observation_values right) /\
+    interp_aggregate_runtime_error AggregateCountStar left =
+      interp_aggregate_runtime_error AggregateCountStar right.
+```
+
+## `count_star_count_all_nonnull_value_local_error_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:134`](../AggregateOutcomeBridgeFacts.v#L134)
+
+Purpose/direction: Relates COUNT-star to COUNT ALL over an equally long reached expression list under explicit non-NULL and, for full outcomes, child-safety premises.
+
+Applicability: Use only for AggregateAll after proving equal reached cardinality and every expression value non-NULL.  The full runtime form also requires each reached child observation to be error-free; DISTINCT is excluded.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `COUNT star`, `COUNT expression`, `NOT NULL`, `local error`
+
+```rocq
+Theorem count_star_count_all_nonnull_value_local_error_exact :
+  forall star_values expression_values,
+    List.length star_values = List.length expression_values ->
+    Forall
+      (fun value => NullValues.is_null_value value = false)
+      expression_values ->
+    interp_aggregate AggregateCountStar star_values =
+      interp_aggregate
+        (AggregateCall AggregateCount AggregateAll) expression_values /\
+    aggregate_local_runtime_error AggregateCountStar star_values =
+      aggregate_local_runtime_error
+        (AggregateCall AggregateCount AggregateAll) expression_values.
+```
+
+## `count_star_count_all_nonnull_value_runtime_error_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:166`](../AggregateOutcomeBridgeFacts.v#L166)
+
+Purpose/direction: Relates COUNT-star to COUNT ALL over an equally long reached expression list under explicit non-NULL and, for full outcomes, child-safety premises.
+
+Applicability: Use only for AggregateAll after proving equal reached cardinality and every expression value non-NULL.  The full runtime form also requires each reached child observation to be error-free; DISTINCT is excluded.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `COUNT star`, `COUNT expression`, `NOT NULL`, `runtime error`
+
+```rocq
+Theorem count_star_count_all_nonnull_value_runtime_error_exact :
+  forall star_observations expression_observations,
+    List.length star_observations = List.length expression_observations ->
+    Forall
+      (fun observation =>
+        fst observation = None /\
+        NullValues.is_null_value (snd observation) = false)
+      expression_observations ->
+    interp_aggregate AggregateCountStar
+      (observation_values star_observations) =
+      interp_aggregate (AggregateCall AggregateCount AggregateAll)
+        (observation_values expression_observations) /\
+    interp_aggregate_runtime_error AggregateCountStar star_observations =
+      interp_aggregate_runtime_error
+        (AggregateCall AggregateCount AggregateAll)
+        expression_observations.
+```
+
+## `formula_pred_outcome_equiv_of_argument_observations`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:241`](../AggregateOutcomeBridgeFacts.v#L241)
+
+Purpose/direction: Transports full predicate-formula outcomes from equality of reached argument values and first runtime errors, retaining FALSE versus UNKNOWN.
+
+Applicability: Use after proving equality of the complete reached argument-value list and its left-biased first runtime error.  Acceptance equality alone is insufficient because the theorem preserves the full Bool3 outcome.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `predicate`, `Bool3`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`, `aggregate observation`, `runtime error`
+
+```rocq
+Theorem formula_pred_outcome_equiv_of_argument_observations :
+  forall left_env right_env predicate left_arguments right_arguments,
+    first_runtime_error
+      (@eval_aggterm_runtime_error T
+        symbol_runtime_error aggregate_runtime_error left_env)
+      left_arguments =
+    first_runtime_error
+      (@eval_aggterm_runtime_error T
+        symbol_runtime_error aggregate_runtime_error right_env)
+      right_arguments ->
+    map (@Interp.interp_aggterm T left_env) left_arguments =
+    map (@Interp.interp_aggterm T right_env) right_arguments ->
+    forall outcome,
+      eval_formula left_env (FExpr_Pred predicate left_arguments) outcome <->
+      eval_formula right_env (FExpr_Pred predicate right_arguments) outcome.
+```
+
+## `tnull_group_count_star_projection_eq_of_equal_length`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:300`](../AggregateOutcomeBridgeFacts.v#L300)
+
+Purpose/direction: Derives semantic equality of one-column COUNT-star group projections from equal group cardinality, independent of the output alias.
+
+Applicability: Use with equal cardinality for every paired reached group.  Arbitrary HAVING requires exact aggregate and formula outcome correspondence; the TRUE-HAVING specialization discharges only that predicate boundary.  The scheduler result is semantic permutation, not a promoted exact ordered row list.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`, `projection`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`, `COUNT star`, `group projection`, `equal cardinality`, `semantic row equality`
+
+```rocq
+Lemma tnull_group_count_star_projection_eq_of_equal_length :
+  forall left_env right_env left_group_terms right_group_terms
+      left_group right_group output,
+    List.length left_group = List.length right_group ->
+    Oeset.compare (OTuple TNull)
+      (group_projection left_env (tnull_count_star_select_list output)
+        left_group_terms left_group)
+      (group_projection right_env (tnull_count_star_select_list output)
+        right_group_terms right_group) = Eq.
+```
+
+## `tnull_count_star_group_observation_equiv_of_equal_length`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:364`](../AggregateOutcomeBridgeFacts.v#L364)
+
+Purpose/direction: Builds one exact COUNT-star group execution relation from equal cardinality and explicit aggregate/HAVING outcome correspondence.
+
+Applicability: Use with equal cardinality for every paired reached group.  Arbitrary HAVING requires exact aggregate and formula outcome correspondence; the TRUE-HAVING specialization discharges only that predicate boundary.  The scheduler result is semantic permutation, not a promoted exact ordered row list.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `equivalence`, `congruence`, `COUNT star`, `group outcome`, `HAVING`, `equal cardinality`
+
+```rocq
+Theorem tnull_count_star_group_observation_equiv_of_equal_length :
+  forall left_env right_env left_group_terms right_group_terms
+      left_having right_having left_group right_group output,
+    List.length left_group = List.length right_group ->
+    eval_formula_aggregates
+      (Env.env_g TNull left_env
+        (@Env.Group_By TNull left_group_terms) left_group)
+      left_having =
+    eval_formula_aggregates
+      (Env.env_g TNull right_env
+        (@Env.Group_By TNull right_group_terms) right_group)
+      right_having ->
+    (forall outcome,
+      eval_formula
+        (Env.env_g TNull left_env
+          (@Env.Group_By TNull left_group_terms) left_group)
+        left_having outcome <->
+      eval_formula
+        (Env.env_g TNull right_env
+          (@Env.Group_By TNull right_group_terms) right_group)
+        right_having outcome) ->
+    @group_execution_observation_equiv TNull relname
+      basesort instance unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value
+      left_env (tnull_count_star_select_list output)
+      left_group_terms left_having
+      right_env (tnull_count_star_select_list output)
+      right_group_terms right_having
+      left_group right_group.
+```
+
+## `tnull_count_star_groups_outcome_equiv_of_Forall2_observations`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:458`](../AggregateOutcomeBridgeFacts.v#L458)
+
+Purpose/direction: Lifts pointwise equal-cardinality COUNT-star observations through the ordered group scheduler, preserving duplicate groups and the first error.
+
+Applicability: Use with equal cardinality for every paired reached group.  Arbitrary HAVING requires exact aggregate and formula outcome correspondence; the TRUE-HAVING specialization discharges only that predicate boundary.  The scheduler result is semantic permutation, not a promoted exact ordered row list.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`, `COUNT star`, `group scheduler`, `first error`, `duplicate groups`
+
+```rocq
+Theorem tnull_count_star_groups_outcome_equiv_of_Forall2_observations :
+  forall left_env right_env left_group_terms right_group_terms
+      left_having right_having left_groups right_groups output,
+    Forall2
+      (fun left_group right_group =>
+        List.length left_group = List.length right_group /\
+        eval_formula_aggregates
+          (Env.env_g TNull left_env
+            (@Env.Group_By TNull left_group_terms) left_group)
+          left_having =
+        eval_formula_aggregates
+          (Env.env_g TNull right_env
+            (@Env.Group_By TNull right_group_terms) right_group)
+          right_having /\
+        forall outcome,
+          eval_formula
+            (Env.env_g TNull left_env
+              (@Env.Group_By TNull left_group_terms) left_group)
+            left_having outcome <->
+          eval_formula
+            (Env.env_g TNull right_env
+              (@Env.Group_By TNull right_group_terms) right_group)
+            right_having outcome)
+      left_groups right_groups ->
+    (exists outcome,
+      eval_groups left_env (tnull_count_star_select_list output)
+        left_group_terms left_having left_groups outcome) ->
+    outcome_relation_equiv (Oeset.permut (OTuple TNull))
+      (eval_groups left_env (tnull_count_star_select_list output)
+        left_group_terms left_having left_groups)
+      (eval_groups right_env (tnull_count_star_select_list output)
+        right_group_terms right_having right_groups).
+```
+
+## `tnull_count_star_groups_true_outcome_equiv_of_Forall2_length`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:506`](../AggregateOutcomeBridgeFacts.v#L506)
+
+Purpose/direction: Lifts pointwise equal-cardinality COUNT-star observations through the ordered group scheduler, preserving duplicate groups and the first error.
+
+Applicability: Use with equal cardinality for every paired reached group.  Arbitrary HAVING requires exact aggregate and formula outcome correspondence; the TRUE-HAVING specialization discharges only that predicate boundary.  The scheduler result is semantic permutation, not a promoted exact ordered row list.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`, `COUNT star`, `TRUE HAVING`, `group cardinality`, `runtime error`
+
+```rocq
+Corollary tnull_count_star_groups_true_outcome_equiv_of_Forall2_length :
+  forall left_env right_env left_group_terms right_group_terms
+      left_groups right_groups output,
+    Forall2
+      (fun left_group right_group =>
+        List.length left_group = List.length right_group)
+      left_groups right_groups ->
+    (exists outcome,
+      eval_groups left_env (tnull_count_star_select_list output)
+        left_group_terms FExpr_True left_groups outcome) ->
+    outcome_relation_equiv (Oeset.permut (OTuple TNull))
+      (eval_groups left_env (tnull_count_star_select_list output)
+        left_group_terms FExpr_True left_groups)
+      (eval_groups right_env (tnull_count_star_select_list output)
+        right_group_terms FExpr_True right_groups).
+```
 
 ## `first_error_none_iff`
 
@@ -14,7 +346,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -33,7 +365,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -53,7 +385,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -76,7 +408,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -97,7 +429,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -118,7 +450,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -138,7 +470,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -158,7 +490,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -179,7 +511,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `cardinality` (rank 44)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `cardinality`
 
@@ -198,7 +530,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -220,7 +552,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -244,7 +576,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 46)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -269,7 +601,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -295,7 +627,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 40)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -320,7 +652,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -346,7 +678,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -366,7 +698,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -386,7 +718,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -406,7 +738,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `cardinality` (rank 52), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -426,7 +758,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -446,7 +778,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -466,7 +798,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -486,7 +818,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -506,7 +838,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -528,7 +860,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 46)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -551,7 +883,7 @@ Applicability: Use when the goal or a hypothesis matches the `all_null_non_null_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -571,7 +903,7 @@ Applicability: Use when the goal or a hypothesis matches the `aggregate_input_va
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -581,9 +913,28 @@ Lemma aggregate_input_values_membership :
     In value (aggregate_input_values quantifier values) <-> In value values.
 ```
 
+## `aggregate_input_values_nonempty_iff`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:345`](../AggregateRuntimeFacts.v#L345)
+
+Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma aggregate_input_values_nonempty_iff : forall quantifier values,
+  aggregate_input_values quantifier values <> [] <-> values <> [].
+```
+
 ## `aggregate_input_values_preserves_Forall`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:349`](../AggregateRuntimeFacts.v#L349)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:367`](../AggregateRuntimeFacts.v#L367)
 
 Purpose/direction: Transports an arbitrary pointwise input property through ALL or DISTINCT aggregate input selection.
 
@@ -591,7 +942,7 @@ Applicability: Use for properties insensitive to occurrence removal; DISTINCT ma
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 10)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -604,7 +955,7 @@ Lemma aggregate_input_values_preserves_Forall :
 
 ## `non_null_count_eq_length_of_Forall_nonnull`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:363`](../AggregateRuntimeFacts.v#L363)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:381`](../AggregateRuntimeFacts.v#L381)
 
 Purpose/direction: Computes aggregate non-NULL count as the exact list length when every input value is proved non-NULL.
 
@@ -612,7 +963,7 @@ Applicability: Use only with an explicit `Forall` non-NULL proof; SQL NULL input
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 12), `cardinality` (rank 8), `scalar` (rank 52)
+Cross-index: `grouping`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `cardinality`
 
@@ -625,7 +976,7 @@ Lemma non_null_count_eq_length_of_Forall_nonnull :
 
 ## `distinct_values_fixed_of_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:376`](../AggregateRuntimeFacts.v#L376)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:394`](../AggregateRuntimeFacts.v#L394)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for aggregate evaluation.
 
@@ -633,7 +984,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 36), `bag` (rank 52)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `multiplicity`
 
@@ -644,7 +995,7 @@ Lemma distinct_values_fixed_of_nodup : forall values,
 
 ## `distinct_values_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:387`](../AggregateRuntimeFacts.v#L387)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:405`](../AggregateRuntimeFacts.v#L405)
 
 Purpose/direction: Provides the stated reusable upper bound for aggregate evaluation.
 
@@ -652,7 +1003,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `cardinality` (rank 40)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `cardinality`
 
@@ -663,7 +1014,7 @@ Lemma distinct_values_length_le : forall values,
 
 ## `aggregate_input_values_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:394`](../AggregateRuntimeFacts.v#L394)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:412`](../AggregateRuntimeFacts.v#L412)
 
 Purpose/direction: Provides the stated reusable upper bound for aggregate evaluation.
 
@@ -671,7 +1022,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `cardinality` (rank 40)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `cardinality`
 
@@ -683,7 +1034,7 @@ Lemma aggregate_input_values_length_le : forall quantifier values,
 
 ## `aggregate_input_values_distinct_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:402`](../AggregateRuntimeFacts.v#L402)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:420`](../AggregateRuntimeFacts.v#L420)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for aggregate evaluation.
 
@@ -691,7 +1042,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 34), `bag` (rank 52)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `multiplicity`
 
@@ -702,7 +1053,7 @@ Lemma aggregate_input_values_distinct_nodup : forall values,
 
 ## `aggregate_distinct_input_Permutation_of_NoDup_support`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:411`](../AggregateRuntimeFacts.v#L411)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:429`](../AggregateRuntimeFacts.v#L429)
 
 Purpose/direction: Identifies DISTINCT aggregate selection, up to permutation, with any duplicate-free list having exactly the original value support.
 
@@ -710,7 +1061,7 @@ Applicability: Use only after supplying both duplicate-freedom and exact support
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 6), `bag` (rank 8)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -726,7 +1077,7 @@ Theorem aggregate_distinct_input_Permutation_of_NoDup_support :
 
 ## `aggregate_input_values_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:429`](../AggregateRuntimeFacts.v#L429)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:447`](../AggregateRuntimeFacts.v#L447)
 
 Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
 
@@ -734,7 +1085,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 34), `bag` (rank 44)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -747,9 +1098,115 @@ Lemma aggregate_input_values_permutation :
       (aggregate_input_values quantifier right).
 ```
 
+## `non_null_count_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:459`](../AggregateRuntimeFacts.v#L459)
+
+Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma non_null_count_permutation : forall left right,
+  Permutation left right -> non_null_count left = non_null_count right.
+```
+
+## `interp_aggregate_count_star_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:482`](../AggregateRuntimeFacts.v#L482)
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma interp_aggregate_count_star_permutation : forall left right,
+  Permutation left right ->
+  interp_aggregate AggregateCountStar left =
+  interp_aggregate AggregateCountStar right.
+```
+
+## `aggregate_count_star_local_runtime_error_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:495`](../AggregateRuntimeFacts.v#L495)
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for aggregate evaluation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma aggregate_count_star_local_runtime_error_permutation : forall left right,
+  Permutation left right ->
+  aggregate_local_runtime_error AggregateCountStar left =
+  aggregate_local_runtime_error AggregateCountStar right.
+```
+
+## `interp_aggregate_count_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:506`](../AggregateRuntimeFacts.v#L506)
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma interp_aggregate_count_permutation : forall quantifier left right,
+  Permutation left right ->
+  interp_aggregate (AggregateCall AggregateCount quantifier) left =
+  interp_aggregate (AggregateCall AggregateCount quantifier) right.
+```
+
+## `aggregate_count_local_runtime_error_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:524`](../AggregateRuntimeFacts.v#L524)
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for aggregate evaluation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma aggregate_count_local_runtime_error_permutation :
+  forall quantifier left right,
+    Permutation left right ->
+    aggregate_local_runtime_error
+      (AggregateCall AggregateCount quantifier) left =
+    aggregate_local_runtime_error
+      (AggregateCall AggregateCount quantifier) right.
+```
+
 ## `aggregate_input_values_idempotent`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:441`](../AggregateRuntimeFacts.v#L441)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:546`](../AggregateRuntimeFacts.v#L546)
 
 Purpose/direction: Establishes idempotence for the declared aggregate evaluation operator.
 
@@ -757,7 +1214,7 @@ Applicability: Use when the goal or a hypothesis matches the `aggregate_input_va
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -770,7 +1227,7 @@ Lemma aggregate_input_values_idempotent : forall quantifier values,
 
 ## `interp_aggregate_call_selected_input_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:451`](../AggregateRuntimeFacts.v#L451)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:556`](../AggregateRuntimeFacts.v#L556)
 
 Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
 
@@ -778,7 +1235,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `equivalence`, `congruence`
 
@@ -793,7 +1250,7 @@ Lemma interp_aggregate_call_selected_input_congr :
 
 ## `aggregate_call_local_runtime_error_selected_input_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:462`](../AggregateRuntimeFacts.v#L462)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:567`](../AggregateRuntimeFacts.v#L567)
 
 Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
 
@@ -801,7 +1258,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -818,7 +1275,7 @@ Lemma aggregate_call_local_runtime_error_selected_input_congr :
 
 ## `interp_aggregate_call_permutation_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:475`](../AggregateRuntimeFacts.v#L475)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:580`](../AggregateRuntimeFacts.v#L580)
 
 Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
 
@@ -826,7 +1283,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping` (rank 34), `bag` (rank 44)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -844,7 +1301,7 @@ Lemma interp_aggregate_call_permutation_congr :
 
 ## `aggregate_call_local_runtime_error_permutation_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:490`](../AggregateRuntimeFacts.v#L490)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:595`](../AggregateRuntimeFacts.v#L595)
 
 Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
 
@@ -852,7 +1309,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52), `bag` (rank 44)
+Cross-index: `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -870,9 +1327,188 @@ Lemma aggregate_call_local_runtime_error_permutation_congr :
       (AggregateCall function quantifier) right.
 ```
 
+## `fold_nonempty_support_equiv`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:677`](../AggregateRuntimeFacts.v#L677)
+
+Purpose/direction: Makes the displayed associative/commutative/idempotent fold or exact integral, NUMERIC, and C-collation textual extrema invariant under permutation, support equivalence, or repeated input blocks.
+
+Applicability: Use only for the explicitly enumerated exact MIN/MAX functions.  The law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; preserve child-error order through the separate runtime theorem.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `equivalence`, `congruence`, `associative commutative idempotent fold`, `support`, `duplicates`
+
+```rocq
+Theorem fold_nonempty_support_equiv :
+  forall (A : Type) (operation : A -> A -> A),
+    (forall left right, operation left right = operation right left) ->
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    (forall value, operation value value = value) ->
+    forall left right,
+      (forall value, In value left <-> In value right) ->
+      fold_nonempty operation left = fold_nonempty operation right.
+```
+
+## `exact_extrema_aggregate_permutation`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:879`](../AggregateRuntimeFacts.v#L879)
+
+Purpose/direction: Makes the displayed associative/commutative/idempotent fold or exact integral, NUMERIC, and C-collation textual extrema invariant under permutation, support equivalence, or repeated input blocks.
+
+Applicability: Use only for the explicitly enumerated exact MIN/MAX functions.  The law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; preserve child-error order through the separate runtime theorem.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`, `MIN`, `MAX`, `permutation`, `C collation`
+
+```rocq
+Lemma exact_extrema_aggregate_permutation : forall function quantifier left right,
+  (function = AggregateMinZ \/ function = AggregateMaxZ \/
+   function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+   function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+   function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+   function = AggregateMaxString) ->
+  Permutation left right ->
+  interp_aggregate (AggregateCall function quantifier) left =
+  interp_aggregate (AggregateCall function quantifier) right.
+```
+
+## `exact_extrema_aggregate_support_equiv`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:986`](../AggregateRuntimeFacts.v#L986)
+
+Purpose/direction: Makes the displayed associative/commutative/idempotent fold or exact integral, NUMERIC, and C-collation textual extrema invariant under permutation, support equivalence, or repeated input blocks.
+
+Applicability: Use only for the explicitly enumerated exact MIN/MAX functions.  The law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; preserve child-error order through the separate runtime theorem.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `equivalence`, `congruence`, `MIN`, `MAX`, `duplicate-insensitive support`, `runtime boundary`
+
+```rocq
+Theorem exact_extrema_aggregate_support_equiv :
+  forall function quantifier left right,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    (forall value, In value left <-> In value right) ->
+    interp_aggregate (AggregateCall function quantifier) left =
+    interp_aggregate (AggregateCall function quantifier) right.
+```
+
+## `exact_extrema_aggregate_duplicate_block`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1004`](../AggregateRuntimeFacts.v#L1004)
+
+Purpose/direction: Makes the displayed associative/commutative/idempotent fold or exact integral, NUMERIC, and C-collation textual extrema invariant under permutation, support equivalence, or repeated input blocks.
+
+Applicability: Use only for the explicitly enumerated exact MIN/MAX functions.  The law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; preserve child-error order through the separate runtime theorem.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `MIN`, `MAX`, `idempotence`, `duplicate block`
+
+```rocq
+Theorem exact_extrema_aggregate_duplicate_block :
+  forall function quantifier prefix block suffix,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    interp_aggregate (AggregateCall function quantifier)
+      (prefix ++ block ++ block ++ suffix) =
+    interp_aggregate (AggregateCall function quantifier)
+      (prefix ++ block ++ suffix).
+```
+
+## `first_runtime_error_duplicate_block`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1021`](../AggregateRuntimeFacts.v#L1021)
+
+Purpose/direction: Shows that repeating one reached input block preserves its left-biased first runtime error, and packages that boundary for exact extrema aggregates.
+
+Applicability: Use only for literal repetition of the same reached block in the same prefix/suffix schedule.  Arbitrary support equivalence does not preserve which SQL error is observed first.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `runtime error`, `evaluation order`, `duplicate block`
+
+```rocq
+Lemma first_runtime_error_duplicate_block :
+  forall (A : Type) (check : A -> option sql_runtime_error)
+    prefix block suffix,
+    first_runtime_error check (prefix ++ block ++ block ++ suffix) =
+    first_runtime_error check (prefix ++ block ++ suffix).
+```
+
+## `first_observation_error_duplicate_block`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1032`](../AggregateRuntimeFacts.v#L1032)
+
+Purpose/direction: Shows that repeating one reached input block preserves its left-biased first runtime error, and packages that boundary for exact extrema aggregates.
+
+Applicability: Use only for literal repetition of the same reached block in the same prefix/suffix schedule.  Arbitrary support equivalence does not preserve which SQL error is observed first.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `runtime error`, `evaluation order`, `duplicate block`
+
+```rocq
+Lemma first_observation_error_duplicate_block :
+  forall prefix block suffix,
+    first_observation_error (prefix ++ block ++ block ++ suffix) =
+    first_observation_error (prefix ++ block ++ suffix).
+```
+
+## `exact_extrema_aggregate_runtime_error_duplicate_block`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1046`](../AggregateRuntimeFacts.v#L1046)
+
+Purpose/direction: Shows that repeating one reached input block preserves its left-biased first runtime error, and packages that boundary for exact extrema aggregates.
+
+Applicability: Use only for the explicitly enumerated exact MIN/MAX functions.  The law is deliberately unavailable for SUM/AVG, especially FLOAT/DOUBLE; preserve child-error order through the separate runtime theorem.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `MIN`, `MAX`, `runtime error`, `duplicate block`
+
+```rocq
+Theorem exact_extrema_aggregate_runtime_error_duplicate_block :
+  forall function quantifier prefix block suffix,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    interp_aggregate_runtime_error (AggregateCall function quantifier)
+      (prefix ++ block ++ block ++ suffix) =
+    interp_aggregate_runtime_error (AggregateCall function quantifier)
+      (prefix ++ block ++ suffix).
+```
+
 ## `aggregate_input_values_preserves_all_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:507`](../AggregateRuntimeFacts.v#L507)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1070`](../AggregateRuntimeFacts.v#L1070)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -880,7 +1516,7 @@ Applicability: Use when the goal or a hypothesis matches the `aggregate_input_va
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 34), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -893,7 +1529,7 @@ Lemma aggregate_input_values_preserves_all_null : forall quantifier values,
 
 ## `aggregate_filter_input_membership`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:524`](../AggregateRuntimeFacts.v#L524)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1087`](../AggregateRuntimeFacts.v#L1087)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate evaluation.
 
@@ -901,7 +1537,7 @@ Applicability: Use when the goal or a hypothesis matches the `aggregate_filter_i
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 46)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -914,7 +1550,7 @@ Lemma aggregate_filter_input_membership :
 
 ## `aggregate_filter_input_distinct_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:535`](../AggregateRuntimeFacts.v#L535)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1098`](../AggregateRuntimeFacts.v#L1098)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for aggregate evaluation.
 
@@ -922,7 +1558,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 46), `bag` (rank 52)
+Cross-index: `grouping`, `filter`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `filter`, `WHERE`, `multiplicity`
 
@@ -933,7 +1569,7 @@ Lemma aggregate_filter_input_distinct_nodup : forall predicate values,
 
 ## `aggregate_filter_input_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:542`](../AggregateRuntimeFacts.v#L542)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1105`](../AggregateRuntimeFacts.v#L1105)
 
 Purpose/direction: Provides the stated reusable upper bound for aggregate evaluation.
 
@@ -941,7 +1577,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 46), `cardinality` (rank 40)
+Cross-index: `grouping`, `filter`, `cardinality`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`, `cardinality`
 
@@ -954,7 +1590,7 @@ Lemma aggregate_filter_input_length_le :
 
 ## `aggregate_filter_input_false_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:553`](../AggregateRuntimeFacts.v#L553)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1116`](../AggregateRuntimeFacts.v#L1116)
 
 Purpose/direction: States the exact empty-input or empty-result law for aggregate evaluation.
 
@@ -962,7 +1598,7 @@ Applicability: Use when the goal or a hypothesis matches the `aggregate_filter_i
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 46)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -973,7 +1609,7 @@ Lemma aggregate_filter_input_false_empty : forall quantifier values,
 
 ## `count_star_value_of_row_count_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:567`](../AggregateRuntimeFacts.v#L567)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1130`](../AggregateRuntimeFacts.v#L1130)
 
 Purpose/direction: Connects the displayed range/representability premise to aggregate evaluation.
 
@@ -981,7 +1617,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36), `cardinality` (rank 52), `scalar` (rank 52)
+Cross-index: `grouping`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`, `cardinality`
 
@@ -996,7 +1632,7 @@ Lemma count_star_value_of_row_count_range : forall values,
 
 ## `count_value_of_non_null_count_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:584`](../AggregateRuntimeFacts.v#L584)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1147`](../AggregateRuntimeFacts.v#L1147)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1004,7 +1640,7 @@ Applicability: Use when the goal or a hypothesis matches the `count_value_of_non
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`
 
@@ -1020,9 +1656,161 @@ Lemma count_value_of_non_null_count_range : forall quantifier values,
       non_null_count (aggregate_input_values quantifier values).
 ```
 
+## `int32_values_nonempty_of_typed_nonnull`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1175`](../AggregateRuntimeFacts.v#L1175)
+
+Purpose/direction: States the exact empty-input or empty-result law for aggregate evaluation.
+
+Applicability: Use when the goal or a hypothesis matches the `int32_values_nonempty_of_typed_nonnull` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `grouping`, `schema`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `INTEGER`, `int32`, `schema conformance`, `typing`
+
+```rocq
+Lemma int32_values_nonempty_of_typed_nonnull : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_int32_value value = true /\ is_null_value value = false)
+    values ->
+  int32_values values <> [].
+```
+
+## `numeric_values_nonempty_of_typed_nonnull`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1189`](../AggregateRuntimeFacts.v#L1189)
+
+Purpose/direction: States the exact empty-input or empty-result law for aggregate evaluation.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_values_nonempty_of_typed_nonnull` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `grouping`, `schema`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`, `schema conformance`, `typing`
+
+```rocq
+Lemma numeric_values_nonempty_of_typed_nonnull : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  numeric_values values <> [].
+```
+
+## `interp_sum_int32_nonnull_of_nonempty_runtime_safe`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1203`](../AggregateRuntimeFacts.v#L1203)
+
+Purpose/direction: Establishes the explicit runtime-safety direction for aggregate evaluation.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma interp_sum_int32_nonnull_of_nonempty_runtime_safe : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_int32_value value = true /\ is_null_value value = false)
+    values ->
+  sum_int32_runtime_error values = None ->
+  is_null_value (interp_sum_int32_as_int64 values) = false.
+```
+
+## `interp_sum_numeric_nonnull_of_nonempty`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1235`](../AggregateRuntimeFacts.v#L1235)
+
+Purpose/direction: States the exact empty-input or empty-result law for aggregate evaluation.
+
+Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric_nonnull_of_nonempty` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma interp_sum_numeric_nonnull_of_nonempty : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  is_null_value (interp_sum_numeric values) = false.
+```
+
+## `aggregate_sum_int32_nonnull_of_nonempty_runtime_safe`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1278`](../AggregateRuntimeFacts.v#L1278)
+
+Purpose/direction: Establishes the explicit runtime-safety direction for aggregate evaluation.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma aggregate_sum_int32_nonnull_of_nonempty_runtime_safe :
+  forall quantifier values,
+    values <> [] ->
+    Forall
+      (fun value =>
+        is_int32_value value = true /\ is_null_value value = false)
+      values ->
+    aggregate_local_runtime_error
+      (AggregateCall AggregateSumInt32 quantifier) values = None ->
+    is_null_value
+      (interp_aggregate
+        (AggregateCall AggregateSumInt32 quantifier) values) = false.
+```
+
+## `aggregate_sum_numeric_nonnull_of_nonempty`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1299`](../AggregateRuntimeFacts.v#L1299)
+
+Purpose/direction: States the exact empty-input or empty-result law for aggregate evaluation.
+
+Applicability: Use when the goal or a hypothesis matches the `aggregate_sum_numeric_nonnull_of_nonempty` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma aggregate_sum_numeric_nonnull_of_nonempty : forall quantifier values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  is_null_value
+    (interp_aggregate
+      (AggregateCall AggregateSumNumeric quantifier) values) = false.
+```
+
 ## `count_star_empty_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:609`](../AggregateRuntimeFacts.v#L609)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1318`](../AggregateRuntimeFacts.v#L1318)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -1030,7 +1818,7 @@ Applicability: Use when the goal or a hypothesis matches the `count_star_empty_s
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`
 
@@ -1043,7 +1831,7 @@ Lemma count_star_empty_success :
 
 ## `count_empty_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:624`](../AggregateRuntimeFacts.v#L624)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1333`](../AggregateRuntimeFacts.v#L1333)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -1051,7 +1839,7 @@ Applicability: Use when the goal or a hypothesis matches the `count_empty_succes
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `BIGINT`, `int64`
 
@@ -1065,7 +1853,7 @@ Lemma count_empty_success : forall quantifier,
 
 ## `count_all_null_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:642`](../AggregateRuntimeFacts.v#L642)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1351`](../AggregateRuntimeFacts.v#L1351)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1073,7 +1861,7 @@ Applicability: Use when the goal or a hypothesis matches the `count_all_null_suc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`
 
@@ -1088,7 +1876,7 @@ Lemma count_all_null_success : forall quantifier values,
 
 ## `all_null_numeric_projections_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:666`](../AggregateRuntimeFacts.v#L666)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1375`](../AggregateRuntimeFacts.v#L1375)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1096,7 +1884,7 @@ Applicability: Use when the goal or a hypothesis matches the `all_null_numeric_p
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -1110,7 +1898,7 @@ Lemma all_null_numeric_projections_empty : forall values,
 
 ## `all_null_float_string_projections_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:688`](../AggregateRuntimeFacts.v#L688)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1397`](../AggregateRuntimeFacts.v#L1397)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1118,7 +1906,7 @@ Applicability: Use when the goal or a hypothesis matches the `all_null_float_str
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`, `string`, `VARCHAR`
 
@@ -1132,7 +1920,7 @@ Lemma all_null_float_string_projections_empty : forall values,
 
 ## `sum_int32_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:712`](../AggregateRuntimeFacts.v#L712)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1421`](../AggregateRuntimeFacts.v#L1421)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1140,7 +1928,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_int32_empty_is
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -1152,7 +1940,7 @@ Lemma sum_int32_empty_is_null : forall quantifier,
 
 ## `sum_int64_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:717`](../AggregateRuntimeFacts.v#L717)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1426`](../AggregateRuntimeFacts.v#L1426)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1160,7 +1948,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_int64_numeric_
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `BIGINT`, `int64`
 
@@ -1172,7 +1960,7 @@ Lemma sum_int64_numeric_empty_is_null : forall quantifier,
 
 ## `sum_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:722`](../AggregateRuntimeFacts.v#L722)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1431`](../AggregateRuntimeFacts.v#L1431)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1180,7 +1968,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_numeric_empty_
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1192,7 +1980,7 @@ Lemma sum_numeric_empty_is_null : forall quantifier,
 
 ## `sum_int32_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:727`](../AggregateRuntimeFacts.v#L727)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1436`](../AggregateRuntimeFacts.v#L1436)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1200,7 +1988,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_int32_all_null
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -1213,7 +2001,7 @@ Lemma sum_int32_all_null_is_null : forall quantifier values,
 
 ## `sum_int64_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:745`](../AggregateRuntimeFacts.v#L745)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1454`](../AggregateRuntimeFacts.v#L1454)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1221,7 +2009,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_int64_numeric_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `BIGINT`, `int64`
 
@@ -1235,7 +2023,7 @@ Lemma sum_int64_numeric_all_null_is_null : forall quantifier values,
 
 ## `sum_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:764`](../AggregateRuntimeFacts.v#L764)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1473`](../AggregateRuntimeFacts.v#L1473)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1243,7 +2031,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_numeric_all_nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1256,7 +2044,7 @@ Lemma sum_numeric_all_null_is_null : forall quantifier values,
 
 ## `sum_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:782`](../AggregateRuntimeFacts.v#L782)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1491`](../AggregateRuntimeFacts.v#L1491)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1264,7 +2052,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_float_empty_is
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1276,7 +2064,7 @@ Lemma sum_float_empty_is_null : forall quantifier,
 
 ## `sum_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:787`](../AggregateRuntimeFacts.v#L787)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1496`](../AggregateRuntimeFacts.v#L1496)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1284,7 +2072,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_double_empty_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1296,7 +2084,7 @@ Lemma sum_double_empty_is_null : forall quantifier,
 
 ## `sum_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:792`](../AggregateRuntimeFacts.v#L792)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1501`](../AggregateRuntimeFacts.v#L1501)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1304,7 +2092,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_float_all_null
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1317,7 +2105,7 @@ Lemma sum_float_all_null_is_null : forall quantifier values,
 
 ## `sum_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:810`](../AggregateRuntimeFacts.v#L810)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1519`](../AggregateRuntimeFacts.v#L1519)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1325,7 +2113,7 @@ Applicability: Use when the goal or a hypothesis matches the `sum_double_all_nul
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1338,7 +2126,7 @@ Lemma sum_double_all_null_is_null : forall quantifier values,
 
 ## `min_max_int32_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:828`](../AggregateRuntimeFacts.v#L828)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1537`](../AggregateRuntimeFacts.v#L1537)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1346,7 +2134,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_int32_empt
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`
 
@@ -1358,7 +2146,7 @@ Lemma min_max_int32_empty_is_null : forall function quantifier,
 
 ## `min_max_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:835`](../AggregateRuntimeFacts.v#L835)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1544`](../AggregateRuntimeFacts.v#L1544)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1366,7 +2154,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_numeric_em
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1378,7 +2166,7 @@ Lemma min_max_numeric_empty_is_null : forall function quantifier,
 
 ## `min_max_int32_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:842`](../AggregateRuntimeFacts.v#L842)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1551`](../AggregateRuntimeFacts.v#L1551)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1386,7 +2174,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_int32_all_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`
 
@@ -1399,7 +2187,7 @@ Lemma min_max_int32_all_null_is_null : forall function quantifier values,
 
 ## `min_max_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:866`](../AggregateRuntimeFacts.v#L866)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1575`](../AggregateRuntimeFacts.v#L1575)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1407,7 +2195,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_numeric_al
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1420,7 +2208,7 @@ Lemma min_max_numeric_all_null_is_null : forall function quantifier values,
 
 ## `min_max_int64_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:890`](../AggregateRuntimeFacts.v#L890)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1599`](../AggregateRuntimeFacts.v#L1599)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1428,7 +2216,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_int64_empt
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`
 
@@ -1440,7 +2228,7 @@ Lemma min_max_int64_empty_is_null : forall function quantifier,
 
 ## `min_max_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:897`](../AggregateRuntimeFacts.v#L897)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1606`](../AggregateRuntimeFacts.v#L1606)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1448,7 +2236,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_float_empt
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1460,7 +2248,7 @@ Lemma min_max_float_empty_is_null : forall function quantifier,
 
 ## `min_max_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:904`](../AggregateRuntimeFacts.v#L904)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1613`](../AggregateRuntimeFacts.v#L1613)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1468,7 +2256,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_double_emp
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1480,7 +2268,7 @@ Lemma min_max_double_empty_is_null : forall function quantifier,
 
 ## `max_string_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:911`](../AggregateRuntimeFacts.v#L911)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1620`](../AggregateRuntimeFacts.v#L1620)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1488,7 +2276,7 @@ Applicability: Use when the goal or a hypothesis matches the `max_string_empty_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -1500,7 +2288,7 @@ Lemma max_string_empty_is_null : forall quantifier,
 
 ## `min_max_int64_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:916`](../AggregateRuntimeFacts.v#L916)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1625`](../AggregateRuntimeFacts.v#L1625)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1508,7 +2296,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_int64_all_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `BIGINT`, `int64`
 
@@ -1521,7 +2309,7 @@ Lemma min_max_int64_all_null_is_null : forall function quantifier values,
 
 ## `min_max_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:940`](../AggregateRuntimeFacts.v#L940)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1649`](../AggregateRuntimeFacts.v#L1649)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1529,7 +2317,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_float_all_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1542,7 +2330,7 @@ Lemma min_max_float_all_null_is_null : forall function quantifier values,
 
 ## `min_max_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:964`](../AggregateRuntimeFacts.v#L964)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1673`](../AggregateRuntimeFacts.v#L1673)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1550,7 +2338,7 @@ Applicability: Use when the goal or a hypothesis matches the `min_max_double_all
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1563,7 +2351,7 @@ Lemma min_max_double_all_null_is_null : forall function quantifier values,
 
 ## `max_string_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:988`](../AggregateRuntimeFacts.v#L988)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1697`](../AggregateRuntimeFacts.v#L1697)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1571,7 +2359,7 @@ Applicability: Use when the goal or a hypothesis matches the `max_string_all_nul
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -1584,7 +2372,7 @@ Lemma max_string_all_null_is_null : forall quantifier values,
 
 ## `avg_integral_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1006`](../AggregateRuntimeFacts.v#L1006)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1715`](../AggregateRuntimeFacts.v#L1715)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1592,7 +2380,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_integral_empty
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1605,7 +2393,7 @@ Lemma avg_integral_empty_is_null : forall function quantifier,
 
 ## `avg_integral_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1014`](../AggregateRuntimeFacts.v#L1014)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1723`](../AggregateRuntimeFacts.v#L1723)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1613,7 +2401,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_integral_all_n
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1627,7 +2415,7 @@ Lemma avg_integral_all_null_is_null : forall function quantifier values,
 
 ## `avg_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1040`](../AggregateRuntimeFacts.v#L1040)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1749`](../AggregateRuntimeFacts.v#L1749)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1635,19 +2423,19 @@ Applicability: Use when the goal or a hypothesis matches the `avg_float_empty_is
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
 ```rocq
 Lemma avg_float_empty_is_null : forall quantifier,
   interp_aggregate (AggregateCall AggregateAverageFloat quantifier) [] =
-  Value_float None.
+  Value_double None.
 ```
 
 ## `avg_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1045`](../AggregateRuntimeFacts.v#L1045)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1754`](../AggregateRuntimeFacts.v#L1754)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1655,7 +2443,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_double_empty_i
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1667,7 +2455,7 @@ Lemma avg_double_empty_is_null : forall quantifier,
 
 ## `avg_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1050`](../AggregateRuntimeFacts.v#L1050)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1759`](../AggregateRuntimeFacts.v#L1759)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1675,7 +2463,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_float_all_null
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1683,12 +2471,12 @@ Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UN
 Lemma avg_float_all_null_is_null : forall quantifier values,
   Forall (fun value => is_null_value value = true) values ->
   interp_aggregate (AggregateCall AggregateAverageFloat quantifier) values =
-  Value_float None.
+  Value_double None.
 ```
 
 ## `avg_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1068`](../AggregateRuntimeFacts.v#L1068)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1777`](../AggregateRuntimeFacts.v#L1777)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1696,7 +2484,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_double_all_nul
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `floating point`, `special value`
 
@@ -1709,7 +2497,7 @@ Lemma avg_double_all_null_is_null : forall quantifier values,
 
 ## `avg_numeric_fixed_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1086`](../AggregateRuntimeFacts.v#L1086)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1795`](../AggregateRuntimeFacts.v#L1795)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1717,7 +2505,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_numeric_fixed_
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1730,7 +2518,7 @@ Lemma avg_numeric_fixed_empty_is_null : forall precision scale quantifier,
 
 ## `avg_numeric_fixed_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1097`](../AggregateRuntimeFacts.v#L1097)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1806`](../AggregateRuntimeFacts.v#L1806)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1738,7 +2526,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_numeric_fixed_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`
 
@@ -1754,7 +2542,7 @@ Lemma avg_numeric_fixed_all_null_is_null :
 
 ## `avg_numeric_at_scale_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1120`](../AggregateRuntimeFacts.v#L1120)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1829`](../AggregateRuntimeFacts.v#L1829)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1762,7 +2550,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_numeric_at_sca
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1775,7 +2563,7 @@ Lemma avg_numeric_at_scale_empty_is_null : forall scale quantifier,
 
 ## `avg_numeric_at_scale_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1131`](../AggregateRuntimeFacts.v#L1131)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1840`](../AggregateRuntimeFacts.v#L1840)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for aggregate evaluation.
 
@@ -1783,7 +2571,7 @@ Applicability: Use when the goal or a hypothesis matches the `avg_numeric_at_sca
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `grouping` (rank 36), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1797,7 +2585,7 @@ Lemma avg_numeric_at_scale_all_null_is_null : forall scale quantifier values,
 
 ## `single_value_int32_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1155`](../AggregateRuntimeFacts.v#L1155)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1864`](../AggregateRuntimeFacts.v#L1864)
 
 Purpose/direction: Characterizes SINGLE_VALUE safety exactly as at most one selected INT32 value.
 
@@ -1805,7 +2593,7 @@ Applicability: Use after lowering a supported one-column INT32 scalar comparison
 
 Important premises: the law is for `AggregateSingleValueInt32`/`single_value_int32`; it does not justify arbitrary scalar-subquery shapes or result types; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 40), `cardinality` (rank 38), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `scalar subquery`, `SINGLE_VALUE`, `scalar cardinality`, `CardinalityViolation`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -1817,7 +2605,7 @@ Lemma single_value_int32_runtime_error_none_iff : forall values,
 
 ## `single_value_int32_runtime_error_cardinality_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1165`](../AggregateRuntimeFacts.v#L1165)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1874`](../AggregateRuntimeFacts.v#L1874)
 
 Purpose/direction: Characterizes CardinalityViolation exactly as at least two selected INT32 values.
 
@@ -1825,7 +2613,7 @@ Applicability: Use after lowering a supported one-column INT32 scalar comparison
 
 Important premises: the law is for `AggregateSingleValueInt32`/`single_value_int32`; it does not justify arbitrary scalar-subquery shapes or result types; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52), `cardinality` (rank 38), `scalar` (rank 40)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `scalar subquery`, `SINGLE_VALUE`, `scalar cardinality`, `CardinalityViolation`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -1837,7 +2625,7 @@ Lemma single_value_int32_runtime_error_cardinality_iff : forall values,
 
 ## `aggregate_single_value_int32_selected_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1175`](../AggregateRuntimeFacts.v#L1175)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1884`](../AggregateRuntimeFacts.v#L1884)
 
 Purpose/direction: Shows that empty selected input yields SQL NULL with no SINGLE_VALUE runtime error.
 
@@ -1845,7 +2633,7 @@ Applicability: Use after lowering a supported one-column INT32 scalar comparison
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; the law is for `AggregateSingleValueInt32`/`single_value_int32`; it does not justify arbitrary scalar-subquery shapes or result types; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52), `cardinality` (rank 38), `scalar` (rank 52)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `scalar subquery`, `SINGLE_VALUE`, `scalar cardinality`, `CardinalityViolation`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -1862,7 +2650,7 @@ Lemma aggregate_single_value_int32_selected_empty :
 
 ## `aggregate_single_value_int32_selected_singleton`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1189`](../AggregateRuntimeFacts.v#L1189)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1898`](../AggregateRuntimeFacts.v#L1898)
 
 Purpose/direction: Shows that singleton selected input returns its INT32 value with no SINGLE_VALUE runtime error.
 
@@ -1870,7 +2658,7 @@ Applicability: Use after lowering a supported one-column INT32 scalar comparison
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; the law is for `AggregateSingleValueInt32`/`single_value_int32`; it does not justify arbitrary scalar-subquery shapes or result types; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52), `cardinality` (rank 38), `scalar` (rank 52)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `scalar subquery`, `SINGLE_VALUE`, `scalar cardinality`, `CardinalityViolation`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -1888,7 +2676,7 @@ Lemma aggregate_single_value_int32_selected_singleton :
 
 ## `aggregate_single_value_int32_cardinality_violation_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1204`](../AggregateRuntimeFacts.v#L1204)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1913`](../AggregateRuntimeFacts.v#L1913)
 
 Purpose/direction: Characterizes CardinalityViolation exactly as at least two selected INT32 values.
 
@@ -1896,7 +2684,7 @@ Applicability: Use after lowering a supported one-column INT32 scalar comparison
 
 Important premises: the law is for `AggregateSingleValueInt32`/`single_value_int32`; it does not justify arbitrary scalar-subquery shapes or result types; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 34), `runtime` (rank 52), `cardinality` (rank 38), `scalar` (rank 44)
+Cross-index: `grouping`, `runtime`, `cardinality`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `scalar subquery`, `SINGLE_VALUE`, `scalar cardinality`, `CardinalityViolation`, `aggregate`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -1912,7 +2700,7 @@ Lemma aggregate_single_value_int32_cardinality_violation_iff :
 
 ## `query_make_groups_empty_shape`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1220`](../AggregateRuntimeFacts.v#L1220)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1929`](../AggregateRuntimeFacts.v#L1929)
 
 Purpose/direction: States the exact empty-input or empty-result law for aggregate grouping.
 
@@ -1920,7 +2708,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 26)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -1936,7 +2724,7 @@ Lemma query_make_groups_empty_shape :
 
 ## `eval_grouping_sets_nil_outcome_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1262`](../AggregateRuntimeFacts.v#L1262)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1971`](../AggregateRuntimeFacts.v#L1971)
 
 Purpose/direction: Gives necessary and sufficient conditions for aggregate grouping.
 
@@ -1944,7 +2732,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `outcome` (rank 52), `grouping` (rank 28), `runtime` (rank 52), `bag` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1957,7 +2745,7 @@ Lemma eval_grouping_sets_nil_outcome_iff : forall env input_bag outcome,
 
 ## `eval_grouping_sets_cons_success_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1272`](../AggregateRuntimeFacts.v#L1272)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1981`](../AggregateRuntimeFacts.v#L1981)
 
 Purpose/direction: Gives necessary and sufficient conditions for aggregate grouping.
 
@@ -1965,7 +2753,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome` (rank 52), `grouping` (rank 28), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1985,7 +2773,7 @@ Lemma eval_grouping_sets_cons_success_iff :
 
 ## `eval_grouping_sets_cons_error_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1290`](../AggregateRuntimeFacts.v#L1290)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1999`](../AggregateRuntimeFacts.v#L1999)
 
 Purpose/direction: Gives necessary and sufficient conditions for aggregate grouping.
 
@@ -1993,7 +2781,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome` (rank 52), `grouping` (rank 28), `runtime` (rank 48)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2013,7 +2801,7 @@ Lemma eval_grouping_sets_cons_error_iff :
 
 ## `eval_grouping_sets_outcome_Forall2_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1342`](../AggregateRuntimeFacts.v#L1342)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2051`](../AggregateRuntimeFacts.v#L2051)
 
 Purpose/direction: Lifts branchwise exact outcome agreement through an arbitrary ordered GROUPING SETS schedule without moving its first error.
 
@@ -2021,7 +2809,7 @@ Applicability: Use for arbitrary grouping-set lists in their original order.  Br
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 0), `grouping` (rank 0), `runtime` (rank 0)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -2037,7 +2825,7 @@ Theorem eval_grouping_sets_outcome_Forall2_congr :
 
 ## `eval_grouping_sets_success_fold_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1386`](../AggregateRuntimeFacts.v#L1386)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2095`](../AggregateRuntimeFacts.v#L2095)
 
 Purpose/direction: Characterizes every successful GROUPING SETS schedule as the ordered UNION ALL fold of one successful bag per branch.
 
@@ -2045,7 +2833,7 @@ Applicability: Use for arbitrary grouping-set lists in their original order.  Br
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 2)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`
 
@@ -2062,7 +2850,7 @@ Theorem eval_grouping_sets_success_fold_iff :
 
 ## `eval_grouping_sets_error_prefix_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1428`](../AggregateRuntimeFacts.v#L1428)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2137`](../AggregateRuntimeFacts.v#L2137)
 
 Purpose/direction: Characterizes a GROUPING SETS error by an ordered prefix of successful branches followed by the exact failing branch.
 
@@ -2070,7 +2858,7 @@ Applicability: Use for arbitrary grouping-set lists in their original order.  Br
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 4), `runtime` (rank 4)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2088,6 +2876,35 @@ Theorem eval_grouping_sets_error_prefix_iff :
       grouping_set_error_at env input_bag current error.
 ```
 
+## `closed_group_direct_column_argument_observations_permutation_rows`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2391`](../AggregateRuntimeFacts.v#L2391)
+
+Purpose/direction: Shows that the declared aggregate grouping result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem closed_group_direct_column_argument_observations_permutation_rows :
+  forall group_terms group aggregate attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS Tuple.labels T row)
+      group ->
+    Permutation
+      (closed_group_direct_column_argument_observations
+        group_terms group aggregate attribute)
+      (map
+        (fun row => (None, Tuple.dot T row attribute))
+        group).
+```
+
 ## `query_make_groups_support_exact`
 
 Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:23`](../GroupedFilterOutcomeFacts.v#L23)
@@ -2098,7 +2915,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 26)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -2122,7 +2939,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 24), `bag` (rank 50)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `bag semantics`, `list/bag bridge`
 
@@ -2149,7 +2966,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 10)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -2181,7 +2998,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 4), `bag` (rank 6)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -2211,9 +3028,53 @@ Theorem query_make_groups_projected_bag_eq_of_support_rel :
         (map emit (@query_make_groups T env right_rows group_terms))).
 ```
 
+## `query_make_groups_heterogeneous_projected_bag_eq`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:294`](../GroupedFilterOutcomeFacts.v#L294)
+
+Purpose/direction: States the query make groups heterogeneous projected bag equality law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_make_groups_heterogeneous_projected_bag_eq :
+  forall env left_terms right_terms
+      (project : tuple T -> tuple T)
+      (left_emit right_emit : list (tuple T) -> tuple T) rows,
+    left_terms <> nil ->
+    right_terms <> nil ->
+    (forall group row,
+      In group (@query_make_groups T env rows left_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (left_emit group) = Eq) ->
+    (forall group row,
+      In group (@query_make_groups T env rows right_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (right_emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env left_terms left =
+      query_grouping_key env left_terms right) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env right_terms left =
+      query_grouping_key env right_terms right) ->
+    bag_eq T
+      (rows_bag T
+        (map left_emit (@query_make_groups T env rows left_terms)))
+      (rows_bag T
+        (map right_emit (@query_make_groups T env rows right_terms))).
+```
+
 ## `oeset_permut_support_rel`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:292`](../GroupedFilterOutcomeFacts.v#L292)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:390`](../GroupedFilterOutcomeFacts.v#L390)
 
 Purpose/direction: States the oeset permut support rel law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2221,7 +3082,7 @@ Applicability: Use when the goal or a hypothesis matches the `oeset_permut_suppo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 36), `bag` (rank 44)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `bag semantics`, `list/bag bridge`
 
@@ -2236,7 +3097,7 @@ Lemma oeset_permut_support_rel :
 
 ## `rows_bag_eq_implies_permut`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:329`](../GroupedFilterOutcomeFacts.v#L329)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:427`](../GroupedFilterOutcomeFacts.v#L427)
 
 Purpose/direction: States the rows bag equality implies permut law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2244,7 +3105,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 36), `bag` (rank 42)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -2255,9 +3116,51 @@ Lemma rows_bag_eq_implies_permut :
     Oeset.permut (OTuple T) left right.
 ```
 
+## `rows_permut_implies_bag_eq`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:445`](../GroupedFilterOutcomeFacts.v#L445)
+
+Purpose/direction: Converts semantic row permutation into equality of finite row bags, the converse of the reset-boundary occurrence bridge.
+
+Applicability: Use after a semantic list-permutation proof when the enclosing constructor or equivalence goal expects finite-bag equality.
+
+Important premises: The two row lists must be semantically permuted under `OTuple`.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma rows_permut_implies_bag_eq :
+  forall (T : Tuple.Rcd) left right,
+    Oeset.permut (OTuple T) left right ->
+    bag_eq T (rows_bag T left) (rows_bag T right).
+```
+
+## `rows_reverse_permut_congr`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:460`](../GroupedFilterOutcomeFacts.v#L460)
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `equivalence`, `congruence`
+
+```rocq
+Lemma rows_reverse_permut_congr :
+  forall (T : Tuple.Rcd) left right,
+    Oeset.permut (OTuple T) left right ->
+    Oeset.permut (OTuple T) (rev left) (rev right).
+```
+
 ## `query_same_rows_as_bag_permut_between`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:342`](../GroupedFilterOutcomeFacts.v#L342)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:480`](../GroupedFilterOutcomeFacts.v#L480)
 
 Purpose/direction: Bridges the two displayed representations of aggregate evaluation.
 
@@ -2265,7 +3168,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 36), `bag` (rank 44)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -2279,7 +3182,7 @@ Lemma query_same_rows_as_bag_permut_between :
 
 ## `formula_acceptance_exact_total_success`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:396`](../GroupedFilterOutcomeFacts.v#L396)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:534`](../GroupedFilterOutcomeFacts.v#L534)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -2287,7 +3190,7 @@ Applicability: Use when the goal or a hypothesis matches the `formula_acceptance
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2300,7 +3203,7 @@ Lemma formula_acceptance_exact_total_success :
 
 ## `formula_true_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:406`](../GroupedFilterOutcomeFacts.v#L406)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:544`](../GroupedFilterOutcomeFacts.v#L544)
 
 Purpose/direction: States the formula true acceptance exact law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2308,7 +3211,7 @@ Applicability: Use when the goal or a hypothesis matches the `formula_true_accep
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2320,7 +3223,7 @@ Lemma formula_true_acceptance_exact :
 
 ## `acceptance_interp_conj_is_true`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:472`](../GroupedFilterOutcomeFacts.v#L472)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:610`](../GroupedFilterOutcomeFacts.v#L610)
 
 Purpose/direction: States the acceptance interp conj is true law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2328,7 +3231,7 @@ Applicability: Use when the goal or a hypothesis matches the `acceptance_interp_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2342,7 +3245,7 @@ Lemma acceptance_interp_conj_is_true :
 
 ## `formula_conj_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:486`](../GroupedFilterOutcomeFacts.v#L486)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:624`](../GroupedFilterOutcomeFacts.v#L624)
 
 Purpose/direction: Composes exact TRUE-acceptance contracts through eager SQL AND or OR without identifying the underlying FALSE and UNKNOWN values.
 
@@ -2350,7 +3253,7 @@ Applicability: Use after proving exact acceptance for both eager children; the c
 
 Important premises: Both displayed child exact-acceptance contracts are mandatory because FormalSQL evaluates the right child eagerly for both AND and OR.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 38), `scalar` (rank 20)
+Cross-index: `grouping`, `filter`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`, `predicate`, `Bool3`
 
@@ -2364,9 +3267,33 @@ Theorem formula_conj_acceptance_exact :
       (acceptance_interp_conj operation left_accepted right_accepted).
 ```
 
+## `formula_and_redundant_right_acceptance_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:668`](../GroupedFilterOutcomeFacts.v#L668)
+
+Purpose/direction: Eliminates an acceptance-redundant eager right conjunct only after both sides have exact error-free acceptance and right acceptance is proved whenever the left guard accepts.
+
+Applicability: Use for guarded correlated predicates only after the inserted right formula is exact and cannot error on every reached row.  FormalSQL is eager, so a witness proved only on accepting guard rows is insufficient.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `SQL AND`, `redundant conjunct`, `eager evaluation`, `runtime error`
+
+```rocq
+Theorem formula_and_redundant_right_acceptance_exact :
+  forall env left right left_accepted right_accepted,
+    formula_acceptance_exact_at env left left_accepted ->
+    formula_acceptance_exact_at env right right_accepted ->
+    (left_accepted = true -> right_accepted = true) ->
+    formula_acceptance_exact_at env
+      (FExpr_Conj And_F left right) left_accepted.
+```
+
 ## `formula_and_success_intro`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:528`](../GroupedFilterOutcomeFacts.v#L528)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:691`](../GroupedFilterOutcomeFacts.v#L691)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -2374,7 +3301,7 @@ Applicability: Use when the goal or a hypothesis matches the `formula_and_succes
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2389,7 +3316,7 @@ Lemma formula_and_success_intro :
 
 ## `formula_and_right_error_intro`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:538`](../GroupedFilterOutcomeFacts.v#L538)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:701`](../GroupedFilterOutcomeFacts.v#L701)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for aggregate evaluation.
 
@@ -2397,7 +3324,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2411,7 +3338,7 @@ Lemma formula_and_right_error_intro :
 
 ## `formula_and_true_left_outcome_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:549`](../GroupedFilterOutcomeFacts.v#L549)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:712`](../GroupedFilterOutcomeFacts.v#L712)
 
 Purpose/direction: States the formula and true left outcome exact law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2419,7 +3346,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome` (rank 52), `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2434,7 +3361,7 @@ Lemma formula_and_true_left_outcome_exact :
 
 ## `formula_and_total_success_at_intro`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:580`](../GroupedFilterOutcomeFacts.v#L580)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:743`](../GroupedFilterOutcomeFacts.v#L743)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -2442,7 +3369,7 @@ Applicability: Use when the goal or a hypothesis matches the `formula_and_total_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2456,7 +3383,7 @@ Lemma formula_and_total_success_at_intro :
 
 ## `formula_and_left_nontrue_success_rejected`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:597`](../GroupedFilterOutcomeFacts.v#L597)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:760`](../GroupedFilterOutcomeFacts.v#L760)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate evaluation.
 
@@ -2464,7 +3391,7 @@ Applicability: Use when the goal or a hypothesis matches the `formula_and_left_n
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2478,7 +3405,7 @@ Lemma formula_and_left_nontrue_success_rejected :
 
 ## `eval_groups_success_Forall_projection`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1190`](../GroupedFilterOutcomeFacts.v#L1190)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1353`](../GroupedFilterOutcomeFacts.v#L1353)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
 
@@ -2486,7 +3413,7 @@ Applicability: Use when the goal or a hypothesis matches the `eval_groups_succes
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 6), `projection` (rank 10)
+Cross-index: `grouping`, `projection`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`
 
@@ -2504,7 +3431,7 @@ Theorem eval_groups_success_Forall_projection :
 
 ## `eval_groups_global_success_length_le_one`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1218`](../GroupedFilterOutcomeFacts.v#L1218)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1381`](../GroupedFilterOutcomeFacts.v#L1381)
 
 Purpose/direction: Provides the stated reusable upper bound for aggregate grouping.
 
@@ -2512,7 +3439,7 @@ Applicability: Use when the goal or a hypothesis matches the `eval_groups_global
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -2526,7 +3453,7 @@ Theorem eval_groups_global_success_length_le_one :
 
 ## `eval_groups_global_success_NoDupA`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1235`](../GroupedFilterOutcomeFacts.v#L1235)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1398`](../GroupedFilterOutcomeFacts.v#L1398)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
 
@@ -2534,7 +3461,7 @@ Applicability: Use when the goal or a hypothesis matches the `eval_groups_global
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -2549,7 +3476,7 @@ Theorem eval_groups_global_success_NoDupA :
 
 ## `eval_group_bag_success_occurrence_property`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1257`](../GroupedFilterOutcomeFacts.v#L1257)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1420`](../GroupedFilterOutcomeFacts.v#L1420)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
 
@@ -2557,7 +3484,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `outcome` (rank 50), `grouping` (rank 8), `runtime` (rank 50), `bag` (rank 12)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -2573,7 +3500,7 @@ Theorem eval_group_bag_success_occurrence_property :
       forall group,
         In group
           (@query_make_groups T env
-            (query_canonical_rows representative) group_terms) ->
+            representative group_terms) ->
         P (group_projection env select_list group_terms group)) ->
     eval_group_bag env select_list group_terms having input_bag
       (SqlSuccess output_bag) ->
@@ -2584,7 +3511,7 @@ Theorem eval_group_bag_success_occurrence_property :
 
 ## `group_execution_observation_equiv_sym`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1345`](../GroupedFilterOutcomeFacts.v#L1345)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1508`](../GroupedFilterOutcomeFacts.v#L1508)
 
 Purpose/direction: Reverses a proved aggregate grouping relation.
 
@@ -2592,7 +3519,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `equivalence`, `congruence`
 
@@ -2613,7 +3540,7 @@ Lemma group_execution_observation_equiv_sym :
 
 ## `eval_groups_outcome_Forall2_congr_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1374`](../GroupedFilterOutcomeFacts.v#L1374)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1537`](../GroupedFilterOutcomeFacts.v#L1537)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -2621,7 +3548,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 52), `grouping` (rank 36), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -2647,7 +3574,7 @@ Lemma eval_groups_outcome_Forall2_congr_forward :
 
 ## `eval_groups_outcome_Forall2_congr`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1497`](../GroupedFilterOutcomeFacts.v#L1497)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1660`](../GroupedFilterOutcomeFacts.v#L1660)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -2655,7 +3582,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 50), `grouping` (rank 34), `runtime` (rank 50)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -2681,7 +3608,7 @@ Theorem eval_groups_outcome_Forall2_congr :
 
 ## `eval_groups_true_outcome_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1581`](../GroupedFilterOutcomeFacts.v#L1581)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1744`](../GroupedFilterOutcomeFacts.v#L1744)
 
 Purpose/direction: Characterizes all-TRUE evaluation in each `group_env` exactly as the ordered projection map after all four per-group runtime checks, including as the group-processing component of a regrouping proof.
 
@@ -2689,7 +3616,7 @@ Applicability: Use when every reached HAVING decision is exactly TRUE and each o
 
 Important premises: For every reached group retain SELECT aggregate safety, HAVING aggregate safety, exact TRUE acceptance, and scalar SELECT safety; do not replace the resulting list map by a bag or set.
 
-Cross-index: `outcome` (rank 50), `grouping` (rank 22), `runtime` (rank 50)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2715,9 +3642,38 @@ Theorem eval_groups_true_outcome_exact :
         (map (group_projection env select_list group_terms) groups).
 ```
 
+## `eval_groups_global_true_outcome_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1833`](../GroupedFilterOutcomeFacts.v#L1833)
+
+Purpose/direction: Specializes exact TRUE-HAVING group execution to SQL global aggregation, including the singleton empty-input group.
+
+Applicability: Use for `GROUP BY [] HAVING TRUE` after proving aggregate finalization and scalar projection runtime safety for the one global group.
+
+Important premises: Aggregate finalization and scalar SELECT evaluation must be safe in the one environment formed from `rev rows`; HAVING is literally TRUE.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_groups_global_true_outcome_exact :
+  forall env select_list rows,
+    eval_select_aggregates
+      (group_env env [] (rev rows)) select_list = None ->
+    @eval_select_list_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (group_env env [] (rev rows)) select_list = None ->
+    forall outcome,
+      eval_groups env select_list [] FExpr_True
+        (query_make_groups env rows []) outcome <->
+      outcome = SqlSuccess
+        [group_projection env select_list [] (rev rows)].
+```
+
 ## `eval_groups_acceptance_outcome_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1673`](../GroupedFilterOutcomeFacts.v#L1673)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1863`](../GroupedFilterOutcomeFacts.v#L1863)
 
 Purpose/direction: Characterizes arbitrary exact HAVING acceptance in each `group_env` as the ordered projection map over `List.filter`, retaining duplicate groups and requiring scalar SELECT safety only for accepted groups.
 
@@ -2725,7 +3681,7 @@ Applicability: Use after choosing a Boolean `keep` for every reached group and p
 
 Important premises: For every reached group retain SELECT and HAVING aggregate safety and exact acceptance/no-error evidence; scalar SELECT safety is mandatory exactly when `keep group = true`.
 
-Cross-index: `outcome` (rank 20), `grouping` (rank 18), `runtime` (rank 22)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2753,9 +3709,41 @@ Theorem eval_groups_acceptance_outcome_exact :
           (filter keep groups)).
 ```
 
+## `eval_groups_all_rejected_outcome_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1996`](../GroupedFilterOutcomeFacts.v#L1996)
+
+Purpose/direction: Characterizes an all-rejected HAVING schedule as exact empty success while retaining reached SELECT/HAVING aggregate finalization and excluding HAVING runtime errors.
+
+Applicability: Use only when SELECT and HAVING aggregate finalization succeeds for every reached group and HAVING has one exact nontrue, error-free decision.  Scalar SELECT projection is intentionally not a premise.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `HAVING`, `empty result`, `evaluation reachability`, `runtime error`
+
+```rocq
+Theorem eval_groups_all_rejected_outcome_exact :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      eval_select_aggregates
+        (group_env env group_terms group) select_list = None /\
+      eval_formula_aggregates
+        (group_env env group_terms group) having = None /\
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (group_env env group_terms group) having false) ->
+    forall outcome,
+      eval_groups env select_list group_terms having groups outcome <->
+      outcome = SqlSuccess [].
+```
+
 ## `grouped_key_formula_contract_tail`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1831`](../GroupedFilterOutcomeFacts.v#L1831)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2061`](../GroupedFilterOutcomeFacts.v#L2061)
 
 Purpose/direction: States the grouped key formula contract tail law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -2763,7 +3751,7 @@ Applicability: Use when the goal or a hypothesis matches the `grouped_key_formul
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -2777,7 +3765,7 @@ Lemma grouped_key_formula_contract_tail :
 
 ## `skipped_group_runtime_safe_tail`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1841`](../GroupedFilterOutcomeFacts.v#L1841)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2071`](../GroupedFilterOutcomeFacts.v#L2071)
 
 Purpose/direction: States the skipped group runtime safe tail law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -2785,7 +3773,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 36), `runtime` (rank 46)
+Cross-index: `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2800,7 +3788,7 @@ Lemma skipped_group_runtime_safe_tail :
 
 ## `eval_groups_having_key_conj_filter_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1853`](../GroupedFilterOutcomeFacts.v#L1853)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2083`](../GroupedFilterOutcomeFacts.v#L2083)
 
 Purpose/direction: States the eval groups having key conj filter exact law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -2808,7 +3796,7 @@ Applicability: Use when the goal or a hypothesis matches the `eval_groups_having
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 6), `filter` (rank 8)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
 
@@ -2827,7 +3815,7 @@ Theorem eval_groups_having_key_conj_filter_exact :
 
 ## `eval_group_bag_exact_rows_permut_equiv`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2051`](../GroupedFilterOutcomeFacts.v#L2051)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2294`](../GroupedFilterOutcomeFacts.v#L2294)
 
 Purpose/direction: Lifts exact per-representative group evaluation through the quotient-saturated group-bag reset when emitted rows are semantic permutations, preserving key and processing errors.
 
@@ -2835,7 +3823,7 @@ Applicability: Use at a `QExpr_Group` bag reset after characterizing `eval_group
 
 Important premises: Both exact contracts quantify over every bag representative and include group-key safety; the cross-representative output permutation premise may not be weakened to support equality.
 
-Cross-index: `outcome` (rank 50), `grouping` (rank 8), `runtime` (rank 50), `bag` (rank 18)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -2848,19 +3836,17 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
         list (list (tuple T)) -> list (tuple T)),
     (forall representative,
       query_same_rows_as_bag representative left_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms left_having groups outcome <->
         outcome = SqlSuccess (left_rows groups)) ->
     (forall representative,
       query_same_rows_as_bag representative right_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms right_having groups outcome <->
         outcome = SqlSuccess (right_rows groups)) ->
@@ -2869,19 +3855,112 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
       query_same_rows_as_bag right_representative right_bag ->
       Oeset.permut (OTuple T)
         (left_rows
-          (query_make_groups env
-            (query_canonical_rows left_representative) group_terms))
+          (query_make_groups env left_representative group_terms))
         (right_rows
-          (query_make_groups env
-            (query_canonical_rows right_representative) group_terms))) ->
+          (query_make_groups env right_representative group_terms))) ->
     forall outcome,
       eval_group_bag env select_list group_terms left_having left_bag outcome <->
       eval_group_bag env select_list group_terms right_having right_bag outcome.
 ```
 
+## `eval_group_bag_global_true_success_for_representative`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2411`](../GroupedFilterOutcomeFacts.v#L2411)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem eval_group_bag_global_true_success_for_representative :
+  forall env select_list input_bag representative,
+    query_same_rows_as_bag representative input_bag ->
+    @eval_select_list_aggregate_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (Env.env_g T env (@Env.Group_By T []) (rev representative))
+      select_list = None ->
+    @eval_select_list_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (Env.env_g T env (@Env.Group_By T []) (rev representative))
+      select_list = None ->
+    eval_group_bag env select_list [] FExpr_True input_bag
+      (SqlSuccess
+        (rows_bag T
+          [group_projection env select_list [] (rev representative)])).
+```
+
+## `eval_group_bag_global_true_success_exists`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2451`](../GroupedFilterOutcomeFacts.v#L2451)
+
+Purpose/direction: Constructs a successful global-aggregate bag outcome from explicit aggregate-finalization and scalar-projection runtime safety.
+
+Applicability: Use to discharge an outcome-inhabitation premise for a runtime-safe `GROUP BY [] HAVING TRUE` or scalar aggregate subquery.
+
+Important premises: Aggregate finalization and scalar SELECT evaluation must be safe for every group list that the representative-saturated reset may choose.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem eval_group_bag_global_true_success_exists :
+  forall env select_list input_bag,
+    (forall group,
+      @eval_select_list_aggregate_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None /\
+      @eval_select_list_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None) ->
+    exists output_bag,
+      eval_group_bag env select_list [] FExpr_True input_bag
+        (SqlSuccess output_bag).
+```
+
+## `eval_group_bag_global_true_success_bag_unique_if_stable`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2478`](../GroupedFilterOutcomeFacts.v#L2478)
+
+Purpose/direction: Lifts safe global aggregation through the bag reset and proves a representative-independent singleton result when the projection is explicitly permutation-stable.
+
+Applicability: Use at a successful scalar/global aggregate subquery when the child is represented as a bag and the actual aggregate projection has a separate permutation-stability proof.
+
+Important premises: Retain input-representative validity, aggregate and scalar SELECT safety for every possible global group, explicit projection permutation stability, and the successful reset outcome.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem eval_group_bag_global_true_success_bag_unique_if_stable :
+  forall env select_list input_bag chosen output_bag,
+    query_same_rows_as_bag chosen input_bag ->
+    group_projection_permutation_stable env select_list [] ->
+    (forall group,
+      @eval_select_list_aggregate_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None /\
+      @eval_select_list_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None) ->
+    eval_group_bag env select_list [] FExpr_True input_bag
+      (SqlSuccess output_bag) ->
+    bag_eq T output_bag
+      (rows_bag T
+        [group_projection env select_list []
+          (rev chosen)]).
+```
+
 ## `eval_group_bag_true_projected_support_equiv`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2198`](../GroupedFilterOutcomeFacts.v#L2198)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2545`](../GroupedFilterOutcomeFacts.v#L2545)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -2889,7 +3968,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 8), `grouping` (rank 4), `runtime` (rank 50), `bag` (rank 50)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -2934,7 +4013,7 @@ Theorem eval_group_bag_true_projected_support_equiv :
 
 ## `query_expr_group_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2355`](../GroupedFilterOutcomeFacts.v#L2355)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2694`](../GroupedFilterOutcomeFacts.v#L2694)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -2942,7 +4021,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 4), `grouping` (rank 4), `runtime` (rank 50), `bag` (rank 50)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -2996,9 +4075,57 @@ Theorem query_expr_group_outcome_equiv_of_supported_child_outcomes :
       (QExpr_Group select_list group_terms having right).
 ```
 
+## `query_canonical_rows_permut`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:16`](../GroupingRewriteFacts.v#L16)
+
+Purpose/direction: States the query canonical rows permut law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `query_canonical_rows_permut` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma query_canonical_rows_permut :
+  forall (T : Tuple.Rcd) rows,
+    Oeset.permut (OTuple T) (@query_canonical_rows T rows) rows.
+```
+
+## `query_canonical_rows_map_factor_permut`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:31`](../GroupingRewriteFacts.v#L31)
+
+Purpose/direction: Transports a projection or rename through canonical bag-row selection up to semantic permutation, without exposing the bag implementation's concrete sorting algorithm.
+
+Applicability: Use when a schema-changing projection or alias rename is moved across grouping, quantified predicates, or another canonical bag representative boundary.
+
+Important premises: The representation map must respect semantic tuple equality, and the displayed pointwise factor equation must hold for every source item.
+
+Cross-index: `renaming`, `grouping`, `projection`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Theorem query_canonical_rows_map_factor_permut :
+  forall (T : Tuple.Rcd) (A : Type)
+      (first second : A -> tuple T) (rename : tuple T -> tuple T),
+    (forall left right,
+      Oeset.compare (OTuple T) left right = Eq ->
+      Oeset.compare (OTuple T) (rename left) (rename right) = Eq) ->
+    (forall item, rename (first item) = second item) ->
+    forall rows,
+      Oeset.permut (OTuple T)
+        (@query_canonical_rows T (map second rows))
+        (map rename (@query_canonical_rows T (map first rows))).
+```
+
 ## `filter_insert_in_partition_by_key`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:23`](../GroupingRewriteFacts.v#L23)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:71`](../GroupingRewriteFacts.v#L71)
 
 Purpose/direction: States the filter insert in partition by key law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3006,7 +4133,7 @@ Applicability: Use when the goal or a hypothesis matches the `filter_insert_in_p
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `filter` (rank 46)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -3023,7 +4150,7 @@ Lemma filter_insert_in_partition_by_key :
 
 ## `filter_partition_rec_by_key`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:44`](../GroupingRewriteFacts.v#L44)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:92`](../GroupingRewriteFacts.v#L92)
 
 Purpose/direction: States the filter partition rec by key law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3031,7 +4158,7 @@ Applicability: Use when the goal or a hypothesis matches the `filter_partition_r
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 36), `filter` (rank 46)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -3047,7 +4174,7 @@ Lemma filter_partition_rec_by_key :
 
 ## `partition_filter_by_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:59`](../GroupingRewriteFacts.v#L59)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:107`](../GroupingRewriteFacts.v#L107)
 
 Purpose/direction: States the partition filter by key exact law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3055,7 +4182,7 @@ Applicability: Use when the goal or a hypothesis matches the `partition_filter_b
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 44)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -3070,7 +4197,7 @@ Theorem partition_filter_by_key_exact :
 
 ## `map_snd_filter_keyed_groups`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:74`](../GroupingRewriteFacts.v#L74)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:122`](../GroupingRewriteFacts.v#L122)
 
 Purpose/direction: States the map snd filter keyed groups law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3078,7 +4205,7 @@ Applicability: Use when the goal or a hypothesis matches the `map_snd_filter_key
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 36), `filter` (rank 46)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
 
@@ -3100,7 +4227,7 @@ Lemma map_snd_filter_keyed_groups :
 
 ## `partition_members_filter_by_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:112`](../GroupingRewriteFacts.v#L112)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:160`](../GroupingRewriteFacts.v#L160)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate evaluation.
 
@@ -3108,7 +4235,7 @@ Applicability: Use when the goal or a hypothesis matches the `partition_members_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 44)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -3129,7 +4256,7 @@ Theorem partition_members_filter_by_key_exact :
 
 ## `partition_map_heterogeneous`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:157`](../GroupingRewriteFacts.v#L157)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:205`](../GroupingRewriteFacts.v#L205)
 
 Purpose/direction: States the partition map heterogeneous law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3137,7 +4264,7 @@ Applicability: Use when the goal or a hypothesis matches the `partition_map_hete
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -3151,9 +4278,36 @@ Theorem partition_map_heterogeneous :
       (@Partition.partition A Key key_order keyA rows).
 ```
 
+## `partition_members_equal_of_key_decisions`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:333`](../GroupingRewriteFacts.v#L333)
+
+Purpose/direction: Relates membership or occurrence evidence to aggregate evaluation.
+
+Applicability: Use when the goal or a hypothesis matches the `partition_members_equal_of_key_decisions` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Theorem partition_members_equal_of_key_decisions :
+  forall (A Key : Type) (key_order : Oset.Rcd Key)
+      (left_key right_key : A -> Key) rows,
+    (forall first second,
+      In first rows ->
+      In second rows ->
+      Oset.eq_bool key_order (left_key first) (left_key second) =
+      Oset.eq_bool key_order (right_key first) (right_key second)) ->
+    map snd (@Partition.partition A Key key_order left_key rows) =
+    map snd (@Partition.partition A Key key_order right_key rows).
+```
+
 ## `list_permut_eq_implies_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:189`](../GroupingRewriteFacts.v#L189)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:356`](../GroupingRewriteFacts.v#L356)
 
 Purpose/direction: States the list permut equality implies permutation law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3161,7 +4315,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 36), `bag` (rank 44)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3174,7 +4328,7 @@ Lemma list_permut_eq_implies_Permutation :
 
 ## `partition_keys_Permutation_of_NoDup_support`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:228`](../GroupingRewriteFacts.v#L228)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:395`](../GroupingRewriteFacts.v#L395)
 
 Purpose/direction: Identifies the keys materialized by generic partitioning with any duplicate-free same-support key representative, up to permutation.
 
@@ -3182,7 +4336,7 @@ Applicability: Use only after supplying both duplicate-freedom and exact support
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 8), `bag` (rank 10)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3199,7 +4353,7 @@ Theorem partition_keys_Permutation_of_NoDup_support :
 
 ## `partition_member_exact_key_filter`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:506`](../GroupingRewriteFacts.v#L506)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:673`](../GroupingRewriteFacts.v#L673)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate evaluation.
 
@@ -3207,7 +4361,7 @@ Applicability: Use when the goal or a hypothesis matches the `partition_member_e
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 34), `filter` (rank 44)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`
 
@@ -3226,7 +4380,7 @@ Theorem partition_member_exact_key_filter :
 
 ## `partition_factored_key_refinement_Forall2`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:654`](../GroupingRewriteFacts.v#L654)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:821`](../GroupingRewriteFacts.v#L821)
 
 Purpose/direction: States the partition factored key refinement forall2 law for aggregate evaluation, in the exact direction displayed by the declaration.
 
@@ -3234,7 +4388,7 @@ Applicability: Use when the goal or a hypothesis matches the `partition_factored
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 34)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
 
@@ -3257,9 +4411,57 @@ Theorem partition_factored_key_refinement_Forall2 :
         (@Partition.partition A Fine fine_order fine_key rows)).
 ```
 
+## `query_grouping_key_decision_Permutation`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:883`](../GroupingRewriteFacts.v#L883)
+
+Purpose/direction: States the query grouping key decision permutation law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_grouping_key_decision_Permutation :
+  forall (T : Tuple.Rcd) (env : Env.env T) left_terms right_terms left right,
+    Sorting.Permutation.Permutation left_terms right_terms ->
+    Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (query_grouping_key env left_terms left)
+      (query_grouping_key env left_terms right) =
+    Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+      (query_grouping_key env right_terms left)
+      (query_grouping_key env right_terms right).
+```
+
+## `query_make_groups_group_terms_Permutation`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:929`](../GroupingRewriteFacts.v#L929)
+
+Purpose/direction: States the query make groups group terms permutation law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_make_groups_group_terms_Permutation :
+  forall (T : Tuple.Rcd) (env : Env.env T) rows left_terms right_terms,
+    Sorting.Permutation.Permutation left_terms right_terms ->
+    @query_make_groups T env rows left_terms =
+    @query_make_groups T env rows right_terms.
+```
+
 ## `query_make_groups_map_heterogeneous`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:712`](../GroupingRewriteFacts.v#L712)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:984`](../GroupingRewriteFacts.v#L984)
 
 Purpose/direction: States the query make groups map heterogeneous law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3267,7 +4469,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3286,7 +4488,7 @@ Theorem query_make_groups_map_heterogeneous :
 
 ## `query_make_groups_factored_refinement_Forall2`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:754`](../GroupingRewriteFacts.v#L754)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1026`](../GroupingRewriteFacts.v#L1026)
 
 Purpose/direction: States the query make groups factored refinement forall2 law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3294,7 +4496,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3322,7 +4524,7 @@ Theorem query_make_groups_factored_refinement_Forall2 :
 
 ## `query_make_groups_filter_by_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:857`](../GroupingRewriteFacts.v#L857)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1129`](../GroupingRewriteFacts.v#L1129)
 
 Purpose/direction: States the query make groups filter by key exact law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3330,7 +4532,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 8), `filter` (rank 10)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
 
@@ -3354,7 +4556,7 @@ Theorem query_make_groups_filter_by_key_exact :
 
 ## `query_make_groups_selected_members_permut`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:881`](../GroupingRewriteFacts.v#L881)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1153`](../GroupingRewriteFacts.v#L1153)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate grouping.
 
@@ -3362,7 +4564,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3385,7 +4587,7 @@ Theorem query_make_groups_selected_members_permut :
 
 ## `query_make_groups_selected_members_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:917`](../GroupingRewriteFacts.v#L917)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1189`](../GroupingRewriteFacts.v#L1189)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate grouping.
 
@@ -3393,7 +4595,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 24), `bag` (rank 42)
+Cross-index: `grouping`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3416,7 +4618,7 @@ Theorem query_make_groups_selected_members_Permutation :
 
 ## `query_make_groups_constant_nonempty_key`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:954`](../GroupingRewriteFacts.v#L954)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1226`](../GroupingRewriteFacts.v#L1226)
 
 Purpose/direction: Computes groups for one constant nonempty grouping key as no group on empty input or one reverse-ordered member list otherwise.
 
@@ -3424,7 +4626,7 @@ Applicability: Use only with a nonempty grouping-term list and one proved key fo
 
 Important premises: The grouping terms must be nonempty and every input row must have the displayed key; the nonempty result is exactly `[rev rows]`.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3445,7 +4647,7 @@ Theorem query_make_groups_constant_nonempty_key :
 
 ## `query_make_groups_matching_one_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:977`](../GroupingRewriteFacts.v#L977)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1249`](../GroupingRewriteFacts.v#L1249)
 
 Purpose/direction: States the query make groups matching one key exact law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3453,7 +4655,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3489,9 +4691,54 @@ Theorem query_make_groups_matching_one_key_exact :
     end.
 ```
 
+## `query_make_groups_lookup_key_exact`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1297`](../GroupingRewriteFacts.v#L1297)
+
+Purpose/direction: States the query make groups lookup key exact law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `query_make_groups_lookup_key_exact` direction for aggregate grouping; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
+
+```rocq
+Theorem query_make_groups_lookup_key_exact :
+  forall (T : Tuple.Rcd) (env : Env.env T) group_terms rows key,
+    group_terms <> nil ->
+    filter
+      (fun members =>
+        match members with
+        | nil => false
+        | row :: _ =>
+            Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+              (query_grouping_key env group_terms row) key
+        end)
+      (@query_make_groups T env rows group_terms) =
+    match
+      filter
+        (fun row =>
+          Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+            (query_grouping_key env group_terms row) key)
+        rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [rev
+          (filter
+            (fun row =>
+              Oset.eq_bool (OrderedSet.mk_olists (OVal T))
+                (query_grouping_key env group_terms row) key)
+            rows)]
+    end.
+```
+
 ## `query_make_groups_members_same_key_nonempty`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1021`](../GroupingRewriteFacts.v#L1021)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1339`](../GroupingRewriteFacts.v#L1339)
 
 Purpose/direction: States the exact empty-input or empty-result law for aggregate grouping.
 
@@ -3499,7 +4746,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 26)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3516,7 +4763,7 @@ Lemma query_make_groups_members_same_key_nonempty :
 
 ## `query_make_groups_member_exact_key_filter`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1049`](../GroupingRewriteFacts.v#L1049)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1367`](../GroupingRewriteFacts.v#L1367)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate grouping.
 
@@ -3524,7 +4771,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 24), `filter` (rank 44)
+Cross-index: `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
 
@@ -3546,7 +4793,7 @@ Theorem query_make_groups_member_exact_key_filter :
 
 ## `query_make_groups_member_key_filter_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1126`](../GroupingRewriteFacts.v#L1126)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1444`](../GroupingRewriteFacts.v#L1444)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate grouping.
 
@@ -3554,7 +4801,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 25), `filter` (rank 45), `bag` (rank 43)
+Cross-index: `grouping`, `filter`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3575,7 +4822,7 @@ Corollary query_make_groups_member_key_filter_Permutation :
 
 ## `query_make_groups_global_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1149`](../GroupingRewriteFacts.v#L1149)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1467`](../GroupingRewriteFacts.v#L1467)
 
 Purpose/direction: States the query make groups global exact law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3583,7 +4830,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 24)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3595,7 +4842,7 @@ Theorem query_make_groups_global_exact :
 
 ## `query_make_groups_global_length_one`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1161`](../GroupingRewriteFacts.v#L1161)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1479`](../GroupingRewriteFacts.v#L1479)
 
 Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
 
@@ -3603,7 +4850,7 @@ Applicability: Use when the goal or a hypothesis matches the `query_make_groups_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 25)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3615,7 +4862,7 @@ Corollary query_make_groups_global_length_one :
 
 ## `query_make_groups_permut_nonempty`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1174`](../GroupingRewriteFacts.v#L1174)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1492`](../GroupingRewriteFacts.v#L1492)
 
 Purpose/direction: Transports semantic row permutation to semantic group permutation for a nonempty grouping-term list.
 
@@ -3623,7 +4870,7 @@ Applicability: Use when two input row lists represent the same bag and grouping 
 
 Important premises: The nonempty grouping-term premise is mandatory because the global empty grouping set has distinct empty-input semantics.
 
-Cross-index: `grouping` (rank 12)
+Cross-index: `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -3639,7 +4886,7 @@ Lemma query_make_groups_permut_nonempty :
 
 ## `group_filter_map_permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1195`](../GroupingRewriteFacts.v#L1195)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1513`](../GroupingRewriteFacts.v#L1513)
 
 Purpose/direction: Transports a semantic group permutation through an equality-respecting group filter and projection map while retaining occurrences.
 
@@ -3647,7 +4894,7 @@ Applicability: Use after proving both the retained-group decision and emitted ro
 
 Important premises: Supply semantic-equality compatibility for both `keep` and `emit`; the conclusion is occurrence-preserving permutation, not set equality.
 
-Cross-index: `grouping` (rank 14), `filter` (rank 46), `bag` (rank 44)
+Cross-index: `grouping`, `filter`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3668,9 +4915,72 @@ Lemma group_filter_map_permutation :
       (map emit (filter keep right)).
 ```
 
+## `query_group_success_bags_congr_extensional`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:476`](../OrderedQueryFacts.v#L476)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_group_success_bags_congr_extensional :
+  forall env left_select left_terms left_having
+      right_select right_terms right_having left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_group_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env left_select left_terms left_having)
+      (@query_group_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env right_select right_terms right_having) ->
+    rel_equiv
+      (success_bags env
+        (QExpr_Group left_select left_terms left_having left))
+      (success_bags env
+        (QExpr_Group right_select right_terms right_having right)).
+```
+
+## `query_grouping_sets_success_bags_congr_extensional`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:502`](../OrderedQueryFacts.v#L502)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_grouping_sets_success_bags_congr_extensional :
+  forall env left_sets right_sets left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_grouping_sets_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env left_sets)
+      (@query_grouping_sets_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env right_sets) ->
+    rel_equiv
+      (success_bags env (QExpr_GroupingSets left_sets left))
+      (success_bags env (QExpr_GroupingSets right_sets right)).
+```
+
 ## `query_expr_group_outcome_equiv_of_global_having`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:616`](../OrderedQueryFacts.v#L616)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1028`](../OrderedQueryFacts.v#L1028)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -3678,7 +4988,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 40), `grouping` (rank 30), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -3698,7 +5008,7 @@ Lemma query_expr_group_outcome_equiv_of_global_having :
 
 ## `eval_query_expr_group_outcome_iff_of_child_outcome_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:641`](../OrderedQueryFacts.v#L641)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1053`](../OrderedQueryFacts.v#L1053)
 
 Purpose/direction: Gives necessary and sufficient conditions for aggregate grouping.
 
@@ -3706,7 +5016,7 @@ Applicability: Use in either direction to invert or construct a goal about aggre
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 46), `grouping` (rank 30), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -3723,7 +5033,7 @@ Lemma eval_query_expr_group_outcome_iff_of_child_outcome_equiv :
 
 ## `query_expr_group_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:699`](../OrderedQueryFacts.v#L699)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1111`](../OrderedQueryFacts.v#L1111)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -3731,7 +5041,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome` (rank 42), `grouping` (rank 30), `runtime` (rank 52)
+Cross-index: `outcome`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
@@ -3749,7 +5059,7 @@ Lemma query_expr_group_outcome_equiv_congr :
 
 ## `tnull_eval_groups_having_key_conj_filter_exact`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:179`](../ProofAgentFacade.v#L179)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:865`](../ProofAgentFacade.v#L865)
 
 Purpose/direction: States the tnull eval groups having key conj filter exact law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3757,7 +5067,7 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_eval_groups_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `facade` (rank 6), `grouping` (rank 2), `filter` (rank 2)
+Cross-index: `facade`, `grouping`, `filter`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
 
@@ -3777,7 +5087,7 @@ Lemma tnull_eval_groups_having_key_conj_filter_exact :
 
 ## `tnull_direct_columns_group_projection_member_eq`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1250`](../ProofAgentFacade.v#L1250)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2012`](../ProofAgentFacade.v#L2012)
 
 Purpose/direction: Relates membership or occurrence evidence to aggregate grouping.
 
@@ -3785,7 +5095,7 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_direct_colum
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 16), `projection` (rank 16)
+Cross-index: `facade`, `grouping`, `projection`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`
 
@@ -3803,7 +5113,7 @@ Lemma tnull_direct_columns_group_projection_member_eq :
 
 ## `tnull_direct_columns_projection_reflects_grouping_key`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1295`](../ProofAgentFacade.v#L1295)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2057`](../ProofAgentFacade.v#L2057)
 
 Purpose/direction: States the tnull direct columns projection reflects grouping key law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3811,7 +5121,7 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_direct_colum
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 12), `projection` (rank 16)
+Cross-index: `facade`, `grouping`, `projection`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`
 
@@ -3828,7 +5138,7 @@ Lemma tnull_direct_columns_projection_reflects_grouping_key :
 
 ## `tnull_direct_columns_group_projection_support_rel`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1323`](../ProofAgentFacade.v#L1323)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2085`](../ProofAgentFacade.v#L2085)
 
 Purpose/direction: States the tnull direct columns group projection support rel law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3836,7 +5146,7 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_direct_colum
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 6), `projection` (rank 8), `bag` (rank 10)
+Cross-index: `facade`, `grouping`, `projection`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`, `bag semantics`, `list/bag bridge`
 
@@ -3856,7 +5166,7 @@ Lemma tnull_direct_columns_group_projection_support_rel :
 
 ## `tnull_direct_columns_group_rows_bag_eq_of_projection_support`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1348`](../ProofAgentFacade.v#L1348)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2110`](../ProofAgentFacade.v#L2110)
 
 Purpose/direction: States the tnull direct columns group rows bag equality of projection support law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -3864,7 +5174,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 2), `projection` (rank 16), `bag` (rank 2)
+Cross-index: `facade`, `grouping`, `projection`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -3896,7 +5206,7 @@ Lemma tnull_direct_columns_group_rows_bag_eq_of_projection_support :
 
 ## `tnull_direct_columns_group_keys_runtime_safe`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1394`](../ProofAgentFacade.v#L1394)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2156`](../ProofAgentFacade.v#L2156)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for aggregate grouping.
 
@@ -3904,7 +5214,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 16), `runtime` (rank 10)
+Cross-index: `facade`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -3919,7 +5229,7 @@ Lemma tnull_direct_columns_group_keys_runtime_safe :
 
 ## `tnull_direct_columns_group_select_runtime_safe`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1427`](../ProofAgentFacade.v#L1427)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2189`](../ProofAgentFacade.v#L2189)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for aggregate grouping.
 
@@ -3927,7 +5237,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for aggregat
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 16), `runtime` (rank 10)
+Cross-index: `facade`, `grouping`, `runtime`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -3946,7 +5256,7 @@ Lemma tnull_direct_columns_group_select_runtime_safe :
 
 ## `tnull_eval_group_bag_direct_columns_true_equiv_of_projection_support`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1507`](../ProofAgentFacade.v#L1507)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2747`](../ProofAgentFacade.v#L2747)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -3954,7 +5264,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `facade` (rank 16), `outcome` (rank 4), `grouping` (rank 2), `runtime` (rank 16), `projection` (rank 16), `bag` (rank 16), `scalar` (rank 16)
+Cross-index: `facade`, `outcome`, `grouping`, `runtime`, `projection`, `bag`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `projection`, `SELECT list`, `NULL`, `UNKNOWN`, `three-valued logic`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -3986,7 +5296,7 @@ Lemma tnull_eval_group_bag_direct_columns_true_equiv_of_projection_support :
 
 ## `tnull_direct_columns_group_bag_has_success`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1554`](../ProofAgentFacade.v#L1554)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2794`](../ProofAgentFacade.v#L2794)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
 
@@ -3994,7 +5304,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `facade` (rank 16), `outcome` (rank 16), `grouping` (rank 16), `runtime` (rank 16), `bag` (rank 16), `scalar` (rank 16)
+Cross-index: `facade`, `outcome`, `grouping`, `runtime`, `bag`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -4012,7 +5322,7 @@ Lemma tnull_direct_columns_group_bag_has_success :
 
 ## `tnull_eval_group_bag_direct_columns_true_no_error`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1626`](../ProofAgentFacade.v#L1626)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2866`](../ProofAgentFacade.v#L2866)
 
 Purpose/direction: Rules out every local group-bag error for direct-column GROUP BY with TRUE HAVING, for any supplied successful child bag.
 
@@ -4020,7 +5330,7 @@ Applicability: Use after a child bag has been supplied to discharge only the loc
 
 Important premises: Keep all three displayed restrictions: direct-column SELECT, matching direct grouping keys, and TRUE HAVING.  The theorem starts after a child input bag is supplied and does not erase child-query errors.
 
-Cross-index: `facade` (rank 2), `outcome` (rank 4), `grouping` (rank 2), `runtime` (rank 2), `bag` (rank 8), `scalar` (rank 16)
+Cross-index: `facade`, `outcome`, `grouping`, `runtime`, `bag`, `scalar`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `NULL`, `UNKNOWN`, `three-valued logic`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -4037,7 +5347,7 @@ Lemma tnull_eval_group_bag_direct_columns_true_no_error :
 
 ## `tnull_direct_columns_group_outcome_equiv_of_projected_support`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1710`](../ProofAgentFacade.v#L1710)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2950`](../ProofAgentFacade.v#L2950)
 
 Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
 
@@ -4045,7 +5355,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ag
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `facade` (rank 0), `outcome` (rank 0), `grouping` (rank 0), `runtime` (rank 4), `bag` (rank 16)
+Cross-index: `facade`, `outcome`, `grouping`, `runtime`, `bag`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
@@ -4087,7 +5397,7 @@ Lemma tnull_direct_columns_group_outcome_equiv_of_projected_support :
 
 ## `tnull_query_groups_matching_one_key`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:2067`](../ProofAgentFacade.v#L2067)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:3476`](../ProofAgentFacade.v#L3476)
 
 Purpose/direction: States the tnull query groups matching one key law for aggregate grouping, in the exact direction displayed by the declaration.
 
@@ -4095,7 +5405,7 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_query_groups
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `facade` (rank 16), `grouping` (rank 16)
+Cross-index: `facade`, `grouping`
 
 Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
 
@@ -4129,4 +5439,166 @@ Lemma tnull_query_groups_matching_one_key :
             (fun item =>
               keep (query_grouping_key env group_terms item)) rows)]
     end.
+```
+
+## `eval_groups_formula_congr_forward`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:620`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L620)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_groups_formula_congr_forward :
+  forall left right,
+    formula_expr_global_group_outcome_equiv left right ->
+    forall env select_list group_terms groups outcome,
+      eval_groups env select_list group_terms left groups outcome ->
+      eval_groups env select_list group_terms right groups outcome.
+```
+
+## `eval_groups_formula_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:669`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L669)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_groups_formula_congr :
+  forall left right,
+    formula_expr_global_group_outcome_equiv left right ->
+    forall env select_list group_terms groups outcome,
+      eval_groups env select_list group_terms left groups outcome <->
+      eval_groups env select_list group_terms right groups outcome.
+```
+
+## `eval_group_bag_formula_congr_forward`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:684`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L684)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_group_bag_formula_congr_forward :
+  forall left right,
+    formula_expr_global_group_outcome_equiv left right ->
+    forall env select_list group_terms input_bag outcome,
+      eval_group_bag env select_list group_terms left input_bag outcome ->
+      eval_group_bag env select_list group_terms right input_bag outcome.
+```
+
+## `eval_group_bag_formula_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:708`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L708)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_group_bag_formula_congr :
+  forall left right,
+    formula_expr_global_group_outcome_equiv left right ->
+    forall env select_list group_terms input_bag outcome,
+      eval_group_bag env select_list group_terms left input_bag outcome <->
+      eval_group_bag env select_list group_terms right input_bag outcome.
+```
+
+## `query_expr_group_global_typed_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1111`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1111)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `schema`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_group_global_typed_congr :
+  forall select_list group_terms having having' input input',
+    formula_expr_global_group_outcome_equiv having having' ->
+    query_expr_global_typed_outcome_equiv input input' ->
+    query_expr_global_typed_outcome_equiv
+      (QExpr_Group select_list group_terms having input)
+      (QExpr_Group select_list group_terms having' input').
+```
+
+## `query_expr_scalar_group_global_typed_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1146`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1146)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `schema`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_scalar_group_global_typed_congr :
+  forall select_list group_terms having input input',
+    query_expr_global_typed_outcome_equiv input input' ->
+    query_expr_global_typed_outcome_equiv
+      (QExpr_ScalarGroup select_list group_terms having input)
+      (QExpr_ScalarGroup select_list group_terms having input').
+```
+
+## `query_expr_grouping_sets_global_typed_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1178`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1178)
+
+Purpose/direction: Transports or composes aggregate grouping across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `schema`
+
+Search aliases: `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_grouping_sets_global_typed_congr :
+  forall grouping_sets input input',
+    query_expr_global_typed_outcome_equiv input input' ->
+    query_expr_global_typed_outcome_equiv
+      (QExpr_GroupingSets grouping_sets input)
+      (QExpr_GroupingSets grouping_sets input').
 ```

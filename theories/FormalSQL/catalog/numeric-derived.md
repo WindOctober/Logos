@@ -14,7 +14,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_checked_resu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -34,7 +34,7 @@ Applicability: Use when the goal or a hypothesis matches the `int64_checked_resu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`
 
@@ -54,7 +54,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_int32_neq_d
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `predicate`, `Bool3`, `INTEGER`, `int32`
 
@@ -80,7 +80,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -100,7 +100,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`
 
@@ -120,7 +120,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -140,7 +140,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`
 
@@ -160,7 +160,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_checked_valu
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -179,7 +179,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_to_int64_inj
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -198,7 +198,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_to_int64_val
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -217,7 +217,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_add_total_of
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -239,7 +239,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_sub_total_of
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -261,7 +261,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_mul_total_of
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -283,7 +283,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_div_total_of
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -306,7 +306,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -326,7 +326,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -346,7 +346,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -366,7 +366,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -387,7 +387,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -407,7 +407,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -428,7 +428,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -449,7 +449,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -470,7 +470,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -492,7 +492,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
 
@@ -513,7 +513,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -534,7 +534,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -557,7 +557,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -579,7 +579,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -601,7 +601,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -623,7 +623,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -643,7 +643,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -667,7 +667,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -691,7 +691,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -716,7 +716,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -740,7 +740,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -765,7 +765,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_cast_int32_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `floating point`, `special value`
 
@@ -785,7 +785,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_cast_int32_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -805,7 +805,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_cast_int64_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -825,7 +825,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_int32_int64
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`
 
@@ -846,7 +846,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_integer_ca
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`, `BIGINT`, `int64`, `floating point`, `special value`
 
@@ -868,7 +868,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -890,7 +890,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -912,7 +912,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 44)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`, `BIGINT`, `int64`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -935,7 +935,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`
 
@@ -957,7 +957,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_to_int32_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`
 
@@ -979,7 +979,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1003,7 +1003,7 @@ Applicability: Use when the goal or a hypothesis matches the `scalar_cast_numeri
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `INTEGER`, `int32`
 
@@ -1027,7 +1027,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1050,7 +1050,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1073,7 +1073,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1099,7 +1099,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1125,7 +1125,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1147,7 +1147,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1169,7 +1169,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1195,7 +1195,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1221,7 +1221,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_add_commut
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1240,7 +1240,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_mul_commut
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1259,7 +1259,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_opp_involu
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1278,7 +1278,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_add_zero_l
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1297,7 +1297,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sub_self_f
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1316,7 +1316,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_min_idempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1335,7 +1335,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_max_idempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1354,7 +1354,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -1373,7 +1373,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1395,7 +1395,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_decimal_pa
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1415,7 +1415,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_round_spec
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -1437,7 +1437,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1459,7 +1459,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1480,7 +1480,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_fits_typmo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1500,7 +1500,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1521,7 +1521,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1541,7 +1541,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `floating point`, `special value`
 
@@ -1561,7 +1561,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_cast_typmo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `floating point`, `special value`
 
@@ -1581,7 +1581,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1605,7 +1605,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -1629,7 +1629,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 40), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1649,7 +1649,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1670,7 +1670,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1690,7 +1690,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1714,7 +1714,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1738,7 +1738,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_div_nan_le
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -1758,7 +1758,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_div_nan_ri
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -1778,7 +1778,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_div_finite
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -1799,7 +1799,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1821,7 +1821,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1844,7 +1844,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1870,7 +1870,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1900,7 +1900,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1928,7 +1928,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1959,7 +1959,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1989,7 +1989,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2009,7 +2009,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2033,7 +2033,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2058,7 +2058,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_avg_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -2078,7 +2078,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_avg_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
 
@@ -2107,7 +2107,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_agg_specia
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -2127,7 +2127,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_agg_specia
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2148,7 +2148,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_agg_specia
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -2170,7 +2170,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_agg_specia
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`
 
@@ -2192,7 +2192,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_agg_specia
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2212,7 +2212,7 @@ Applicability: Use when the goal or a hypothesis matches the `eval_int32_neq_dis
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `INTEGER`, `int32`
 
@@ -2256,7 +2256,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_add_associ
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2276,7 +2276,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_initia
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2295,7 +2295,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_transi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2317,7 +2317,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_option
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 50)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2345,7 +2345,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2366,7 +2366,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_fold_o
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2389,7 +2389,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_fold_f
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 51)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2410,7 +2410,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2432,7 +2432,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2451,7 +2451,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2474,7 +2474,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 50), `scalar` (rank 38)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2508,7 +2508,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `grouping` (rank 0), `bag` (rank 42), `scalar` (rank 50)
+Cross-index: `grouping`, `bag`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -2530,7 +2530,7 @@ Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_row
 
 ## `tnull_closed_group_sum_numeric_dot_value_runtime_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:586`](../NumericRegroupFacts.v#L586)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:576`](../NumericRegroupFacts.v#L576)
 
 Purpose/direction: Establishes the displayed closure property for typed numeric semantics.
 
@@ -2538,7 +2538,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for typed nu
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 2), `runtime` (rank 8), `scalar` (rank 38)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2565,7 +2565,7 @@ Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
 
 ## `query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:738`](../NumericRegroupFacts.v#L738)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:728`](../NumericRegroupFacts.v#L728)
 
 Purpose/direction: Regroups closed-group SUM(NUMERIC column) values while preserving only the outer SUM value and its local runtime callback.
 
@@ -2573,7 +2573,7 @@ Applicability: Use only for the displayed closed-group SUM(NUMERIC Dot) family. 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `grouping` (rank 14), `runtime` (rank 18), `scalar` (rank 38)
+Cross-index: `grouping`, `runtime`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -2605,7 +2605,7 @@ Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
 
 ## `numeric_values_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:890`](../NumericRegroupFacts.v#L890)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:880`](../NumericRegroupFacts.v#L880)
 
 Purpose/direction: States the numeric values finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2613,7 +2613,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_values_fin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2625,7 +2625,7 @@ Lemma numeric_values_finite_observations : forall numbers,
 
 ## `finite_observations_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:897`](../NumericRegroupFacts.v#L897)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:887`](../NumericRegroupFacts.v#L887)
 
 Purpose/direction: States the finite observations all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2633,7 +2633,7 @@ Applicability: Use when the goal or a hypothesis matches the `finite_observation
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2644,7 +2644,7 @@ Lemma finite_observations_all_numeric : forall numbers,
 
 ## `numeric_sum_finite_fold_state`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:903`](../NumericRegroupFacts.v#L903)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:893`](../NumericRegroupFacts.v#L893)
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2652,7 +2652,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_sum_finite
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2670,7 +2670,7 @@ Lemma numeric_sum_finite_fold_state :
 
 ## `interp_sum_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:919`](../NumericRegroupFacts.v#L919)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:909`](../NumericRegroupFacts.v#L909)
 
 Purpose/direction: States the interp sum finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2678,7 +2678,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_sum_finite_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2693,7 +2693,7 @@ Lemma interp_sum_finite_observations : forall numbers,
 
 ## `interp_sum_numeric_values_extensional`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:942`](../NumericRegroupFacts.v#L942)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:932`](../NumericRegroupFacts.v#L932)
 
 Purpose/direction: States the interp sum numeric values extensional law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2701,7 +2701,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2715,7 +2715,7 @@ Lemma interp_sum_numeric_values_extensional : forall left right,
 
 ## `finite_numeric_total_from_accumulator`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:952`](../NumericRegroupFacts.v#L952)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:942`](../NumericRegroupFacts.v#L942)
 
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
@@ -2723,7 +2723,7 @@ Applicability: Use when the goal or a hypothesis matches the `finite_numeric_tot
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2735,7 +2735,7 @@ Lemma finite_numeric_total_from_accumulator : forall numbers accumulator,
 
 ## `nonempty_group_totals_flatten`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:964`](../NumericRegroupFacts.v#L964)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:954`](../NumericRegroupFacts.v#L954)
 
 Purpose/direction: States the exact empty-input or empty-result law for typed numeric semantics.
 
@@ -2743,7 +2743,7 @@ Applicability: Use when the goal or a hypothesis matches the `nonempty_group_tot
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 52), `scalar` (rank 52)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`
 
@@ -2755,7 +2755,7 @@ Lemma nonempty_group_totals_flatten : forall groups,
 
 ## `grouped_finite_sums_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:986`](../NumericRegroupFacts.v#L986)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:976`](../NumericRegroupFacts.v#L976)
 
 Purpose/direction: States the grouped finite sums all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2763,7 +2763,7 @@ Applicability: Use when the goal or a hypothesis matches the `grouped_finite_sum
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2778,7 +2778,7 @@ Lemma grouped_finite_sums_all_numeric : forall groups,
 
 ## `numeric_values_grouped_finite_sums`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:998`](../NumericRegroupFacts.v#L998)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:988`](../NumericRegroupFacts.v#L988)
 
 Purpose/direction: States the numeric values grouped finite sums law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2786,7 +2786,7 @@ Applicability: Use when the goal or a hypothesis matches the `numeric_values_gro
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2802,7 +2802,7 @@ Lemma numeric_values_grouped_finite_sums : forall groups,
 
 ## `nonempty_group_totals_nil_iff`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1011`](../NumericRegroupFacts.v#L1011)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1001`](../NumericRegroupFacts.v#L1001)
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -2810,7 +2810,7 @@ Applicability: Use in either direction to invert or construct a goal about typed
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 52), `scalar` (rank 44)
+Cross-index: `grouping`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`
 
@@ -2821,7 +2821,7 @@ Lemma nonempty_group_totals_nil_iff : forall groups,
 
 ## `interp_sum_numeric_finite_regroup`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1029`](../NumericRegroupFacts.v#L1029)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1019`](../NumericRegroupFacts.v#L1019)
 
 Purpose/direction: States the interp sum numeric finite regroup law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2829,7 +2829,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 50)
+Cross-index: `scalar`
 
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
@@ -2846,7 +2846,7 @@ Theorem interp_sum_numeric_finite_regroup : forall groups,
 
 ## `eval_group_bag_global_success_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1150`](../NumericRegroupFacts.v#L1150)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1140`](../NumericRegroupFacts.v#L1140)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for typed numeric semantics.
 
@@ -2854,7 +2854,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `outcome` (rank 50), `grouping` (rank 12), `runtime` (rank 50), `bag` (rank 14), `scalar` (rank 50)
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
 
 Search aliases: `numeric and cast semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 

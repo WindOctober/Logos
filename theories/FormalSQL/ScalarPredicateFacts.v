@@ -832,6 +832,26 @@ Proof.
   cbn [interp_case_values]; now rewrite Hcondition.
 Qed.
 
+(** The frontend's binary COALESCE encoding is a CASE guarded by IS NOT NULL.
+    Once the first value is known non-NULL, the fallback is unobservable. *)
+Lemma interp_case_is_not_null_identity : forall value fallback,
+  is_null_value value = false ->
+  interp_case_values
+    [interp_scalar_operator
+       (ScalarPredicateValue PredicateIsNotNull) [value];
+     value;
+     fallback] = value.
+Proof.
+  intros value fallback Hnonnull.
+  apply interp_case_values_true_branch_if.
+  change
+    (value_bool_to_bool3
+      (bool3_to_value_bool
+        (NullValues.interp_predicate PredicateIsNotNull [value])) = true3).
+  rewrite value_bool_to_bool3_roundtrip.
+  now apply interp_predicate_is_not_null_true_iff.
+Qed.
+
 Lemma interp_case_values_skip_nontrue : forall condition then_value rest,
   value_bool_to_bool3 condition <> true3 ->
   interp_case_values (condition :: then_value :: rest) =
@@ -895,6 +915,26 @@ Lemma case_runtime_error_true_branch : forall condition then_error then_value re
 Proof.
   intros condition then_error then_value rest Hcondition.
   cbn [case_runtime_error]; rewrite Hcondition; reflexivity.
+Qed.
+
+Lemma case_runtime_error_is_not_null_identity :
+  forall value fallback value_error fallback_error,
+    is_null_value value = false ->
+    case_runtime_error
+      [(None,
+          interp_scalar_operator
+            (ScalarPredicateValue PredicateIsNotNull) [value]);
+       (value_error, value);
+       (fallback_error, fallback)] = value_error.
+Proof.
+  intros value fallback value_error fallback_error Hnonnull.
+  apply case_runtime_error_true_branch.
+  change
+    (value_bool_to_bool3
+      (bool3_to_value_bool
+        (NullValues.interp_predicate PredicateIsNotNull [value])) = true3).
+  rewrite value_bool_to_bool3_roundtrip.
+  now apply interp_predicate_is_not_null_true_iff.
 Qed.
 
 Lemma case_runtime_error_skip_nontrue : forall condition then_error then_value rest,

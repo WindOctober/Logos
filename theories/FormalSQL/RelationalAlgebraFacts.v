@@ -12,6 +12,197 @@ From SQLFS Require Import
 
 Import Tuple.
 
+(** The reassociation used when one [flat_map] block is inserted between a
+    right prefix and suffix. *)
+Local Lemma append_related_blocks_assoc :
+  forall X (prefix block tail suffix : list X),
+    (prefix ++ block) ++ (tail ++ suffix) =
+    prefix ++ ((block ++ tail) ++ suffix).
+Proof.
+intros X prefix block tail suffix.
+induction prefix as [|head prefix IH]; cbn.
+- apply app_assoc.
+- now rewrite IH.
+Qed.
+
+(** Insert one related output block at an arbitrary position around an
+    already-related remainder.  Keeping this helper local avoids exposing the
+    constructor plumbing needed by the public [flat_map] congruence below. *)
+Local Lemma permut_insert_related_block :
+  forall A B (R : A -> B -> Prop)
+      left_block right_block left_rest right_prefix right_suffix,
+    _permut R left_block right_block ->
+    _permut R left_rest (right_prefix ++ right_suffix) ->
+    _permut R
+      (left_block ++ left_rest)
+      (right_prefix ++ right_block ++ right_suffix).
+Proof.
+intros A B R left_block right_block left_rest
+  right_prefix right_suffix Hblock.
+revert left_rest right_prefix right_suffix.
+induction Hblock as
+  [|left_value right_value left_tail right_before right_after
+      Hrelated Htail IH];
+  intros left_rest right_prefix right_suffix Hrest.
+- cbn; exact Hrest.
+- cbn.
+  rewrite <- append_related_blocks_assoc.
+  apply (@Pcons _ _ R left_value right_value
+    (left_tail ++ left_rest)
+    (right_prefix ++ right_before)
+    (right_after ++ right_suffix)).
+  + exact Hrelated.
+  + pose proof (IH left_rest right_prefix right_suffix Hrest) as HIH.
+    repeat rewrite app_assoc in HIH.
+    repeat rewrite app_assoc.
+    exact HIH.
+Qed.
+
+(** Heterogeneous relational congruence for [flat_map].  The outer lists may
+    use different element types, and each matched pair may emit differently
+    typed blocks.  The block premise is membership-scoped, so clients need
+    prove it only for pairs that the two input relations can actually expose.
+
+    This is the multiplicity-preserving composition law behind relational
+    operators represented as a list of per-row output blocks. *)
+Lemma list_flat_map_permut_rel :
+  forall A B C D
+      (R : A -> B -> Prop) (S : C -> D -> Prop)
+      (left_block : A -> list C) (right_block : B -> list D)
+      left right,
+    _permut R left right ->
+    (forall left_value right_value,
+      In left_value left ->
+      In right_value right ->
+      R left_value right_value ->
+      _permut S
+        (left_block left_value)
+        (right_block right_value)) ->
+    _permut S
+      (flat_map left_block left)
+      (flat_map right_block right).
+Proof.
+intros A B C D R S left_block right_block left right Houter.
+induction Houter as
+  [|left_value right_value left_tail right_prefix right_suffix
+      Hrelated Htail IH];
+  intro Hblocks.
+- apply Pnil.
+- cbn [flat_map].
+  rewrite ListFacts.flat_map_app; cbn [flat_map].
+  eapply permut_insert_related_block.
+  + apply Hblocks.
+    * now left.
+    * apply in_or_app; right; now left.
+    * exact Hrelated.
+  + rewrite <- ListFacts.flat_map_app.
+    apply IH.
+    intros left_member right_member Hleft Hright Hmember_related.
+    apply Hblocks.
+    * now right.
+    * apply List.in_app_iff in Hright.
+      apply List.in_app_iff.
+      destruct Hright as [Hright|Hright].
+      -- now left.
+      -- right; now right.
+    * exact Hmember_related.
+Qed.
+
+Local Lemma map_filter_as_flat_map :
+  forall A B (keep : A -> bool) (emit : A -> B) rows,
+    map emit (filter keep rows) =
+    flat_map
+      (fun row => if keep row then emit row :: nil else nil)
+      rows.
+Proof.
+intros A B keep emit rows.
+induction rows as [|row rows IH].
+- reflexivity.
+- simpl.
+  destruct (keep row); simpl; congruence.
+Qed.
+
+(** Thin heterogeneous theta-join corollary.  Each outer row filters a shared
+    inner relation and maps every accepted pair to one output.  Related input
+    pairs must make the same Boolean decision and emit related outputs, but
+    these obligations are required only for members of the four input lists.
+    No functionality, key, cardinality, or query-shape assumption is hidden in
+    the theorem. *)
+Lemma theta_filter_map_permut_rel :
+  forall A B C D E F
+      (outer_rel : A -> B -> Prop)
+      (inner_rel : C -> D -> Prop)
+      (output_rel : E -> F -> Prop)
+      (left_accept : A -> C -> bool)
+      (right_accept : B -> D -> bool)
+      (left_emit : A -> C -> E)
+      (right_emit : B -> D -> F)
+      left_outer right_outer left_inner right_inner,
+    _permut outer_rel left_outer right_outer ->
+    _permut inner_rel left_inner right_inner ->
+    (forall left_row right_row left_value right_value,
+      In left_row left_outer ->
+      In right_row right_outer ->
+      In left_value left_inner ->
+      In right_value right_inner ->
+      outer_rel left_row right_row ->
+      inner_rel left_value right_value ->
+      left_accept left_row left_value =
+        right_accept right_row right_value) ->
+    (forall left_row right_row left_value right_value,
+      In left_row left_outer ->
+      In right_row right_outer ->
+      In left_value left_inner ->
+      In right_value right_inner ->
+      outer_rel left_row right_row ->
+      inner_rel left_value right_value ->
+      output_rel
+        (left_emit left_row left_value)
+        (right_emit right_row right_value)) ->
+    _permut output_rel
+      (flat_map
+        (fun left_row =>
+          map (left_emit left_row)
+            (filter (left_accept left_row) left_inner))
+        left_outer)
+      (flat_map
+        (fun right_row =>
+          map (right_emit right_row)
+            (filter (right_accept right_row) right_inner))
+        right_outer).
+Proof.
+intros A B C D E F outer_rel inner_rel output_rel
+  left_accept right_accept left_emit right_emit
+  left_outer right_outer left_inner right_inner
+  Houter Hinner Haccept Hemit.
+eapply list_flat_map_permut_rel; [exact Houter|].
+intros left_row right_row Hleft_row Hright_row Hrows_related.
+rewrite
+  (map_filter_as_flat_map
+    (left_accept left_row) (left_emit left_row) left_inner),
+  (map_filter_as_flat_map
+    (right_accept right_row) (right_emit right_row) right_inner).
+eapply list_flat_map_permut_rel; [exact Hinner|].
+intros left_value right_value Hleft_value Hright_value Hvalues_related.
+pose proof
+  (Haccept left_row right_row left_value right_value
+    Hleft_row Hright_row Hleft_value Hright_value
+    Hrows_related Hvalues_related) as Hsame.
+pose proof
+  (Hemit left_row right_row left_value right_value
+    Hleft_row Hright_row Hleft_value Hright_value
+    Hrows_related Hvalues_related) as Houtput.
+destruct (left_accept left_row left_value) eqn:Hleft_accept;
+  destruct (right_accept right_row right_value) eqn:Hright_accept;
+  try discriminate Hsame; cbn [flat_map].
+- exact
+    (@Pcons E F output_rel
+      (left_emit left_row left_value)
+      (right_emit right_row right_value)
+      nil nil nil Houtput (@Pnil E F output_rel)).
+- apply Pnil.
+Qed.
+
 (** A direct column reference reads the current row at the head of [env_t].
     The presence premise is essential: absent columns fall through to the
     outer environment instead. *)
@@ -94,6 +285,43 @@ split.
   exists (left_map x); split.
   + apply in_map; exact Hx.
   + exact (Hmap x y Hrel).
+Qed.
+
+(** Related row supports remain related after filtering when the two total
+    Boolean decisions agree on related representatives.  Properness is needed
+    only for representatives actually supplied by the support relation; no
+    multiplicity or evaluation-order claim is introduced. *)
+Lemma list_support_rel_filter_transport :
+  forall A B (R : A -> B -> Prop)
+      (left_keep : A -> bool) (right_keep : B -> bool) left right,
+    list_support_rel R left right ->
+    (forall left_row right_row,
+      R left_row right_row ->
+      left_keep left_row = right_keep right_row) ->
+    list_support_rel R
+      (filter left_keep left) (filter right_keep right).
+Proof.
+  intros A B R left_keep right_keep left right
+    [Hforward Hbackward] Hkeep.
+  split.
+  - intros left_row Hleft.
+    apply filter_In in Hleft as [Hleft Hleft_keep].
+    destruct (Hforward left_row Hleft) as
+      [right_row [Hright Hrelated]].
+    exists right_row; split.
+    + apply filter_In; split; [exact Hright|].
+      rewrite <- (Hkeep left_row right_row Hrelated).
+      exact Hleft_keep.
+    + exact Hrelated.
+  - intros right_row Hright.
+    apply filter_In in Hright as [Hright Hright_keep].
+    destruct (Hbackward right_row Hright) as
+      [left_row [Hleft Hrelated]].
+    exists left_row; split.
+    + apply filter_In; split; [exact Hleft|].
+      rewrite (Hkeep left_row right_row Hrelated).
+      exact Hright_keep.
+    + exact Hrelated.
 Qed.
 
 (** When both presentations are maps, support can be stated directly on the
@@ -1795,6 +2023,746 @@ split.
     exact Hnone.
 Qed.
 
+(** Kind-indexed support descriptions for the native join scheduler.  These
+    definitions intentionally distinguish matched rows, NULL-padding sources,
+    and semi/anti left-row emission.  They are support-level predicates: no
+    multiplicity or output-order claim is hidden in them. *)
+Definition query_join_matched_source_supported
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  exists left right,
+    In left lefts /\
+    In right rights /\
+    matches left right = true /\
+    JoinSourceMatched T (join_tuple T left right) = output.
+
+Definition query_join_unmatched_left_source_supported
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  exists left,
+    In left lefts /\
+    (forall right, In right rights -> matches left right = false) /\
+    JoinSourceLeft T left = output.
+
+Definition query_join_unmatched_right_source_supported
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  exists right,
+    In right rights /\
+    (forall left, In left lefts -> matches left right = false) /\
+    JoinSourceRight T right = output.
+
+Definition query_join_semi_source_supported
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  exists left right,
+    In left lefts /\
+    In right rights /\
+    matches left right = true /\
+    JoinSourceLeft T left = output.
+
+Definition query_join_anti_source_supported
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  exists left,
+    In left lefts /\
+    (forall right, In right rights -> matches left right = false) /\
+    JoinSourceLeft T left = output.
+
+Definition query_join_source_supported kind
+    (matches : tuple T -> tuple T -> bool) lefts rights output : Prop :=
+  match kind with
+  | QueryJoinInner =>
+      query_join_matched_source_supported matches lefts rights output
+  | QueryJoinLeft =>
+      query_join_matched_source_supported matches lefts rights output \/
+      query_join_unmatched_left_source_supported matches lefts rights output
+  | QueryJoinRight =>
+      query_join_matched_source_supported matches lefts rights output \/
+      query_join_unmatched_right_source_supported matches lefts rights output
+  | QueryJoinFull =>
+      query_join_matched_source_supported matches lefts rights output \/
+      query_join_unmatched_left_source_supported matches lefts rights output \/
+      query_join_unmatched_right_source_supported matches lefts rights output
+  | QueryJoinSemi =>
+      query_join_semi_source_supported matches lefts rights output
+  | QueryJoinAnti =>
+      query_join_anti_source_supported matches lefts rights output
+  end.
+
+Local Lemma query_join_left_inner_sources_boolean_matrix_member_iff :
+  forall (matches : tuple T -> tuple T -> bool) lefts rights output,
+    In output
+      (query_join_left_sources T QueryJoinInner lefts rights
+        (map (fun left => map (matches left) rights) lefts)) <->
+    query_join_matched_source_supported matches lefts rights output.
+Proof.
+intros matches lefts; induction lefts as [|left lefts IH];
+  intros rights output.
+- cbn [query_join_left_sources query_join_matched_source_supported].
+  split; [contradiction|].
+  intros [first [right [Hfirst _]]]; contradiction.
+- rewrite (ListFacts.map_unfold
+    (fun current => map (matches current) rights) (left :: lefts)).
+  cbn [query_join_left_sources].
+  rewrite List.in_app_iff,
+    query_join_matched_sources_boolean_matrix_member_iff, IH.
+  unfold query_join_matched_source_supported.
+  split.
+  + intros
+      [[right [Hright [Hmatch Houtput]]] |
+       [tail_left [right [Htail [Hright [Hmatch Houtput]]]]]].
+    * exists left, right; repeat split; try assumption; now left.
+    * exists tail_left, right; repeat split; try assumption; now right.
+  + intros
+      [first [right [[Hfirst|Hfirst] [Hright [Hmatch Houtput]]]]].
+    * subst first; left; exists right; repeat split; assumption.
+    * right; exists first, right; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_left_sources_inner_right :
+  forall lefts rights matrix,
+    query_join_left_sources T QueryJoinInner lefts rights matrix =
+    query_join_left_sources T QueryJoinRight lefts rights matrix.
+Proof.
+intros lefts; induction lefts as [|left lefts IH];
+  intros rights [|flags matrix]; cbn [query_join_left_sources];
+  try reflexivity.
+now rewrite IH.
+Qed.
+
+Local Lemma query_join_left_sources_left_full :
+  forall lefts rights matrix,
+    query_join_left_sources T QueryJoinLeft lefts rights matrix =
+    query_join_left_sources T QueryJoinFull lefts rights matrix.
+Proof.
+intros lefts; induction lefts as [|left lefts IH];
+  intros rights [|flags matrix]; cbn [query_join_left_sources];
+  try reflexivity.
+destruct (query_join_row_has_match flags); now rewrite IH.
+Qed.
+
+Local Lemma query_join_left_semi_sources_boolean_matrix_member_iff :
+  forall (matches : tuple T -> tuple T -> bool) lefts rights output,
+    In output
+      (query_join_left_sources T QueryJoinSemi lefts rights
+        (map (fun left => map (matches left) rights) lefts)) <->
+    query_join_semi_source_supported matches lefts rights output.
+Proof.
+intros matches lefts; induction lefts as [|left lefts IH];
+  intros rights output.
+- cbn [query_join_left_sources query_join_semi_source_supported].
+  split; [contradiction|].
+  intros [first [right [Hfirst _]]]; contradiction.
+- rewrite (ListFacts.map_unfold
+    (fun current => map (matches current) rights) (left :: lefts)).
+  cbn [query_join_left_sources].
+  rewrite query_join_row_has_match_boolean_matrix.
+  destruct (existsb (matches left) rights) eqn:Hexists.
+  + apply existsb_exists in Hexists as [right [Hright Hmatch]].
+    rewrite List.in_app_iff, IH; cbn.
+    unfold query_join_semi_source_supported.
+    split.
+    * intros [Houtput|Htail].
+      -- destruct Houtput as [Houtput|Hfalse]; [|contradiction].
+         exists left, right.
+         split; [now left|].
+         split; [exact Hright|].
+         split; [exact Hmatch|exact Houtput].
+      -- destruct Htail as
+           [tail_left [tail_right
+             [Hlefts [Hrights [Hmatches Houtput]]]]].
+         exists tail_left, tail_right; repeat split; try assumption; now right.
+    * intros
+        [first [matched [[Hfirst|Hfirst]
+          [Hmatched [Hmatches Houtput]]]]].
+      -- subst first; left; cbn; now left.
+      -- right; exists first, matched; repeat split; assumption.
+  + pose proof
+      (proj1 (list_existsb_false_iff (matches left) rights) Hexists)
+      as Hnone.
+    rewrite List.in_app_iff, IH; cbn.
+    unfold query_join_semi_source_supported.
+    split.
+    * intros [Hfalse|Htail]; [contradiction|].
+      destruct Htail as
+        [tail_left [matched
+          [Hlefts [Hmatched [Hmatches Houtput]]]]].
+      exists tail_left, matched; repeat split; try assumption; now right.
+    * intros
+        [first [matched [[Hfirst|Hfirst]
+          [Hmatched [Hmatches Houtput]]]]].
+      -- subst first; specialize (Hnone matched Hmatched); congruence.
+      -- right; exists first, matched; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_left_anti_sources_boolean_matrix_member_iff :
+  forall (matches : tuple T -> tuple T -> bool) lefts rights output,
+    In output
+      (query_join_left_sources T QueryJoinAnti lefts rights
+        (map (fun left => map (matches left) rights) lefts)) <->
+    query_join_anti_source_supported matches lefts rights output.
+Proof.
+intros matches lefts; induction lefts as [|left lefts IH];
+  intros rights output.
+- cbn [query_join_left_sources query_join_anti_source_supported].
+  split; [contradiction|].
+  intros [first [Hfirst _]]; contradiction.
+- rewrite (ListFacts.map_unfold
+    (fun current => map (matches current) rights) (left :: lefts)).
+  cbn [query_join_left_sources].
+  rewrite query_join_row_has_match_boolean_matrix.
+  destruct (existsb (matches left) rights) eqn:Hexists.
+  + apply existsb_exists in Hexists as [matched [Hmatched Hmatch]].
+    rewrite List.in_app_iff, IH; cbn.
+    unfold query_join_anti_source_supported.
+    split.
+    * intros [Hfalse|Htail]; [contradiction|].
+      destruct Htail as [tail_left [Hlefts [Hnone Houtput]]].
+      exists tail_left; repeat split; try assumption; now right.
+    * intros [first [[Hfirst|Hfirst] [Hnone Houtput]]].
+      -- subst first; specialize (Hnone matched Hmatched); congruence.
+      -- right; exists first; repeat split; assumption.
+  + pose proof
+      (proj1 (list_existsb_false_iff (matches left) rights) Hexists)
+      as Hnone.
+    rewrite List.in_app_iff, IH; cbn.
+    unfold query_join_anti_source_supported.
+    split.
+    * intros [Houtput|Htail].
+      -- destruct Houtput as [Houtput|Hfalse]; [|contradiction].
+         exists left.
+         split; [now left|].
+         split; [exact Hnone|exact Houtput].
+      -- destruct Htail as [tail_left [Hlefts [Hnone_tail Houtput]]].
+         exists tail_left; repeat split; try assumption; now right.
+    * intros [first [[Hfirst|Hfirst] [Hnone_first Houtput]]].
+      -- subst first; left; cbn; now left.
+      -- right; exists first; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_unmatched_right_sources_boolean_matrix_member_iff :
+  forall (matches : tuple T -> tuple T -> bool) lefts rights output,
+    In output
+      (query_join_unmatched_right_sources_from T 0 rights
+        (map (fun left => map (matches left) rights) lefts)) <->
+    query_join_unmatched_right_source_supported
+      matches lefts rights output.
+Proof.
+intros matches lefts rights output.
+pose proof
+  (query_join_unmatched_right_sources_boolean_matrix
+    matches lefts (nil : list (tuple T)) rights) as Hunmatched.
+cbn [length List.app] in Hunmatched.
+rewrite Hunmatched.
+unfold query_join_unmatched_right_source_supported.
+split.
+- intro Houtput.
+  apply in_map_iff in Houtput.
+  destruct Houtput as [right [Houtput Hright]].
+  apply filter_In in Hright as [Hright Hnone].
+  apply Bool.negb_true_iff in Hnone.
+  exists right; repeat split; try assumption.
+  now apply (proj1
+    (list_existsb_false_iff
+      (fun left => matches left right) lefts)).
+- intros [right [Hright [Hnone Houtput]]].
+  apply in_map_iff; exists right; split; [exact Houtput|].
+  apply filter_In; split; [exact Hright|].
+  apply Bool.negb_true_iff.
+  now apply (proj2
+    (list_existsb_false_iff
+      (fun left => matches left right) lefts)).
+Qed.
+
+(** Complete source-support characterization for every native join kind.
+    The condition matrix is exact and row-major.  FALSE and UNKNOWN have
+    already been projected to [false] at this scheduler boundary; no theorem
+    here identifies their underlying Bool3 observations. *)
+Theorem query_join_sources_member_iff :
+  forall kind (matches : tuple T -> tuple T -> bool) lefts rights output,
+    In output
+      (query_join_sources T kind lefts rights
+        (map (fun left => map (matches left) rights) lefts)) <->
+    query_join_source_supported kind matches lefts rights output.
+Proof.
+intros kind matches lefts rights output; destruct kind;
+  unfold query_join_source_supported.
+- unfold query_join_sources; cbn; rewrite app_nil_r.
+  apply query_join_left_inner_sources_boolean_matrix_member_iff.
+- unfold query_join_sources; cbn; rewrite app_nil_r.
+  rewrite query_join_left_sources_left_full.
+  apply query_join_left_full_sources_boolean_matrix_member_iff.
+- unfold query_join_sources; cbn.
+  rewrite <- query_join_left_sources_inner_right.
+  rewrite List.in_app_iff,
+    query_join_left_inner_sources_boolean_matrix_member_iff,
+    query_join_unmatched_right_sources_boolean_matrix_member_iff.
+  reflexivity.
+- apply query_join_full_sources_member_iff.
+- unfold query_join_sources; cbn; rewrite app_nil_r.
+  apply query_join_left_semi_sources_boolean_matrix_member_iff.
+- unfold query_join_sources; cbn; rewrite app_nil_r.
+  apply query_join_left_anti_sources_boolean_matrix_member_iff.
+Qed.
+
+(** Relate reached scheduler sources across heterogeneous input views.  The
+    relation records only constructor payloads; reachability is supplied by
+    [query_join_source_supported].  In particular, semi and anti joins both
+    emit a left source, but their matched/no-match reachability conditions are
+    intentionally kept distinct by [query_join_sources_member_iff]. *)
+Definition query_join_matched_source_rel
+    (left_rel right_rel : tuple T -> tuple T -> Prop)
+    (first second : query_join_source T) : Prop :=
+  exists left left' right right',
+    left_rel left left' /\
+    right_rel right right' /\
+    first = JoinSourceMatched T (join_tuple T left right) /\
+    second = JoinSourceMatched T (join_tuple T left' right').
+
+Definition query_join_left_source_rel
+    (left_rel : tuple T -> tuple T -> Prop)
+    (first second : query_join_source T) : Prop :=
+  exists left left',
+    left_rel left left' /\
+    first = JoinSourceLeft T left /\
+    second = JoinSourceLeft T left'.
+
+Definition query_join_right_source_rel
+    (right_rel : tuple T -> tuple T -> Prop)
+    (first second : query_join_source T) : Prop :=
+  exists right right',
+    right_rel right right' /\
+    first = JoinSourceRight T right /\
+    second = JoinSourceRight T right'.
+
+Definition query_join_kind_source_rel kind
+    (left_rel right_rel : tuple T -> tuple T -> Prop)
+    (first second : query_join_source T) : Prop :=
+  match kind with
+  | QueryJoinInner =>
+      query_join_matched_source_rel left_rel right_rel first second
+  | QueryJoinLeft =>
+      query_join_matched_source_rel left_rel right_rel first second \/
+      query_join_left_source_rel left_rel first second
+  | QueryJoinRight =>
+      query_join_matched_source_rel left_rel right_rel first second \/
+      query_join_right_source_rel right_rel first second
+  | QueryJoinFull =>
+      query_join_matched_source_rel left_rel right_rel first second \/
+      query_join_left_source_rel left_rel first second \/
+      query_join_right_source_rel right_rel first second
+  | QueryJoinSemi | QueryJoinAnti =>
+      query_join_left_source_rel left_rel first second
+  end.
+
+Local Lemma query_join_matched_source_rel_converse :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop) first second,
+    query_join_matched_source_rel
+      (fun target source => left_rel source target)
+      (fun target source => right_rel source target) second first ->
+    query_join_matched_source_rel left_rel right_rel first second.
+Proof.
+intros left_rel right_rel first second
+  [left' [left [right' [right
+    [Hleft [Hright [Hsecond Hfirst]]]]]]].
+exists left, left', right, right'; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_left_source_rel_converse :
+  forall (left_rel : tuple T -> tuple T -> Prop) first second,
+    query_join_left_source_rel
+      (fun target source => left_rel source target) second first ->
+    query_join_left_source_rel left_rel first second.
+Proof.
+intros left_rel first second
+  [left' [left [Hleft [Hsecond Hfirst]]]].
+exists left, left'; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_right_source_rel_converse :
+  forall (right_rel : tuple T -> tuple T -> Prop) first second,
+    query_join_right_source_rel
+      (fun target source => right_rel source target) second first ->
+    query_join_right_source_rel right_rel first second.
+Proof.
+intros right_rel first second
+  [right' [right [Hright [Hsecond Hfirst]]]].
+exists right, right'; repeat split; assumption.
+Qed.
+
+Local Lemma query_join_kind_source_rel_converse :
+  forall kind (left_rel right_rel : tuple T -> tuple T -> Prop)
+      first second,
+    query_join_kind_source_rel kind
+      (fun target source => left_rel source target)
+      (fun target source => right_rel source target) second first ->
+    query_join_kind_source_rel kind left_rel right_rel first second.
+Proof.
+intros kind left_rel right_rel first second; destruct kind; cbn.
+- now apply query_join_matched_source_rel_converse.
+- intros [Hmatched | Hleft].
+  + left; now apply query_join_matched_source_rel_converse.
+  + right; now apply query_join_left_source_rel_converse.
+- intros [Hmatched | Hright].
+  + left; now apply query_join_matched_source_rel_converse.
+  + right; now apply query_join_right_source_rel_converse.
+- intros [Hmatched | [Hleft | Hright]].
+  + left; now apply query_join_matched_source_rel_converse.
+  + right; left; now apply query_join_left_source_rel_converse.
+  + right; right; now apply query_join_right_source_rel_converse.
+- now apply query_join_left_source_rel_converse.
+- now apply query_join_left_source_rel_converse.
+Qed.
+
+Local Lemma query_join_matched_source_support_transport :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_matched_source_supported
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_matched_source_supported
+        right_match left_rows' right_rows' target /\
+      query_join_matched_source_rel left_rel right_rel source target.
+Proof.
+intros left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  [Hleft_forward _] [Hright_forward _] Hmatch
+  [left [right [Hleft [Hright [Haccepted Hsource]]]]].
+subst source.
+destruct (Hleft_forward left Hleft)
+  as [left' [Hleft' Hleft_rel]].
+destruct (Hright_forward right Hright)
+  as [right' [Hright' Hright_rel]].
+exists (JoinSourceMatched T (join_tuple T left' right')); split.
+- exists left', right'; repeat split; try assumption.
+  now rewrite <- (Hmatch left left' right right' Hleft_rel Hright_rel).
+- exists left, left', right, right'; repeat split; try assumption.
+Qed.
+
+Local Lemma query_join_unmatched_left_source_support_transport :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_unmatched_left_source_supported
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_unmatched_left_source_supported
+        right_match left_rows' right_rows' target /\
+      query_join_left_source_rel left_rel source target.
+Proof.
+intros left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  [Hleft_forward _] [_ Hright_backward] Hmatch
+  [left [Hleft [Hnone Hsource]]].
+subst source.
+destruct (Hleft_forward left Hleft)
+  as [left' [Hleft' Hleft_rel]].
+exists (JoinSourceLeft T left'); split.
+- exists left'; repeat split; try assumption.
+  intros right' Hright'.
+  destruct (Hright_backward right' Hright')
+    as [right [Hright Hright_rel]].
+  specialize (Hnone right Hright).
+  now rewrite <- (Hmatch left left' right right' Hleft_rel Hright_rel).
+- exists left, left'; repeat split; try assumption.
+Qed.
+
+Local Lemma query_join_unmatched_right_source_support_transport :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_unmatched_right_source_supported
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_unmatched_right_source_supported
+        right_match left_rows' right_rows' target /\
+      query_join_right_source_rel right_rel source target.
+Proof.
+intros left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  [_ Hleft_backward] [Hright_forward _] Hmatch
+  [right [Hright [Hnone Hsource]]].
+subst source.
+destruct (Hright_forward right Hright)
+  as [right' [Hright' Hright_rel]].
+exists (JoinSourceRight T right'); split.
+- exists right'; repeat split; try assumption.
+  intros left' Hleft'.
+  destruct (Hleft_backward left' Hleft')
+    as [left [Hleft Hleft_rel]].
+  specialize (Hnone left Hleft).
+  now rewrite <- (Hmatch left left' right right' Hleft_rel Hright_rel).
+- exists right, right'; repeat split; try assumption.
+Qed.
+
+Local Lemma query_join_semi_source_support_transport :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_semi_source_supported
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_semi_source_supported
+        right_match left_rows' right_rows' target /\
+      query_join_left_source_rel left_rel source target.
+Proof.
+intros left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  [Hleft_forward _] [Hright_forward _] Hmatch
+  [left [right [Hleft [Hright [Haccepted Hsource]]]]].
+subst source.
+destruct (Hleft_forward left Hleft)
+  as [left' [Hleft' Hleft_rel]].
+destruct (Hright_forward right Hright)
+  as [right' [Hright' Hright_rel]].
+exists (JoinSourceLeft T left'); split.
+- exists left', right'; repeat split; try assumption.
+  now rewrite <- (Hmatch left left' right right' Hleft_rel Hright_rel).
+- exists left, left'; repeat split; try assumption.
+Qed.
+
+Local Lemma query_join_anti_source_support_transport :
+  forall (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_anti_source_supported
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_anti_source_supported
+        right_match left_rows' right_rows' target /\
+      query_join_left_source_rel left_rel source target.
+Proof.
+intros left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  Hleft Hright Hmatch Hsource.
+change (query_join_unmatched_left_source_supported
+  left_match left_rows right_rows source) in Hsource.
+change (exists target,
+  query_join_unmatched_left_source_supported
+    right_match left_rows' right_rows' target /\
+  query_join_left_source_rel left_rel source target).
+eapply query_join_unmatched_left_source_support_transport; eassumption.
+Qed.
+
+Local Lemma query_join_source_supported_transport_forward :
+  forall kind (left_rel right_rel : tuple T -> tuple T -> Prop)
+      left_match right_match left_rows left_rows' right_rows right_rows'
+      source,
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    query_join_source_supported kind
+      left_match left_rows right_rows source ->
+    exists target,
+      query_join_source_supported kind
+        right_match left_rows' right_rows' target /\
+      query_join_kind_source_rel kind left_rel right_rel source target.
+Proof.
+intros kind left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' source
+  Hleft Hright Hmatch Hsource.
+destruct kind; cbn [query_join_source_supported
+  query_join_kind_source_rel] in Hsource |- *.
+- eapply query_join_matched_source_support_transport;
+    eassumption.
+- destruct Hsource as [Hmatched | Hunmatched].
+  + destruct (query_join_matched_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hmatched) as [target [Htarget Hrel]].
+    exists target; split; now left.
+  + destruct (query_join_unmatched_left_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hunmatched) as [target [Htarget Hrel]].
+    exists target; split; now right.
+- destruct Hsource as [Hmatched | Hunmatched].
+  + destruct (query_join_matched_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hmatched) as [target [Htarget Hrel]].
+    exists target; split; now left.
+  + destruct (query_join_unmatched_right_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hunmatched) as [target [Htarget Hrel]].
+    exists target; split; now right.
+- destruct Hsource as [Hmatched | [Hleft_source | Hright_source]].
+  + destruct (query_join_matched_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hmatched) as [target [Htarget Hrel]].
+    exists target; split; now left.
+  + destruct (query_join_unmatched_left_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hleft_source) as [target [Htarget Hrel]].
+    exists target; split; [now right; left | now right; left].
+  + destruct (query_join_unmatched_right_source_support_transport
+      (left_match := left_match) right_match
+      Hleft Hright Hmatch Hright_source) as [target [Htarget Hrel]].
+    exists target; split; [now right; right | now right; right].
+- eapply query_join_semi_source_support_transport;
+    eassumption.
+- eapply query_join_anti_source_support_transport;
+    eassumption.
+Qed.
+
+(** Every native join scheduler transports support across arbitrary
+    bidirectional input relations when related pairs make the same TRUE versus
+    non-TRUE decision.  The result relates only sources actually reached by
+    the selected join kind.  It deliberately says nothing about multiplicity,
+    source order, projection safety, or SQL runtime errors. *)
+Theorem query_join_sources_support_rel :
+  forall kind (left_rel right_rel : tuple T -> tuple T -> Prop)
+      (left_match right_match : tuple T -> tuple T -> bool)
+      left_rows left_rows' right_rows right_rows',
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    list_support_rel (query_join_kind_source_rel kind left_rel right_rel)
+      (query_join_sources T kind left_rows right_rows
+        (map (fun left => map (left_match left) right_rows) left_rows))
+      (query_join_sources T kind left_rows' right_rows'
+        (map (fun left => map (right_match left) right_rows') left_rows')).
+Proof.
+intros kind left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows' Hleft Hright Hmatch.
+split.
+- intros source Hsource.
+  apply query_join_sources_member_iff in Hsource.
+  destruct (@query_join_source_supported_transport_forward
+    kind left_rel right_rel left_match right_match
+    left_rows left_rows' right_rows right_rows' source
+    Hleft Hright Hmatch Hsource) as [target [Htarget Hrel]].
+  exists target; split; [|exact Hrel].
+  now apply query_join_sources_member_iff.
+- intros target Htarget.
+  apply query_join_sources_member_iff in Htarget.
+  assert (Hleft_reverse :
+    list_support_rel (fun target source => left_rel source target)
+      left_rows' left_rows).
+  {
+    destruct Hleft as [Hforward Hbackward]; split; assumption.
+  }
+  assert (Hright_reverse :
+    list_support_rel (fun target source => right_rel source target)
+      right_rows' right_rows).
+  {
+    destruct Hright as [Hforward Hbackward]; split; assumption.
+  }
+  assert (Hmatch_reverse : forall left' left right' right,
+    (fun target source => left_rel source target) left' left ->
+    (fun target source => right_rel source target) right' right ->
+    right_match left' right' = left_match left right).
+  {
+    intros left' left right' right Hleft_rel Hright_rel.
+    symmetry; now apply Hmatch.
+  }
+  destruct (@query_join_source_supported_transport_forward
+    kind
+    (fun target source => left_rel source target)
+    (fun target source => right_rel source target)
+    right_match left_match
+    left_rows' left_rows right_rows' right_rows target
+    Hleft_reverse Hright_reverse Hmatch_reverse Htarget)
+    as [source [Hsource Hrel]].
+  exists source; split.
+  + now apply query_join_sources_member_iff.
+  + now apply query_join_kind_source_rel_converse.
+Qed.
+
+(** Caller-provided emitters may transport reached source pairs into any
+    output relation.  This is the projected-support boundary for all six join
+    kinds.  Both source-support premises deliberately occur before the
+    structural relation: emitters have obligations only for pairs actually
+    reached on the two sides, and branches a constructor cannot produce impose
+    no obligations.  The conclusion remains support-only: it does not assemble
+    multiplicities, ordered observations, or runtime-error outcomes. *)
+Theorem query_join_sources_projected_support_rel :
+  forall kind (left_rel right_rel output_rel : tuple T -> tuple T -> Prop)
+      (left_match right_match : tuple T -> tuple T -> bool)
+      (left_emit right_emit : query_join_source T -> tuple T)
+      left_rows left_rows' right_rows right_rows',
+    list_support_rel left_rel left_rows left_rows' ->
+    list_support_rel right_rel right_rows right_rows' ->
+    (forall left left' right right',
+      left_rel left left' ->
+      right_rel right right' ->
+      left_match left right = right_match left' right') ->
+    (forall first second,
+      query_join_source_supported kind
+        left_match left_rows right_rows first ->
+      query_join_source_supported kind
+        right_match left_rows' right_rows' second ->
+      query_join_kind_source_rel kind left_rel right_rel first second ->
+      output_rel (left_emit first) (right_emit second)) ->
+    list_support_rel output_rel
+      (map left_emit
+        (query_join_sources T kind left_rows right_rows
+          (map (fun left => map (left_match left) right_rows) left_rows)))
+      (map right_emit
+        (query_join_sources T kind left_rows' right_rows'
+          (map
+            (fun left => map (right_match left) right_rows') left_rows'))).
+Proof.
+intros kind left_rel right_rel output_rel left_match right_match
+  left_emit right_emit left_rows left_rows' right_rows right_rows'
+  Hleft Hright Hmatch Hemit.
+pose proof (@query_join_sources_support_rel
+  kind left_rel right_rel left_match right_match
+  left_rows left_rows' right_rows right_rows'
+  Hleft Hright Hmatch) as Hsources.
+destruct Hsources as [Hforward Hbackward]; split.
+- intros output Houtput.
+  apply in_map_iff in Houtput.
+  destruct Houtput as [first [Houtput Hfirst]]; subst output.
+  destruct (Hforward first Hfirst) as [second [Hsecond Hrel]].
+  exists (right_emit second); split.
+  + now apply in_map.
+  + apply Hemit.
+    * now apply query_join_sources_member_iff.
+    * now apply query_join_sources_member_iff.
+    * exact Hrel.
+- intros output Houtput.
+  apply in_map_iff in Houtput.
+  destruct Houtput as [second [Houtput Hsecond]]; subst output.
+  destruct (Hbackward second Hsecond) as [first [Hfirst Hrel]].
+  exists (left_emit first); split.
+  + now apply in_map.
+  + apply Hemit.
+    * now apply query_join_sources_member_iff.
+    * now apply query_join_sources_member_iff.
+    * exact Hrel.
+Qed.
+
 (** FULL JOIN source support transports across arbitrary bidirectional input
     relations.  This is intentionally relation-parametric: a raw input row
     may correspond to a projected or grouped row with a different label set.
@@ -2618,6 +3586,64 @@ induction lefts as [|left lefts IH]; intros matrix Heval.
   split; [cbn; now f_equal|constructor; assumption].
 Qed.
 
+(** With one left occurrence, RIGHT JOIN contributes exactly one source for
+    each right occurrence: a matching right row is represented by the matched
+    source, while a non-matching row is represented by the unmatched-right
+    source.  This is independent of the concrete predicate and keeps duplicate
+    right rows as distinct occurrences. *)
+Local Lemma nth_bool_at_app_boundary :
+  forall done flag flags,
+    nth (length done) (done ++ flag :: flags) false = flag.
+Proof.
+induction done as [|head done IH]; intros flag flags; cbn.
+- reflexivity.
+- apply IH.
+Qed.
+
+Local Lemma query_join_right_single_left_partition_length :
+  forall (left : tuple T) (done : list bool) rights flags,
+    length rights = length flags ->
+    length (query_join_matched_sources T left rights flags) +
+      length (query_join_unmatched_right_sources_from T
+        (length done) rights ((done ++ flags) :: nil)) =
+    length rights.
+Proof.
+intros left done rights; revert done.
+induction rights as [|right rights IH];
+  intros done [|flag flags] Hlength; cbn in Hlength |- *;
+  try discriminate; try reflexivity.
+apply Nat.succ_inj in Hlength.
+unfold query_join_column_has_match.
+cbn [query_join_matched_sources
+  query_join_unmatched_right_sources_from].
+rewrite nth_bool_at_app_boundary.
+cbn.
+specialize (IH (done ++ flag :: nil) flags Hlength).
+rewrite length_app in IH; cbn in IH.
+replace (length done + 1)%nat with (S (length done)) in IH by lia.
+rewrite <- app_assoc in IH; cbn in IH.
+destruct flag; cbn in *; lia.
+Qed.
+
+Lemma query_join_right_single_left_sources_length :
+  forall (left : tuple T) rights flags,
+    length flags = length rights ->
+    length
+      (query_join_sources T QueryJoinRight (left :: nil) rights
+        (flags :: nil)) =
+    length rights.
+Proof.
+intros left rights flags Hlength.
+unfold query_join_sources.
+cbn [query_join_left_sources length List.app].
+pose proof
+  (query_join_right_single_left_partition_length
+    left nil rights flags (eq_sym Hlength)) as Hpartition.
+cbn in Hpartition.
+rewrite 2 length_app; cbn.
+lia.
+Qed.
+
 (** Internal list facts for the partial-functional LEFT JOIN bridge below.
     They stay local so the agent-facing API exposes the semantic bag theorem,
     not the condition-matrix implementation. *)
@@ -3029,6 +4055,59 @@ all: apply (proj1 (N.compare_le_iff _ _));
   rewrite <- Nat2N.inj_compare;
   apply (proj2 (Nat.compare_le_iff _ _));
   exact Hproject_bound.
+Qed.
+
+(** A successful RIGHT JOIN with exactly one left input occurrence preserves
+    the right input cardinality exactly.  The predicate may accept or reject
+    each pair independently: every right occurrence is emitted once, either
+    as a match or as an unmatched-right row.  The statement is at the bag
+    evaluator boundary, so it applies to every concrete representative and
+    does not assume child determinism. *)
+Theorem eval_join_bag_right_single_left_success_cardinal :
+  forall env predicate matched_select left_select right_select
+         left_bag right_bag output_bag,
+    Febag.cardinal (Fecol.CBag (CTuple T)) left_bag = 1%N ->
+    @eval_join_bag_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null env
+      QueryJoinRight predicate matched_select left_select right_select
+      left_bag right_bag (SqlSuccess output_bag) ->
+    Febag.cardinal (Fecol.CBag (CTuple T)) output_bag =
+      Febag.cardinal (Fecol.CBag (CTuple T)) right_bag.
+Proof.
+intros env predicate matched_select left_select right_select
+  left_bag right_bag output_bag Hleft_single Heval.
+inversion Heval; subst.
+pose proof (query_same_rows_as_bag_cardinal H0) as Hleft_cardinal.
+pose proof (query_same_rows_as_bag_cardinal H1) as Hright_cardinal.
+pose proof (query_same_rows_as_bag_cardinal H11) as Houtput_cardinal.
+assert (Hleft_length : length left_rows = 1%nat).
+{
+  apply Nat2N.inj.
+  change (N.of_nat (length left_rows) = N.of_nat 1).
+  transitivity (Febag.cardinal (Fecol.CBag (CTuple T)) left_bag).
+  - symmetry; exact Hleft_cardinal.
+  - rewrite Hleft_single; reflexivity.
+}
+destruct left_rows as [|left [|left_extra left_rest]];
+  cbn in Hleft_length; try discriminate.
+pose proof (eval_join_conditions_success_dimensions H2)
+  as [Hmatrix_length Hmatrix_dimensions].
+cbn in Hmatrix_length.
+destruct matrix as [|flags [|extra_flags matrix_rest]];
+  cbn in Hmatrix_length; try discriminate.
+inversion Hmatrix_dimensions as [|? ? Hflags_length _]; subst.
+pose proof
+  (query_join_right_single_left_sources_length
+    left right_rows flags Hflags_length) as Hsources_length.
+pose proof
+  (project_join_sources_success_length
+    env matched_select left_select right_select
+    (query_join_sources T QueryJoinRight (left :: nil) right_rows
+      (flags :: nil)) H3) as Hprojected_length.
+transitivity (N.of_nat (length projected)); [exact Houtput_cardinal|].
+transitivity (N.of_nat (length right_rows)).
+- f_equal; exact (eq_trans Hprojected_length Hsources_length).
+- symmetry; exact Hright_cardinal.
 Qed.
 
 Lemma query_grouping_sets_actual_success_bags_congr :

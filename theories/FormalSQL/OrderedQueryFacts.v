@@ -96,6 +96,11 @@ Local Abbreviation success_bags :=
   (query_success_bags basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
 
+Local Abbreviation query_length_le :=
+  (@query_success_length_le T
+    symbol_runtime_error aggregate_runtime_error relname
+    basesort instance unknown value_is_null).
+
 (** A lightweight contract for row properties of every successful concrete
     observation of a query.  It deliberately says nothing about errors or
     query inhabitation: those remain separate outcome obligations. *)
@@ -119,6 +124,78 @@ Proof.
 intros env query Hsafe [[rows | error] Houtcome].
 - now exists rows.
 - exfalso; exact (Hsafe error Houtcome).
+Qed.
+
+(** A successful observation is already an inhabited raw outcome.  Keeping
+    this direction named avoids repeatedly unpacking and repacking the same
+    witness when an outcome-level bridge asks only for inhabitation. *)
+Lemma query_expr_has_outcome_of_success :
+  forall env query,
+    query_has_success env query ->
+    exists outcome, eval_query env query outcome.
+Proof.
+intros env query [rows Hrows].
+now exists (SqlSuccess rows).
+Qed.
+
+(** Base tables are total in the FormalSQL evaluator: their finite bag always
+    has a list representative and table lookup itself exposes no SQL runtime
+    error. *)
+Lemma query_expr_table_runtime_safe :
+  forall env outputs table,
+    query_safe env (QExpr_Table outputs table).
+Proof.
+intros env outputs table error Herror.
+exact (query_table_has_no_error Herror).
+Qed.
+
+Lemma query_expr_table_has_outcome :
+  forall env outputs table,
+    exists outcome, eval_query env (QExpr_Table outputs table) outcome.
+Proof.
+intros env outputs table.
+apply query_expr_has_outcome_of_success.
+apply query_table_has_success.
+Qed.
+
+(** Literal VALUES is another total leaf.  Its finite bag always has a
+    concrete list representative and the leaf has no local runtime error. *)
+Lemma query_expr_values_runtime_safe :
+  forall env outputs values,
+    query_safe env (QExpr_Values outputs values).
+Proof.
+intros env outputs values error Herror.
+inversion Herror.
+Qed.
+
+Lemma query_expr_values_has_success :
+  forall env outputs values,
+    query_has_success env (QExpr_Values outputs values).
+Proof.
+intros env outputs values.
+exists (Febag.elements (Fecol.CBag (CTuple T)) values).
+apply EQuery_Values.
+apply query_elements_same_rows_as_bag.
+Qed.
+
+Lemma query_expr_values_has_outcome :
+  forall env outputs values,
+    exists outcome, eval_query env (QExpr_Values outputs values) outcome.
+Proof.
+intros env outputs values.
+apply query_expr_has_outcome_of_success.
+apply query_expr_values_has_success.
+Qed.
+
+(** An explicit error leaf is inhabited but intentionally neither successful
+    nor runtime-safe.  Naming only the valid outcome fact prevents structural
+    automation from silently treating the error as a value. *)
+Lemma query_expr_error_has_outcome :
+  forall env outputs error,
+    exists outcome, eval_query env (QExpr_Error outputs error) outcome.
+Proof.
+intros env outputs error.
+exists (SqlError error); constructor.
 Qed.
 
 (** The safe exact equivalence and error-preserving exact equivalence
@@ -271,6 +348,299 @@ apply query_bag_closed_outcome_equiv_of_success_bags; try assumption.
 - now apply query_bag_reset_sound.
 Qed.
 
+(** Assemble actual query-level congruence from two exact possible-bag
+    characterizations.  These generic combinators isolate all witness
+    plumbing; operator-specific corollaries below leave only equality of the
+    abstract bag operation as the semantic rewrite obligation. *)
+Lemma query_unary_success_bags_congr_from_characterizations :
+  forall env left_parent right_parent left_child right_child
+      (left_operation right_operation : unary_bag_relation T),
+    rel_equiv
+      (success_bags env left_parent)
+      (lift_possible_bag_unary left_operation
+        (success_bags env left_child)) ->
+    rel_equiv
+      (success_bags env right_parent)
+      (lift_possible_bag_unary right_operation
+        (success_bags env right_child)) ->
+    rel_equiv
+      (success_bags env left_child)
+      (success_bags env right_child) ->
+    unary_bag_relation_equiv left_operation right_operation ->
+    rel_equiv
+      (success_bags env left_parent)
+      (success_bags env right_parent).
+Proof.
+intros env left_parent right_parent left_child right_child
+  left_operation right_operation Hleft Hright Hchildren Hoperation.
+eapply rel_equiv_trans; [exact Hleft |].
+eapply rel_equiv_trans.
+- now apply lift_possible_bag_unary_congr.
+- eapply rel_equiv_trans.
+  + now apply lift_possible_bag_unary_operation_congr.
+  + now apply rel_equiv_sym.
+Qed.
+
+Lemma query_binary_success_bags_congr_from_characterizations :
+  forall env left_parent right_parent
+      left_child left_child' right_child right_child'
+      (left_operation right_operation : binary_bag_relation T),
+    rel_equiv
+      (success_bags env left_parent)
+      (lift_possible_bag_binary left_operation
+        (success_bags env left_child) (success_bags env right_child)) ->
+    rel_equiv
+      (success_bags env right_parent)
+      (lift_possible_bag_binary right_operation
+        (success_bags env left_child') (success_bags env right_child')) ->
+    rel_equiv
+      (success_bags env left_child)
+      (success_bags env left_child') ->
+    rel_equiv
+      (success_bags env right_child)
+      (success_bags env right_child') ->
+    binary_bag_relation_equiv left_operation right_operation ->
+    rel_equiv
+      (success_bags env left_parent)
+      (success_bags env right_parent).
+Proof.
+intros env left_parent right_parent left_child left_child'
+  right_child right_child' left_operation right_operation
+  Hleft Hright Hleft_child Hright_child Hoperation.
+eapply rel_equiv_trans; [exact Hleft |].
+eapply rel_equiv_trans.
+- now apply lift_possible_bag_binary_congr.
+- eapply rel_equiv_trans.
+  + now apply lift_possible_bag_binary_operation_congr.
+  + now apply rel_equiv_sym.
+Qed.
+
+Theorem query_set_success_bags_congr_extensional :
+  forall env left_operation right_operation
+      left left' right right',
+    rel_equiv (success_bags env left) (success_bags env left') ->
+    rel_equiv (success_bags env right) (success_bags env right') ->
+    binary_bag_relation_equiv
+      (query_set_bag_relation left_operation left right)
+      (query_set_bag_relation right_operation left' right') ->
+    rel_equiv
+      (success_bags env (QExpr_Set left_operation left right))
+      (success_bags env (QExpr_Set right_operation left' right')).
+Proof.
+intros env left_operation right_operation left left' right right'
+  Hleft Hright Hoperation.
+eapply query_binary_success_bags_congr_from_characterizations.
+- apply query_set_success_bags.
+- apply query_set_success_bags.
+- exact Hleft.
+- exact Hright.
+- exact Hoperation.
+Qed.
+
+Theorem query_join_success_bags_congr_extensional :
+  forall env
+      left_kind left_predicate left_matched left_left_select left_right_select
+      right_kind right_predicate right_matched right_left_select
+      right_right_select left left' right right',
+    rel_equiv (success_bags env left) (success_bags env left') ->
+    rel_equiv (success_bags env right) (success_bags env right') ->
+    binary_bag_relation_equiv
+      (@query_join_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env left_kind left_predicate
+        left_matched left_left_select left_right_select)
+      (@query_join_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env right_kind right_predicate
+        right_matched right_left_select right_right_select) ->
+    rel_equiv
+      (success_bags env
+        (QExpr_Join left_kind left_predicate
+          left_matched left_left_select left_right_select left right))
+      (success_bags env
+        (QExpr_Join right_kind right_predicate
+          right_matched right_left_select right_right_select left' right')).
+Proof.
+intros env left_kind left_predicate left_matched left_left_select
+  left_right_select right_kind right_predicate right_matched
+  right_left_select right_right_select left left' right right'
+  Hleft Hright Hoperation.
+eapply query_binary_success_bags_congr_from_characterizations.
+- apply query_join_success_bags.
+- apply query_join_success_bags.
+- exact Hleft.
+- exact Hright.
+- exact Hoperation.
+Qed.
+
+Theorem query_group_success_bags_congr_extensional :
+  forall env left_select left_terms left_having
+      right_select right_terms right_having left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_group_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env left_select left_terms left_having)
+      (@query_group_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env right_select right_terms right_having) ->
+    rel_equiv
+      (success_bags env
+        (QExpr_Group left_select left_terms left_having left))
+      (success_bags env
+        (QExpr_Group right_select right_terms right_having right)).
+Proof.
+intros env left_select left_terms left_having
+  right_select right_terms right_having left right Hchildren Hoperation.
+eapply query_unary_success_bags_congr_from_characterizations.
+- apply query_group_success_bags.
+- apply query_group_success_bags.
+- exact Hchildren.
+- exact Hoperation.
+Qed.
+
+Theorem query_grouping_sets_success_bags_congr_extensional :
+  forall env left_sets right_sets left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_grouping_sets_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env left_sets)
+      (@query_grouping_sets_bag_relation T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env right_sets) ->
+    rel_equiv
+      (success_bags env (QExpr_GroupingSets left_sets left))
+      (success_bags env (QExpr_GroupingSets right_sets right)).
+Proof.
+intros env left_sets right_sets left right Hchildren Hoperation.
+eapply query_unary_success_bags_congr_from_characterizations.
+- apply query_grouping_sets_success_bags.
+- apply query_grouping_sets_success_bags.
+- exact Hchildren.
+- exact Hoperation.
+Qed.
+
+Theorem query_rank_success_bags_congr_extensional :
+  forall env left_partition left_order left_attribute left_value
+      right_partition right_order right_attribute right_value left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_rank_bag_relation T value_is_null
+        left_partition left_order left_attribute left_value)
+      (@query_rank_bag_relation T value_is_null
+        right_partition right_order right_attribute right_value) ->
+    rel_equiv
+      (success_bags env
+        (QExpr_Rank left_partition left_order left_attribute left_value left))
+      (success_bags env
+        (QExpr_Rank
+          right_partition right_order right_attribute right_value right)).
+Proof.
+intros env left_partition left_order left_attribute left_value
+  right_partition right_order right_attribute right_value left right
+  Hchildren Hoperation.
+eapply query_unary_success_bags_congr_from_characterizations.
+- apply query_rank_success_bags.
+- apply query_rank_success_bags.
+- exact Hchildren.
+- exact Hoperation.
+Qed.
+
+Theorem query_window_success_bags_congr_extensional :
+  forall env left_partition left_order left_items
+      right_partition right_order right_items left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    unary_bag_relation_equiv
+      (@query_window_bag_relation T symbol_runtime_error
+        aggregate_runtime_error value_is_null env
+        left_partition left_order left_items)
+      (@query_window_bag_relation T symbol_runtime_error
+        aggregate_runtime_error value_is_null env
+        right_partition right_order right_items) ->
+    rel_equiv
+      (success_bags env
+        (QExpr_Window left_partition left_order left_items left))
+      (success_bags env
+        (QExpr_Window right_partition right_order right_items right)).
+Proof.
+intros env left_partition left_order left_items
+  right_partition right_order right_items left right Hchildren Hoperation.
+eapply query_unary_success_bags_congr_from_characterizations.
+- apply query_window_success_bags.
+- apply query_window_success_bags.
+- exact Hchildren.
+- exact Hoperation.
+Qed.
+
+(** Agent-facing names for the compositional success-closure certificate.
+    These statements concern successful row observations only: SQL errors keep
+    their exact left-to-right evaluation behavior and must still be related by
+    a separate outcome proof. *)
+Corollary query_bag_reset_success_permutation_closed :
+  forall env query,
+    query_expr_order_behavior query = BagReset ->
+    ConcretePermutationClosed T
+      (fun rows => eval_query env query (SqlSuccess rows)).
+Proof.
+exact (@query_bag_reset_concrete_permutation_closed
+  T relname basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null).
+Qed.
+
+Corollary query_project_preserves_success_permutation_closed :
+  forall env select_list input,
+    ConcretePermutationClosed T
+      (fun rows => eval_query env input (SqlSuccess rows)) ->
+    ConcretePermutationClosed T
+      (fun rows =>
+        eval_query env (QExpr_Project select_list input) (SqlSuccess rows)).
+Proof.
+exact (@query_project_preserves_concrete_permutation_closed
+  T relname basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null).
+Qed.
+
+Corollary query_row_map_preserves_success_permutation_closed :
+  forall env output_attributes row_map input,
+    ConcretePermutationClosed T
+      (fun rows => eval_query env input (SqlSuccess rows)) ->
+    ConcretePermutationClosed T
+      (fun rows =>
+        eval_query env (QExpr_RowMap output_attributes row_map input)
+          (SqlSuccess rows)).
+Proof.
+exact (@query_row_map_preserves_concrete_permutation_closed
+  T relname basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null).
+Qed.
+
+Corollary query_filter_preserves_success_permutation_closed :
+  forall env formula input,
+    ConcretePermutationClosed T
+      (fun rows => eval_query env input (SqlSuccess rows)) ->
+    ConcretePermutationClosed T
+      (fun rows =>
+        eval_query env (QExpr_Filter formula input) (SqlSuccess rows)).
+Proof.
+exact (@query_filter_preserves_concrete_permutation_closed
+  T relname basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null).
+Qed.
+
+(** The recursive classifier discharges a complete reset-derived transparent
+    stack in one step, for example [Project (Filter (RowMap (Group ...)))]. *)
+Corollary query_structural_successes_bag_closed :
+  forall env query,
+    query_expr_permutation_closure_certified query = true ->
+    BagClosed T
+      (fun rows => eval_query env query (SqlSuccess rows)).
+Proof.
+exact (@query_expr_permutation_closure_certified_bag_closed
+  T relname basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null).
+Qed.
+
 (** Exact left-to-right error propagation for set operations.  A right-child
     error is observable only after the left child has produced a success. *)
 Lemma eval_query_expr_set_error_iff :
@@ -364,6 +734,48 @@ exists
       (rows_bag T left_rows) (rows_bag T right_rows))).
 eapply EQuery_CrossJoinSuccess; [exact Hleft | exact Hright |].
 apply query_elements_same_rows_as_bag.
+Qed.
+
+(** Construct one successful query-level JOIN observation from successful
+    child observations and exact, error-free row contracts.  This is the
+    query wrapper around [eval_join_bag_safe_of_acceptance_projection_exact]:
+    it chooses a legal representative of the resulting bag but makes no
+    determinism claim about either child or the join's possible outcomes. *)
+Lemma query_expr_join_has_success_of_acceptance_projection_exact :
+  forall env kind predicate matched_select left_select right_select
+      left right (accepted : tuple T -> tuple T -> bool)
+      (emit : query_join_source T -> tuple T),
+    query_has_success env left ->
+    query_has_success env right ->
+    (forall left_row right_row,
+      @join_condition_acceptance_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env predicate left_row right_row (accepted left_row right_row)) ->
+    (forall source,
+      @project_join_source_outcome T symbol_runtime_error
+        aggregate_runtime_error env
+        matched_select left_select right_select source =
+      SqlSuccess (emit source)) ->
+    query_has_success env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left right).
+Proof.
+intros env kind predicate matched_select left_select right_select
+  left right accepted emit [left_rows Hleft] [right_rows Hright]
+  Hconditions Hprojection.
+pose proof
+  (@eval_join_bag_safe_of_acceptance_projection_exact
+    T relname basesort instance unknown symbol_runtime_error
+    aggregate_runtime_error value_is_null env kind predicate
+    matched_select left_select right_select accepted emit
+    (query_rows_bag left_rows) (query_rows_bag right_rows)
+    Hconditions Hprojection) as [[output_bag Hjoin] _].
+exists (Febag.elements (Fecol.CBag (CTuple T)) output_bag).
+eapply EQuery_JoinSuccess.
+- exact Hleft.
+- exact Hright.
+- exact Hjoin.
+- apply query_elements_same_rows_as_bag.
 Qed.
 
 (** Inhabitation also composes when either child fails.  Error constructors
@@ -966,6 +1378,42 @@ intros env select_list input output; split; intro Heval.
   now apply EQuery_ProjectRows.
 Qed.
 
+(** Query-level projection preserves occurrence cardinality on the exact child
+    success selected by the parent derivation.  This is intentionally an
+    existential transport theorem: the evaluator is relational, so no global
+    child determinism is assumed. *)
+Lemma eval_query_expr_project_success_length :
+  forall env select_list input output,
+    eval_query env (QExpr_Project select_list input) (SqlSuccess output) ->
+    exists input_rows,
+      eval_query env input (SqlSuccess input_rows) /\
+      length output = length input_rows.
+Proof.
+intros env select_list input output Heval.
+apply eval_query_expr_project_success_iff in Heval.
+destruct Heval as [input_rows [Hinput Hproject]].
+exists input_rows; split; [exact Hinput|].
+now apply project_rows_success_length in Hproject.
+Qed.
+
+(** A well-sorted table leaf exposes the database bag cardinality directly.
+    The explicit sort premise rules out the total evaluator's malformed-scan
+    empty fallback.  Callers may combine this theorem with an independently
+    certified instance cardinality without unfolding table rows. *)
+Lemma eval_query_expr_table_success_cardinal :
+  forall env outputs table rows,
+    @query_outputs_sort T outputs =S= basesort table ->
+    eval_query env (QExpr_Table outputs table) (SqlSuccess rows) ->
+    Febag.cardinal (Fecol.CBag (CTuple T)) (instance table) =
+      N.of_nat (length rows).
+Proof.
+intros env outputs table rows Hsort Heval.
+apply eval_query_expr_table_success_iff in Heval.
+unfold query_table_bag in Heval.
+rewrite Hsort in Heval.
+now apply query_same_rows_as_bag_cardinal in Heval.
+Qed.
+
 Lemma eval_query_expr_project_error_iff :
   forall env select_list input error,
     eval_query env (QExpr_Project select_list input) (SqlError error) <->
@@ -1060,25 +1508,6 @@ apply eval_query_expr_filter_success_iff in Houtput.
 destruct Houtput as [input_rows [Hrows Hfilter]].
 eapply filter_rows_success_Forall;
   [exact Hfilter | exact (Hinput input_rows Hrows)].
-Qed.
-
-(** UNORDERED may choose any concrete representative of the child's bag.
-    Hence the property must respect semantic tuple equality; the underlying
-    [query_same_rows_as_bag] witnesses preserve every duplicate occurrence. *)
-Lemma query_expr_unordered_success_Forall :
-  forall env input (property : tuple T -> Prop),
-    tuple_property_semantic_invariant property ->
-    query_success_Forall env input property ->
-    query_success_Forall env (QExpr_Unordered input) property.
-Proof.
-intros env input property Hproper Hinput output Houtput.
-apply eval_query_expr_unordered_success_iff in Houtput.
-destruct Houtput as [input_rows [Hrows Hbag]].
-eapply query_same_rows_as_bag_Forall_transport.
-- exact Hproper.
-- apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl.
-- exact Hbag.
-- exact (Hinput input_rows Hrows).
 Qed.
 
 (** UNION ALL combines the complete multiplicities of both successful child
@@ -1287,6 +1716,115 @@ intros env formula input keep Hproper Hexact output; split.
     eapply bag_eq_trans; [exact Hfiltered | exact Houtput_bag].
 Qed.
 
+(** Extensional possible-success-bag congruence for FILTER.  Both formulae
+    are related to the same semantic keep decision; this is the exact
+    abstraction needed to change either the child query or the concrete
+    formula without reopening evaluator witnesses.  The acceptance contracts
+    retain SQL's TRUE/non-TRUE boundary and rule out formula-local errors,
+    while [Hproper] makes the Boolean decision well defined on semantic row
+    equality. *)
+Theorem query_filter_success_bags_congr_extensional_exact :
+  forall env left_formula right_formula left right
+      (keep : tuple T -> bool),
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      keep first = keep second) ->
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) left_formula (keep row)) ->
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) right_formula (keep row)) ->
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env (QExpr_Filter left_formula left))
+      (success_bags env (QExpr_Filter right_formula right)).
+Proof.
+intros env left_formula right_formula left right keep
+  Hproper Hleft_exact Hright_exact Hinputs output.
+pose proof
+  (@query_filter_success_bags_exact
+    env left_formula left keep Hproper Hleft_exact output) as Hleft.
+pose proof
+  (@query_filter_success_bags_exact
+    env right_formula right keep Hproper Hright_exact output) as Hright.
+split; intro Houtput.
+- apply (proj1 Hleft) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hfiltered]].
+  apply (proj2 Hright); exists input_bag; split.
+  + now apply (proj1 (Hinputs input_bag)).
+  + exact Hfiltered.
+- apply (proj1 Hright) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hfiltered]].
+  apply (proj2 Hleft); exists input_bag; split.
+  + now apply (proj2 (Hinputs input_bag)).
+  + exact Hfiltered.
+Qed.
+
+(** Same-formula specialization used by structural automation.  The semantic
+    [keep] contract remains explicit because formula evaluation may contain
+    subqueries or runtime errors and therefore cannot be guessed from syntax. *)
+Corollary query_filter_success_bags_congr_exact :
+  forall env formula left right (keep : tuple T -> bool),
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      keep first = keep second) ->
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) formula (keep row)) ->
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env (QExpr_Filter formula left))
+      (success_bags env (QExpr_Filter formula right)).
+Proof.
+intros env formula left right keep Hproper Hexact Hinputs.
+eapply query_filter_success_bags_congr_extensional_exact;
+  eassumption.
+Qed.
+
+(** A stable agent-facing contract for FILTER congruence.  The semantic keep
+    function is existentially packaged in the proposition, rather than left
+    as an unconstrained evar by automation.  Both formulae must implement the
+    same TRUE/non-TRUE decision and that decision must respect semantic row
+    equality. *)
+Definition filter_success_bag_contract
+    (env : Env.env T)
+    (left_formula right_formula : @formula_expr T relname) : Prop :=
+  exists keep : tuple T -> bool,
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      keep first = keep second) /\
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) left_formula (keep row)) /\
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) right_formula (keep row)).
+
+Theorem query_filter_success_bags_congr_of_contract :
+  forall env left_formula right_formula left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    filter_success_bag_contract env left_formula right_formula ->
+    rel_equiv
+      (success_bags env (QExpr_Filter left_formula left))
+      (success_bags env (QExpr_Filter right_formula right)).
+Proof.
+intros env left_formula right_formula left right Hinputs
+  [keep [Hproper [Hleft_exact Hright_exact]]].
+eapply query_filter_success_bags_congr_extensional_exact;
+  eassumption.
+Qed.
+
 (** If every row of every successful child observation has an exact
     acceptance contract, filtering introduces no SQL runtime-error category.
     Child errors are still propagated unchanged. *)
@@ -1343,6 +1881,52 @@ apply
       value_is_null env formula rows keep (fun row _ => Hexact row)
       (SqlSuccess (List.filter keep rows)))).
 reflexivity.
+Qed.
+
+(** A total exact TRUE/non-TRUE acceptance contract makes FILTER runtime
+    safety purely compositional.  The more general error theorem retains a
+    successful-input premise because it is also useful when exactness is only
+    known on reachable rows; this wrapper covers the common total contract. *)
+Lemma query_expr_filter_runtime_safe_exact :
+  forall env formula input (keep : tuple T -> bool),
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) formula (keep row)) ->
+    query_safe env input ->
+    query_safe env (QExpr_Filter formula input).
+Proof.
+intros env formula input keep Hexact Hinput error Herror.
+apply (proj1
+  (query_filter_error_iff_exact
+    (env := env) (formula := formula) (input := input)
+    keep (fun _ row _ _ => Hexact row) error)) in Herror.
+exact (Hinput error Herror).
+Qed.
+
+(** Total exact acceptance also packages raw outcome inhabitation.  A child
+    error is forwarded, while a child success evaluates every reached formula
+    to a successful TRUE/non-TRUE decision. *)
+Lemma query_expr_filter_has_outcome_exact :
+  forall env formula input (keep : tuple T -> bool),
+    (forall row,
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (env_t T env row) formula (keep row)) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome, eval_query env (QExpr_Filter formula input) outcome.
+Proof.
+intros env formula input keep Hexact Hinput.
+eapply query_expr_filter_has_outcome_of_formula_total; [|exact Hinput].
+intros input_rows Hrows row Hrow.
+pose proof
+  (@formula_acceptance_exact_total_success T relname basesort instance
+    unknown symbol_runtime_error aggregate_runtime_error value_is_null
+    (env_t T env row) formula (keep row) (Hexact row)) as Htotal.
+destruct Htotal as [[truth Htruth] _].
+now exists (SqlSuccess truth).
 Qed.
 
 (** Exact proper filtering preserves functionality of possible successful
@@ -1515,6 +2099,47 @@ intros env input error; split; intro Heval.
 - now apply EQuery_DistinctChildError.
 Qed.
 
+(** DISTINCT has no operator-local runtime error.  These small packages keep
+    agents from re-proving its success witness and error transport whenever a
+    larger operator needs safety or inhabitation. *)
+Lemma query_expr_distinct_runtime_safe :
+  forall env input,
+    query_safe env input ->
+    query_safe env (QExpr_Distinct input).
+Proof.
+intros env input Hinput error Herror.
+apply (proj1
+  (eval_query_expr_distinct_error_iff env input error)) in Herror.
+exact (Hinput error Herror).
+Qed.
+
+Lemma query_expr_distinct_has_success :
+  forall env input,
+    query_has_success env input ->
+    query_has_success env (QExpr_Distinct input).
+Proof.
+intros env input [rows Hrows].
+exists
+  (Febag.elements (Fecol.CBag (CTuple T))
+    (query_distinct_bag (rows_bag T rows))).
+apply eval_query_expr_distinct_success_iff.
+exists rows; split; [exact Hrows |].
+apply query_elements_same_rows_as_bag.
+Qed.
+
+Lemma query_expr_distinct_has_outcome :
+  forall env input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome, eval_query env (QExpr_Distinct input) outcome.
+Proof.
+intros env input [[rows | error] Hinput].
+- apply query_expr_has_outcome_of_success.
+  apply query_expr_distinct_has_success.
+  now exists rows.
+- exists (SqlError error).
+  now apply EQuery_DistinctChildError.
+Qed.
+
 (** DISTINCT is raw-outcome inert at a reset boundary when duplicate
     elimination leaves every possible child bag unchanged.  The reset
     transport is used directly; ordinary [BagClosed] deliberately promises
@@ -1604,6 +2229,117 @@ intros env partition_keys order_keys items input error; split; intro Heval.
   + eapply EQuery_WindowRowsError with
       (input_rows := input_rows) (ordered_rows := ordered_input);
       eassumption.
+Qed.
+
+(** ORDER BY and the two list slices have no operator-local runtime error.
+    They therefore preserve safety, successful inhabitation, and raw outcome
+    inhabitation.  These packages expose that common compositional contract
+    without asking callers to destruct and rebuild evaluator witnesses. *)
+Lemma query_expr_order_by_runtime_safe :
+  forall env keys input,
+    query_safe env input ->
+    query_safe env (QExpr_OrderBy keys input).
+Proof.
+intros env keys input Hinput error Herror.
+apply (proj1
+  (@eval_query_expr_order_by_error_iff T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null env keys input error)) in Herror.
+exact (Hinput error Herror).
+Qed.
+
+Lemma query_expr_order_by_has_success :
+  forall env keys input,
+    query_has_success env input ->
+    query_has_success env (QExpr_OrderBy keys input).
+Proof.
+intros env keys input [rows Hrows].
+now apply eval_query_expr_order_by_has_success with rows.
+Qed.
+
+Lemma query_expr_order_by_has_outcome :
+  forall env keys input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome, eval_query env (QExpr_OrderBy keys input) outcome.
+Proof.
+intros env keys input [[rows | error] Hinput].
+- apply query_expr_has_outcome_of_success.
+  apply query_expr_order_by_has_success.
+  now exists rows.
+- exists (SqlError error).
+  now apply EQuery_OrderByChildError.
+Qed.
+
+Lemma query_expr_offset_runtime_safe :
+  forall env count input,
+    query_safe env input ->
+    query_safe env (QExpr_Offset count input).
+Proof.
+intros env count input Hinput error Herror.
+apply (proj1
+  (@eval_query_expr_offset_error_iff T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null env count input error)) in Herror.
+exact (Hinput error Herror).
+Qed.
+
+Lemma query_expr_offset_has_success :
+  forall env count input,
+    query_has_success env input ->
+    query_has_success env (QExpr_Offset count input).
+Proof.
+intros env count input [rows Hrows].
+exists (skipn count rows).
+now apply EQuery_OffsetSuccess.
+Qed.
+
+Lemma query_expr_offset_has_outcome :
+  forall env count input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome, eval_query env (QExpr_Offset count input) outcome.
+Proof.
+intros env count input [[rows | error] Hinput].
+- apply query_expr_has_outcome_of_success.
+  apply query_expr_offset_has_success.
+  now exists rows.
+- exists (SqlError error).
+  now apply EQuery_OffsetChildError.
+Qed.
+
+Lemma query_expr_fetch_runtime_safe :
+  forall env count input,
+    query_safe env input ->
+    query_safe env (QExpr_Fetch count input).
+Proof.
+intros env count input Hinput error Herror.
+apply (proj1
+  (@eval_query_expr_fetch_error_iff T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null env count input error)) in Herror.
+exact (Hinput error Herror).
+Qed.
+
+Lemma query_expr_fetch_has_success :
+  forall env count input,
+    query_has_success env input ->
+    query_has_success env (QExpr_Fetch count input).
+Proof.
+intros env count input [rows Hrows].
+exists (firstn count rows).
+now apply EQuery_FetchSuccess.
+Qed.
+
+Lemma query_expr_fetch_has_outcome :
+  forall env count input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome, eval_query env (QExpr_Fetch count input) outcome.
+Proof.
+intros env count input [[rows | error] Hinput].
+- apply query_expr_has_outcome_of_success.
+  apply query_expr_fetch_has_success.
+  now exists rows.
+- exists (SqlError error).
+  now apply EQuery_FetchChildError.
 Qed.
 
 (** OFFSET and FETCH are exact deterministic list slices.  These laws retain
@@ -1841,6 +2577,220 @@ exists input_rows; split; [exact Hinput |].
 subst output; apply length_firstn.
 Qed.
 
+(** Pure Cartesian and natural joins expose the same uniform cardinality
+    contract as native JOIN.  The intrinsic bag arithmetic remains in
+    [RelationalAlgebraFacts]; these are only query-level lifts over every
+    successful child observation. *)
+Theorem query_success_length_le_cross_join :
+  forall env left right left_bound right_bound,
+    query_length_le env left left_bound ->
+    query_length_le env right right_bound ->
+    query_length_le env (QExpr_CrossJoin left right)
+      (left_bound * right_bound).
+Proof.
+intros env left right left_bound right_bound Hleft Hright output Houtput.
+apply eval_query_expr_cross_join_success_iff in Houtput.
+destruct Houtput as
+  [left_rows [right_rows [Hleft_rows [Hright_rows Hsame]]]].
+assert (Hlength : length output = length left_rows * length right_rows).
+{
+  apply Nat2N.inj.
+  change
+    (N.of_nat (length output) =
+     N.of_nat (length left_rows * length right_rows)).
+  rewrite Nat2N.inj_mul.
+  eapply eq_trans.
+  - exact (eq_sym (query_same_rows_as_bag_cardinal Hsame)).
+  - rewrite query_cross_join_bag_cardinal, 2 rows_bag_cardinal.
+    reflexivity.
+}
+rewrite Hlength.
+apply Nat.mul_le_mono; [now apply Hleft | now apply Hright].
+Qed.
+
+Theorem query_success_length_le_natural_join :
+  forall env left right left_bound right_bound,
+    query_length_le env left left_bound ->
+    query_length_le env right right_bound ->
+    query_length_le env (QExpr_NaturalJoin left right)
+      (left_bound * right_bound).
+Proof.
+intros env left right left_bound right_bound Hleft Hright output Houtput.
+apply eval_query_expr_natural_join_success_iff in Houtput.
+destruct Houtput as
+  [left_rows [right_rows [Hleft_rows [Hright_rows Hsame]]]].
+assert (Hactual : length output <= length left_rows * length right_rows).
+{
+  apply (proj1 (Nat.compare_le_iff _ _)).
+  rewrite Nat2N.inj_compare.
+  apply (proj2 (N.compare_le_iff _ _)).
+  change
+    (N.of_nat (length output) <=
+     N.of_nat (length left_rows * length right_rows))%N.
+  rewrite Nat2N.inj_mul.
+  eapply N.le_trans.
+  - apply N.eq_le_incl.
+    exact (eq_sym (query_same_rows_as_bag_cardinal Hsame)).
+  - eapply N.le_trans; [apply query_natural_join_bag_cardinal_le |].
+    rewrite 2 rows_bag_cardinal.
+    apply N.le_refl.
+}
+eapply Nat.le_trans; [exact Hactual |].
+apply Nat.mul_le_mono; [now apply Hleft | now apply Hright].
+Qed.
+
+(** A join-kind-indexed upper bound for successful SQL row occurrences.  The
+    outer-join branches account for unmatched rows; semi and anti joins emit
+    at most one row per left occurrence. *)
+Definition query_join_length_upper_bound
+    (kind : query_join_kind) (left right : nat) : nat :=
+  match kind with
+  | QueryJoinInner => left * right
+  | QueryJoinLeft => left * Nat.max 1 right
+  | QueryJoinRight => left * right + right
+  | QueryJoinFull => left * Nat.max 1 right + right
+  | QueryJoinSemi | QueryJoinAnti => left
+  end.
+
+(** Lift the bag evaluator's join bound through the exact child successes
+    chosen by a query-level derivation.  The hypotheses range over every
+    possible child success because FormalSQL evaluation is relational. *)
+Theorem eval_query_expr_join_success_length_le :
+  forall env kind predicate matched_select left_select right_select
+      left right output left_bound right_bound,
+    eval_query env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left right) (SqlSuccess output) ->
+    (forall rows,
+      eval_query env left (SqlSuccess rows) ->
+      length rows <= left_bound) ->
+    (forall rows,
+      eval_query env right (SqlSuccess rows) ->
+      length rows <= right_bound) ->
+    length output <=
+      query_join_length_upper_bound kind left_bound right_bound.
+Proof.
+intros env kind predicate matched_select left_select right_select
+  left right output left_bound right_bound Heval Hleft Hright.
+inversion Heval; subst.
+pose proof (eval_join_bag_success_cardinal_le H9) as Hcardinal.
+pose proof (query_same_rows_as_bag_cardinal H10) as Houtput_cardinal.
+rewrite 2 rows_bag_cardinal in Hcardinal.
+rewrite Houtput_cardinal in Hcardinal.
+pose proof (Hleft left_rows H3) as Hleft_bound.
+pose proof (Hright right_rows H8) as Hright_bound.
+assert (Hactual :
+  length output <=
+    query_join_length_upper_bound kind
+      (length left_rows) (length right_rows)).
+{
+  destruct kind; cbn in Hcardinal |- *.
+  all: try replace (1%N) with (N.of_nat 1) in Hcardinal by reflexivity.
+  all: try rewrite <- Nat2N.inj_max in Hcardinal.
+  all: try rewrite <- Nat2N.inj_mul in Hcardinal.
+  all: try rewrite <- Nat2N.inj_add in Hcardinal.
+  all: apply (proj1 (Nat.compare_le_iff _ _));
+    rewrite Nat2N.inj_compare;
+    apply (proj2 (N.compare_le_iff _ _));
+    exact Hcardinal.
+}
+eapply Nat.le_trans; [exact Hactual|].
+destruct kind; unfold query_join_length_upper_bound.
+- now apply Nat.mul_le_mono.
+- apply Nat.mul_le_mono; [exact Hleft_bound|].
+  now apply Nat.max_le_compat.
+- apply Nat.add_le_mono; [now apply Nat.mul_le_mono|exact Hright_bound].
+- apply Nat.add_le_mono; [|exact Hright_bound].
+  apply Nat.mul_le_mono; [exact Hleft_bound|].
+  now apply Nat.max_le_compat.
+- exact Hleft_bound.
+- exact Hleft_bound.
+Qed.
+
+(** Compositional form of the preceding evaluator theorem, sharing the same
+    [query_success_length_le] contract used by table, projection, OFFSET, and
+    FETCH.  It preserves the relational interpretation: the two child bounds
+    range over every successful child observation selected by a JOIN
+    derivation. *)
+Corollary query_success_length_le_join :
+  forall env kind predicate matched_select left_select right_select
+      left right left_bound right_bound,
+    query_length_le env left left_bound ->
+    query_length_le env right right_bound ->
+    query_length_le env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left right)
+      (query_join_length_upper_bound kind left_bound right_bound).
+Proof.
+intros env kind predicate matched_select left_select right_select
+  left right left_bound right_bound Hleft Hright output Houtput.
+eapply eval_query_expr_join_success_length_le;
+  [exact Houtput | exact Hleft | exact Hright].
+Qed.
+
+(** The exact RIGHT JOIN specialization hidden by the coarse general bound:
+    when the selected left child success has one occurrence, every right
+    occurrence contributes exactly one output occurrence.  The existential
+    exposes the right child success selected by this parent derivation. *)
+Theorem eval_query_expr_right_join_single_left_success_length :
+  forall env predicate matched_select left_select right_select
+      left right output,
+    eval_query env
+      (QExpr_Join QueryJoinRight predicate
+        matched_select left_select right_select left right)
+      (SqlSuccess output) ->
+    (forall rows,
+      eval_query env left (SqlSuccess rows) ->
+      length rows = 1%nat) ->
+    exists right_rows,
+      eval_query env right (SqlSuccess right_rows) /\
+      length output = length right_rows.
+Proof.
+intros env predicate matched_select left_select right_select
+  left right output Heval Hleft.
+inversion Heval; subst.
+exists right_rows; split; [exact H8|].
+assert (Hleft_cardinal :
+  Febag.cardinal (Fecol.CBag (CTuple T))
+    (query_rows_bag left_rows) = 1%N).
+{
+  rewrite rows_bag_cardinal.
+  change (N.of_nat (length left_rows) = N.of_nat 1).
+  f_equal; exact (Hleft left_rows H3).
+}
+pose proof
+  (eval_join_bag_right_single_left_success_cardinal
+    Hleft_cardinal H9) as Hjoin_cardinal.
+pose proof (query_same_rows_as_bag_cardinal H10) as Houtput_cardinal.
+apply Nat2N.inj.
+transitivity
+  (Febag.cardinal (Fecol.CBag (CTuple T)) output_bag).
+- symmetry; exact Houtput_cardinal.
+- rewrite Hjoin_cardinal, rows_bag_cardinal; reflexivity.
+Qed.
+
+(** Bound-oriented corollary for composition with OFFSET/FETCH.  A successful
+    singleton-left RIGHT JOIN has exactly the selected right-child length, so
+    any universal right-child bound transfers unchanged. *)
+Corollary query_success_length_le_right_join_single_left :
+  forall env predicate matched_select left_select right_select
+      left right bound,
+    (forall rows,
+      eval_query env left (SqlSuccess rows) ->
+      length rows = 1%nat) ->
+    query_length_le env right bound ->
+    query_length_le env
+      (QExpr_Join QueryJoinRight predicate
+        matched_select left_select right_select left right) bound.
+Proof.
+intros env predicate matched_select left_select right_select
+  left right bound Hleft Hright output Houtput.
+destruct
+  (eval_query_expr_right_join_single_left_success_length Houtput Hleft)
+  as [right_rows [Hright_rows Hlength]].
+rewrite Hlength; now apply Hright.
+Qed.
+
 (** ORDER BY retains the complete input bag while constraining only the legal
     ordered representatives. *)
 
@@ -1897,6 +2847,177 @@ intros env keys input output Heval.
 apply eval_query_expr_order_by_success_iff in Heval.
 destruct Heval as [input_rows [_ [_ Hordered]]].
 exact Hordered.
+Qed.
+
+(** ORDER BY changes exact list observations but not their successful bag
+    abstraction.  This theorem may be used only after a proof has explicitly
+    entered [query_success_bags]; it does not classify ORDER BY as BagClosed
+    and cannot justify an OFFSET/FETCH rewrite. *)
+Theorem query_order_by_success_bags :
+  forall env keys input,
+    rel_equiv
+      (success_bags env (QExpr_OrderBy keys input))
+      (success_bags env input).
+Proof.
+intros env keys input output; split; intro Houtput.
+- unfold success_bags, query_success_bags, alpha in Houtput |- *.
+  destruct Houtput as [output_rows [Heval Houtput_bag]].
+  apply eval_query_expr_order_by_success_iff in Heval.
+  destruct Heval as [input_rows [Hinput [Hsame _]]].
+  apply query_same_rows_as_bag_iff_bag_eq in Hsame.
+  exists input_rows; split; [exact Hinput |].
+  eapply bag_eq_trans; [exact (bag_eq_sym Hsame) | exact Houtput_bag].
+- unfold success_bags, query_success_bags, alpha in Houtput |- *.
+  destruct Houtput as [input_rows [Hinput Hinput_bag]].
+  destruct (@order_by_rows_has_observation T value_is_null keys input_rows)
+    as [output_rows [Hsame Hordered]].
+  exists output_rows; split.
+  + apply eval_query_expr_order_by_success_iff.
+    exists input_rows; repeat split; assumption.
+  + apply query_same_rows_as_bag_iff_bag_eq in Hsame.
+    eapply bag_eq_trans; [exact Hsame | exact Hinput_bag].
+Qed.
+
+(** ORDER BY preserves possible-success-bag functionality because its bag
+    abstraction is exactly the child's.  This is deliberately a bag-level
+    theorem: it says nothing about uniqueness of the ordered row list. *)
+Theorem query_order_by_success_bags_functional :
+  forall env keys input,
+    (forall first second,
+      success_bags env input first ->
+      success_bags env input second ->
+      bag_eq T first second) ->
+    forall first second,
+      success_bags env (QExpr_OrderBy keys input) first ->
+      success_bags env (QExpr_OrderBy keys input) second ->
+      bag_eq T first second.
+Proof.
+intros env keys input Hinput first second Hfirst Hsecond.
+apply (proj1 (query_order_by_success_bags env keys input first)) in Hfirst.
+apply (proj1 (query_order_by_success_bags env keys input second)) in Hsecond.
+now eapply Hinput.
+Qed.
+
+(** At the bag layer even the concrete ordering keys may differ: both sides
+    erase to their child possible bags.  Exact ordered equivalence still needs
+    the ordinary ORDER BY congruence and is not a consequence of this lemma. *)
+Theorem query_order_by_success_bags_congr :
+  forall env left_keys right_keys left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env (QExpr_OrderBy left_keys left))
+      (success_bags env (QExpr_OrderBy right_keys right)).
+Proof.
+intros env left_keys right_keys left right Hinputs.
+eapply rel_equiv_trans.
+- apply query_order_by_success_bags.
+- eapply rel_equiv_trans; [exact Hinputs |].
+  now apply rel_equiv_sym, query_order_by_success_bags.
+Qed.
+
+(** A positional list transformer may be lifted through possible bags only
+    when both child success relations are already BagClosed.  The closure
+    witnesses recover a matching input order before the transformer consumes
+    positions.  This is the condition missing from the unsound rule that
+    would lift arbitrary child bag equality through OFFSET or FETCH. *)
+Theorem query_list_transform_success_bags_congr_closed :
+  forall env left_parent right_parent left right
+      (transform : list (tuple T) -> list (tuple T)),
+    (forall output,
+      eval_query env left_parent (SqlSuccess output) <->
+      exists input_rows,
+        eval_query env left (SqlSuccess input_rows) /\
+        output = transform input_rows) ->
+    (forall output,
+      eval_query env right_parent (SqlSuccess output) <->
+      exists input_rows,
+        eval_query env right (SqlSuccess input_rows) /\
+        output = transform input_rows) ->
+    (forall first second,
+      ordered_rows_equiv T first second ->
+      ordered_rows_equiv T (transform first) (transform second)) ->
+    BagClosed T (fun rows => eval_query env left (SqlSuccess rows)) ->
+    BagClosed T (fun rows => eval_query env right (SqlSuccess rows)) ->
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env left_parent)
+      (success_bags env right_parent).
+Proof.
+intros env left_parent right_parent left right transform
+  Hleft_eval Hright_eval Htransform Hleft_closed Hright_closed Hchildren
+  output_bag.
+unfold success_bags, query_success_bags, alpha.
+split; intros [output_rows [Houtput Houtput_bag]].
+- apply Hleft_eval in Houtput.
+  destruct Houtput as [left_rows [Hleft ->]].
+  assert (Hleft_bag :
+    alpha T (fun rows => eval_query env left (SqlSuccess rows))
+      (rows_bag T left_rows)).
+  { exists left_rows; split; [exact Hleft | apply bag_eq_refl]. }
+  pose proof (proj1 (Hchildren (rows_bag T left_rows)) Hleft_bag)
+    as Hright_bag.
+  destruct (Hright_closed left_rows Hright_bag)
+    as [right_rows [Hright Hrows]].
+  exists (transform right_rows); split.
+  + apply Hright_eval; exists right_rows; now split.
+  + pose proof
+      (ordered_rows_equiv_implies_bag_eq (Htransform _ _ Hrows)) as Hbags.
+    eapply bag_eq_trans; [exact (bag_eq_sym Hbags) | exact Houtput_bag].
+- apply Hright_eval in Houtput.
+  destruct Houtput as [right_rows [Hright ->]].
+  assert (Hright_bag :
+    alpha T (fun rows => eval_query env right (SqlSuccess rows))
+      (rows_bag T right_rows)).
+  { exists right_rows; split; [exact Hright | apply bag_eq_refl]. }
+  pose proof (proj2 (Hchildren (rows_bag T right_rows)) Hright_bag)
+    as Hleft_bag.
+  destruct (Hleft_closed right_rows Hleft_bag)
+    as [left_rows [Hleft Hrows]].
+  exists (transform left_rows); split.
+  + apply Hleft_eval; exists left_rows; now split.
+  + pose proof
+      (ordered_rows_equiv_implies_bag_eq (Htransform _ _ Hrows)) as Hbags.
+    eapply bag_eq_trans; [exact (bag_eq_sym Hbags) | exact Houtput_bag].
+Qed.
+
+Corollary query_offset_success_bags_congr_closed :
+  forall env count left right,
+    BagClosed T (fun rows => eval_query env left (SqlSuccess rows)) ->
+    BagClosed T (fun rows => eval_query env right (SqlSuccess rows)) ->
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env (QExpr_Offset count left))
+      (success_bags env (QExpr_Offset count right)).
+Proof.
+intros env count left right Hleft_closed Hright_closed Hchildren.
+eapply query_list_transform_success_bags_congr_closed
+  with (left_parent := QExpr_Offset count left)
+       (right_parent := QExpr_Offset count right)
+       (left := left) (right := right)
+       (transform := skipn count); try eassumption.
+- apply eval_query_expr_offset_success_iff.
+- apply eval_query_expr_offset_success_iff.
+- intros; now apply ordered_rows_equiv_skipn.
+Qed.
+
+Corollary query_fetch_success_bags_congr_closed :
+  forall env count left right,
+    BagClosed T (fun rows => eval_query env left (SqlSuccess rows)) ->
+    BagClosed T (fun rows => eval_query env right (SqlSuccess rows)) ->
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    rel_equiv
+      (success_bags env (QExpr_Fetch count left))
+      (success_bags env (QExpr_Fetch count right)).
+Proof.
+intros env count left right Hleft_closed Hright_closed Hchildren.
+eapply query_list_transform_success_bags_congr_closed
+  with (left_parent := QExpr_Fetch count left)
+       (right_parent := QExpr_Fetch count right)
+       (left := left) (right := right)
+       (transform := firstn count); try eassumption.
+- apply eval_query_expr_fetch_success_iff.
+- apply eval_query_expr_fetch_success_iff.
+- intros; now apply ordered_rows_equiv_firstn.
 Qed.
 
 (** A bag representative with at most one row has only one semantic ordering.
@@ -3202,6 +4323,249 @@ exists input_rows; split.
 - now apply ordered_rows_equiv_of_Forall2.
 Qed.
 
+(** A deterministic row adapter is total as a semantic map when every input
+    row returns the chosen mapped row.  Keeping the map explicit gives
+    generated adapters a compact contract and avoids inspecting callback
+    implementations in automation. *)
+Definition row_map_total_as
+    (row_map : tuple T -> sql_outcome (tuple T))
+    (mapping : tuple T -> tuple T) : Prop :=
+  forall row, row_map row = SqlSuccess (mapping row).
+
+Definition row_mapping_semantic_proper
+    (mapping : tuple T -> tuple T) : Prop :=
+  forall first second,
+    Oeset.compare (OTuple T) first second = Eq ->
+    Oeset.compare (OTuple T) (mapping first) (mapping second) = Eq.
+
+Lemma row_map_rows_outcome_total_as :
+  forall row_map mapping rows,
+    row_map_total_as row_map mapping ->
+    @row_map_rows_outcome T row_map rows =
+      SqlSuccess (map mapping rows).
+Proof.
+intros row_map mapping rows Htotal.
+induction rows as [|row rows IH]; [reflexivity |].
+cbn; now rewrite Htotal, IH.
+Qed.
+
+Definition query_row_map_bag
+    (mapping : tuple T -> tuple T)
+    (input : Febag.bag (Fecol.CBag (CTuple T))) :=
+  Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
+    mapping input.
+
+Lemma query_row_map_bag_congr :
+  forall mapping left right,
+    row_mapping_semantic_proper mapping ->
+    bag_eq T left right ->
+    bag_eq T
+      (query_row_map_bag mapping left)
+      (query_row_map_bag mapping right).
+Proof.
+intros mapping left right Hproper Hbags.
+unfold query_row_map_bag.
+now apply (RelationalAlgebraFacts.query_bag_map_congr (T := T)).
+Qed.
+
+Theorem query_row_map_success_bags_total :
+  forall env outputs row_map mapping input,
+    row_map_total_as row_map mapping ->
+    row_mapping_semantic_proper mapping ->
+    rel_equiv
+      (success_bags env (QExpr_RowMap outputs row_map input))
+      (fun output =>
+        exists input_bag,
+          success_bags env input input_bag /\
+          bag_eq T (query_row_map_bag mapping input_bag) output).
+Proof.
+intros env outputs row_map mapping input Htotal Hproper output.
+split; intro Houtput.
+- unfold success_bags, query_success_bags, alpha in Houtput.
+  destruct Houtput as [output_rows [Heval Houtput_bag]].
+  apply eval_query_expr_row_map_success_iff in Heval.
+  destruct Heval as [input_rows [Hinput Hmapped]].
+  rewrite (row_map_rows_outcome_total_as input_rows Htotal) in Hmapped.
+  inversion Hmapped; subst output_rows.
+  exists (rows_bag T input_rows); split.
+  + unfold success_bags, query_success_bags, alpha.
+    exists input_rows; split; [exact Hinput | apply bag_eq_refl].
+  + pose proof
+      (@RelationalAlgebraFacts.query_same_rows_as_bag_map
+        T mapping input_rows (rows_bag T input_rows)
+        Hproper) as Hmap.
+    specialize (Hmap ltac:(
+      apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl)).
+    apply query_same_rows_as_bag_iff_bag_eq in Hmap.
+    eapply bag_eq_trans; [apply bag_eq_sym; exact Hmap |].
+    exact Houtput_bag.
+- destruct Houtput as [input_bag [Hinput Houtput_bag]].
+  unfold success_bags, query_success_bags, alpha in Hinput |- *.
+  destruct Hinput as [input_rows [Heval Hinput_bag]].
+  exists (map mapping input_rows); split.
+  + apply eval_query_expr_row_map_success_iff.
+    exists input_rows; split; [exact Heval |].
+    now apply row_map_rows_outcome_total_as.
+  + assert (Hsame : query_same_rows_as_bag input_rows input_bag).
+    { apply query_same_rows_as_bag_iff_bag_eq; exact Hinput_bag. }
+    pose proof
+      (@RelationalAlgebraFacts.query_same_rows_as_bag_map
+        T mapping input_rows input_bag Hproper Hsame) as Hmap.
+    apply query_same_rows_as_bag_iff_bag_eq in Hmap.
+    eapply bag_eq_trans; [exact Hmap | exact Houtput_bag].
+Qed.
+
+Theorem query_row_map_success_bags_congr_extensional_total :
+  forall env left_outputs right_outputs left_row_map right_row_map
+      left_mapping right_mapping left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    row_map_total_as left_row_map left_mapping ->
+    row_map_total_as right_row_map right_mapping ->
+    row_mapping_semantic_proper left_mapping ->
+    row_mapping_semantic_proper right_mapping ->
+    (forall input_bag,
+      success_bags env left input_bag ->
+      bag_eq T
+        (query_row_map_bag left_mapping input_bag)
+        (query_row_map_bag right_mapping input_bag)) ->
+    rel_equiv
+      (success_bags env (QExpr_RowMap left_outputs left_row_map left))
+      (success_bags env (QExpr_RowMap right_outputs right_row_map right)).
+Proof.
+intros env left_outputs right_outputs left_row_map right_row_map
+  left_mapping right_mapping left right Hinputs Hleft_total Hright_total
+  Hleft_proper Hright_proper Hmapping output.
+pose proof
+  (@query_row_map_success_bags_total env left_outputs left_row_map
+    left_mapping left Hleft_total Hleft_proper output) as Hleft.
+pose proof
+  (@query_row_map_success_bags_total env right_outputs right_row_map
+    right_mapping right Hright_total Hright_proper output) as Hright.
+split; intro Houtput.
+- apply (proj1 Hleft) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hmapped]].
+  apply (proj2 Hright); exists input_bag; split.
+  + now apply (proj1 (Hinputs input_bag)).
+  + eapply bag_eq_trans.
+    * now apply bag_eq_sym, Hmapping.
+    * exact Hmapped.
+- apply (proj1 Hright) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hmapped]].
+  assert (Hleft_input : success_bags env left input_bag).
+  { now apply (proj2 (Hinputs input_bag)). }
+  apply (proj2 Hleft); exists input_bag; split; [exact Hleft_input |].
+  eapply bag_eq_trans.
+  + exact (Hmapping input_bag Hleft_input).
+  + exact Hmapped.
+Qed.
+
+Corollary query_row_map_success_bags_congr_total :
+  forall env outputs row_map mapping left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    row_map_total_as row_map mapping ->
+    row_mapping_semantic_proper mapping ->
+    rel_equiv
+      (success_bags env (QExpr_RowMap outputs row_map left))
+      (success_bags env (QExpr_RowMap outputs row_map right)).
+Proof.
+intros env outputs row_map mapping left right Hinputs Htotal Hproper.
+eapply query_row_map_success_bags_congr_extensional_total;
+  try eassumption.
+intros input_bag _; apply bag_eq_refl.
+Qed.
+
+(** Stable contracts for row-adapter transport.  Packaging the semantic map
+    prevents [logos.] from inventing an unconstrained mapping evar when the
+    callback contract has not yet been proved. *)
+Definition row_map_success_bag_contract
+    (row_map : tuple T -> sql_outcome (tuple T)) : Prop :=
+  exists mapping : tuple T -> tuple T,
+    row_map_total_as row_map mapping /\
+    row_mapping_semantic_proper mapping.
+
+Theorem query_row_map_success_bags_congr_of_contract :
+  forall env outputs row_map left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    row_map_success_bag_contract row_map ->
+    rel_equiv
+      (success_bags env (QExpr_RowMap outputs row_map left))
+      (success_bags env (QExpr_RowMap outputs row_map right)).
+Proof.
+intros env outputs row_map left right Hinputs [mapping [Htotal Hproper]].
+now eapply query_row_map_success_bags_congr_total.
+Qed.
+
+(** A successful RowMap is functional only under the existing total,
+    setoid-proper callback contract.  The theorem intentionally does not infer
+    that contract from the absence of an observed error. *)
+Theorem query_row_map_success_bags_functional_of_contract :
+  forall env outputs row_map input,
+    (forall first second,
+      success_bags env input first ->
+      success_bags env input second ->
+      bag_eq T first second) ->
+    row_map_success_bag_contract row_map ->
+    forall first second,
+      success_bags env (QExpr_RowMap outputs row_map input) first ->
+      success_bags env (QExpr_RowMap outputs row_map input) second ->
+      bag_eq T first second.
+Proof.
+intros env outputs row_map input Hinput
+  [mapping [Htotal Hproper]] first second Hfirst Hsecond.
+apply (proj1
+  (@query_row_map_success_bags_total
+    env outputs row_map mapping input Htotal Hproper first)) in Hfirst.
+apply (proj1
+  (@query_row_map_success_bags_total
+    env outputs row_map mapping input Htotal Hproper second)) in Hsecond.
+destruct Hfirst as [first_input [Hfirst_input Hfirst_map]].
+destruct Hsecond as [second_input [Hsecond_input Hsecond_map]].
+assert (Hmapped :
+  bag_eq T
+    (query_row_map_bag mapping first_input)
+    (query_row_map_bag mapping second_input)).
+{
+  apply query_row_map_bag_congr; [exact Hproper |].
+  now eapply Hinput.
+}
+exact
+  (bag_eq_trans (bag_eq_sym Hfirst_map)
+    (bag_eq_trans Hmapped Hsecond_map)).
+Qed.
+
+Definition row_map_success_bag_extensional_contract
+    (env : Env.env T)
+    (left_row_map right_row_map : tuple T -> sql_outcome (tuple T))
+    (left : @query_expr T relname) : Prop :=
+  exists left_mapping right_mapping : tuple T -> tuple T,
+    row_map_total_as left_row_map left_mapping /\
+    row_map_total_as right_row_map right_mapping /\
+    row_mapping_semantic_proper left_mapping /\
+    row_mapping_semantic_proper right_mapping /\
+    (forall input_bag,
+      success_bags env left input_bag ->
+      bag_eq T
+        (query_row_map_bag left_mapping input_bag)
+        (query_row_map_bag right_mapping input_bag)).
+
+Theorem query_row_map_success_bags_congr_extensional_of_contract :
+  forall env left_outputs right_outputs left_row_map right_row_map left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    row_map_success_bag_extensional_contract
+      env left_row_map right_row_map left ->
+    rel_equiv
+      (success_bags env (QExpr_RowMap left_outputs left_row_map left))
+      (success_bags env (QExpr_RowMap right_outputs right_row_map right)).
+Proof.
+intros env left_outputs right_outputs left_row_map right_row_map left right
+  Hinputs
+  [left_mapping [right_mapping
+    [Hleft_total [Hright_total
+      [Hleft_proper [Hright_proper Hmapping]]]]]].
+eapply query_row_map_success_bags_congr_extensional_total;
+  eassumption.
+Qed.
+
 (** The possible successful bag produced by a projection is the multiplicity-
     preserving bag map of one possible child bag. *)
 Definition query_project_bag
@@ -3395,6 +4759,292 @@ intros first second Hequal.
 apply projection_eq, env_t_eq_2; exact Hequal.
 Qed.
 
+(** Stable residual contract for two extensionally equal projections.  Naming
+    the reachable-bag obligation keeps structural automation from exposing a
+    large anonymous [forall] goal, while retaining exactly the semantic fact
+    that a caller must prove. *)
+Definition project_success_bag_extensional_contract
+    (env : Env.env T)
+    (left_select right_select : @_select_list T)
+    (left : @query_expr T relname) : Prop :=
+  forall input_bag,
+    success_bags env left input_bag ->
+    bag_eq T
+      (query_project_bag env left_select input_bag)
+      (query_project_bag env right_select input_bag).
+
+(** Possible-success-bag congruence for two extensionally equal projections.
+    This is intentionally weaker than ordered child-outcome congruence: an
+    enclosing reset may care only about the child bags even when the child
+    list observations or intermediate output layouts differ.  Both SELECT
+    lists remain explicitly safe because this theorem exposes Project as a
+    pure multiplicity-preserving bag map. *)
+Theorem query_project_success_bags_congr_extensional_safe :
+  forall env left_select right_select left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) left_select = None) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) right_select = None) ->
+    project_success_bag_extensional_contract
+      env left_select right_select left ->
+    rel_equiv
+      (success_bags env (QExpr_Project left_select left))
+      (success_bags env (QExpr_Project right_select right)).
+Proof.
+intros env left_select right_select left right Hinputs
+  Hleft_safe Hright_safe Hproject output.
+unfold project_success_bag_extensional_contract in Hproject.
+pose proof
+  (@query_project_success_bags_safe
+    env left_select left Hleft_safe output) as Hleft.
+pose proof
+  (@query_project_success_bags_safe
+    env right_select right Hright_safe output) as Hright.
+split; intro Houtput.
+- apply (proj1 Hleft) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hmapped]].
+  apply (proj2 Hright); exists input_bag; split.
+  + now apply (proj1 (Hinputs input_bag)).
+  + eapply bag_eq_trans.
+    * now apply bag_eq_sym, Hproject.
+    * exact Hmapped.
+- apply (proj1 Hright) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hmapped]].
+  assert (Hleft_input : success_bags env left input_bag).
+  { now apply (proj2 (Hinputs input_bag)). }
+  apply (proj2 Hleft); exists input_bag; split; [exact Hleft_input |].
+  eapply bag_eq_trans.
+  + exact (Hproject input_bag Hleft_input).
+  + exact Hmapped.
+Qed.
+
+(** Same-SELECT specialization for the common structural congruence path. *)
+Corollary query_project_success_bags_congr_safe :
+  forall env select_list left right,
+    rel_equiv (success_bags env left) (success_bags env right) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) select_list = None) ->
+    rel_equiv
+      (success_bags env (QExpr_Project select_list left))
+      (success_bags env (QExpr_Project select_list right)).
+Proof.
+intros env select_list left right Hinputs Hsafe.
+eapply query_project_success_bags_congr_extensional_safe;
+  try eassumption.
+intros input_bag _; apply bag_eq_refl.
+Qed.
+
+(** Stable residual contract for projection fusion.  It is deliberately
+    phrased over all reachable child bags rather than over a particular query
+    rewrite, column layout, or benchmark. *)
+Definition project_fusion_success_bag_contract
+    (env : Env.env T)
+    (single outer inner : @_select_list T)
+    (input : @query_expr T relname) : Prop :=
+  forall input_bag,
+    success_bags env input input_bag ->
+    bag_eq T
+      (query_project_bag env single input_bag)
+      (query_project_bag env outer
+        (query_project_bag env inner input_bag)).
+
+(** Fuse one projection with two projections over the same child.  The only
+    semantic premise left to a caller is equality of the two composed bag
+    maps on reachable child bags.  In particular, this theorem neither asks
+    for the intermediate projection to be invertible nor equates its ordered
+    observations with those of the unprojected child. *)
+Theorem query_project_success_bags_fusion_safe :
+  forall env single outer inner input,
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) single = None) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) outer = None) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) inner = None) ->
+    project_fusion_success_bag_contract env single outer inner input ->
+    rel_equiv
+      (success_bags env (QExpr_Project single input))
+      (success_bags env
+        (QExpr_Project outer (QExpr_Project inner input))).
+Proof.
+intros env single outer inner input
+  Hsingle_safe Houter_safe Hinner_safe Hfusion output.
+unfold project_fusion_success_bag_contract in Hfusion.
+pose proof
+  (@query_project_success_bags_safe
+    env single input Hsingle_safe output) as Hsingle.
+pose proof
+  (@query_project_success_bags_safe
+    env inner input Hinner_safe) as Hinner.
+pose proof
+  (@query_project_success_bags_safe
+    env outer (QExpr_Project inner input) Houter_safe output) as Houter.
+split; intro Houtput.
+- apply (proj1 Hsingle) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hsingle_bag]].
+  apply (proj2 Houter).
+  exists (query_project_bag env inner input_bag); split.
+  + apply (proj2 (Hinner (query_project_bag env inner input_bag))).
+    exists input_bag; split; [exact Hinput | apply bag_eq_refl].
+  + eapply bag_eq_trans; [|exact Hsingle_bag].
+    now apply bag_eq_sym, Hfusion.
+- apply (proj1 Houter) in Houtput.
+  destruct Houtput as [middle_bag [Hmiddle Houter_bag]].
+  apply (proj1 (Hinner middle_bag)) in Hmiddle.
+  destruct Hmiddle as [input_bag [Hinput Hinner_bag]].
+  apply (proj2 Hsingle).
+  exists input_bag; split; [exact Hinput |].
+  eapply bag_eq_trans; [exact (Hfusion input_bag Hinput) |].
+  eapply bag_eq_trans; [|exact Houter_bag].
+  now apply query_project_bag_congr.
+Qed.
+
+(** Eliminate a projection whose bag map is the identity on every reachable
+    child bag.  The premise is semantic rather than syntactic, so it covers
+    aliases and composed projections without encoding a rewrite pattern. *)
+Theorem query_project_success_bags_identity_safe :
+  forall env select_list input,
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) select_list = None) ->
+    (forall input_bag,
+      success_bags env input input_bag ->
+      bag_eq T (query_project_bag env select_list input_bag) input_bag) ->
+    rel_equiv
+      (success_bags env (QExpr_Project select_list input))
+      (success_bags env input).
+Proof.
+intros env select_list input Hsafe Hidentity output.
+pose proof
+  (@query_project_success_bags_safe
+    env select_list input Hsafe output) as Hproject.
+split; intro Houtput.
+- apply (proj1 Hproject) in Houtput.
+  destruct Houtput as [input_bag [Hinput Hmapped]].
+  assert (Hbags : bag_eq T input_bag output).
+  {
+    eapply bag_eq_trans.
+    - now apply bag_eq_sym, Hidentity.
+    - exact Hmapped.
+  }
+  unfold success_bags, query_success_bags in Hinput |- *.
+  now apply (proj1
+    (@alpha_extensional T
+      (fun rows => eval_query env input (SqlSuccess rows))
+      input_bag output Hbags)).
+- apply (proj2 Hproject).
+  exists output; split; [exact Houtput |].
+  exact (Hidentity output Houtput).
+Qed.
+
+(** Exact possible-success-bag descriptions for the three leaves.  They make
+    the success-bag layer complete without confusing an explicit SQL error
+    with an empty successful result. *)
+Theorem query_error_success_bags_empty :
+  forall env outputs error output,
+    ~ success_bags env (QExpr_Error outputs error) output.
+Proof.
+intros env outputs error output Houtput.
+unfold success_bags, query_success_bags, alpha in Houtput.
+destruct Houtput as [rows [Heval _]].
+now apply (query_error_has_no_success Heval).
+Qed.
+
+Theorem query_values_success_bags :
+  forall env outputs values,
+    rel_equiv
+      (success_bags env (QExpr_Values outputs values))
+      (fun output => bag_eq T values output).
+Proof.
+intros env outputs values output; split; intro Houtput.
+- unfold success_bags, query_success_bags, alpha in Houtput.
+  destruct Houtput as [rows [Heval Hrows]].
+  inversion Heval; subst.
+  apply query_same_rows_as_bag_iff_bag_eq in H0.
+  eapply bag_eq_trans; [exact (bag_eq_sym H0) | exact Hrows].
+- unfold success_bags, query_success_bags, alpha.
+  exists (Febag.elements (Fecol.CBag (CTuple T)) values); split.
+  + apply EQuery_Values, query_elements_same_rows_as_bag.
+  + eapply bag_eq_trans; [apply rows_bag_elements | exact Houtput].
+Qed.
+
+Theorem query_table_success_bags :
+  forall env outputs table,
+    rel_equiv
+      (success_bags env (QExpr_Table outputs table))
+      (fun output =>
+        bag_eq T
+          (@query_table_bag T relname basesort instance outputs table)
+          output).
+Proof.
+intros env outputs table output; split; intro Houtput.
+- unfold success_bags, query_success_bags, alpha in Houtput.
+  destruct Houtput as [rows [Heval Hrows]].
+  apply eval_query_expr_table_success_iff in Heval.
+  apply query_same_rows_as_bag_iff_bag_eq in Heval.
+  eapply bag_eq_trans; [exact (bag_eq_sym Heval) | exact Hrows].
+- unfold success_bags, query_success_bags, alpha.
+  exists
+    (Febag.elements (Fecol.CBag (CTuple T))
+      (@query_table_bag T relname basesort instance outputs table)).
+  split.
+  + apply eval_query_expr_table_success_iff, query_elements_same_rows_as_bag.
+  + eapply bag_eq_trans; [apply rows_bag_elements | exact Houtput].
+Qed.
+
+Theorem query_values_success_bags_congr :
+  forall env left_outputs right_outputs left_values right_values,
+    bag_eq T left_values right_values ->
+    rel_equiv
+      (success_bags env (QExpr_Values left_outputs left_values))
+      (success_bags env (QExpr_Values right_outputs right_values)).
+Proof.
+intros env left_outputs right_outputs left_values right_values Hvalues output.
+pose proof
+  (query_values_success_bags env left_outputs left_values output) as Hleft.
+pose proof
+  (query_values_success_bags env right_outputs right_values output) as Hright.
+split; intro Houtput.
+- apply (proj2 Hright).
+  eapply bag_eq_trans; [exact (bag_eq_sym Hvalues) |].
+  now apply (proj1 Hleft).
+- apply (proj2 Hleft).
+  eapply bag_eq_trans; [exact Hvalues |].
+  now apply (proj1 Hright).
+Qed.
+
+Theorem query_table_success_bags_congr :
+  forall env left_outputs right_outputs left_table right_table,
+    bag_eq T
+      (@query_table_bag T relname basesort instance
+        left_outputs left_table)
+      (@query_table_bag T relname basesort instance
+        right_outputs right_table) ->
+    rel_equiv
+      (success_bags env (QExpr_Table left_outputs left_table))
+      (success_bags env (QExpr_Table right_outputs right_table)).
+Proof.
+intros env left_outputs right_outputs left_table right_table Htables output.
+pose proof
+  (query_table_success_bags env left_outputs left_table output) as Hleft.
+pose proof
+  (query_table_success_bags env right_outputs right_table output) as Hright.
+split; intro Houtput.
+- apply (proj2 Hright).
+  eapply bag_eq_trans; [exact (bag_eq_sym Htables) |].
+  now apply (proj1 Hleft).
+- apply (proj2 Hleft).
+  eapply bag_eq_trans; [exact Htables |].
+  now apply (proj1 Hright).
+Qed.
+
 (** Base tables have one possible successful bag modulo [bag_eq]. *)
 Theorem query_table_success_bags_functional :
   forall env outputs table first second,
@@ -3574,6 +5224,43 @@ apply query_expr_outcome_equiv_of_observations.
     * rewrite (@project_rows_outcome_all_safe
         env select_list rows Hselect_safe) in Hlocal.
       discriminate.
+Qed.
+
+(** Extensional projection congruence combines the two orthogonal projection
+    rules above: the child query may change, and the two SELECT lists may also
+    differ.  The only row-level premise is stated on successful target-child
+    observations; child outcome equivalence transports the source there
+    first.  This is an operator law, not a nested-project rewrite pattern. *)
+Theorem query_expr_project_outcome_equiv_congr_extensional_safe :
+  forall env left_select right_select left right,
+    query_outcome_equiv env left right ->
+    select_list_outputs left_select = select_list_outputs right_select ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) left_select = None) ->
+    (forall row,
+      @eval_select_list_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) right_select = None) ->
+    (forall input_rows row,
+      eval_query env right (SqlSuccess input_rows) ->
+      In row input_rows ->
+      Oeset.compare (OTuple T)
+        (projection T (env_t T env row) (@Select_List T left_select))
+        (projection T (env_t T env row) (@Select_List T right_select)) = Eq) ->
+    query_outcome_equiv env
+      (QExpr_Project left_select left)
+      (QExpr_Project right_select right).
+Proof.
+intros env left_select right_select left right Hchild Houtputs
+  Hleft_safe Hright_safe Hrows.
+pose proof Hchild as Hchild_congruence.
+destruct Hchild as
+  [_ [_ [Hright_outcome [_ [_ _]]]]].
+eapply query_expr_outcome_equiv_trans with
+  (second := QExpr_Project left_select right).
+- now apply query_expr_project_outcome_equiv_congr_safe.
+- eapply query_expr_project_select_lists_outcome_equiv_safe;
+    eassumption.
 Qed.
 
 (** Successful projection observations determine their output list
@@ -3759,6 +5446,42 @@ eapply bag_eq_trans.
 - exact Hsecond.
 Qed.
 
+(** NATURAL JOIN has the same compositional functionality boundary as CROSS
+    JOIN: its fixed-input bag operator is a functional graph, while each child
+    must independently have one possible successful bag modulo [bag_eq]. *)
+Theorem query_natural_join_success_bags_functional :
+  forall env left right,
+    (forall first second,
+      success_bags env left first ->
+      success_bags env left second ->
+      bag_eq T first second) ->
+    (forall first second,
+      success_bags env right first ->
+      success_bags env right second ->
+      bag_eq T first second) ->
+    forall first second,
+      success_bags env (QExpr_NaturalJoin left right) first ->
+      success_bags env (QExpr_NaturalJoin left right) second ->
+      bag_eq T first second.
+Proof.
+intros env left right Hleft Hright first second Hfirst Hsecond.
+apply (proj1
+  (@query_natural_join_success_bags T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    env left right first)) in Hfirst.
+apply (proj1
+  (@query_natural_join_success_bags T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    env left right second)) in Hsecond.
+eapply (@lift_possible_bag_binary_functional T
+  (query_natural_join_bag_relation T value_is_null)
+  (success_bags env left) (success_bags env right));
+  try eassumption.
+- apply query_natural_join_bag_relation_extensional.
+- unfold query_natural_join_bag_relation.
+  apply binary_bag_graph_functional.
+Qed.
+
 (** DISTINCT preserves possible-success-bag functionality without assuming
     that it is inert: both observations apply the same duplicate-elimination
     function to equivalent child bags. *)
@@ -3792,4 +5515,375 @@ eapply bag_eq_trans.
   exact (Hinput _ _ Hinput_first Hinput_second).
 - exact Hsecond.
 Qed.
+
+(** RANK preserves possible-success-bag functionality compositionally.  Its
+    bag relation is functional because it evaluates a deterministic rank
+    computation over the canonical rows of a fixed input bag. *)
+Theorem query_rank_success_bags_functional :
+  forall env partition_keys order_keys rank_attribute rank_value input,
+    (forall first second,
+      success_bags env input first ->
+      success_bags env input second ->
+      bag_eq T first second) ->
+    forall first second,
+      success_bags env
+        (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+        first ->
+      success_bags env
+        (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+        second ->
+      bag_eq T first second.
+Proof.
+intros env partition_keys order_keys rank_attribute rank_value input Hinput
+  first second Hfirst Hsecond.
+apply (proj1
+  (@query_rank_success_bags T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    env partition_keys order_keys rank_attribute rank_value input first))
+  in Hfirst.
+apply (proj1
+  (@query_rank_success_bags T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    env partition_keys order_keys rank_attribute rank_value input second))
+  in Hsecond.
+eapply (@lift_possible_bag_unary_functional T
+  (query_rank_bag_relation value_is_null
+    partition_keys order_keys rank_attribute rank_value)
+  (success_bags env input)); try eassumption.
+- apply query_rank_bag_relation_extensional.
+- apply query_rank_bag_relation_functional.
+Qed.
+
+(** There is intentionally no unconditional Window counterpart.  Legal peer
+    orderings for a cumulative ROWS-style window may compute different value
+    bags from the same input bag.  A caller may still use the generic
+    [lift_possible_bag_unary_functional] interface, but must supply a genuine
+    functionality proof for its particular window relation. *)
 End ExactQueries.
+
+(** * Intrinsic position, partition-run, and tie-key structure
+
+    These facts deliberately stop at list structure.  In particular,
+    [rows_key_aligned] records only the keys visible at corresponding
+    positions; it does not assert semantic row equality, bag equality, or that
+    either list is an evaluated SQL observation.  Applying these facts to an
+    exact query outcome therefore still requires the operator's evaluation,
+    error, and (where permutation closure is used) [BagClosed] premises. *)
+
+Fixpoint position_rows_from {A : Type} (position : nat) (rows : list A) :
+    list (nat * A) :=
+  match rows with
+  | [] => []
+  | row :: rest => (position, row) :: position_rows_from (S position) rest
+  end.
+
+Theorem position_rows_from_values :
+  forall (A : Type) position (rows : list A),
+    map snd (position_rows_from position rows) = rows.
+Proof.
+intros A position rows.
+revert position.
+induction rows as [|row rows IH]; intro position; cbn.
+- reflexivity.
+- now rewrite IH.
+Qed.
+
+(** Indexed lookup exposes the exact zero-based offset from the supplied
+    starting position.  It does not compare row values, so duplicate rows and
+    semantic tuple-equality boundaries remain untouched. *)
+Theorem position_rows_from_nth_error :
+  forall (A : Type) start (rows : list A) index,
+    nth_error (position_rows_from start rows) index =
+    option_map (fun row => (start + index, row)) (nth_error rows index).
+Proof.
+intros A start rows index.
+revert start rows.
+induction index as [|index IH].
+- intros start [|row rows]; cbn; [reflexivity|].
+  now rewrite Nat.add_0_r.
+- intros start [|row rows]; [reflexivity|].
+  cbn. rewrite IH.
+  destruct (nth_error rows index) as [found|]; cbn.
+  + replace (S (start + index))%nat with (start + S index)%nat by lia.
+    reflexivity.
+  + reflexivity.
+Qed.
+
+(** Filtering numbered rows by an inclusive position bound is exactly a list
+    prefix.  No uniqueness premise is needed, so duplicates and empty inputs
+    are preserved. *)
+Theorem position_rows_from_filter_le_prefix :
+  forall (A : Type) start cutoff (rows : list A),
+    map snd
+      (filter (fun numbered => Nat.leb (fst numbered) cutoff)
+        (position_rows_from start rows)) =
+    firstn (S cutoff - start) rows.
+Proof.
+intros A start cutoff rows.
+revert start cutoff.
+induction rows as [|row rows IH]; intros start cutoff.
+- cbn [position_rows_from List.filter map].
+  destruct (S cutoff - start)%nat; reflexivity.
+- cbn [position_rows_from List.filter].
+  change
+    (map snd
+      (if Nat.leb start cutoff then
+        (start, row) ::
+          filter
+            (fun numbered => Nat.leb (fst numbered) cutoff)
+            (position_rows_from (S start) rows)
+       else
+          filter
+            (fun numbered => Nat.leb (fst numbered) cutoff)
+            (position_rows_from (S start) rows)) =
+     firstn (S cutoff - start) (row :: rows)).
+  destruct (Nat.leb start cutoff) eqn:Hle.
+  + apply Nat.leb_le in Hle.
+    replace (S cutoff - start)%nat
+      with (S (S cutoff - S start)%nat) by lia.
+    cbn [map firstn].
+    f_equal.
+    exact (IH (S start) cutoff).
+  + apply Nat.leb_gt in Hle.
+    etransitivity.
+    * exact (IH (S start) cutoff).
+    * replace (S cutoff - start)%nat with 0%nat by lia.
+      replace (S cutoff - S start)%nat with 0%nat by lia.
+      reflexivity.
+Qed.
+
+(** Adjacent equality and block-boundary inequality are parameterized by the
+    caller's semantic key comparator.  No Rocq equality on SQL rows or values
+    is introduced here. *)
+Fixpoint adjacent_compare_equal {A : Type}
+    (compare : A -> A -> comparison) (rows : list A) : Prop :=
+  match rows with
+  | first :: ((second :: rest) as tail) =>
+      compare first second = Eq /\ adjacent_compare_equal compare tail
+  | _ => True
+  end.
+
+Fixpoint compare_partition_blocks_well_formed {A : Type}
+    (compare : A -> A -> comparison) (blocks : list (list A)) : Prop :=
+  match blocks with
+  | [] => True
+  | [] :: _ => False
+  | ((first :: rows) as block) :: rest =>
+      adjacent_compare_equal compare block /\
+      match rest with
+      | [] => True
+      | [] :: _ => False
+      | (next :: _) :: _ =>
+          compare (last block first) next <> Eq /\
+          compare_partition_blocks_well_formed compare rest
+      end
+  end.
+
+Fixpoint partition_runs_by_compare {A : Type}
+    (compare : A -> A -> comparison) (rows : list A) : list (list A) :=
+  match rows with
+  | [] => []
+  | row :: rest =>
+      match partition_runs_by_compare compare rest with
+      | [] => [[row]]
+      | [] :: blocks => [row] :: blocks
+      | ((next :: tail) as block) :: blocks =>
+          match compare row next with
+          | Eq => (row :: block) :: blocks
+          | Lt | Gt => [row] :: block :: blocks
+          end
+      end
+  end.
+
+Local Lemma last_nonempty_default_irrelevant_ordered_core :
+  forall (A : Type) (first : A) rows (left_default right_default : A),
+    last (first :: rows) left_default = last (first :: rows) right_default.
+Proof.
+intros A first rows.
+revert first.
+induction rows as [|second rows IH];
+  intros first left_default right_default.
+- reflexivity.
+- cbn [last]. exact (IH second left_default right_default).
+Qed.
+
+Theorem partition_runs_by_compare_exact_well_formed :
+  forall (A : Type) (compare : A -> A -> comparison) rows,
+    concat (partition_runs_by_compare compare rows) = rows /\
+    compare_partition_blocks_well_formed compare
+      (partition_runs_by_compare compare rows).
+Proof.
+intros A compare rows.
+induction rows as [|row rows IH].
+- split; [reflexivity|exact I].
+- destruct IH as [Hexact Hwell_formed].
+  remember (partition_runs_by_compare compare rows) as blocks eqn:Hblocks.
+  destruct blocks as [|block blocks].
+  + cbn [concat] in Hexact. subst rows.
+    split; [reflexivity|].
+    cbn [partition_runs_by_compare compare_partition_blocks_well_formed].
+    split; exact I.
+  + destruct block as [|next tail].
+    * cbn [compare_partition_blocks_well_formed] in Hwell_formed.
+      contradiction.
+    * destruct (compare row next) eqn:Hcompare.
+      -- cbn [partition_runs_by_compare]. rewrite <- Hblocks, Hcompare.
+         split.
+         ++ cbn [concat app]. f_equal.
+            cbn [concat] in Hexact. exact Hexact.
+         ++ cbn [compare_partition_blocks_well_formed
+              adjacent_compare_equal].
+            rewrite Hcompare.
+            cbn [compare_partition_blocks_well_formed] in Hwell_formed.
+            destruct Hwell_formed as [Hadjacent Hrest].
+            split.
+            ** split; [reflexivity|exact Hadjacent].
+            ** replace (last (row :: next :: tail) row)
+                 with (last (next :: tail) next).
+               2: { cbn [last].
+                    apply last_nonempty_default_irrelevant_ordered_core. }
+               exact Hrest.
+      -- cbn [partition_runs_by_compare]. rewrite <- Hblocks, Hcompare.
+         split.
+         ++ cbn [concat app]. f_equal.
+            cbn [concat] in Hexact. exact Hexact.
+         ++ cbn [compare_partition_blocks_well_formed
+              adjacent_compare_equal].
+            split; [exact I|]. split.
+            ** cbn [last]. rewrite Hcompare. discriminate.
+            ** exact Hwell_formed.
+      -- cbn [partition_runs_by_compare]. rewrite <- Hblocks, Hcompare.
+         split.
+         ++ cbn [concat app]. f_equal.
+            cbn [concat] in Hexact. exact Hexact.
+         ++ cbn [compare_partition_blocks_well_formed
+              adjacent_compare_equal].
+            split; [exact I|]. split.
+            ** cbn [last]. rewrite Hcompare. discriminate.
+            ** exact Hwell_formed.
+Qed.
+
+(** Key alignment is intentionally relational and heterogeneous: [key_rel]
+    can be semantic tuple/key equality rather than Rocq [eq].  It captures the
+    positional information shared by legal peer-order observations while
+    leaving multiplicity and outcome legality to their authoritative layers. *)
+Definition rows_key_aligned
+    {A B LeftKey RightKey : Type}
+    (key_rel : LeftKey -> RightKey -> Prop)
+    (left_key : A -> LeftKey) (right_key : B -> RightKey)
+    (left : list A) (right : list B) : Prop :=
+  Forall2
+    (fun left_row right_row =>
+      key_rel (left_key left_row) (right_key right_row))
+    left right.
+
+Theorem rows_key_aligned_length :
+  forall (A B LeftKey RightKey : Type)
+      (key_rel : LeftKey -> RightKey -> Prop)
+      (left_key : A -> LeftKey) (right_key : B -> RightKey) left right,
+    rows_key_aligned key_rel left_key right_key left right ->
+    length left = length right.
+Proof.
+intros A B LeftKey RightKey key_rel left_key right_key left right Haligned.
+unfold rows_key_aligned in Haligned.
+now apply Forall2_length in Haligned.
+Qed.
+
+Theorem rows_key_aligned_firstn :
+  forall (A B LeftKey RightKey : Type) count
+      (key_rel : LeftKey -> RightKey -> Prop)
+      (left_key : A -> LeftKey) (right_key : B -> RightKey) left right,
+    rows_key_aligned key_rel left_key right_key left right ->
+    rows_key_aligned key_rel left_key right_key
+      (firstn count left) (firstn count right).
+Proof.
+intros A B LeftKey RightKey count.
+induction count as [|count IH];
+  intros key_rel left_key right_key left right Haligned.
+- constructor.
+- inversion Haligned as [|left_row right_row left_tail right_tail Hkey Htail];
+    subst; cbn.
+  + constructor.
+  + constructor; [exact Hkey|].
+    now apply IH.
+Qed.
+
+Theorem rows_key_aligned_skipn :
+  forall (A B LeftKey RightKey : Type) count
+      (key_rel : LeftKey -> RightKey -> Prop)
+      (left_key : A -> LeftKey) (right_key : B -> RightKey) left right,
+    rows_key_aligned key_rel left_key right_key left right ->
+    rows_key_aligned key_rel left_key right_key
+      (skipn count left) (skipn count right).
+Proof.
+intros A B LeftKey RightKey count.
+induction count as [|count IH];
+  intros key_rel left_key right_key left right Haligned.
+- exact Haligned.
+- inversion Haligned as [|left_row right_row left_tail right_tail Hkey Htail];
+    subst; cbn.
+  + constructor.
+  + now apply IH.
+Qed.
+
+(** A filter may hide peer payloads only when its decision is determined by
+    related keys.  Predicates that inspect non-key payload, are volatile, or
+    can raise SQL runtime errors are outside this total boolean interface. *)
+Theorem rows_key_aligned_filter :
+  forall (A B LeftKey RightKey : Type)
+      (key_rel : LeftKey -> RightKey -> Prop)
+      (left_key : A -> LeftKey) (right_key : B -> RightKey)
+      (left_keep : LeftKey -> bool) (right_keep : RightKey -> bool),
+    (forall left_value right_value,
+      key_rel left_value right_value ->
+      left_keep left_value = right_keep right_value) ->
+    forall left right,
+      rows_key_aligned key_rel left_key right_key left right ->
+      rows_key_aligned key_rel left_key right_key
+        (filter (fun row => left_keep (left_key row)) left)
+        (filter (fun row => right_keep (right_key row)) right).
+Proof.
+intros A B LeftKey RightKey key_rel left_key right_key left_keep right_keep
+  Hkeep left right Haligned.
+unfold rows_key_aligned in Haligned |- *.
+induction Haligned as
+  [|left_row right_row left_rows right_rows Hkey Htail IH].
+- constructor.
+- cbn.
+  pose proof (Hkeep _ _ Hkey) as Hdecision.
+  rewrite Hdecision.
+  destruct (right_keep (right_key right_row));
+    [constructor; assumption|exact IH].
+Qed.
+
+(** The maps are ordinary Coq functions and hence total and deterministic.
+    Runtime-error-producing or volatile SQL projections must first be proved
+    safe and functional before this transport can be used. *)
+Theorem rows_key_aligned_total_map_transport :
+  forall (A B C D LeftKey RightKey LeftOutputKey RightOutputKey : Type)
+      (input_key_rel : LeftKey -> RightKey -> Prop)
+      (output_key_rel : LeftOutputKey -> RightOutputKey -> Prop)
+      (left_key : A -> LeftKey) (right_key : B -> RightKey)
+      (left_output_key : C -> LeftOutputKey)
+      (right_output_key : D -> RightOutputKey)
+      (left_map : A -> C) (right_map : B -> D),
+    (forall left_row right_row,
+      input_key_rel (left_key left_row) (right_key right_row) ->
+      output_key_rel
+        (left_output_key (left_map left_row))
+        (right_output_key (right_map right_row))) ->
+    forall left right,
+      rows_key_aligned input_key_rel left_key right_key left right ->
+      rows_key_aligned output_key_rel left_output_key right_output_key
+        (map left_map left) (map right_map right).
+Proof.
+intros A B C D LeftKey RightKey LeftOutputKey RightOutputKey
+  input_key_rel output_key_rel left_key right_key
+  left_output_key right_output_key left_map right_map Hmap
+  left right Haligned.
+unfold rows_key_aligned in Haligned |- *.
+induction Haligned as
+  [|left_row right_row left_rows right_rows Hkey Htail IH]; cbn.
+- constructor.
+- constructor; [now apply Hmap|exact IH].
+Qed.

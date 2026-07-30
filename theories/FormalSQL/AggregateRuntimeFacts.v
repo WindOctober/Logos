@@ -342,6 +342,24 @@ Proof.
   - apply distinct_values_membership.
 Qed.
 
+Lemma aggregate_input_values_nonempty_iff : forall quantifier values,
+  aggregate_input_values quantifier values <> [] <-> values <> [].
+Proof.
+  intros quantifier values; split.
+  - intros Hselected ->; apply Hselected; destruct quantifier; reflexivity.
+  - intros Hvalues Hselected.
+    destruct values as [|value values]; [contradiction|].
+    assert (Hin : In value
+      (aggregate_input_values quantifier (value :: values))).
+    {
+      apply (proj2
+        (aggregate_input_values_membership
+          quantifier value (value :: values))).
+      now left.
+    }
+    rewrite Hselected in Hin; contradiction.
+Qed.
+
 (** Aggregate quantifiers can discard duplicate occurrences, but they never
     introduce a value outside the original input support.  Stating this once
     for an arbitrary property avoids rebuilding DISTINCT-specific [Forall]
@@ -438,6 +456,93 @@ Proof.
   - now apply distinct_values_permutation.
 Qed.
 
+Lemma non_null_count_permutation : forall left right,
+  Permutation left right -> non_null_count left = non_null_count right.
+Proof.
+  intros left right Hpermutation.
+  assert (Hfiltered :
+    Permutation
+      (filter (fun value => negb (is_null_value value)) left)
+      (filter (fun value => negb (is_null_value value)) right)).
+  {
+    induction Hpermutation; cbn.
+    - constructor.
+    - destruct (is_null_value x); cbn; [exact IHHpermutation|].
+      now constructor.
+    - destruct (is_null_value x), (is_null_value y); cbn;
+        try apply Permutation_refl.
+      apply perm_swap.
+    - now transitivity
+        (filter (fun value => negb (is_null_value value)) l').
+  }
+  unfold non_null_count.
+  now rewrite (Permutation_length Hfiltered).
+Qed.
+
+Lemma interp_aggregate_count_star_permutation : forall left right,
+  Permutation left right ->
+  interp_aggregate AggregateCountStar left =
+  interp_aggregate AggregateCountStar right.
+Proof.
+  intros left right Hpermutation.
+  change
+    (value_int64_checked (row_count left) =
+     value_int64_checked (row_count right)).
+  unfold row_count.
+  now rewrite (Permutation_length Hpermutation).
+Qed.
+
+Lemma aggregate_count_star_local_runtime_error_permutation : forall left right,
+  Permutation left right ->
+  aggregate_local_runtime_error AggregateCountStar left =
+  aggregate_local_runtime_error AggregateCountStar right.
+Proof.
+  intros left right Hpermutation.
+  change (count_runtime_error left = count_runtime_error right).
+  unfold count_runtime_error, row_count.
+  now rewrite (Permutation_length Hpermutation).
+Qed.
+
+Lemma interp_aggregate_count_permutation : forall quantifier left right,
+  Permutation left right ->
+  interp_aggregate (AggregateCall AggregateCount quantifier) left =
+  interp_aggregate (AggregateCall AggregateCount quantifier) right.
+Proof.
+  intros quantifier left right Hpermutation.
+  change
+    (value_int64_checked
+       (non_null_count (aggregate_input_values quantifier left)) =
+     value_int64_checked
+       (non_null_count (aggregate_input_values quantifier right))).
+  rewrite (non_null_count_permutation
+    (aggregate_input_values quantifier left)
+    (aggregate_input_values quantifier right)).
+  - reflexivity.
+  - now apply aggregate_input_values_permutation.
+Qed.
+
+Lemma aggregate_count_local_runtime_error_permutation :
+  forall quantifier left right,
+    Permutation left right ->
+    aggregate_local_runtime_error
+      (AggregateCall AggregateCount quantifier) left =
+    aggregate_local_runtime_error
+      (AggregateCall AggregateCount quantifier) right.
+Proof.
+  intros quantifier left right Hpermutation.
+  change
+    (non_null_count_runtime_error
+       (aggregate_input_values quantifier left) =
+     non_null_count_runtime_error
+       (aggregate_input_values quantifier right)).
+  unfold non_null_count_runtime_error.
+  rewrite (non_null_count_permutation
+    (aggregate_input_values quantifier left)
+    (aggregate_input_values quantifier right)).
+  - reflexivity.
+  - now apply aggregate_input_values_permutation.
+Qed.
+
 Lemma aggregate_input_values_idempotent : forall quantifier values,
   aggregate_input_values quantifier
     (aggregate_input_values quantifier values) =
@@ -502,6 +607,464 @@ Proof.
   intros function quantifier left right Hstable Hpermutation.
   cbn [aggregate_local_runtime_error].
   apply Hstable, aggregate_input_values_permutation, Hpermutation.
+Qed.
+
+(** A nonempty fold over an associative, commutative, idempotent operation
+    depends only on input support.  In particular, repeating an arbitrary
+    input block cannot change the result.  Idempotence is an explicit premise:
+    this theorem is not available to SUM, AVG, COUNT, or any other
+    multiplicity-sensitive aggregate. *)
+Local Lemma fold_left_aci_seed :
+  forall (A : Type) (operation : A -> A -> A),
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    forall values first second,
+      fold_left operation values (operation first second) =
+      operation first (fold_left operation values second).
+Proof.
+  intros A operation Hassociative values.
+  induction values as [|value values IH]; intros first second; cbn.
+  - reflexivity.
+  - rewrite Hassociative; apply IH.
+Qed.
+
+Local Lemma fold_left_aci_member_absorbed :
+  forall (A : Type) (operation : A -> A -> A),
+    (forall left right, operation left right = operation right left) ->
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    (forall value, operation value value = value) ->
+    forall values initial member,
+      In member (initial :: values) ->
+      operation member (fold_left operation values initial) =
+      fold_left operation values initial.
+Proof.
+  intros A operation Hcommutative Hassociative Hidempotent values.
+  induction values as [|value values IH];
+    intros initial member Hmember; cbn in *.
+  - destruct Hmember as [<-|[]]; apply Hidempotent.
+  - rewrite
+      (fold_left_aci_seed A operation Hassociative values initial value).
+    destruct Hmember as [<-|Hmember].
+    + rewrite <-
+        (Hassociative initial initial
+          (fold_left operation values value)).
+      now rewrite Hidempotent.
+    + rewrite <-
+        (Hassociative member initial
+          (fold_left operation values value)),
+        (Hcommutative member initial),
+        (Hassociative initial member
+          (fold_left operation values value)),
+        (IH value member Hmember).
+      reflexivity.
+Qed.
+
+Local Lemma fold_left_absorbed_values :
+  forall (A : Type) (operation : A -> A -> A) fixed values,
+    (forall value, In value values -> operation fixed value = fixed) ->
+    fold_left operation values fixed = fixed.
+Proof.
+  intros A operation fixed values Habsorbed.
+  induction values as [|value values IH]; cbn; [reflexivity|].
+  rewrite (Habsorbed value (or_introl eq_refl)).
+  apply IH; intros current Hcurrent.
+  apply Habsorbed; now right.
+Qed.
+
+Theorem fold_nonempty_support_equiv :
+  forall (A : Type) (operation : A -> A -> A),
+    (forall left right, operation left right = operation right left) ->
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    (forall value, operation value value = value) ->
+    forall left right,
+      (forall value, In value left <-> In value right) ->
+      fold_nonempty operation left = fold_nonempty operation right.
+Proof.
+  intros A operation Hcommutative Hassociative Hidempotent
+    left right Hsupport.
+  unfold fold_nonempty.
+  destruct left as [|left_head left_tail],
+    right as [|right_head right_tail]; cbn.
+  - reflexivity.
+  - exfalso.
+    specialize (proj2 (Hsupport right_head) (or_introl eq_refl)).
+    contradiction.
+  - exfalso.
+    specialize (proj1 (Hsupport left_head) (or_introl eq_refl)).
+    contradiction.
+  - f_equal.
+    set (left_result := fold_left operation left_tail left_head).
+    set (right_result := fold_left operation right_tail right_head).
+    assert (Hleft_right :
+      operation left_result right_result = left_result).
+    {
+      subst right_result.
+      rewrite <-
+        (fold_left_aci_seed A operation Hassociative
+          right_tail left_result right_head).
+      assert (Hhead : operation left_result right_head = left_result).
+      {
+        rewrite (Hcommutative left_result right_head).
+        unfold left_result.
+        apply fold_left_aci_member_absorbed; try assumption.
+        apply (proj2 (Hsupport right_head)); now left.
+      }
+      rewrite Hhead.
+      apply fold_left_absorbed_values.
+      intros current Hcurrent.
+      rewrite (Hcommutative left_result current).
+      unfold left_result.
+      apply fold_left_aci_member_absorbed; try assumption.
+      apply (proj2 (Hsupport current)); now right.
+    }
+    assert (Hright_left :
+      operation right_result left_result = right_result).
+    {
+      subst left_result.
+      rewrite <-
+        (fold_left_aci_seed A operation Hassociative
+          left_tail right_result left_head).
+      assert (Hhead : operation right_result left_head = right_result).
+      {
+        rewrite (Hcommutative right_result left_head).
+        unfold right_result.
+        apply fold_left_aci_member_absorbed; try assumption.
+        apply (proj1 (Hsupport left_head)); now left.
+      }
+      rewrite Hhead.
+      apply fold_left_absorbed_values.
+      intros current Hcurrent.
+      rewrite (Hcommutative right_result current).
+      unfold right_result.
+      apply fold_left_aci_member_absorbed; try assumption.
+      apply (proj1 (Hsupport current)); now right.
+    }
+    rewrite Hcommutative in Hright_left.
+    congruence.
+Qed.
+
+Local Lemma forallb_support_equiv :
+  forall (A : Type) (test : A -> bool) left right,
+    (forall value, In value left <-> In value right) ->
+    forallb test left = forallb test right.
+Proof.
+  intros A test left right Hsupport.
+  destruct (forallb test left) eqn:Hleft,
+    (forallb test right) eqn:Hright; try reflexivity.
+  - rewrite forallb_forall in Hleft.
+    assert (forallb test right = true) as Hcontradiction.
+    {
+      rewrite forallb_forall; intros value Hvalue.
+      apply Hleft, (proj2 (Hsupport value)), Hvalue.
+    }
+    congruence.
+  - rewrite forallb_forall in Hright.
+    assert (forallb test left = true) as Hcontradiction.
+    {
+      rewrite forallb_forall; intros value Hvalue.
+      apply Hright, (proj1 (Hsupport value)), Hvalue.
+    }
+    congruence.
+Qed.
+
+Local Lemma flat_map_support_equiv :
+  forall (A B : Type) (project : A -> list B) left right,
+    (forall value, In value left <-> In value right) ->
+    forall projected,
+      In projected (flat_map project left) <->
+      In projected (flat_map project right).
+Proof.
+  intros A B project left right Hsupport projected.
+  rewrite !in_flat_map.
+  split; intros [value [Hvalue Hprojected]];
+    exists value; split; try exact Hprojected.
+  - now apply (proj1 (Hsupport value)).
+  - now apply (proj2 (Hsupport value)).
+Qed.
+
+Local Lemma checked_flat_map_fold_nonempty_support_equiv :
+  forall (A B : Type) (predicate : value -> bool)
+    (project : value -> list A) (operation : A -> A -> A)
+    (wrap : option A -> B) left right,
+    (forall current, In current left <-> In current right) ->
+    (forall first second, operation first second = operation second first) ->
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    (forall current, operation current current = current) ->
+    (if forallb predicate left
+     then wrap (fold_nonempty operation (flat_map project left))
+     else wrap None) =
+    (if forallb predicate right
+     then wrap (fold_nonempty operation (flat_map project right))
+     else wrap None).
+Proof.
+  intros A B predicate project operation wrap left right
+    Hsupport Hcommutative Hassociative Hidempotent.
+  rewrite (forallb_support_equiv value predicate left right Hsupport).
+  destruct (forallb predicate right); [|reflexivity].
+  f_equal.
+  apply fold_nonempty_support_equiv; try assumption.
+  now apply flat_map_support_equiv.
+Qed.
+
+(** PostgreSQL text MAX under the modeled UTF8/C collation is another exact
+    semilattice extremum.  Keep its value extraction local to this boundary so
+    the public interface remains phrased over aggregate calls and support. *)
+Local Definition text_value_projection_for_extrema
+    (input : value) : list string :=
+  match input with
+  | Value_string (StringText, Some text) => text :: nil
+  | _ => nil
+  end.
+
+Local Lemma text_values_as_flat_map_for_extrema : forall values,
+  text_values values = flat_map text_value_projection_for_extrema values.
+Proof.
+  induction values as [|value values IH]; cbn; [reflexivity|].
+  destruct value; cbn; try exact IH.
+  destruct s as [typmod payload].
+  destruct typmod; destruct payload; cbn; try exact IH; now rewrite IH.
+Qed.
+
+Local Lemma text_c_max_is_ordered_maximum : forall left right,
+  text_c_max left right = ordered_maximum Ostring left right.
+Proof. reflexivity. Qed.
+
+Local Lemma text_c_max_commutative : forall left right,
+  text_c_max left right = text_c_max right left.
+Proof.
+  intros left right; rewrite !text_c_max_is_ordered_maximum.
+  apply ordered_maximum_commutative.
+Qed.
+
+Local Lemma text_c_max_associative : forall first second third,
+  text_c_max (text_c_max first second) third =
+  text_c_max first (text_c_max second third).
+Proof.
+  intros first second third; rewrite !text_c_max_is_ordered_maximum.
+  apply ordered_maximum_associative.
+Qed.
+
+Local Lemma text_c_max_idempotent : forall text,
+  text_c_max text text = text.
+Proof.
+  intro text; rewrite text_c_max_is_ordered_maximum.
+  unfold ordered_maximum; now rewrite Oset.compare_eq_refl.
+Qed.
+
+Local Lemma interp_max_string_support_equiv : forall left right,
+  (forall value, In value left <-> In value right) ->
+  interp_max_string left = interp_max_string right.
+Proof.
+  intros left right Hsupport.
+  unfold interp_max_string; rewrite !text_values_as_flat_map_for_extrema.
+  eapply
+    (checked_flat_map_fold_nonempty_support_equiv
+      string value is_text_value text_value_projection_for_extrema
+      text_c_max
+      (fun result => Value_string (StringValue StringText result))
+      left right);
+    try exact Hsupport.
+  - apply text_c_max_commutative.
+  - apply text_c_max_associative.
+  - apply text_c_max_idempotent.
+Qed.
+
+Lemma exact_extrema_aggregate_permutation : forall function quantifier left right,
+  (function = AggregateMinZ \/ function = AggregateMaxZ \/
+   function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+   function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+   function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+   function = AggregateMaxString) ->
+  Permutation left right ->
+  interp_aggregate (AggregateCall function quantifier) left =
+  interp_aggregate (AggregateCall function quantifier) right.
+Proof.
+  intros function quantifier left right Hfunction Hperm.
+  eapply interp_aggregate_call_permutation_congr; [|exact Hperm].
+  intros first second Hselected.
+  repeat match type of Hfunction with
+  | _ \/ _ => destruct Hfunction as [Hfunction | Hfunction]
+  | function = _ => subst function
+  end;
+    cbn [interp_aggregate_function].
+  all: first
+    [ now apply interp_min_z_permutation
+    | now apply interp_max_z_permutation
+    | now apply interp_min_int32_permutation
+    | now apply interp_max_int32_permutation
+    | now apply interp_min_int64_permutation
+    | now apply interp_max_int64_permutation
+    | now apply interp_min_numeric_permutation
+    | now apply interp_max_numeric_permutation
+    | apply interp_max_string_support_equiv; intro value; split; intro Hin;
+      [ eapply Permutation_in; [exact Hselected|exact Hin]
+      | eapply Permutation_in;
+        [apply Permutation_sym; exact Hselected|exact Hin] ] ].
+Qed.
+
+Local Lemma exact_extrema_function_support_equiv :
+  forall function left right,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    (forall value, In value left <-> In value right) ->
+    interp_aggregate_function function left =
+    interp_aggregate_function function right.
+Proof.
+  intros function left right Hfunction Hsupport.
+  repeat match type of Hfunction with
+  | _ \/ _ => destruct Hfunction as [Hfunction | Hfunction]
+  | function = _ => subst function
+  end; cbn [interp_aggregate_function].
+  - unfold interp_min_z; rewrite !z_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply Z.min_comm.
+    + intros; symmetry; apply Z.min_assoc.
+    + apply Z.min_id.
+  - unfold interp_max_z; rewrite !z_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply Z.max_comm.
+    + intros; symmetry; apply Z.max_assoc.
+    + apply Z.max_id.
+  - unfold interp_min_int32; rewrite !int32_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply int32_minimum_commutative.
+    + apply int32_minimum_associative.
+    + intro value; unfold int32_minimum; now rewrite Z.leb_refl.
+  - unfold interp_max_int32; rewrite !int32_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply int32_maximum_commutative.
+    + apply int32_maximum_associative.
+    + intro value; unfold int32_maximum; now rewrite Z.leb_refl.
+  - unfold interp_min_int64; rewrite !int64_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply int64_minimum_commutative.
+    + apply int64_minimum_associative.
+    + intro value; unfold int64_minimum; now rewrite Z.leb_refl.
+  - unfold interp_max_int64; rewrite !int64_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply int64_maximum_commutative.
+    + apply int64_maximum_associative.
+    + intro value; unfold int64_maximum; now rewrite Z.leb_refl.
+  - unfold interp_min_numeric; rewrite !numeric_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply numeric_min_commutative.
+    + apply numeric_min_associative.
+    + apply numeric_min_idempotent.
+  - unfold interp_max_numeric; rewrite !numeric_values_as_flat_map.
+    eapply checked_flat_map_fold_nonempty_support_equiv;
+      try exact Hsupport.
+    + apply numeric_max_commutative.
+    + apply numeric_max_associative.
+    + apply numeric_max_idempotent.
+  - now apply interp_max_string_support_equiv.
+Qed.
+
+(** Exact integral, NUMERIC, and C-collated TEXT extrema are support-invariant
+    for both ALL and DISTINCT.  The closed function list deliberately excludes
+    every SUM and AVG, including FLOAT and DOUBLE SUM/AVG, whose transition
+    operations are not idempotent and whose floating variants are not
+    generally permutation invariant.  FLOAT/DOUBLE extrema are also
+    fail-closed here because exact support invariance has not been established
+    for their representation-level tie behavior. *)
+Theorem exact_extrema_aggregate_support_equiv :
+  forall function quantifier left right,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    (forall value, In value left <-> In value right) ->
+    interp_aggregate (AggregateCall function quantifier) left =
+    interp_aggregate (AggregateCall function quantifier) right.
+Proof.
+  intros function quantifier left right Hfunction Hsupport.
+  cbn [interp_aggregate].
+  apply exact_extrema_function_support_equiv; [exact Hfunction|].
+  intro value; rewrite !aggregate_input_values_membership.
+  apply Hsupport.
+Qed.
+
+Theorem exact_extrema_aggregate_duplicate_block :
+  forall function quantifier prefix block suffix,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    interp_aggregate (AggregateCall function quantifier)
+      (prefix ++ block ++ block ++ suffix) =
+    interp_aggregate (AggregateCall function quantifier)
+      (prefix ++ block ++ suffix).
+Proof.
+  intros function quantifier prefix block suffix Hfunction.
+  apply exact_extrema_aggregate_support_equiv; [exact Hfunction|].
+  intro value; repeat rewrite in_app_iff; tauto.
+Qed.
+
+Lemma first_runtime_error_duplicate_block :
+  forall (A : Type) (check : A -> option sql_runtime_error)
+    prefix block suffix,
+    first_runtime_error check (prefix ++ block ++ block ++ suffix) =
+    first_runtime_error check (prefix ++ block ++ suffix).
+Proof.
+  intros A check prefix block suffix.
+  repeat rewrite first_runtime_error_app.
+  destruct (first_runtime_error check block); reflexivity.
+Qed.
+
+Lemma first_observation_error_duplicate_block :
+  forall prefix block suffix,
+    first_observation_error (prefix ++ block ++ block ++ suffix) =
+    first_observation_error (prefix ++ block ++ suffix).
+Proof.
+  intros prefix block suffix.
+  rewrite !first_observation_error_as_first_runtime_error.
+  apply first_runtime_error_duplicate_block.
+Qed.
+
+(** Arbitrary support equivalence is intentionally insufficient for this
+    runtime theorem: support does not record which child error is reached
+    first.  Repeating the same reached block preserves that left-biased error,
+    and exact extrema have no aggregate-local error branch. *)
+Theorem exact_extrema_aggregate_runtime_error_duplicate_block :
+  forall function quantifier prefix block suffix,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    interp_aggregate_runtime_error (AggregateCall function quantifier)
+      (prefix ++ block ++ block ++ suffix) =
+    interp_aggregate_runtime_error (AggregateCall function quantifier)
+      (prefix ++ block ++ suffix).
+Proof.
+  intros function quantifier prefix block suffix Hfunction.
+  unfold interp_aggregate_runtime_error.
+  rewrite first_observation_error_duplicate_block.
+  destruct
+    (first_observation_error (prefix ++ block ++ suffix));
+    [reflexivity|].
+  repeat match type of Hfunction with
+  | _ \/ _ => destruct Hfunction as [Hfunction | Hfunction]
+  | function = _ => subst function
+  end; reflexivity.
 Qed.
 
 Lemma aggregate_input_values_preserves_all_null : forall quantifier values,
@@ -602,6 +1165,152 @@ Proof.
        Value_int64 (Some result)).
     unfold value_int64_checked; now rewrite Hresult.
   - now apply int64_checked_result_value in Hresult.
+Qed.
+
+(** Successful SUM over a nonempty, well-typed, non-NULL input cannot produce
+    SQL NULL.  The int32 variant needs the explicit runtime-safety premise
+    because PostgreSQL reports bigint overflow instead of returning a value;
+    unconstrained NUMERIC retains a non-NULL mathematical value and reports
+    any range error through the separate runtime channel. *)
+Lemma int32_values_nonempty_of_typed_nonnull : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_int32_value value = true /\ is_null_value value = false)
+    values ->
+  int32_values values <> [].
+Proof.
+  intros [|value values] Hnonempty Hvalues; [contradiction|].
+  inversion Hvalues as [|? ? [Htyped Hnonnull] ?]; subst.
+  destruct value; cbn in Htyped; try discriminate.
+  destruct o; cbn in Hnonnull |- *; discriminate.
+Qed.
+
+Lemma numeric_values_nonempty_of_typed_nonnull : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  numeric_values values <> [].
+Proof.
+  intros [|value values] Hnonempty Hvalues; [contradiction|].
+  inversion Hvalues as [|? ? [Htyped Hnonnull] ?]; subst.
+  destruct value; cbn in Htyped; try discriminate.
+  destruct o; cbn in Hnonnull |- *; discriminate.
+Qed.
+
+Lemma interp_sum_int32_nonnull_of_nonempty_runtime_safe : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_int32_value value = true /\ is_null_value value = false)
+    values ->
+  sum_int32_runtime_error values = None ->
+  is_null_value (interp_sum_int32_as_int64 values) = false.
+Proof.
+  intros values Hnonempty Hvalues Hsafe.
+  assert (Htyped : forallb is_int32_value values = true).
+  {
+    apply forallb_forall; intros value Hvalue.
+    rewrite Forall_forall in Hvalues.
+    exact (proj1 (Hvalues value Hvalue)).
+  }
+  pose proof
+    (int32_values_nonempty_of_typed_nonnull values Hnonempty Hvalues)
+    as Hintegers.
+  unfold interp_sum_int32_as_int64, sum_int32_runtime_error in *.
+  rewrite Htyped in *.
+  destruct (int32_values values) as [|integer integers] eqn:Hselected;
+    [contradiction|].
+  unfold int64_result_runtime_error, value_int64_checked in *.
+  destruct
+    (int64_checked
+      (fold_left
+        (fun accumulator next => accumulator + int32_value next)
+        (integer :: integers) 0)) eqn:Hresult;
+    [reflexivity|discriminate].
+Qed.
+
+Lemma interp_sum_numeric_nonnull_of_nonempty : forall values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  is_null_value (interp_sum_numeric values) = false.
+Proof.
+  intros values Hnonempty Hvalues.
+  assert (Htyped : forallb is_numeric_value values = true).
+  {
+    apply forallb_forall; intros value Hvalue.
+    rewrite Forall_forall in Hvalues.
+    exact (proj1 (Hvalues value Hvalue)).
+  }
+  pose proof
+    (numeric_values_nonempty_of_typed_nonnull values Hnonempty Hvalues)
+    as Hnumbers.
+  unfold interp_sum_numeric.
+  rewrite Htyped.
+  destruct (numeric_values values) as [|number numbers] eqn:Hselected;
+    [contradiction|].
+  remember
+    (fold_left numeric_sum_transition (number :: numbers)
+      numeric_sum_initial) as state.
+  assert (Hcount :
+    numeric_sum_total_count state = Z.of_nat (S (List.length numbers))).
+  {
+    subst state.
+    rewrite numeric_sum_fold_total_count_exact.
+    reflexivity.
+  }
+  unfold numeric_sum_from_state.
+  rewrite Hcount.
+  destruct (Z.eqb (Z.of_nat (S (List.length numbers))) 0) eqn:Hzero.
+  - apply Z.eqb_eq in Hzero; lia.
+  - destruct
+      (numeric_agg_special_result
+        (numeric_sum_nan_count state)
+        (numeric_sum_pos_inf_count state)
+        (numeric_sum_neg_inf_count state)); reflexivity.
+Qed.
+
+Lemma aggregate_sum_int32_nonnull_of_nonempty_runtime_safe :
+  forall quantifier values,
+    values <> [] ->
+    Forall
+      (fun value =>
+        is_int32_value value = true /\ is_null_value value = false)
+      values ->
+    aggregate_local_runtime_error
+      (AggregateCall AggregateSumInt32 quantifier) values = None ->
+    is_null_value
+      (interp_aggregate
+        (AggregateCall AggregateSumInt32 quantifier) values) = false.
+Proof.
+  intros quantifier values Hnonempty Hvalues Hsafe.
+  apply interp_sum_int32_nonnull_of_nonempty_runtime_safe.
+  - apply (proj2 (aggregate_input_values_nonempty_iff quantifier values)).
+    exact Hnonempty.
+  - now apply aggregate_input_values_preserves_Forall.
+  - exact Hsafe.
+Qed.
+
+Lemma aggregate_sum_numeric_nonnull_of_nonempty : forall quantifier values,
+  values <> [] ->
+  Forall
+    (fun value =>
+      is_numeric_value value = true /\ is_null_value value = false)
+    values ->
+  is_null_value
+    (interp_aggregate
+      (AggregateCall AggregateSumNumeric quantifier) values) = false.
+Proof.
+  intros quantifier values Hnonempty Hvalues.
+  apply interp_sum_numeric_nonnull_of_nonempty.
+  - apply (proj2 (aggregate_input_values_nonempty_iff quantifier values)).
+    exact Hnonempty.
+  - now apply aggregate_input_values_preserves_Forall.
 Qed.
 
 (** Empty and all-NULL aggregate results. *)
@@ -1039,7 +1748,7 @@ Qed.
 
 Lemma avg_float_empty_is_null : forall quantifier,
   interp_aggregate (AggregateCall AggregateAverageFloat quantifier) [] =
-  Value_float None.
+  Value_double None.
 Proof. intro quantifier; destruct quantifier; reflexivity. Qed.
 
 Lemma avg_double_empty_is_null : forall quantifier,
@@ -1050,7 +1759,7 @@ Proof. intro quantifier; destruct quantifier; reflexivity. Qed.
 Lemma avg_float_all_null_is_null : forall quantifier values,
   Forall (fun value => is_null_value value = true) values ->
   interp_aggregate (AggregateCall AggregateAverageFloat quantifier) values =
-  Value_float None.
+  Value_double None.
 Proof.
   intros quantifier values Hnulls.
   pose proof (aggregate_input_values_preserves_all_null
@@ -1059,10 +1768,10 @@ Proof.
   destruct Hselected as [Hfloat _].
   change
     (interp_avg_float (aggregate_input_values quantifier values) =
-     Value_float None).
+     Value_double None).
   unfold interp_avg_float.
   destruct (forallb is_float_value (aggregate_input_values quantifier values));
-    [now rewrite Hfloat|reflexivity].
+    [rewrite Hfloat; reflexivity|reflexivity].
 Qed.
 
 Lemma avg_double_all_null_is_null : forall quantifier values,
@@ -1534,3 +2243,186 @@ Proof.
   - exact (Htrans left middle right Hleft Hright).
   - exact (eq_trans Hleft Hright).
 Qed.
+
+(** Argument observations for a direct column over one closed group.
+
+    This interface deliberately stops at [Permutation] of the observations
+    selected by the aggregate evaluator.  It does not identify aggregate
+    results under that permutation: callers using order-sensitive operations
+    such as floating-point SUM or AVG must retain the representative order or
+    supply a separate stability theorem. *)
+Section DirectColumnAggregateArguments.
+
+Context {T : Tuple.Rcd}.
+
+Variable symbol_runtime_error :
+  Tuple.scalar_operator T ->
+  list (option sql_runtime_error * Tuple.value T) ->
+  option sql_runtime_error.
+
+Definition direct_column_aggregate_term
+    (aggregate : Tuple.aggregate T)
+    (attribute : Tuple.attribute T) : @ATerms.aggterm T :=
+  @ATerms.A_agg T aggregate (@FTerms.F_Dot T attribute).
+
+Definition closed_group_direct_column_argument_envs
+    (group_terms : list (@ATerms.aggterm T))
+    (group : list (Tuple.tuple T))
+    (aggregate : Tuple.aggregate T)
+    (attribute : Tuple.attribute T) : list (Env.env T) :=
+  let group_env :=
+    Env.env_g T nil (@Env.Group_By T group_terms) group in
+  let aggregate_term := direct_column_aggregate_term aggregate attribute in
+  let function_term := @FTerms.F_Dot T attribute in
+  let selected_env :=
+    if Fset.is_empty (Tuple.A T) (FTerms.variables_ft T function_term)
+    then Some group_env
+    else Interp.find_eval_env T group_env aggregate_term in
+  match selected_env with
+  | None | Some nil => nil
+  | Some (slice :: outer_env) =>
+      map (fun inner_slice => inner_slice :: outer_env)
+        (Interp.unfold_env_slice T slice)
+  end.
+
+(** Definitionally, this is the observation list passed to an aggregate
+    callback by [eval_aggterm_aggregate_runtime_error] for the corresponding
+    direct-column aggregate application. *)
+Definition closed_group_direct_column_argument_observations
+    (group_terms : list (@ATerms.aggterm T))
+    (group : list (Tuple.tuple T))
+    (aggregate : Tuple.aggregate T)
+    (attribute : Tuple.attribute T) :=
+  map
+    (fun argument_env =>
+      (@eval_funterm_runtime_error T symbol_runtime_error
+        argument_env (@FTerms.F_Dot T attribute),
+       Interp.interp_funterm T argument_env (@FTerms.F_Dot T attribute)))
+    (closed_group_direct_column_argument_envs
+      group_terms group aggregate attribute).
+
+Local Lemma direct_column_variables_nonempty : forall attribute,
+  Fset.is_empty (Tuple.A T)
+    (FTerms.variables_ft T (@FTerms.F_Dot T attribute)) = false.
+Proof.
+  intro attribute; cbn [FTerms.variables_ft].
+  case_eq
+    (Fset.is_empty (Tuple.A T)
+      (Fset.singleton (Tuple.A T) attribute)); intro Hempty.
+  - exfalso.
+    rewrite Fset.is_empty_spec, Fset.equal_spec in Hempty.
+    specialize (Hempty attribute).
+    rewrite Fset.singleton_spec, Oset.eq_bool_refl,
+      Fset.empty_spec in Hempty.
+    discriminate.
+  - reflexivity.
+Qed.
+
+Local Lemma direct_column_aggregate_selects_closed_group :
+  forall group_terms group aggregate attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS Tuple.labels T row)
+      group ->
+    Interp.find_eval_env T
+      (Env.env_g T nil (@Env.Group_By T group_terms) group)
+      (direct_column_aggregate_term aggregate attribute) =
+    Some (Env.env_g T nil (@Env.Group_By T group_terms) group).
+Proof.
+  intros group_terms group aggregate attribute Hnonempty Hpresent.
+  case_eq (ListSort.quicksort (Tuple.OTuple T) group).
+  - intro Hsorted.
+    pose proof
+      (ListSort.length_quicksort (Tuple.OTuple T) group) as Hlength.
+    rewrite Hsorted in Hlength; symmetry in Hlength.
+    apply length_zero_iff_nil in Hlength; contradiction.
+  - intros first rest Hsorted.
+    assert (Hfirst : attribute inS Tuple.labels T first).
+    {
+      rewrite Forall_forall in Hpresent.
+      apply Hpresent.
+      apply (proj2
+        (ListSort.In_quicksort (Tuple.OTuple T) group first)).
+      rewrite Hsorted; now left.
+    }
+    unfold Env.env_g; rewrite Hsorted.
+    assert (Hsuitable :
+      Interp.is_a_suitable_env T (Tuple.labels T first) nil
+        (direct_column_aggregate_term aggregate attribute) = true).
+    {
+      unfold Interp.is_a_suitable_env, direct_column_aggregate_term.
+      cbn [ATerms.is_built_upon_ag FTerms.is_built_upon_ft].
+      rewrite Bool.Bool.orb_true_iff; right.
+      cbn [FTerms.is_built_upon_ft flat_map].
+      rewrite FTerms.funterm_mem_true_iff.
+      rewrite ATerms.in_extract_funterms, app_nil_r.
+      apply
+        (in_map
+          (fun current : Tuple.attribute T =>
+            @ATerms.A_Expr T (@FTerms.F_Dot T current))
+          (Fset.elements (Tuple.A T) (Tuple.labels T first)) attribute).
+      now apply Fset.mem_in_elements.
+    }
+    unfold Interp.find_eval_env at 1; fold Interp.find_eval_env.
+    rewrite Hsuitable; reflexivity.
+Qed.
+
+Local Lemma direct_column_singleton_observation :
+  forall stored_labels row attribute,
+    attribute inS Tuple.labels T row ->
+    (@eval_funterm_runtime_error T symbol_runtime_error
+       ((stored_labels, @Env.Group_Fine T, row :: nil) :: nil)
+       (@FTerms.F_Dot T attribute),
+     Interp.interp_funterm T
+       ((stored_labels, @Env.Group_Fine T, row :: nil) :: nil)
+       (@FTerms.F_Dot T attribute)) =
+    (None, Tuple.dot T row attribute).
+Proof.
+  intros stored_labels row attribute Hpresent.
+  unfold Interp.interp_funterm, Interp.interp_dot.
+  cbn [eval_funterm_runtime_error].
+  rewrite ListSort.quicksort_1; now rewrite Hpresent.
+Qed.
+
+(** A nonempty closed group whose rows expose the referenced column produces
+    exactly one error-free direct-column observation per row, modulo the
+    evaluator's representative ordering.  Neither the tuple schema nor the
+    aggregate operator is fixed by this statement. *)
+Theorem closed_group_direct_column_argument_observations_permutation_rows :
+  forall group_terms group aggregate attribute,
+    group <> nil ->
+    Forall
+      (fun row => attribute inS Tuple.labels T row)
+      group ->
+    Permutation
+      (closed_group_direct_column_argument_observations
+        group_terms group aggregate attribute)
+      (map
+        (fun row => (None, Tuple.dot T row attribute))
+        group).
+Proof.
+  intros group_terms group aggregate attribute Hnonempty Hpresent.
+  pose proof
+    (direct_column_aggregate_selects_closed_group
+      group_terms group aggregate attribute Hnonempty Hpresent) as Hselected.
+  unfold closed_group_direct_column_argument_observations,
+    closed_group_direct_column_argument_envs.
+  rewrite direct_column_variables_nonempty, Hselected.
+  unfold Env.env_g.
+  case_eq (ListSort.quicksort (Tuple.OTuple T) group).
+  - intro Hsorted.
+    pose proof
+      (ListSort.length_quicksort (Tuple.OTuple T) group) as Hlength.
+    rewrite Hsorted in Hlength; symmetry in Hlength.
+    apply length_zero_iff_nil in Hlength; contradiction.
+  - intros first rest Hsorted; cbn.
+    unfold Interp.unfold_env_slice; rewrite !map_map.
+    apply Permutation_refl'.
+    apply map_ext_in; intros row Hrow.
+    apply
+      (direct_column_singleton_observation
+        (Tuple.labels T first) row attribute).
+    rewrite Forall_forall in Hpresent; now apply Hpresent.
+Qed.
+
+End DirectColumnAggregateArguments.

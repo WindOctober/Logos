@@ -414,6 +414,111 @@ destruct (existsb (accept left_row) right) eqn:Hexists; cbn [filter].
   end.
 Qed.
 
+(** A partial-functional left join may expose different projected views for
+    its matched and NULL-padded branches.  The branch decision is retained
+    explicitly on the right-hand side, while each left occurrence contributes
+    exactly once.  This is a single-operator occurrence law; SQL condition and
+    projection errors remain separate evaluator obligations. *)
+Lemma map_left_join_functional_branch_permut :
+  forall (A B : Type) (OB : Oeset.Rcd B)
+      (join : A -> A -> A) (accept : A -> A -> bool)
+      (project matched_emit unmatched_emit : A -> B)
+      (pad : A -> A) left right,
+    (forall left_row right_row,
+      In left_row left ->
+      In right_row right ->
+      accept left_row right_row = true ->
+      Oeset.compare OB (project (join left_row right_row))
+        (matched_emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      Oeset.compare OB (project (pad left_row))
+        (unmatched_emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      (List.length (filter (accept left_row) right) <= 1)%nat) ->
+    Oeset.permut OB
+      (map project
+        (theta_join_list A join accept left right ++
+         map pad
+           (filter
+             (fun left_row => negb (existsb (accept left_row) right)) left)))
+      (map
+        (fun left_row =>
+          if existsb (accept left_row) right
+          then matched_emit left_row
+          else unmatched_emit left_row)
+        left).
+Proof.
+intros A B OB join accept project matched_emit unmatched_emit pad left right
+  Hmatched Hpad Hfunctional.
+induction left as [|left_row rest IH]; [apply Oeset.permut_refl|].
+specialize (IH
+  (fun row other Hrow Hother Haccepted =>
+    Hmatched row other (or_intror _ Hrow) Hother Haccepted)
+  (fun row Hrow => Hpad row (or_intror _ Hrow))
+  (fun row Hrow => Hfunctional row (or_intror _ Hrow))).
+unfold theta_join_list, d_join_list in IH.
+unfold List.flat_map in IH.
+unfold theta_join_list.
+unfold List.flat_map at 1.
+unfold d_join_list.
+destruct (existsb (accept left_row) right) eqn:Hexists; cbn [filter].
+- pose proof Hexists as Hexists_eq.
+  apply existsb_exists in Hexists as [matched [Hmatched_in Haccept]].
+  destruct
+    (filter_singleton_of_nonempty_length_le_one A (accept left_row) right)
+    as [only Hmatches].
+  { exists matched; now split. }
+  { apply Hfunctional; now left. }
+  assert (Honly : In only right /\ accept left_row only = true).
+  {
+    assert (Hin : In only (filter (accept left_row) right)).
+    { rewrite Hmatches; now left. }
+    now apply filter_In in Hin.
+  }
+  destruct Honly as [Honly_in Honly_accept].
+  rewrite Hmatches, Hexists_eq; cbn.
+  rewrite Hexists_eq; cbn.
+  apply (proj1
+    (Oeset.permut_cons OB _ _ _ _
+      (Hmatched left_row only (or_introl eq_refl)
+        Honly_in Honly_accept))).
+  exact IH.
+- assert (Hmatches : filter (accept left_row) right = nil).
+  { destruct (filter (accept left_row) right) as [|matched tail] eqn:Hfilter;
+      [reflexivity|].
+    assert (Hin : In matched (filter (accept left_row) right)).
+    { rewrite Hfilter; now left. }
+    apply filter_In in Hin as [Hmatched_in Haccept].
+    assert (Htrue : existsb (accept left_row) right = true).
+    { apply existsb_exists; exists matched; now split. }
+    rewrite Hexists in Htrue; discriminate. }
+  rewrite Hmatches, Hexists; cbn.
+  rewrite Hexists; cbn.
+  rewrite map_app; cbn.
+  rewrite map_app in IH.
+  match goal with
+  | |- Oeset.permut OB
+      (?before ++ project (pad left_row) :: ?after)
+      (unmatched_emit left_row :: ?target) =>
+    eapply Oeset.permut_trans;
+    [ apply Oeset.permut_sym;
+      apply (proj1
+        (Oeset.permut_cons_inside OB
+          (project (pad left_row)) (project (pad left_row))
+          (before ++ after) before after
+          (Oeset.compare_eq_refl OB _)));
+      apply Oeset.permut_refl
+    | apply (proj1
+        (Oeset.permut_cons OB
+          (project (pad left_row)) (unmatched_emit left_row)
+          (before ++ after) target
+          (Hpad left_row (or_introl eq_refl))));
+      exact IH ]
+  end.
+Qed.
+
 (** Semantic duplicate-freedom of a mapped list pulls back to the source
     through the induced relation, without assuming that the map is injective. *)
 Lemma NoDupA_map_preimage :

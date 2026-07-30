@@ -1,4 +1,4 @@
-.PHONY: submodules check-rocq-env formal-sql smoke logos-formal-sql-lemmas logos-formal-sql-checks calcite-ir status
+.PHONY: submodules check-rocq-env formal-sql formal-sql-catalog smoke logos-formal-sql-lemmas logos-formal-sql-checks calcite-ir status
 
 OPAM ?= opam
 ROCQ_OPAM_SWITCH ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH),$(CURDIR)/.opam-rocq)
@@ -12,7 +12,7 @@ ROCQ_ENV := ROCQLIB=$(ROCQLIB) COQLIB=$(COQLIB) OCAMLFIND_CONF=$(OCAMLFIND_CONF)
 LOGOS_ROCQ_COMPILE = $(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq compile -Q $(FORMALSQL_SRC) SQLFS -Q theories Logos
 LOGOS_ROCQ_TEST_COMPILE = $(LOGOS_ROCQ_COMPILE) -Q tests/rocq LogosTests
 
-formal-sql-catalog:
+formal-sql-catalog: submodules
 	python3 scripts/generate-formal-sql-catalog.py --check
 
 submodules:
@@ -21,7 +21,7 @@ submodules:
 check-rocq-env:
 	@test -n "$(OPAM_SWITCH)" || { echo "Set ROCQ_OPAM_SWITCH or OPAM_SWITCH before building Rocq targets."; exit 2; }
 
-formal-sql: check-rocq-env submodules
+formal-sql: check-rocq-env formal-sql-catalog
 	cd $(FORMALSQL_SRC) && $(RM) Makefile.rocq Makefile.rocq.conf .Makefile.rocq.d
 	cd $(FORMALSQL_SRC) && $(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- rocq makefile -f _CoqProject -o Makefile.rocq
 	cd $(FORMALSQL_SRC) && $(ROCQ_ENV) $(OPAM) exec --switch=$(OPAM_SWITCH) -- make -f Makefile.rocq -j1
@@ -47,11 +47,22 @@ logos-formal-sql-lemmas: formal-sql
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/GroupingRewriteFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/AggregateRuntimeFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/RelationalAlgebraFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/OuterJoinFilterFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/GroupedFilterOutcomeFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/SemijoinCompositionFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/NumericRegroupFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/OrderedQueryFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/OrderedObservationTransportFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/RenameTransportFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/ProofAgentFacade.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/SubqueryFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/MembershipCompositionFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/WitnessFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/CountermodelFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/AggregateOutcomeBridgeFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/CorrelatedMembershipFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/MembershipJoinCompositionFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/FilterFkEliminationFacts.v
 
 logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/BitwiseRegression.v
@@ -61,25 +72,45 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FilterExtensionalOutcomeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/GroupingGenericInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AggregatePartitionSupportRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/IdempotentAggregateSupportRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AggregateOutcomeBridgeRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FloatAggregateOrderRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/LeftJoinFunctionalProjectionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FullJoinSourceSupportRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/RelationalSupportFilterRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OuterJoinFilterRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/BagHomomorphismInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OutcomeResetCongruenceRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OrderedGroupChildOutcomeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OrderedGroupingSetsFunctionalityRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OrderedWindowStructureRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OrderedObservationTransportRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NumericRegroupRuntimeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NumericGroupObservationRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NumericStrictMarginRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProjectionEnvironmentExtensionalityRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProjectionSelectListExtensionalityRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProjectionUnionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OperatorOutcomeInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SuccessForallCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NullableTableObservationRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PostgresValueDomainRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/TableAttributeAbsenceRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SchemaRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SubqueryEnvironmentCongruenceRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SubqueryTruthAcceptanceRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NativeScalarExpressionRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/MembershipCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/InSemijoinAcceptanceRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SemijoinCompositionRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/RenamingTransportRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofAgentFacadeRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofSelectorAuthorityRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/CountermodelFactsRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/CountermodelCardinalityRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/CorrelatedMembershipRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/MembershipJoinCompositionRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FilterFkEliminationRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/Smoke.v
 
 calcite-ir:

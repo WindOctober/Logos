@@ -51,6 +51,9 @@ Local Abbreviation formula_exact :=
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_exists :=
+  (@eval_query_exists_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null).
 Local Abbreviation eval_groups :=
   (@eval_groups_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
@@ -79,15 +82,15 @@ Proof.
     now apply formula_conj_acceptance_exact.
 Qed.
 
-(** Successful subquery observations need only agree on emptiness; row lists
-    may otherwise differ.  Inhabitation and error exclusion remain separate. *)
+(** Native existential observations need only agree on the two-valued result.
+    Inhabitation and error exclusion remain separate. *)
 Theorem exists_acceptance_exact_regression :
   forall env subquery empty,
-    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
-    (forall rows,
-      eval_query env subquery (SqlSuccess rows) ->
-      rows_empty_decision rows = empty) ->
-    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    (exists truth, eval_exists env subquery (SqlSuccess truth)) ->
+    (forall truth,
+      eval_exists env subquery (SqlSuccess truth) ->
+      truth = exists_truth_from_empty empty) ->
+    (forall error, ~ eval_exists env subquery (SqlError error)) ->
     formula_exact env (FExpr_Exists subquery) (Datatypes.negb empty).
 Proof.
   intros env subquery empty Hsuccess Hempty Herror.
@@ -167,21 +170,19 @@ Theorem exact_group_bag_reset_regression :
         list (list (tuple T)) -> list (tuple T)),
     (forall representative,
       query_same_rows_as_bag representative left_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T
         symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms left_having groups outcome <->
         outcome = SqlSuccess (left_rows groups)) ->
     (forall representative,
       query_same_rows_as_bag representative right_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T
         symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms right_having groups outcome <->
         outcome = SqlSuccess (right_rows groups)) ->
@@ -190,11 +191,9 @@ Theorem exact_group_bag_reset_regression :
       query_same_rows_as_bag right_representative right_bag ->
       Oeset.permut (OTuple T)
         (left_rows
-          (query_make_groups env
-            (query_canonical_rows left_representative) group_terms))
+          (query_make_groups env left_representative group_terms))
         (right_rows
-          (query_make_groups env
-            (query_canonical_rows right_representative) group_terms))) ->
+          (query_make_groups env right_representative group_terms))) ->
     forall outcome,
       eval_group_bag env select_list group_terms left_having left_bag outcome <->
       eval_group_bag env select_list group_terms right_having right_bag outcome.

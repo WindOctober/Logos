@@ -2,7 +2,7 @@
 
 Route here for: typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes.
 
-This focused catalog contains 64 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 99 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`, `WitnessFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `project_row_length`
 
@@ -14,7 +14,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `projection` (rank 52), `cardinality` (rank 44), `schema` (rank 36)
+Cross-index: `projection`, `cardinality`, `schema`
 
 Search aliases: `schema and integrity semantics`, `projection`, `SELECT list`, `cardinality`
 
@@ -34,7 +34,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 44), `schema` (rank 36)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `schema and integrity semantics`, `cardinality`
 
@@ -55,7 +55,7 @@ Applicability: Use in either direction to invert or construct a goal about schem
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`
 
@@ -76,7 +76,7 @@ Applicability: Use when the goal or a hypothesis matches the `row_attributes_not
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `projection` (rank 52), `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `projection`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `projection`, `SELECT list`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -99,7 +99,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_attributes_no
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -121,7 +121,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_attributes_no
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `filter` (rank 46), `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `filter`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -142,7 +142,7 @@ Applicability: Use when the goal or a hypothesis matches the `primary_key_compon
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 22), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `integrity constraint`, `key`
 
@@ -165,7 +165,7 @@ Applicability: Use when the goal or a hypothesis matches the `primary_key_projec
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit.
 
-Cross-index: `projection` (rank 51), `schema` (rank 21), `scalar` (rank 51)
+Cross-index: `projection`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `projection`, `SELECT list`, `NULL`, `UNKNOWN`, `three-valued logic`, `integrity constraint`, `key`
 
@@ -189,7 +189,7 @@ Applicability: Use when the goal or a hypothesis matches the `unique_key_conform
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `schema` (rank 24)
+Cross-index: `filter`, `schema`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -210,7 +210,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 38), `schema` (rank 22)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`, `cardinality`
 
@@ -238,7 +238,7 @@ Applicability: Use when the goal or a hypothesis matches the `foreign_key_confor
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 26)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -261,7 +261,7 @@ Applicability: Use when the goal or a hypothesis matches the `foreign_key_confor
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 26)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -291,7 +291,7 @@ Applicability: Use when the goal or a hypothesis matches the `foreign_key_confor
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `schema` (rank 26)
+Cross-index: `filter`, `schema`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -312,7 +312,7 @@ Applicability: Use when the goal or a hypothesis matches the `check_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -334,7 +334,7 @@ Applicability: Use when the goal or a hypothesis matches the `check_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `schema` (rank 36)
+Cross-index: `filter`, `schema`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -355,7 +355,7 @@ Applicability: Use in either direction to invert or construct a goal about schem
 
 Important premises: keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -377,7 +377,7 @@ Applicability: Use in either direction to invert or construct a goal about schem
 
 Important premises: keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 24)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -399,7 +399,7 @@ Applicability: Use when the goal or a hypothesis matches the `unique_index_witho
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 24), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `predicate`, `Bool3`, `integrity constraint`, `key`
 
@@ -420,7 +420,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 44), `schema` (rank 24)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`, `cardinality`
 
@@ -440,7 +440,7 @@ Applicability: Use when the goal or a hypothesis matches the `unique_index_confo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `schema` (rank 24)
+Cross-index: `filter`, `schema`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `integrity constraint`, `key`
 
@@ -461,7 +461,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 38), `schema` (rank 22)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`, `cardinality`
 
@@ -494,7 +494,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_constraint_co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 44), `schema` (rank 34)
+Cross-index: `filter`, `schema`
 
 Search aliases: `schema and integrity semantics`, `filter`, `WHERE`, `schema conformance`, `typing`
 
@@ -518,7 +518,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `NULL`, `UNKNOWN`, `three-valued logic`
 
@@ -541,7 +541,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 22)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -564,7 +564,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 24)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -587,7 +587,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 26)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -610,7 +610,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`
 
@@ -633,7 +633,7 @@ Applicability: Use when the goal or a hypothesis matches the `table_constraint_c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 24)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
 
@@ -656,7 +656,7 @@ Applicability: Use when the goal or a hypothesis matches the `database_conforms_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 28)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
 
@@ -678,7 +678,7 @@ Applicability: Use after selecting one declared table constraint and computing i
 
 Important premises: Retain database conformance, membership of the exact table constraint, and its exact `constraint_primary_key = Some key` metadata equation.
 
-Cross-index: `schema` (rank 21)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`, `integrity constraint`, `key`
 
@@ -702,7 +702,7 @@ Applicability: Use when the goal or a hypothesis matches the `database_conforms_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 27), `scalar` (rank 51)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `schema conformance`, `typing`
 
@@ -726,7 +726,7 @@ Applicability: Use before analyzing an outer join's unmatched branch when the re
 
 Important premises: Retain exact constraint and row membership, foreign-key membership, and inclusion of all referencing columns in the NOT NULL declaration; nullable MATCH SIMPLE keys are deliberately excluded.
 
-Cross-index: `schema` (rank 25)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`, `integrity constraint`, `key`
 
@@ -760,7 +760,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_domain_size_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -779,7 +779,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_domain_size_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -798,7 +798,7 @@ Applicability: Use when the goal or a hypothesis matches the `database_conforms_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 28)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
 
@@ -821,7 +821,7 @@ Applicability: Use when the goal or a hypothesis matches the `rows_attribute_con
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
 
@@ -843,7 +843,7 @@ Applicability: Use when the goal or a hypothesis matches the `conforming_int32_v
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -864,7 +864,7 @@ Applicability: Use when the goal or a hypothesis matches the `conforming_nonnull
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -886,7 +886,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about sc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `equivalence`, `congruence`
 
@@ -908,7 +908,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_index_lt` di
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -927,7 +927,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_index_in_dom
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -947,7 +947,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_index_inject
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -968,7 +968,7 @@ Applicability: Use in either direction to invert or construct a goal about schem
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 44)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -992,7 +992,7 @@ Applicability: Use when the goal or a hypothesis matches the `NoDup_map_by_key` 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`
 
@@ -1019,7 +1019,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
 
-Cross-index: `projection` (rank 52), `bag` (rank 52), `schema` (rank 22), `scalar` (rank 52)
+Cross-index: `projection`, `bag`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `projection`, `SELECT list`, `INTEGER`, `int32`, `integrity constraint`, `key`, `multiplicity`
 
@@ -1041,7 +1041,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
 
-Cross-index: `bag` (rank 52), `schema` (rank 22), `scalar` (rank 52)
+Cross-index: `bag`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `multiplicity`
 
@@ -1066,7 +1066,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 20), `scalar` (rank 50)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1088,7 +1088,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 37), `schema` (rank 21), `scalar` (rank 51)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1110,7 +1110,7 @@ Applicability: Use when the goal or a hypothesis matches the `NoDup_map_fixed_pa
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`
 
@@ -1131,7 +1131,7 @@ Applicability: Use when the goal or a hypothesis matches the `NoDup_list_prod` d
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36)
+Cross-index: `schema`
 
 Search aliases: `schema and integrity semantics`
 
@@ -1153,7 +1153,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_pair_index_i
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1175,7 +1175,7 @@ Applicability: Use when the goal or a hypothesis matches the `conforming_nonnull
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1206,7 +1206,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
 
-Cross-index: `projection` (rank 52), `bag` (rank 52), `schema` (rank 22), `scalar` (rank 52)
+Cross-index: `projection`, `bag`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `projection`, `SELECT list`, `INTEGER`, `int32`, `integrity constraint`, `key`, `multiplicity`
 
@@ -1233,7 +1233,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
 
-Cross-index: `bag` (rank 52), `schema` (rank 22), `scalar` (rank 52)
+Cross-index: `bag`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `multiplicity`
 
@@ -1263,7 +1263,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 20), `scalar` (rank 50)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1287,7 +1287,7 @@ Applicability: Use when the goal or a hypothesis matches the `int32_composite_do
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1306,7 +1306,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 37), `schema` (rank 21), `scalar` (rank 51)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1330,7 +1330,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 20), `scalar` (rank 50)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1357,7 +1357,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 20), `scalar` (rank 50)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1384,7 +1384,7 @@ Applicability: Use when the goal or a hypothesis matches the `conforming_nullabl
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1405,7 +1405,7 @@ Applicability: Use in either direction to invert or construct a goal about schem
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 44)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1428,7 +1428,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 50), `cardinality` (rank 36), `schema` (rank 34), `scalar` (rank 50)
+Cross-index: `bag`, `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `cardinality`, `multiplicity`
 
@@ -1450,7 +1450,7 @@ Applicability: Use when the goal or a hypothesis matches the `nullable_int32_dom
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `schema` (rank 36), `scalar` (rank 52)
+Cross-index: `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
 
@@ -1469,7 +1469,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 51), `cardinality` (rank 37), `schema` (rank 35), `scalar` (rank 51)
+Cross-index: `bag`, `cardinality`, `schema`, `scalar`
 
 Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`, `cardinality`, `multiplicity`
 
@@ -1479,4 +1479,764 @@ Corollary nullable_int32_nodup_length_2_32_plus_1 :
     Forall (value_conforms_attribute (Attr_int32 name)) values ->
     NoDup values ->
     Z.of_nat (List.length values) <= Z.pow 2 32 + 1.
+```
+
+## `witness_database_instance_rows`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:45`](../WitnessFacts.v#L45)
+
+Purpose/direction: States the witness database instance rows law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_database_instance_rows` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma witness_database_instance_rows :
+  forall expected tables relation,
+    instance_rows (witness_database expected tables) relation =
+    witness_instance_rows tables relation.
+```
+
+## `witness_database_instance_cardinal`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:57`](../WitnessFacts.v#L57)
+
+Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `schema`
+
+Search aliases: `schema and integrity semantics`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma witness_database_instance_cardinal :
+  forall expected tables relation,
+    Febag.cardinal (Fecol.CBag (CTuple TNull))
+      (@_instance TNull (witness_database expected tables) relation) =
+    N.of_nat (length (witness_rows_for tables relation)).
+```
+
+## `witness_query_table_bag_cardinal`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:72`](../WitnessFacts.v#L72)
+
+Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `schema`
+
+Search aliases: `schema and integrity semantics`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma witness_query_table_bag_cardinal :
+  forall expected tables outputs relation,
+    @query_outputs_sort TNull outputs =S=
+      @_basesort TNull expected relation ->
+    Febag.cardinal (Fecol.CBag (CTuple TNull))
+      (@query_table_bag TNull relname
+        (@_basesort TNull (witness_database expected tables))
+        (@_instance TNull (witness_database expected tables))
+        outputs relation) =
+    N.of_nat (length (witness_rows_for tables relation)).
+```
+
+## `witness_query_table_bag_cardinal_generated_sort`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:101`](../WitnessFacts.v#L101)
+
+Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `schema`
+
+Search aliases: `schema and integrity semantics`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Corollary witness_query_table_bag_cardinal_generated_sort :
+  forall expected tables outputs relation,
+    @_basesort TNull expected relation =S=
+      @query_outputs_sort TNull outputs ->
+    Febag.cardinal (Fecol.CBag (CTuple TNull))
+      (@query_table_bag TNull relname
+        (@_basesort TNull (witness_database expected tables))
+        (@_instance TNull (witness_database expected tables))
+        outputs relation) =
+    N.of_nat (length (witness_rows_for tables relation)).
+```
+
+## `option_numeric_eqb_true`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:174`](../WitnessFacts.v#L174)
+
+Purpose/direction: States the option numeric eqb true law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `option_numeric_eqb_true` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`, `scalar`
+
+Search aliases: `schema and integrity semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma option_numeric_eqb_true :
+  forall first second,
+    option_numeric_eqb first second = true -> first = second.
+```
+
+## `value_conforms_attributeb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:183`](../WitnessFacts.v#L183)
+
+Purpose/direction: States the value conforms attributeb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `value_conforms_attributeb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma value_conforms_attributeb_sound :
+  forall attribute value,
+    value_conforms_attributeb attribute value = true ->
+    value_conforms_attribute attribute value.
+```
+
+## `tuple_conforms_sortb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:222`](../WitnessFacts.v#L222)
+
+Purpose/direction: States the tuple conforms sortb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tuple_conforms_sortb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma tuple_conforms_sortb_sound :
+  forall sort row,
+    tuple_conforms_sortb sort row = true ->
+    tuple_conforms_sort sort row.
+```
+
+## `row_attributes_not_nullb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:263`](../WitnessFacts.v#L263)
+
+Purpose/direction: States the row attributes not nullb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `row_attributes_not_nullb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma row_attributes_not_nullb_sound :
+  forall attributes row,
+    row_attributes_not_nullb attributes row = true ->
+    row_attributes_not_null attributes row.
+```
+
+## `rows_attributes_not_nullb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:275`](../WitnessFacts.v#L275)
+
+Purpose/direction: States the rows attributes not nullb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `rows_attributes_not_nullb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma rows_attributes_not_nullb_sound :
+  forall attributes rows,
+    rows_attributes_not_nullb attributes rows = true ->
+    rows_attributes_not_null attributes rows.
+```
+
+## `sql_value_equal_trueb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:303`](../WitnessFacts.v#L303)
+
+Purpose/direction: States the sql value equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `sql_value_equal_trueb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma sql_value_equal_trueb_sound :
+  forall first second,
+    sql_value_equal_trueb first second = true ->
+    sql_value_equal_true first second.
+```
+
+## `sql_value_equal_trueb_iff`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:313`](../WitnessFacts.v#L313)
+
+Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
+
+Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma sql_value_equal_trueb_iff :
+  forall first second,
+    sql_value_equal_trueb first second = true <->
+    sql_value_equal_true first second.
+```
+
+## `sql_key_equal_trueb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:323`](../WitnessFacts.v#L323)
+
+Purpose/direction: States the sql key equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `sql_key_equal_trueb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma sql_key_equal_trueb_sound :
+  forall first second,
+    sql_key_equal_trueb first second = true ->
+    sql_key_equal_true first second.
+```
+
+## `sql_key_equal_trueb_iff`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:335`](../WitnessFacts.v#L335)
+
+Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
+
+Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma sql_key_equal_trueb_iff :
+  forall first second,
+    sql_key_equal_trueb first second = true <->
+    sql_key_equal_true first second.
+```
+
+## `no_relatedb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:356`](../WitnessFacts.v#L356)
+
+Purpose/direction: States the no relatedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `no_relatedb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma no_relatedb_sound :
+  forall (A : Type) (relatedb : A -> A -> bool)
+      (related : A -> A -> Prop) values,
+    (forall first second,
+      relatedb first second = true <-> related first second) ->
+    no_relatedb relatedb values = true ->
+    NoDupA related values.
+```
+
+## `list_nonemptyb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:382`](../WitnessFacts.v#L382)
+
+Purpose/direction: States the exact empty-input or empty-result law for schema and integrity reasoning.
+
+Applicability: Use when the goal or a hypothesis matches the `list_nonemptyb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma list_nonemptyb_sound :
+  forall (A : Type) (values : list A),
+    list_nonemptyb values = true -> values <> nil.
+```
+
+## `unique_key_rows_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:393`](../WitnessFacts.v#L393)
+
+Purpose/direction: States the unique key rows conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_key_rows_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_key_rows_conformb_sound :
+  forall key rows,
+    unique_key_rows_conformb key rows = true ->
+    unique_key_rows_conform key rows.
+```
+
+## `unique_key_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:407`](../WitnessFacts.v#L407)
+
+Purpose/direction: States the unique key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_key_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_key_conformsb_sound :
+  forall key rows,
+    unique_key_conformsb key rows = true ->
+    unique_key_conforms key rows.
+```
+
+## `primary_key_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:425`](../WitnessFacts.v#L425)
+
+Purpose/direction: States the primary key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `primary_key_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma primary_key_conformsb_sound :
+  forall key rows,
+    primary_key_conformsb key rows = true ->
+    primary_key_conforms key rows.
+```
+
+## `foreign_key_attribute_compatibleb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:466`](../WitnessFacts.v#L466)
+
+Purpose/direction: States the foreign key attribute compatibleb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_attribute_compatibleb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_attribute_compatibleb_sound :
+  forall source referenced,
+    foreign_key_attribute_compatibleb source referenced = true ->
+    foreign_key_attribute_compatible source referenced.
+```
+
+## `foreign_key_value_equal_trueb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:488`](../WitnessFacts.v#L488)
+
+Purpose/direction: States the foreign key value equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_value_equal_trueb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_value_equal_trueb_sound :
+  forall source_attribute referenced_attribute source_value referenced_value,
+    foreign_key_value_equal_trueb
+      source_attribute referenced_attribute source_value referenced_value = true ->
+    foreign_key_value_equal_true
+      source_attribute referenced_attribute source_value referenced_value.
+```
+
+## `foreign_key_key_equal_trueb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:521`](../WitnessFacts.v#L521)
+
+Purpose/direction: States the foreign key key equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_key_equal_trueb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_key_equal_trueb_sound :
+  forall source_attributes referenced_attributes source_row referenced_row,
+    foreign_key_key_equal_trueb source_attributes referenced_attributes
+      source_row referenced_row = true ->
+    foreign_key_key_equal_true source_attributes referenced_attributes
+      source_row referenced_row.
+```
+
+## `foreign_key_row_conforms_againstb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:550`](../WitnessFacts.v#L550)
+
+Purpose/direction: States the foreign key row conforms againstb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_row_conforms_againstb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_row_conforms_againstb_sound :
+  forall foreign_key referencing_row referenced_rows,
+    foreign_key_row_conforms_againstb
+      foreign_key referencing_row referenced_rows = true ->
+    foreign_key_row_conforms_against
+      foreign_key referencing_row referenced_rows.
+```
+
+## `foreign_key_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:584`](../WitnessFacts.v#L584)
+
+Purpose/direction: States the foreign key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_conformsb_sound :
+  forall expected tables rows foreign_key,
+    foreign_key_conformsb tables rows foreign_key = true ->
+    foreign_key_conforms
+      (witness_database expected tables) rows foreign_key.
+```
+
+## `attribute_list_eqb_true`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:612`](../WitnessFacts.v#L612)
+
+Purpose/direction: States the attribute list eqb true law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `attribute_list_eqb_true` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
+
+```rocq
+Lemma attribute_list_eqb_true :
+  forall first second,
+    attribute_list_eqb first second = true -> first = second.
+```
+
+## `compatible_attribute_listsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:634`](../WitnessFacts.v#L634)
+
+Purpose/direction: States the compatible attribute listsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `compatible_attribute_listsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
+
+```rocq
+Lemma compatible_attribute_listsb_sound :
+  forall source referenced,
+    compatible_attribute_listsb source referenced = true ->
+    Forall2 foreign_key_attribute_compatible source referenced.
+```
+
+## `table_declares_unique_keyb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:658`](../WitnessFacts.v#L658)
+
+Purpose/direction: States the table declares unique keyb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `table_declares_unique_keyb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma table_declares_unique_keyb_sound :
+  forall constraint key,
+    table_declares_unique_keyb constraint key = true ->
+    table_declares_unique_key constraint key.
+```
+
+## `foreign_key_reference_well_formedb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:694`](../WitnessFacts.v#L694)
+
+Purpose/direction: States the foreign key reference well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `foreign_key_reference_well_formedb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma foreign_key_reference_well_formedb_sound :
+  forall constraints foreign_key,
+    foreign_key_reference_well_formedb constraints foreign_key = true ->
+    foreign_key_reference_well_formed constraints foreign_key.
+```
+
+## `table_constraint_declarations_well_formedb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:729`](../WitnessFacts.v#L729)
+
+Purpose/direction: States the table constraint declarations well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `table_constraint_declarations_well_formedb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma table_constraint_declarations_well_formedb_sound :
+  forall constraints constraint,
+    table_constraint_declarations_well_formedb constraints constraint = true ->
+    table_constraint_declarations_well_formed constraints constraint.
+```
+
+## `schema_constraints_well_formedb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:758`](../WitnessFacts.v#L758)
+
+Purpose/direction: States the schema constraints well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `schema_constraints_well_formedb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
+
+```rocq
+Lemma schema_constraints_well_formedb_sound :
+  forall constraints,
+    schema_constraints_well_formedb constraints = true ->
+    schema_constraints_well_formed constraints.
+```
+
+## `deferred_row_constraints_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:796`](../WitnessFacts.v#L796)
+
+Purpose/direction: States the deferred row constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `deferred_row_constraints_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma deferred_row_constraints_conformb_sound :
+  forall db rows checks indexes,
+    deferred_row_constraints_conformb rows checks indexes = true ->
+    Forall (check_constraint_conforms db rows) checks /\
+    Forall (unique_index_conforms db rows) indexes.
+```
+
+## `rows_constraint_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:836`](../WitnessFacts.v#L836)
+
+Purpose/direction: States the rows constraint conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `rows_constraint_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma rows_constraint_conformb_sound :
+  forall expected tables constraint,
+    rows_constraint_conformb expected tables constraint = true ->
+    table_constraint_conforms
+      (witness_database expected tables) constraint.
+```
+
+## `schema_constraints_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:878`](../WitnessFacts.v#L878)
+
+Purpose/direction: States the schema constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `schema_constraints_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
+
+```rocq
+Lemma schema_constraints_conformb_sound :
+  forall expected tables constraints,
+    schema_constraints_conformb expected tables constraints = true ->
+    schema_constraints_conform
+      (witness_database expected tables) constraints.
+```
+
+## `witness_values_conformb_lookup_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:892`](../WitnessFacts.v#L892)
+
+Purpose/direction: States the witness values conformb lookup sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_values_conformb_lookup_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma witness_values_conformb_lookup_sound :
+  forall expected tables relation row,
+    witness_values_conformb expected tables = true ->
+    In row (witness_instance_rows tables relation) ->
+    tuple_conforms_sort (@_basesort TNull expected relation) row.
+```
+
+## `witness_values_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:916`](../WitnessFacts.v#L916)
+
+Purpose/direction: States the witness values conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_values_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma witness_values_conformb_sound :
+  forall expected tables,
+    witness_values_conformb expected tables = true ->
+    database_values_conform (witness_database expected tables).
+```
+
+## `witness_database_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:940`](../WitnessFacts.v#L940)
+
+Purpose/direction: States the witness database conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_database_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Theorem witness_database_conformsb_sound :
+  forall expected constraints tables,
+    witness_database_conformsb expected constraints tables = true ->
+    database_conforms_schema expected constraints
+      (witness_database expected tables).
 ```

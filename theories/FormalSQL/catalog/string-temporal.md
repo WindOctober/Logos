@@ -2,7 +2,7 @@
 
 Route here for: CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ.
 
-This focused catalog contains 69 declarations routed at declaration granularity from `StringTemporalFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 76 declarations routed at declaration granularity from `StringTemporalFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `string_typmod_descriptor_roundtrip`
 
@@ -14,7 +14,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_typmod_desc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -38,7 +38,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_fits_bounde
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -60,7 +60,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_fits_unboun
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -82,7 +82,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -104,7 +104,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -126,7 +126,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -151,7 +151,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -177,7 +177,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_cast
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -207,7 +207,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_cast
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -235,7 +235,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_cast
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `typmod`, `precision/scale`, `string`, `VARCHAR`
 
@@ -263,7 +263,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for string s
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -273,9 +273,185 @@ Lemma string_cast_and_coercion_local_runtime_safe : forall cast values,
   scalar_operator_local_runtime_error (ScalarCast cast) values = None.
 ```
 
+## `string_to_int32_cast_success`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:201`](../StringTemporalFacts.v#L201)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for string semantics.
+
+Applicability: Use when the goal or a hypothesis matches the `string_to_int32_cast_success` direction for string semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `INTEGER`, `int32`, `string`, `VARCHAR`
+
+```rocq
+Lemma string_to_int32_cast_success : forall source input result,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerValue result ->
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Value_int32 (Some result) /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] = None.
+```
+
+## `string_to_int64_cast_success`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:218`](../StringTemporalFacts.v#L218)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for string semantics.
+
+Applicability: Use when the goal or a hypothesis matches the `string_to_int64_cast_success` direction for string semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `BIGINT`, `int64`, `string`, `VARCHAR`
+
+```rocq
+Lemma string_to_int64_cast_success : forall source input result,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerValue result ->
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Value_int64 (Some result) /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] = None.
+```
+
+## `string_to_int32_cast_invalid`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:235`](../StringTemporalFacts.v#L235)
+
+Purpose/direction: States the string to int32 cast invalid law for string semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `INTEGER`, `int32`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma string_to_int32_cast_invalid : forall source input,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerInvalid ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException InvalidTextRepresentation).
+```
+
+## `string_to_int64_cast_invalid`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:249`](../StringTemporalFacts.v#L249)
+
+Purpose/direction: States the string to int64 cast invalid law for string semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `BIGINT`, `int64`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma string_to_int64_cast_invalid : forall source input,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerInvalid ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException InvalidTextRepresentation).
+```
+
+## `string_to_int32_cast_out_of_range`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:263`](../StringTemporalFacts.v#L263)
+
+Purpose/direction: Connects the displayed range/representability premise to string semantics.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `INTEGER`, `int32`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma string_to_int32_cast_out_of_range : forall source input,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerOutOfRange ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException NumericValueOutOfRange).
+```
+
+## `string_to_int64_cast_out_of_range`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:277`](../StringTemporalFacts.v#L277)
+
+Purpose/direction: Connects the displayed range/representability premise to string semantics.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `BIGINT`, `int64`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma string_to_int64_cast_out_of_range : forall source input,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerOutOfRange ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException NumericValueOutOfRange).
+```
+
+## `string_to_integer_casts_preserve_null`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:291`](../StringTemporalFacts.v#L291)
+
+Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
+
+Applicability: Use when the goal or a hypothesis matches the `string_to_integer_casts_preserve_null` direction for string semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`, `BIGINT`, `int64`, `string`, `VARCHAR`
+
+```rocq
+Lemma string_to_integer_casts_preserve_null : forall source,
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source None)] = Value_int32 None /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source None)] = None /\
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source None)] = Value_int64 None /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source None)] = None.
+```
+
 ## `string_concat_payload_empty`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:203`](../StringTemporalFacts.v#L203)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:306`](../StringTemporalFacts.v#L306)
 
 Purpose/direction: States the exact empty-input or empty-result law for string semantics.
 
@@ -283,7 +459,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_concat_payl
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -294,7 +470,7 @@ Lemma string_concat_payload_empty :
 
 ## `string_concat_payload_nonnull_cons_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:207`](../StringTemporalFacts.v#L207)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:310`](../StringTemporalFacts.v#L310)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -302,7 +478,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -318,7 +494,7 @@ Lemma string_concat_payload_nonnull_cons_iff :
 
 ## `string_concat_payload_null_cons`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:225`](../StringTemporalFacts.v#L225)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:328`](../StringTemporalFacts.v#L328)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
@@ -326,7 +502,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_concat_payl
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -337,7 +513,7 @@ Lemma string_concat_payload_null_cons : forall typmod rest,
 
 ## `interp_string_concat_nonnull_cons`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:229`](../StringTemporalFacts.v#L229)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:332`](../StringTemporalFacts.v#L332)
 
 Purpose/direction: States the interp string concat nonnull cons law for string semantics, in the exact direction displayed by the declaration.
 
@@ -345,7 +521,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_conc
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -362,7 +538,7 @@ Lemma interp_string_concat_nonnull_cons :
 
 ## `interp_string_concat_null_cons`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:247`](../StringTemporalFacts.v#L247)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:350`](../StringTemporalFacts.v#L350)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
@@ -370,7 +546,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_conc
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -382,7 +558,7 @@ Lemma interp_string_concat_null_cons : forall typmod rest,
 
 ## `string_concat_local_runtime_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:252`](../StringTemporalFacts.v#L252)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:355`](../StringTemporalFacts.v#L355)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
@@ -390,7 +566,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for string s
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -401,7 +577,7 @@ Lemma string_concat_local_runtime_safe : forall values,
 
 ## `string_map_append`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:256`](../StringTemporalFacts.v#L256)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:359`](../StringTemporalFacts.v#L359)
 
 Purpose/direction: States the string map append law for string semantics, in the exact direction displayed by the declaration.
 
@@ -409,7 +585,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_map_append`
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -421,7 +597,7 @@ Lemma string_map_append : forall mapping left right,
 
 ## `string_map_length`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:266`](../StringTemporalFacts.v#L266)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:369`](../StringTemporalFacts.v#L369)
 
 Purpose/direction: Relates string semantics to the exact list length or bag cardinality shown below.
 
@@ -429,7 +605,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_map_length`
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -440,7 +616,7 @@ Lemma string_map_length : forall mapping value,
 
 ## `interp_string_case_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:275`](../StringTemporalFacts.v#L275)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:378`](../StringTemporalFacts.v#L378)
 
 Purpose/direction: States the interp string case nonnull law for string semantics, in the exact direction displayed by the declaration.
 
@@ -448,7 +624,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_case
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `CASE`, `conditional expression`, `string`, `VARCHAR`
 
@@ -468,7 +644,7 @@ Lemma interp_string_case_nonnull : forall operation typmod value,
 
 ## `interp_string_case_null`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:290`](../StringTemporalFacts.v#L290)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:393`](../StringTemporalFacts.v#L393)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
@@ -476,7 +652,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_string_case
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `CASE`, `conditional expression`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -489,7 +665,7 @@ Lemma interp_string_case_null : forall operation typmod,
 
 ## `string_case_local_runtime_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:298`](../StringTemporalFacts.v#L298)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:401`](../StringTemporalFacts.v#L401)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
@@ -497,7 +673,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for string s
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `CASE`, `conditional expression`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -509,7 +685,7 @@ Lemma string_case_local_runtime_safe : forall operation values,
 
 ## `string_prefix_refl`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:305`](../StringTemporalFacts.v#L305)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:408`](../StringTemporalFacts.v#L408)
 
 Purpose/direction: Establishes reflexivity for string semantics.
 
@@ -517,7 +693,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about st
 
 Important premises: supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`, `equivalence`, `congruence`
 
@@ -528,7 +704,7 @@ Lemma string_prefix_refl : forall value,
 
 ## `string_like_prefix_physical_refl`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:316`](../StringTemporalFacts.v#L316)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:419`](../StringTemporalFacts.v#L419)
 
 Purpose/direction: Establishes reflexivity for string semantics.
 
@@ -536,7 +712,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about st
 
 Important premises: supply the declared equivalence/properness relation.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`, `equivalence`, `congruence`
 
@@ -547,7 +723,7 @@ Lemma string_like_prefix_physical_refl : forall typmod value,
 
 ## `interp_like_prefix_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:323`](../StringTemporalFacts.v#L323)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:426`](../StringTemporalFacts.v#L426)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -555,7 +731,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
@@ -570,7 +746,7 @@ Lemma interp_like_prefix_true_iff :
 
 ## `interp_like_prefix_false_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:339`](../StringTemporalFacts.v#L339)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:442`](../StringTemporalFacts.v#L442)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -578,7 +754,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
@@ -593,7 +769,7 @@ Lemma interp_like_prefix_false_iff :
 
 ## `interp_like_percent_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:355`](../StringTemporalFacts.v#L355)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:458`](../StringTemporalFacts.v#L458)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -601,7 +777,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
@@ -616,7 +792,7 @@ Lemma interp_like_percent_true_iff :
 
 ## `interp_like_percent_false_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:371`](../StringTemporalFacts.v#L371)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:474`](../StringTemporalFacts.v#L474)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -624,7 +800,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `string`, `VARCHAR`
 
@@ -639,7 +815,7 @@ Lemma interp_like_percent_false_iff :
 
 ## `interp_substring_nonnegative_valid`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:387`](../StringTemporalFacts.v#L387)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:490`](../StringTemporalFacts.v#L490)
 
 Purpose/direction: States the interp substring nonnegative valid law for string semantics, in the exact direction displayed by the declaration.
 
@@ -647,7 +823,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_substring_n
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `INTEGER`, `int32`, `string`, `VARCHAR`
 
@@ -668,7 +844,7 @@ Lemma interp_substring_nonnegative_valid : forall typmod input start count,
 
 ## `interp_substring_nonnegative_null`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:409`](../StringTemporalFacts.v#L409)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:512`](../StringTemporalFacts.v#L512)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
@@ -676,7 +852,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_substring_n
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `string`, `VARCHAR`
 
@@ -689,7 +865,7 @@ Lemma interp_substring_nonnegative_null : forall typmod start count,
 
 ## `interp_substring_nonnegative_invalid`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:417`](../StringTemporalFacts.v#L417)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:520`](../StringTemporalFacts.v#L520)
 
 Purpose/direction: States the interp substring nonnegative invalid law for string semantics, in the exact direction displayed by the declaration.
 
@@ -697,7 +873,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_substring_n
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `INTEGER`, `int32`, `string`, `VARCHAR`
 
@@ -712,7 +888,7 @@ Lemma interp_substring_nonnegative_invalid : forall typmod input start count,
 
 ## `substring_nonnegative_local_runtime_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:434`](../StringTemporalFacts.v#L434)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:537`](../StringTemporalFacts.v#L537)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
@@ -720,7 +896,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for string s
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -731,7 +907,7 @@ Lemma substring_nonnegative_local_runtime_safe : forall values,
 
 ## `string_comparison_values_swap`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:438`](../StringTemporalFacts.v#L438)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:541`](../StringTemporalFacts.v#L541)
 
 Purpose/direction: States the string comparison values swap law for string semantics, in the exact direction displayed by the declaration.
 
@@ -739,7 +915,7 @@ Applicability: Use when the goal or a hypothesis matches the `string_comparison_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -754,7 +930,7 @@ Lemma string_comparison_values_swap :
 
 ## `sql_string_compare_eq_iff_semantic_values`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:449`](../StringTemporalFacts.v#L449)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:552`](../StringTemporalFacts.v#L552)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -762,7 +938,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -777,7 +953,7 @@ Lemma sql_string_compare_eq_iff_semantic_values :
 
 ## `sql_string_eqb_true_iff_semantic_values`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:466`](../StringTemporalFacts.v#L466)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:569`](../StringTemporalFacts.v#L569)
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -785,7 +961,7 @@ Applicability: Use in either direction to invert or construct a goal about strin
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -800,7 +976,7 @@ Lemma sql_string_eqb_true_iff_semantic_values :
 
 ## `sql_string_compare_opposite`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:484`](../StringTemporalFacts.v#L484)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:587`](../StringTemporalFacts.v#L587)
 
 Purpose/direction: States the sql string compare opposite law for string semantics, in the exact direction displayed by the declaration.
 
@@ -808,7 +984,7 @@ Applicability: Use when the goal or a hypothesis matches the `sql_string_compare
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -821,7 +997,7 @@ Lemma sql_string_compare_opposite :
 
 ## `sql_string_eqb_symmetric`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:499`](../StringTemporalFacts.v#L499)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:602`](../StringTemporalFacts.v#L602)
 
 Purpose/direction: Reverses a proved string semantics relation.
 
@@ -829,7 +1005,7 @@ Applicability: Use when the goal or a hypothesis matches the `sql_string_eqb_sym
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -842,7 +1018,7 @@ Lemma sql_string_eqb_symmetric :
 
 ## `order_value_compare_string_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:511`](../StringTemporalFacts.v#L511)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:614`](../StringTemporalFacts.v#L614)
 
 Purpose/direction: States the order value compare string nonnull law for string semantics, in the exact direction displayed by the declaration.
 
@@ -850,7 +1026,7 @@ Applicability: Use when the goal or a hypothesis matches the `order_value_compar
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `string`, `VARCHAR`
 
@@ -865,7 +1041,7 @@ Lemma order_value_compare_string_nonnull :
 
 ## `date_checked_some_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:521`](../StringTemporalFacts.v#L521)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:624`](../StringTemporalFacts.v#L624)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -873,7 +1049,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -884,7 +1060,7 @@ Lemma date_checked_some_iff : forall date,
 
 ## `date_checked_none_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:529`](../StringTemporalFacts.v#L529)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:632`](../StringTemporalFacts.v#L632)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -892,7 +1068,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -903,7 +1079,7 @@ Lemma date_checked_none_iff : forall date,
 
 ## `timestamp_checked_some_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:537`](../StringTemporalFacts.v#L537)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:640`](../StringTemporalFacts.v#L640)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -911,7 +1087,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -923,7 +1099,7 @@ Lemma timestamp_checked_some_iff : forall timestamp,
 
 ## `timestamp_checked_none_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:546`](../StringTemporalFacts.v#L546)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:649`](../StringTemporalFacts.v#L649)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -931,7 +1107,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -943,7 +1119,7 @@ Lemma timestamp_checked_none_iff : forall timestamp,
 
 ## `order_value_compare_date_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:555`](../StringTemporalFacts.v#L555)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:658`](../StringTemporalFacts.v#L658)
 
 Purpose/direction: States the order value compare date nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -951,7 +1127,7 @@ Applicability: Use when the goal or a hypothesis matches the `order_value_compar
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -964,7 +1140,7 @@ Lemma order_value_compare_date_nonnull : forall left right,
 
 ## `order_value_compare_time_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:563`](../StringTemporalFacts.v#L563)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:666`](../StringTemporalFacts.v#L666)
 
 Purpose/direction: States the order value compare time nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -972,7 +1148,7 @@ Applicability: Use when the goal or a hypothesis matches the `order_value_compar
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -985,7 +1161,7 @@ Lemma order_value_compare_time_nonnull : forall left right,
 
 ## `order_value_compare_timestamp_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:571`](../StringTemporalFacts.v#L571)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:674`](../StringTemporalFacts.v#L674)
 
 Purpose/direction: States the order value compare timestamp nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -993,7 +1169,7 @@ Applicability: Use when the goal or a hypothesis matches the `order_value_compar
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1006,7 +1182,7 @@ Lemma order_value_compare_timestamp_nonnull : forall left right,
 
 ## `order_value_compare_timestamptz_nonnull`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:579`](../StringTemporalFacts.v#L579)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:682`](../StringTemporalFacts.v#L682)
 
 Purpose/direction: States the order value compare timestamptz nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1014,7 +1190,7 @@ Applicability: Use when the goal or a hypothesis matches the `order_value_compar
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1027,7 +1203,7 @@ Lemma order_value_compare_timestamptz_nonnull : forall left right,
 
 ## `cast_date_to_timestamp_checked_finite`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:587`](../StringTemporalFacts.v#L587)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:690`](../StringTemporalFacts.v#L690)
 
 Purpose/direction: States the cast date to timestamp checked finite law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1035,7 +1211,7 @@ Applicability: Use when the goal or a hypothesis matches the `cast_date_to_times
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1049,7 +1225,7 @@ Lemma cast_date_to_timestamp_checked_finite : forall date,
 
 ## `cast_timestamp_to_date_checked_finite`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:599`](../StringTemporalFacts.v#L599)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:702`](../StringTemporalFacts.v#L702)
 
 Purpose/direction: States the cast timestamp to date checked finite law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1057,7 +1233,7 @@ Applicability: Use when the goal or a hypothesis matches the `cast_timestamp_to_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1071,7 +1247,7 @@ Lemma cast_timestamp_to_date_checked_finite : forall timestamp,
 
 ## `scalar_cast_date_to_timestamp_success_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:611`](../StringTemporalFacts.v#L611)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:714`](../StringTemporalFacts.v#L714)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1079,7 +1255,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1094,7 +1270,7 @@ Lemma scalar_cast_date_to_timestamp_success_safe : forall date timestamp,
 
 ## `scalar_cast_timestamp_to_date_success_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:625`](../StringTemporalFacts.v#L625)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:728`](../StringTemporalFacts.v#L728)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1102,7 +1278,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1118,7 +1294,7 @@ Lemma scalar_cast_timestamp_to_date_success_safe : forall timestamp date,
 
 ## `scalar_cast_date_to_timestamp_failure_overflow`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:640`](../StringTemporalFacts.v#L640)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:743`](../StringTemporalFacts.v#L743)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
@@ -1126,7 +1302,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1142,7 +1318,7 @@ Lemma scalar_cast_date_to_timestamp_failure_overflow : forall date,
 
 ## `scalar_cast_timestamp_to_date_failure_overflow`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:655`](../StringTemporalFacts.v#L655)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:758`](../StringTemporalFacts.v#L758)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
@@ -1150,7 +1326,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1166,7 +1342,7 @@ Lemma scalar_cast_timestamp_to_date_failure_overflow : forall timestamp,
 
 ## `scalar_temporal_casts_null_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:670`](../StringTemporalFacts.v#L670)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:773`](../StringTemporalFacts.v#L773)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1174,7 +1350,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1192,7 +1368,7 @@ Lemma scalar_temporal_casts_null_safe :
 
 ## `checked_temporal_casts_preserve_infinities`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:681`](../StringTemporalFacts.v#L681)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:784`](../StringTemporalFacts.v#L784)
 
 Purpose/direction: Shows that the indicated operator preserves the displayed temporal semantics property.
 
@@ -1200,7 +1376,7 @@ Applicability: Use when the goal or a hypothesis matches the `checked_temporal_c
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1218,7 +1394,7 @@ Lemma checked_temporal_casts_preserve_infinities :
 
 ## `interp_extract_year_date_finite`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:714`](../StringTemporalFacts.v#L714)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:817`](../StringTemporalFacts.v#L817)
 
 Purpose/direction: States the interp extract year date finite law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1226,7 +1402,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_extract_yea
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NUMERIC`, `DECIMAL`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1240,7 +1416,7 @@ Lemma interp_extract_year_date_finite : forall date,
 
 ## `interp_extract_year_date_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:724`](../StringTemporalFacts.v#L724)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:827`](../StringTemporalFacts.v#L827)
 
 Purpose/direction: States the interp extract year date infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1248,7 +1424,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_extract_yea
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1262,7 +1438,7 @@ Lemma interp_extract_year_date_infinity : forall date result,
 
 ## `interp_extract_month_date_finite`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:739`](../StringTemporalFacts.v#L739)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:842`](../StringTemporalFacts.v#L842)
 
 Purpose/direction: States the interp extract month date finite law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1270,7 +1446,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_extract_mon
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NUMERIC`, `DECIMAL`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1283,7 +1459,7 @@ Lemma interp_extract_month_date_finite : forall date,
 
 ## `interp_extract_month_date_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:748`](../StringTemporalFacts.v#L748)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:851`](../StringTemporalFacts.v#L851)
 
 Purpose/direction: States the interp extract month date infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1291,7 +1467,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_extract_mon
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NUMERIC`, `DECIMAL`, `floating point`, `special value`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1303,7 +1479,7 @@ Lemma interp_extract_month_date_infinity : forall date,
 
 ## `interp_extract_date_null`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:756`](../StringTemporalFacts.v#L756)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:859`](../StringTemporalFacts.v#L859)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for temporal semantics.
 
@@ -1311,7 +1487,7 @@ Applicability: Use when the goal or a hypothesis matches the `interp_extract_dat
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `NUMERIC`, `DECIMAL`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1323,7 +1499,7 @@ Lemma interp_extract_date_null : forall part,
 
 ## `extract_date_local_runtime_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:763`](../StringTemporalFacts.v#L763)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:866`](../StringTemporalFacts.v#L866)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1331,7 +1507,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 46), `scalar` (rank 40)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1342,7 +1518,7 @@ Lemma extract_date_local_runtime_safe : forall part values,
 
 ## `interp_date_lt_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:769`](../StringTemporalFacts.v#L769)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:872`](../StringTemporalFacts.v#L872)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1350,7 +1526,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1363,7 +1539,7 @@ Lemma interp_date_lt_timestamp_true_iff : forall date timestamp,
 
 ## `interp_date_lte_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:781`](../StringTemporalFacts.v#L781)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:884`](../StringTemporalFacts.v#L884)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1371,7 +1547,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1384,7 +1560,7 @@ Lemma interp_date_lte_timestamp_true_iff : forall date timestamp,
 
 ## `interp_date_gt_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:793`](../StringTemporalFacts.v#L793)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:896`](../StringTemporalFacts.v#L896)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1392,7 +1568,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1405,7 +1581,7 @@ Lemma interp_date_gt_timestamp_true_iff : forall date timestamp,
 
 ## `interp_date_gte_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:805`](../StringTemporalFacts.v#L805)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:908`](../StringTemporalFacts.v#L908)
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1413,7 +1589,7 @@ Applicability: Use in either direction to invert or construct a goal about tempo
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `scalar` (rank 44)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1426,7 +1602,7 @@ Lemma interp_date_gte_timestamp_true_iff : forall date timestamp,
 
 ## `timestamp_scalar_add_checked_success`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:829`](../StringTemporalFacts.v#L829)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:932`](../StringTemporalFacts.v#L932)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for temporal semantics.
 
@@ -1434,7 +1610,7 @@ Applicability: Use when the goal or a hypothesis matches the `timestamp_scalar_a
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1450,7 +1626,7 @@ Lemma timestamp_scalar_add_checked_success : forall unit timestamp amount result
 
 ## `timestamp_scalar_add_checked_failure`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:843`](../StringTemporalFacts.v#L843)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:946`](../StringTemporalFacts.v#L946)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
@@ -1458,7 +1634,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1475,7 +1651,7 @@ Lemma timestamp_scalar_add_checked_failure : forall unit timestamp amount,
 
 ## `timestamp_scalar_add_null_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:858`](../StringTemporalFacts.v#L858)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:961`](../StringTemporalFacts.v#L961)
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1483,7 +1659,7 @@ Applicability: Use at the successful-outcome/runtime-error boundary for temporal
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `runtime` (rank 52), `scalar` (rank 52)
+Cross-index: `runtime`, `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`, `runtime outcome`, `runtime safety`, `error propagation`
 
@@ -1498,7 +1674,7 @@ Lemma timestamp_scalar_add_null_safe : forall unit timestamp amount,
 
 ## `timestamp_checked_operation_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:870`](../StringTemporalFacts.v#L870)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:973`](../StringTemporalFacts.v#L973)
 
 Purpose/direction: States the timestamp checked operation infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1506,7 +1682,7 @@ Applicability: Use when the goal or a hypothesis matches the `timestamp_checked_
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `floating point`, `special value`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 
@@ -1518,7 +1694,7 @@ Lemma timestamp_checked_operation_infinity : forall unit timestamp amount,
 
 ## `timestamp_scalar_add_preserves_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:886`](../StringTemporalFacts.v#L886)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:989`](../StringTemporalFacts.v#L989)
 
 Purpose/direction: Shows that the indicated operator preserves the displayed temporal semantics property.
 
@@ -1526,7 +1702,7 @@ Applicability: Use when the goal or a hypothesis matches the `timestamp_scalar_a
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `scalar` (rank 52)
+Cross-index: `scalar`
 
 Search aliases: `string/temporal scalar semantics`, `floating point`, `special value`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
 

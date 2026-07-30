@@ -5,11 +5,11 @@
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
   FiniteSet OrderedSet Bool3 Join FlatData Env Formula Projection SqlOutcome
-  SqlErrorSemantics SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
+  SqlErrorSemantics SqlOrder SqlQuerySyntax SqlQuerySemantics SqlBagAbstraction SqlQueryFacts
   ListFacts ListPermut Partition ValueInteger SchemaConstraints.
 From Logos.FormalSQL Require Import
   SchemaCardinality TNullSyntax.
-From Stdlib Require Import List String ZArith Lia SetoidList SetoidPermutation
+From Stdlib Require Import List String ZArith NArith Lia SetoidList SetoidPermutation
   RelationClasses Morphisms Sorting.Sorted.
 
 Import ListNotations.
@@ -578,6 +578,49 @@ eapply query_same_rows_as_conforming_table_present_attribute;
   eassumption.
 Qed.
 
+(** One-row nullable-safe specialization for generated table metadata.  As in
+    the NOT NULL variant below, the generated output-sort equality is stated
+    over the expected schema and transported once to the actual conforming
+    database. *)
+Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
+  forall expected constraints actual relation attribute outputs env rows row
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    attribute inS (@_basesort TNull expected relation) ->
+    @_basesort TNull expected relation =S=
+      @query_outputs_sort TNull outputs ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs relation)
+      (SqlSuccess rows) ->
+    In row rows ->
+    row_attribute_present_conforms attribute row.
+Proof.
+intros expected constraints actual relation attribute outputs env rows row
+  unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  Hschema Hattribute Hgenerated_sort Hrows Hrow.
+assert (Hactual_sort :
+  @query_outputs_sort TNull outputs =S= @_basesort TNull actual relation).
+{
+  pose proof
+    (database_conforms_schema_basesort
+      expected constraints actual Hschema relation) as Hdatabase_sort.
+  rewrite Fset.equal_spec in Hgenerated_sort, Hdatabase_sort |- *.
+  intro candidate.
+  rewrite <- (Hgenerated_sort candidate).
+  symmetry; exact (Hdatabase_sort candidate).
+}
+pose proof
+  (query_expr_table_success_rows_present_conform_attribute
+    expected constraints actual relation attribute outputs env rows
+    unknown symbol_runtime_error aggregate_runtime_error value_is_null
+    Hschema Hattribute Hactual_sort Hrows) as Hall.
+rewrite Forall_forall in Hall.
+exact (Hall row Hrow).
+Qed.
+
 (** A conforming table's typed NOT NULL column remains typed and non-NULL in
     every ordered representative of its bag.  This is the safe
     schema-to-observation bridge; it does not identify represented tuples by
@@ -657,6 +700,56 @@ unfold query_table_bag in *.
 rewrite Hsort in *.
 eapply query_same_rows_as_conforming_table_attribute;
   eassumption.
+Qed.
+
+(** Agent-facing one-row specialization of the table/schema bridge.  Generated
+    table metadata describes the expected schema, whereas evaluation happens
+    in the conforming actual database.  This theorem performs that basesort
+    transport once and returns the exact property needed by scalar proofs; it
+    neither inspects a generated query nor guesses a schema constraint. *)
+Theorem query_expr_table_success_row_conform_attribute_generated_sort :
+  forall expected constraints actual constraint attribute outputs env rows row
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    attribute inS
+      (@_basesort TNull expected (constraint_relation constraint)) ->
+    In attribute (constraint_not_null constraint) ->
+    @_basesort TNull expected (constraint_relation constraint) =S=
+      @query_outputs_sort TNull outputs ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs
+        (constraint_relation constraint))
+      (SqlSuccess rows) ->
+    In row rows ->
+    row_attribute_present_nonnull_conforms attribute row.
+Proof.
+intros expected constraints actual constraint attribute outputs env rows row
+  unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  Hschema Hconstraint Hattribute Hnot_null Hgenerated_sort Hrows Hrow.
+assert (Hactual_sort :
+  @query_outputs_sort TNull outputs =S=
+    @_basesort TNull actual (constraint_relation constraint)).
+{
+  pose proof
+    (database_conforms_schema_basesort
+      expected constraints actual Hschema
+      (constraint_relation constraint)) as Hdatabase_sort.
+  rewrite Fset.equal_spec in Hgenerated_sort, Hdatabase_sort |- *.
+  intro candidate.
+  rewrite <- (Hgenerated_sort candidate).
+  symmetry; exact (Hdatabase_sort candidate).
+}
+pose proof
+  (query_expr_table_success_rows_conform_attribute
+    expected constraints actual constraint attribute outputs env rows
+    unknown symbol_runtime_error aggregate_runtime_error value_is_null
+    Hschema Hconstraint Hattribute Hnot_null Hactual_sort Hrows) as Hall.
+rewrite Forall_forall in Hall.
+exact (Hall row Hrow).
 Qed.
 
 Corollary query_canonical_rows_Forall :
@@ -1449,6 +1542,673 @@ Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
 Variable unknown : Bool.b (B T).
 Variable value_is_null : value T -> bool.
 
+(** A compositional occurrence bound for every successful ordered observation
+    of a query.  This contract deliberately does not claim determinism or
+    runtime safety: errors remain possible outcomes, and every successful
+    representative must satisfy the bound. *)
+Definition query_success_length_le
+    (env : Env.env T) (query : query_expr T relname) (bound : nat) : Prop :=
+  forall rows,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      env query (SqlSuccess rows) ->
+    (List.length rows <= bound)%nat.
+
+(** Convert the bag equality carried by a successful reset operator into the
+    corresponding occurrence count.  Keeping this small bridge local to the
+    cardinality theory avoids exposing canonical [Febag.elements] lists to
+    operator-level proofs. *)
+Lemma query_same_rows_as_bag_length_N :
+  forall rows bag,
+    @query_same_rows_as_bag T rows bag ->
+    N.of_nat (List.length rows) =
+      Febag.cardinal (Fecol.CBag (CTuple T)) bag.
+Proof.
+intros rows bag Hrows.
+unfold query_same_rows_as_bag, query_rows_bag in Hrows.
+assert (Hcardinal :
+  Febag.cardinal (Fecol.CBag (CTuple T))
+    (Febag.mk_bag (Fecol.CBag (CTuple T)) rows) =
+  Febag.cardinal (Fecol.CBag (CTuple T)) bag).
+{ now apply Febag.cardinal_eq. }
+now rewrite Febag.cardinal_mk_bag in Hcardinal.
+Qed.
+
+Lemma query_same_rows_as_bag_length_le :
+  forall rows bag bound,
+    @query_same_rows_as_bag T rows bag ->
+    (Febag.cardinal (Fecol.CBag (CTuple T)) bag <=
+      N.of_nat bound)%N ->
+    (List.length rows <= bound)%nat.
+Proof.
+intros rows bag bound Hrows Hbound.
+apply (proj1 (Nat.compare_le_iff _ _)).
+rewrite Nat2N.inj_compare.
+apply (proj2 (N.compare_le_iff _ _)).
+rewrite (query_same_rows_as_bag_length_N rows bag Hrows).
+exact Hbound.
+Qed.
+
+(** A query that has no successful outcome satisfies every successful-result
+    bound vacuously.  This does not erase its explicit SQL error outcome. *)
+Lemma query_success_length_le_error :
+  forall env outputs error bound,
+    query_success_length_le env (QExpr_Error outputs error) bound.
+Proof.
+intros env outputs error bound rows Hrows.
+apply query_error_has_no_success in Hrows; contradiction.
+Qed.
+
+(** VALUES exposes exactly its declared bag. *)
+Lemma query_success_length_le_values :
+  forall env outputs values bound,
+    (Febag.cardinal (Fecol.CBag (CTuple T)) values <=
+      N.of_nat bound)%N ->
+    query_success_length_le env (QExpr_Values outputs values) bound.
+Proof.
+intros env outputs values bound Hbound rows Hrows.
+inversion Hrows; subst.
+eapply query_same_rows_as_bag_length_le; eassumption.
+Qed.
+
+(** A well-sorted table leaf turns a certified instance-bag bound into the
+    uniform query-success bound.  In particular, generated fixed-witness
+    cardinality facts can be consumed here without exposing any concrete row
+    value or the canonical ordering of bag elements. *)
+Lemma query_success_length_le_table :
+  forall env outputs table bound,
+    @query_outputs_sort T outputs =S= basesort table ->
+    (Febag.cardinal (Fecol.CBag (CTuple T)) (instance table) <=
+      N.of_nat bound)%N ->
+    query_success_length_le env (QExpr_Table outputs table) bound.
+Proof.
+intros env outputs table bound Hsort Hbound rows Hrows.
+apply eval_query_expr_table_success_iff in Hrows.
+unfold query_table_bag in Hrows.
+rewrite Hsort in Hrows.
+pose proof
+  (proj1 (@query_same_rows_as_bag_iff_bag_eq T rows (instance table)) Hrows)
+  as Hbag.
+unfold bag_eq, rows_bag, SqlBagAbstraction.BTupleT in Hbag.
+assert (Hcardinal :
+  Febag.cardinal (Fecol.CBag (CTuple T))
+    (Febag.mk_bag (Fecol.CBag (CTuple T)) rows) =
+  Febag.cardinal (Fecol.CBag (CTuple T)) (instance table)).
+{ now apply Febag.cardinal_eq. }
+rewrite Febag.cardinal_mk_bag in Hcardinal.
+rewrite <- Hcardinal in Hbound.
+apply (proj1 (Nat.compare_le_iff _ _)).
+rewrite Nat2N.inj_compare.
+apply (proj2 (N.compare_le_iff _ _)).
+exact Hbound.
+Qed.
+
+(** Projection emits exactly one row per successfully projected input row, so
+    it transports any successful-occurrence bound without requiring the query
+    to be deterministic.  Projection errors are outside this success-only
+    contract and are not erased. *)
+Lemma query_success_length_le_project :
+  forall env select_list input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Project select_list input) bound.
+Proof.
+intros env select_list input bound Hinput output Houtput.
+apply eval_query_expr_project_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Hproject]].
+pose proof
+  (project_rows_success_length env select_list input_rows output Hproject)
+  as Hlength.
+rewrite Hlength.
+now apply Hinput.
+Qed.
+
+(** A successful deterministic row adapter emits exactly one output
+    occurrence per selected child occurrence. *)
+Lemma query_success_length_le_row_map :
+  forall env outputs row_map input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_RowMap outputs row_map input) bound.
+Proof.
+intros env outputs row_map input bound Hinput output Houtput.
+apply eval_query_expr_row_map_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Hmap]].
+apply row_map_rows_outcome_success_map in Hmap.
+subst output; rewrite length_map.
+now apply Hinput.
+Qed.
+
+(** OFFSET subtracts the same prefix length from every successful input
+    observation. *)
+Lemma query_success_length_le_offset :
+  forall env offset input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Offset offset input) (bound - offset).
+Proof.
+intros env offset input bound Hinput output Houtput.
+apply eval_query_expr_offset_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Houtput]].
+subst output.
+rewrite length_skipn.
+apply Nat.sub_le_mono_r.
+now apply Hinput.
+Qed.
+
+(** If every successful child observation is no longer than the skipped
+    prefix, every successful OFFSET observation is the empty list.  This is a
+    universal statement over possible ordered results, not a claim about one
+    selected execution. *)
+Lemma query_offset_success_nil_of_input_length_le :
+  forall env offset input,
+    query_success_length_le env input offset ->
+    forall output,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env (QExpr_Offset offset input) (SqlSuccess output) ->
+      output = nil.
+Proof.
+intros env offset input Hinput output Houtput.
+pose proof
+  (query_success_length_le_offset env offset input offset Hinput
+    output Houtput) as Hlength.
+apply (proj1 (length_zero_iff_nil output)).
+cbn in Hlength; lia.
+Qed.
+
+(** FETCH retains at most both the requested count and a transported child
+    bound. *)
+Lemma query_success_length_le_fetch :
+  forall env count input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Fetch count input) (Nat.min count bound).
+Proof.
+intros env count input bound Hinput output Houtput.
+apply eval_query_expr_fetch_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Houtput]].
+subst output.
+rewrite length_firstn.
+apply Nat.min_le_compat_l.
+now apply Hinput.
+Qed.
+
+(** FETCH alone supplies a count bound, even when the child has no known
+    cardinality bound. *)
+Lemma query_success_length_le_fetch_count :
+  forall env count input,
+    query_success_length_le env (QExpr_Fetch count input) count.
+Proof.
+intros env count input output Houtput.
+apply eval_query_expr_fetch_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Houtput]].
+subst output.
+rewrite length_firstn.
+apply Nat.le_min_l.
+Qed.
+
+(** ORDER BY changes only the legal representative order, never the number of
+    row occurrences. *)
+Lemma query_success_length_le_order_by :
+  forall env keys input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_OrderBy keys input) bound.
+Proof.
+intros env keys input bound Hinput output Houtput.
+apply eval_query_expr_order_by_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows [Hsame Hordered]]].
+assert (Hlength : List.length output = List.length input_rows).
+{
+  apply Nat2N.inj.
+  rewrite (query_same_rows_as_bag_length_N output
+    (query_rows_bag input_rows) Hsame).
+  unfold query_rows_bag; rewrite Febag.cardinal_mk_bag; reflexivity.
+}
+rewrite Hlength; now apply Hinput.
+Qed.
+
+(** Finite-set construction can only remove occurrences from its source
+    list.  This is the cardinality fact used by SQL DISTINCT. *)
+Lemma tuple_mk_set_cardinal_le :
+  forall rows : list (tuple T),
+    (Feset.cardinal (Fecol.CSet (CTuple T))
+      (Feset.mk_set (Fecol.CSet (CTuple T)) rows) <=
+     List.length rows)%nat.
+Proof.
+induction rows as [|row rows IH].
+- rewrite Feset.mk_set_unfold, Feset.cardinal_spec, Feset.elements_empty.
+  reflexivity.
+- rewrite Feset.mk_set_unfold.
+  set (tail := Feset.mk_set (Fecol.CSet (CTuple T)) rows).
+  assert (Hequal :
+    Feset.equal (Fecol.CSet (CTuple T))
+      (Feset.add (Fecol.CSet (CTuple T)) row tail)
+      (Feset.union (Fecol.CSet (CTuple T))
+        (Feset.singleton (Fecol.CSet (CTuple T)) row) tail) = true).
+  {
+    rewrite Feset.equal_spec; intro candidate.
+    rewrite Feset.add_spec, Feset.mem_union, Feset.singleton_spec.
+    reflexivity.
+  }
+  assert (Hcardinal :
+    Feset.cardinal (Fecol.CSet (CTuple T))
+      (Feset.add (Fecol.CSet (CTuple T)) row tail) =
+    Feset.cardinal (Fecol.CSet (CTuple T))
+      (Feset.union (Fecol.CSet (CTuple T))
+        (Feset.singleton (Fecol.CSet (CTuple T)) row) tail)).
+  {
+    rewrite 2 Feset.cardinal_spec.
+    now apply
+      (comparelA_eq_length_eq _ _ _
+        (Feset.elements_spec1 _ _ _ Hequal)).
+  }
+  rewrite Hcardinal.
+  pose proof
+    (Feset.cardinal_union_
+      (Fecol.CSet (CTuple T))
+      (Feset.singleton (Fecol.CSet (CTuple T)) row) tail) as Hunion.
+  rewrite Feset.cardinal_singleton in Hunion.
+  assert (Hle :
+    (Feset.cardinal (Fecol.CSet (CTuple T))
+       (Feset.union (Fecol.CSet (CTuple T))
+         (Feset.singleton (Fecol.CSet (CTuple T)) row) tail) <=
+     1 + Feset.cardinal (Fecol.CSet (CTuple T)) tail)%nat) by lia.
+  eapply Nat.le_trans; [exact Hle|].
+  unfold tail; cbn; lia.
+Qed.
+
+Lemma query_distinct_bag_cardinal_le :
+  forall input,
+    (Febag.cardinal (Fecol.CBag (CTuple T))
+       (@query_distinct_bag T input) <=
+     Febag.cardinal (Fecol.CBag (CTuple T)) input)%N.
+Proof.
+intro input.
+unfold query_distinct_bag.
+rewrite Febag.cardinal_mk_bag.
+unfold Febag.cardinal.
+rewrite <- Feset.cardinal_spec.
+apply (proj1 (N.compare_le_iff _ _)).
+rewrite <- Nat2N.inj_compare.
+apply (proj2 (Nat.compare_le_iff _ _)).
+apply tuple_mk_set_cardinal_le.
+Qed.
+
+Lemma query_success_length_le_distinct :
+  forall env input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Distinct input) bound.
+Proof.
+intros env input bound Hinput output Houtput.
+apply eval_query_expr_distinct_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Hsame]].
+eapply Nat.le_trans; [|exact (Hinput input_rows Hinput_rows)].
+apply (proj1 (Nat.compare_le_iff _ _)).
+rewrite Nat2N.inj_compare.
+apply (proj2 (N.compare_le_iff _ _)).
+rewrite (query_same_rows_as_bag_length_N output _ Hsame).
+eapply N.le_trans; [apply query_distinct_bag_cardinal_le|].
+unfold rows_bag; rewrite Febag.cardinal_mk_bag; apply N.le_refl.
+Qed.
+
+(** A constructor-independent cardinality contract for SET operations.  It
+    exposes only the deterministic bag transformer already defined by the
+    exact semantics, including its malformed-sort empty fallback. *)
+Definition query_set_cardinality_bound
+    (operation : set_op) (left right : query_expr T relname)
+    (left_bound right_bound output_bound : nat) : Prop :=
+  forall left_bag right_bag,
+    (Febag.cardinal (Fecol.CBag (CTuple T)) left_bag <=
+      N.of_nat left_bound)%N ->
+    (Febag.cardinal (Fecol.CBag (CTuple T)) right_bag <=
+      N.of_nat right_bound)%N ->
+    (Febag.cardinal (Fecol.CBag (CTuple T))
+      (query_set_bag_function operation left right left_bag right_bag) <=
+      N.of_nat output_bound)%N.
+
+(** Pointwise multiplicity inclusion controls the total number of bag
+    occurrences.  This is deliberately a multiset fact: unlike a finite-set
+    cardinality argument, it remains valid when either SQL input contains
+    duplicate rows. *)
+Lemma oeset_pointwise_nb_occ_le_length :
+  forall (A : Type) (ordered : Oeset.Rcd A) (left right : list A),
+    (forall value,
+      (Oeset.nb_occ ordered value left <=
+       Oeset.nb_occ ordered value right)%N) ->
+    (List.length left <= List.length right)%nat.
+Proof.
+intros A ordered left.
+induction left as [|first left IH]; intros right Hocc; cbn; [lia|].
+assert (Hpresent : Oeset.mem_bool ordered first right = true).
+{
+  apply Oeset.nb_occ_mem; intro Hzero.
+  specialize (Hocc first).
+  rewrite (Oeset.nb_occ_unfold ordered first (first :: left)),
+    Oeset.compare_eq_refl, Hzero in Hocc.
+  lia.
+}
+apply Oeset.mem_bool_true_iff in Hpresent.
+destruct Hpresent as [representative [Hequal Hin]].
+destruct (in_split representative right Hin) as [before [after Hright]].
+subst right.
+assert (Htail :
+  (List.length left <= List.length (before ++ after))%nat).
+{
+  apply IH; intro value.
+  rewrite Oeset.nb_occ_app.
+  specialize (Hocc value).
+  rewrite (Oeset.nb_occ_unfold ordered value (first :: left)),
+    Oeset.nb_occ_app,
+    (Oeset.nb_occ_unfold ordered value (representative :: after)),
+    (Oeset.compare_eq_2 ordered value first representative Hequal)
+    in Hocc.
+  lia.
+}
+rewrite !length_app in *; cbn in *; lia.
+Qed.
+
+Lemma febag_cardinal_le_of_nb_occ_le :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (forall value,
+      (Febag.nb_occ bags value left <=
+       Febag.nb_occ bags value right)%N) ->
+    (Febag.cardinal bags left <= Febag.cardinal bags right)%N.
+Proof.
+intros A ordered bags left right Hocc.
+unfold Febag.cardinal.
+apply (proj1 (N.compare_le_iff _ _)).
+rewrite <- Nat2N.inj_compare.
+apply (proj2 (Nat.compare_le_iff _ _)).
+apply (@oeset_pointwise_nb_occ_le_length A ordered); intro value.
+rewrite <- !Febag.nb_occ_elements; apply Hocc.
+Qed.
+
+Lemma febag_cardinal_union :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    Febag.cardinal bags (Febag.union bags left right) =
+      (Febag.cardinal bags left + Febag.cardinal bags right)%N.
+Proof.
+intros A ordered bags left right.
+unfold Febag.cardinal.
+rewrite <- Nat2N.inj_add; f_equal.
+rewrite <- length_app.
+apply _permut_length with
+  (R := fun x y => Oeset.compare ordered x y = Eq).
+apply Oeset.nb_occ_permut; intro value.
+rewrite <- Febag.nb_occ_elements, Febag.nb_occ_union,
+  Oeset.nb_occ_app, !Febag.nb_occ_elements.
+reflexivity.
+Qed.
+
+Lemma febag_cardinal_union_max_le :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.union_max bags left right) <=
+      Febag.cardinal bags left + Febag.cardinal bags right)%N.
+Proof.
+intros A ordered bags left right.
+rewrite <- febag_cardinal_union.
+apply febag_cardinal_le_of_nb_occ_le; intro value.
+rewrite Febag.nb_occ_union_max, Febag.nb_occ_union.
+apply N.max_lub; [apply N.le_add_r|apply N.le_add_l].
+Qed.
+
+Lemma febag_cardinal_inter_le_left :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.inter bags left right) <=
+      Febag.cardinal bags left)%N.
+Proof.
+intros A ordered bags left right.
+apply febag_cardinal_le_of_nb_occ_le; intro value.
+rewrite Febag.nb_occ_inter; apply N.le_min_l.
+Qed.
+
+Lemma febag_cardinal_inter_le_right :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.inter bags left right) <=
+      Febag.cardinal bags right)%N.
+Proof.
+intros A ordered bags left right.
+apply febag_cardinal_le_of_nb_occ_le; intro value.
+rewrite Febag.nb_occ_inter; apply N.le_min_r.
+Qed.
+
+Lemma febag_cardinal_diff_le_left :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.diff bags left right) <=
+      Febag.cardinal bags left)%N.
+Proof.
+intros A ordered bags left right.
+apply febag_cardinal_le_of_nb_occ_le; intro value.
+rewrite Febag.nb_occ_diff; apply N.le_sub_l.
+Qed.
+
+(** Standard conservative contracts for every modeled SQL multiset
+    operation.  The sort-mismatch fallback is empty and therefore satisfies
+    each bound; no duplicate-freedom premise is used. *)
+Lemma query_set_cardinality_bound_union :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Union left right
+      left_bound right_bound (left_bound + right_bound).
+Proof.
+intros left right left_bound right_bound left_bag right_bag Hleft Hright.
+unfold query_set_bag_function.
+destruct (query_expr_sort left =S?= query_expr_sort right).
+- unfold query_set_bag; cbn.
+  rewrite febag_cardinal_union, Nat2N.inj_add; now apply N.add_le_mono.
+- unfold Febag.cardinal; rewrite Febag.elements_empty; cbn; apply N.le_0_l.
+Qed.
+
+Lemma query_set_cardinality_bound_union_max :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound UnionMax left right
+      left_bound right_bound (left_bound + right_bound).
+Proof.
+intros left right left_bound right_bound left_bag right_bag Hleft Hright.
+unfold query_set_bag_function.
+destruct (query_expr_sort left =S?= query_expr_sort right).
+- unfold query_set_bag; cbn.
+  eapply N.le_trans; [apply febag_cardinal_union_max_le|].
+  rewrite Nat2N.inj_add; now apply N.add_le_mono.
+- unfold Febag.cardinal; rewrite Febag.elements_empty; cbn; apply N.le_0_l.
+Qed.
+
+Lemma query_set_cardinality_bound_inter :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Inter left right
+      left_bound right_bound (Nat.min left_bound right_bound).
+Proof.
+intros left right left_bound right_bound left_bag right_bag Hleft Hright.
+unfold query_set_bag_function.
+destruct (query_expr_sort left =S?= query_expr_sort right).
+- unfold query_set_bag; cbn.
+  rewrite Nat2N.inj_min.
+  apply N.min_glb.
+  + eapply N.le_trans; [apply febag_cardinal_inter_le_left|exact Hleft].
+  + eapply N.le_trans; [apply febag_cardinal_inter_le_right|exact Hright].
+- unfold Febag.cardinal; rewrite Febag.elements_empty; cbn; apply N.le_0_l.
+Qed.
+
+Lemma query_set_cardinality_bound_diff :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Diff left right
+      left_bound right_bound left_bound.
+Proof.
+intros left right left_bound right_bound left_bag right_bag Hleft Hright.
+unfold query_set_bag_function.
+destruct (query_expr_sort left =S?= query_expr_sort right).
+- unfold query_set_bag; cbn.
+  eapply N.le_trans; [apply febag_cardinal_diff_le_left|exact Hleft].
+- unfold Febag.cardinal; rewrite Febag.elements_empty; cbn; apply N.le_0_l.
+Qed.
+
+Lemma query_success_length_le_set :
+  forall env operation left right left_bound right_bound output_bound,
+    query_success_length_le env left left_bound ->
+    query_success_length_le env right right_bound ->
+    query_set_cardinality_bound operation left right
+      left_bound right_bound output_bound ->
+    query_success_length_le env (QExpr_Set operation left right) output_bound.
+Proof.
+intros env operation left right left_bound right_bound output_bound
+  Hleft Hright Hoperation output Houtput.
+apply eval_query_expr_set_success_iff in Houtput.
+destruct Houtput as
+  [left_rows [right_rows [Hleft_rows [Hright_rows Hsame]]]].
+eapply query_same_rows_as_bag_length_le; [exact Hsame|].
+apply Hoperation.
+- unfold rows_bag; rewrite Febag.cardinal_mk_bag.
+  apply (proj1 (N.compare_le_iff _ _)); rewrite <- Nat2N.inj_compare.
+  now apply (proj2 (Nat.compare_le_iff _ _)), Hleft.
+- unfold rows_bag; rewrite Febag.cardinal_mk_bag.
+  apply (proj1 (N.compare_le_iff _ _)); rewrite <- Nat2N.inj_compare.
+  now apply (proj2 (Nat.compare_le_iff _ _)), Hright.
+Qed.
+
+(** Successful rank evaluation attaches exactly one value to each staged row. *)
+Lemma query_rank_rows_outcome_success_length :
+  forall partition_keys order_keys rank_attribute rank_value all_rows rows output,
+    @query_rank_rows_outcome T value_is_null
+      partition_keys order_keys rank_attribute rank_value all_rows rows =
+      Some output ->
+    List.length output = List.length rows.
+Proof.
+intros partition_keys order_keys rank_attribute rank_value all_rows rows.
+induction rows as [|row rows IH]; intros output Houtput; cbn in Houtput.
+- now inversion Houtput.
+- destruct (query_rank_row_outcome value_is_null partition_keys order_keys
+    rank_attribute rank_value all_rows row) eqn:Hrow; [|discriminate].
+  destruct (query_rank_rows_outcome value_is_null partition_keys order_keys
+    rank_attribute rank_value all_rows rows) eqn:Htail; [|discriminate].
+  inversion Houtput; subst output; cbn; f_equal.
+  now eapply IH.
+Qed.
+
+Lemma query_rank_bag_rows_length :
+  forall rows : list (tuple T),
+    List.length (query_rank_bag_rows (rows_bag T rows)) = List.length rows.
+Proof.
+intro rows; unfold query_rank_bag_rows; rewrite length_map.
+apply Nat2N.inj.
+change
+  (Febag.cardinal (Fecol.CBag (CTuple T)) (rows_bag T rows) =
+   N.of_nat (List.length rows)).
+unfold rows_bag; apply Febag.cardinal_mk_bag.
+Qed.
+
+(** Successful cumulative-window evaluation likewise emits one row per legal
+    ordered input occurrence.  This is only a length theorem: peer order may
+    still produce multiple observable value bags for a ROWS frame. *)
+Lemma query_window_rows_outcome_success_length :
+  forall env partition_keys items previous position prefix rows output,
+    @query_window_rows_outcome T symbol_runtime_error aggregate_runtime_error
+      value_is_null env partition_keys items previous position prefix rows =
+      Some (SqlSuccess output) ->
+    List.length output = List.length rows.
+Proof.
+intros env partition_keys items previous position prefix rows.
+revert previous position prefix.
+induction rows as [|row rows IH];
+  intros previous position prefix output Houtput; cbn in Houtput.
+- now inversion Houtput.
+- destruct previous as [previous_row|].
+  + destruct (compare_order_keys value_is_null partition_keys previous_row row).
+    all: cbn in Houtput.
+    all: destruct (query_window_items_outcome symbol_runtime_error
+      aggregate_runtime_error env _ _ _ items row) as [[item_row|item_error]|]
+      eqn:Hitem; try discriminate.
+    all: destruct (query_window_rows_outcome symbol_runtime_error
+      aggregate_runtime_error value_is_null env partition_keys items
+      (Some row) _ _ rows) as [[tail_rows|tail_error]|]
+      eqn:Htail; try discriminate.
+    all: inversion Houtput; subst output; cbn; f_equal;
+      eapply IH; exact Htail.
+  + destruct (query_window_items_outcome symbol_runtime_error
+      aggregate_runtime_error env 1 (row :: nil) _ items row)
+      as [[item_row|item_error]|] eqn:Hitem; try discriminate.
+    destruct (query_window_rows_outcome symbol_runtime_error
+      aggregate_runtime_error value_is_null env partition_keys items
+      (Some row) 1 (row :: nil) rows) as [[tail_rows|tail_error]|]
+      eqn:Htail; try discriminate.
+    inversion Houtput; subst output; cbn; f_equal.
+    eapply IH; exact Htail.
+Qed.
+
+Lemma query_success_length_le_rank :
+  forall env partition_keys order_keys rank_attribute rank_value input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+      bound.
+Proof.
+intros env partition_keys order_keys rank_attribute rank_value input bound
+  Hinput output Houtput.
+apply eval_query_expr_rank_success_iff in Houtput.
+destruct Houtput as [input_rows [output_bag [Hinput_rows [Hrank Hsame]]]].
+unfold query_rank_bag_relation in Hrank.
+destruct Hrank as [ranked_rows [Hcompute Hbag]].
+assert (Houtput_length : List.length output = List.length ranked_rows).
+{
+  apply Nat2N.inj.
+  pose proof (query_same_rows_as_bag_length_N output output_bag Hsame) as Hout.
+  assert (Hcardinal :
+    Febag.cardinal (Fecol.CBag (CTuple T)) (rows_bag T ranked_rows) =
+    Febag.cardinal (Fecol.CBag (CTuple T)) output_bag).
+  { now apply Febag.cardinal_eq. }
+  unfold rows_bag in Hcardinal; rewrite Febag.cardinal_mk_bag in Hcardinal.
+  rewrite Hout; now symmetry.
+}
+rewrite Houtput_length.
+rewrite (query_rank_rows_outcome_success_length _ _ _ _ _ _ _ Hcompute).
+rewrite query_rank_bag_rows_length.
+exact (Hinput input_rows Hinput_rows).
+Qed.
+
+Lemma query_success_length_le_window :
+  forall env partition_keys order_keys items input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Window partition_keys order_keys items input) bound.
+Proof.
+intros env partition_keys order_keys items input bound Hinput output Houtput.
+apply eval_query_expr_window_success_iff in Houtput.
+destruct Houtput as [input_rows [output_bag [Hinput_rows [Hwindow Hsame]]]].
+unfold query_window_bag_relation in Hwindow.
+destruct Hwindow as
+  [ordered_rows [window_rows [Horder [Hcompute Hbag]]]].
+destruct Horder as [Hordered_bag Hordered].
+assert (Houtput_length : List.length output = List.length window_rows).
+{
+  apply Nat2N.inj.
+  pose proof (query_same_rows_as_bag_length_N output output_bag Hsame) as Hout.
+  assert (Hcardinal :
+    Febag.cardinal (Fecol.CBag (CTuple T)) (rows_bag T window_rows) =
+    Febag.cardinal (Fecol.CBag (CTuple T)) output_bag).
+  { now apply Febag.cardinal_eq. }
+  unfold rows_bag in Hcardinal; rewrite Febag.cardinal_mk_bag in Hcardinal.
+  rewrite Hout; now symmetry.
+}
+assert (Hordered_length :
+  List.length ordered_rows =
+  List.length (query_rank_bag_rows (rows_bag T input_rows))).
+{
+  apply Nat2N.inj.
+  rewrite (query_same_rows_as_bag_length_N ordered_rows _ Hordered_bag).
+  unfold query_rows_bag, rows_bag.
+  rewrite Febag.cardinal_mk_bag; reflexivity.
+}
+rewrite Houtput_length.
+rewrite (query_window_rows_outcome_success_length
+  env partition_keys items None 0 nil ordered_rows window_rows Hcompute).
+rewrite Hordered_length, query_rank_bag_rows_length.
+exact (Hinput input_rows Hinput_rows).
+Qed.
+
 Lemma if_tuple_rows_success_true :
   forall (test : bool) (row : tuple T)
       (tail output : list (tuple T)),
@@ -1503,6 +2263,21 @@ induction rows as [|row rows IH]; intros output Hfilter.
         (Bool.is_true (B T) truth) row tail_rows output Htruth H2) as Hout.
       subst output; cbn; lia.
   + cbn [filter_cons_outcome] in *; discriminate.
+Qed.
+
+(** Filtering only removes child occurrences.  Formula and subquery errors
+    remain ordinary non-success outcomes and need no safety assumption here. *)
+Lemma query_success_length_le_filter :
+  forall env formula input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Filter formula input) bound.
+Proof.
+intros env formula input bound Hinput output Houtput.
+apply eval_query_expr_filter_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput_rows Hfilter]].
+eapply Nat.le_trans.
+- exact (filter_rows_success_length_le env formula input_rows output Hfilter).
+- now apply Hinput.
 Qed.
 
 Lemma filter_cons_outcome_success_Forall :

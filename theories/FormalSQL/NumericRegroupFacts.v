@@ -525,9 +525,9 @@ Qed.
 
 (** For a nonempty logical group whose rows expose the referenced attribute,
     the evaluator passes exactly one error-free observation per row to
-    [sum(numeric)], modulo its internal canonical row ordering.  This is the
+    [sum(numeric)] in the representative's actual order.  This is the
     key interface that hides [env_g], [find_eval_env], [unfold_env_slice], and
-    [quicksort] from generated proofs. *)
+    the label-selection details from generated proofs. *)
 Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows :
   forall group_terms group attribute,
     group <> nil ->
@@ -560,23 +560,13 @@ case_eq (ListSort.quicksort (OTuple TNull) group).
   cbn.
   unfold Interp.unfold_env_slice.
   rewrite !map_map.
-  eapply Permutation_trans with
-    (l' :=
-      map
-        (fun row => (None, dot TNull row attribute))
-        (ListSort.quicksort (OTuple TNull) group)).
-  + apply Permutation_refl'.
-    apply map_ext_in; intros row Hrow.
-    apply
-      (@tnull_sum_numeric_dot_singleton_observation
-        (labels TNull first) row attribute).
-    rewrite Forall_forall in Hpresent.
-    apply Hpresent.
-    apply (proj2 (ListSort.In_quicksort (OTuple TNull) group row)).
-    exact Hrow.
-  + apply Permutation_sym, Permutation_map.
-    apply list_permut_eq_implies_Permutation.
-    apply ListSort.quick_permut_strong.
+  apply Permutation_refl'.
+  apply map_ext_in; intros row Hrow.
+  apply
+    (@tnull_sum_numeric_dot_singleton_observation
+      (labels TNull first) row attribute).
+  rewrite Forall_forall in Hpresent.
+  now apply Hpresent.
 Qed.
 
 (** Direct evaluator bridge for one closed logical group.  It covers both the

@@ -39,4 +39,18 @@ Proof.
   discriminate.
 Qed.
 
+Example encoded_coalesce_nonnull_identity
+    (value fallback : value) :
+  is_null_value value = false ->
+  interp_case_values
+    [interp_scalar_operator
+       (ScalarPredicateValue PredicateIsNotNull) [value];
+     value;
+     fallback] = value.
+Proof.
+  apply interp_case_is_not_null_identity.
+Qed.
+
 Print Assumptions interp_predicate_eq_true_is_true_acceptance.
+Print Assumptions interp_case_is_not_null_identity.
+Print Assumptions case_runtime_error_is_not_null_identity.

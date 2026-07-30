@@ -209,6 +209,12 @@ Proof.
     integer_stats_transition_commutes left right initial Hperm).
 Qed.
 
+Definition z_value_projection (value : value) : list Z :=
+  match value with
+  | Value_Z (Some integer) => integer :: nil
+  | _ => nil
+  end.
+
 Definition int32_value_projection (value : value) : list int32 :=
   match value with
   | Value_int32 (Some integer) => integer :: nil
@@ -226,6 +232,14 @@ Definition numeric_value_projection (value : value) : list numeric :=
   | Value_numeric (Some number) => number :: nil
   | _ => nil
   end.
+
+Lemma z_values_as_flat_map : forall values,
+  z_values values = flat_map z_value_projection values.
+Proof.
+  induction values as [|value values IH]; cbn; [reflexivity|].
+  destruct value; cbn; try exact IH.
+  destruct o; cbn; now rewrite IH.
+Qed.
 
 Lemma int32_values_as_flat_map : forall values,
   int32_values values = flat_map int32_value_projection values.
@@ -275,6 +289,14 @@ Proof.
   now apply Permutation_flat_map.
 Qed.
 
+Lemma z_values_permutation : forall left right,
+  Permutation left right ->
+  Permutation (z_values left) (z_values right).
+Proof.
+  intros left right Hperm; rewrite !z_values_as_flat_map.
+  now apply Permutation_flat_map.
+Qed.
+
 Lemma forallb_permutation : forall (A : Type) (predicate : A -> bool) left right,
   Permutation left right -> forallb predicate left = forallb predicate right.
 Proof.
@@ -284,6 +306,303 @@ Proof.
   - now rewrite IHHperm.
   - destruct (predicate x), (predicate y), (forallb predicate l); reflexivity.
   - now rewrite IHHperm1, IHHperm2.
+Qed.
+
+(** A nonempty fold of a commutative semigroup is independent of the input
+    permutation.  This is the common algebraic core of exact MIN/MAX. *)
+Lemma fold_nonempty_permutation : forall (A : Type) (operation : A -> A -> A),
+  (forall left right, operation left right = operation right left) ->
+  (forall first second third,
+    operation (operation first second) third =
+    operation first (operation second third)) ->
+  forall left right,
+    Permutation left right ->
+    fold_nonempty operation left = fold_nonempty operation right.
+Proof.
+  intros A operation Hcomm Hassoc left right Hperm.
+  induction Hperm; cbn [fold_nonempty].
+  - reflexivity.
+  - destruct l, l'; cbn [fold_nonempty] in *; try discriminate.
+    + reflexivity.
+    + f_equal.
+      eapply fold_left_permutation_of_commuting_steps; [|exact Hperm].
+      intros current first second.
+      rewrite !Hassoc, (Hcomm first second); reflexivity.
+  - change
+      (Some (fold_left operation l (operation y x)) =
+       Some (fold_left operation l (operation x y))).
+    now rewrite (Hcomm y x).
+  - now rewrite IHHperm1, IHHperm2.
+Qed.
+
+(** Generic min/max over an ordered carrier.  The order is used only to prove
+    the algebraic laws; aggregate evaluation remains the concrete PostgreSQL
+    operation supplied by each value domain. *)
+Definition ordered_minimum {A : Type} (order : Oset.Rcd A) left right :=
+  match Oset.compare order left right with Gt => right | Eq | Lt => left end.
+
+Definition ordered_maximum {A : Type} (order : Oset.Rcd A) left right :=
+  match Oset.compare order left right with Lt => right | Eq | Gt => left end.
+
+Lemma ordered_minimum_commutative : forall (A : Type) (order : Oset.Rcd A),
+  forall left right,
+    ordered_minimum order left right = ordered_minimum order right left.
+Proof.
+  intros A order left right; unfold ordered_minimum.
+  rewrite (Oset.compare_lt_gt order right left).
+  destruct (Oset.compare order left right) eqn:Hcompare; cbn.
+  - apply (proj1 (Oset.compare_eq_iff order left right)) in Hcompare.
+    now subst right.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma ordered_minimum_associative : forall (A : Type) (order : Oset.Rcd A),
+  forall first second third,
+    ordered_minimum order (ordered_minimum order first second) third =
+    ordered_minimum order first (ordered_minimum order second third).
+Proof.
+  intros A order first second third.
+  unfold ordered_minimum at 1 3.
+  destruct (Oset.compare order first second) eqn:Hfirst_second.
+  - apply (proj1 (Oset.compare_eq_iff order first second)) in Hfirst_second.
+    subst second; unfold ordered_minimum.
+    rewrite Oset.compare_eq_refl.
+    destruct (Oset.compare order first third) eqn:Hfirst_third; cbn;
+      rewrite ?Oset.compare_eq_refl, ?Hfirst_third; reflexivity.
+  - destruct (Oset.compare order second third) eqn:Hsecond_third.
+    + apply (proj1 (Oset.compare_eq_iff order second third)) in Hsecond_third.
+      subst third; unfold ordered_minimum.
+      now rewrite Hfirst_second, Oset.compare_eq_refl, Hfirst_second.
+    + assert (Hfirst_third : Oset.compare order first third = Lt).
+      { eapply Oset.compare_lt_trans; eassumption. }
+      unfold ordered_minimum; now rewrite Hfirst_second, Hsecond_third,
+        Hfirst_third, Hfirst_second.
+    + unfold ordered_minimum; now rewrite Hfirst_second, Hsecond_third.
+  - destruct (Oset.compare order second third) eqn:Hsecond_third.
+    + apply (proj1 (Oset.compare_eq_iff order second third)) in Hsecond_third.
+      subst third; unfold ordered_minimum.
+      now rewrite Hfirst_second, Oset.compare_eq_refl, Hfirst_second.
+    + unfold ordered_minimum.
+      now rewrite Hfirst_second, Hsecond_third, Hfirst_second.
+    + assert (Hthird_first : Oset.compare order third first = Lt).
+      {
+        pose proof Hfirst_second as Hsecond_first.
+        pose proof Hsecond_third as Hthird_second.
+        rewrite Oset.compare_lt_gt, CompOpp_iff in Hsecond_first.
+        rewrite Oset.compare_lt_gt, CompOpp_iff in Hthird_second.
+        eapply Oset.compare_lt_trans; eassumption.
+      }
+      pose proof (Oset.compare_lt_gt order first third) as Hfirst_third.
+      rewrite Hthird_first in Hfirst_third; cbn in Hfirst_third.
+      unfold ordered_minimum.
+      now rewrite Hfirst_second, Hsecond_third, Hfirst_third.
+Qed.
+
+Lemma ordered_maximum_commutative : forall (A : Type) (order : Oset.Rcd A),
+  forall left right,
+    ordered_maximum order left right = ordered_maximum order right left.
+Proof.
+  intros A order left right; unfold ordered_maximum.
+  rewrite (Oset.compare_lt_gt order right left).
+  destruct (Oset.compare order left right) eqn:Hcompare; cbn.
+  - apply (proj1 (Oset.compare_eq_iff order left right)) in Hcompare.
+    now subst right.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma ordered_maximum_associative : forall (A : Type) (order : Oset.Rcd A),
+  forall first second third,
+    ordered_maximum order (ordered_maximum order first second) third =
+    ordered_maximum order first (ordered_maximum order second third).
+Proof.
+  intros A order first second third.
+  unfold ordered_maximum at 1 3.
+  destruct (Oset.compare order first second) eqn:Hfirst_second.
+  - apply (proj1 (Oset.compare_eq_iff order first second)) in Hfirst_second.
+    subst second; unfold ordered_maximum.
+    rewrite Oset.compare_eq_refl.
+    destruct (Oset.compare order first third) eqn:Hfirst_third; cbn;
+      rewrite ?Oset.compare_eq_refl, ?Hfirst_third; reflexivity.
+  - destruct (Oset.compare order second third) eqn:Hsecond_third.
+    + apply (proj1 (Oset.compare_eq_iff order second third)) in Hsecond_third.
+      subst third; unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Oset.compare_eq_refl].
+      reflexivity.
+    + assert (Hfirst_third : Oset.compare order first third = Lt).
+      { eapply Oset.compare_lt_trans; eassumption. }
+      unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Hsecond_third |
+        rewrite Hfirst_third].
+      reflexivity.
+    + unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Hsecond_third].
+      reflexivity.
+  - destruct (Oset.compare order second third) eqn:Hsecond_third.
+    + apply (proj1 (Oset.compare_eq_iff order second third)) in Hsecond_third.
+      subst third; unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Oset.compare_eq_refl].
+      reflexivity.
+    + unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Hsecond_third].
+      reflexivity.
+    + assert (Hthird_first : Oset.compare order third first = Lt).
+      {
+        pose proof Hfirst_second as Hsecond_first.
+        pose proof Hsecond_third as Hthird_second.
+        rewrite Oset.compare_lt_gt, CompOpp_iff in Hsecond_first.
+        rewrite Oset.compare_lt_gt, CompOpp_iff in Hthird_second.
+        eapply Oset.compare_lt_trans; eassumption.
+      }
+      pose proof (Oset.compare_lt_gt order first third) as Hfirst_third.
+      rewrite Hthird_first in Hfirst_third; cbn in Hfirst_third.
+      unfold ordered_maximum.
+      repeat first [rewrite Hfirst_second | rewrite Hsecond_third |
+        rewrite Hfirst_third].
+      reflexivity.
+Qed.
+
+Lemma numeric_minimum_is_ordered_minimum : forall left right,
+  numeric_min left right = ordered_minimum Onumeric left right.
+Proof. reflexivity. Qed.
+
+Lemma numeric_maximum_is_ordered_maximum : forall left right,
+  numeric_max left right = ordered_maximum Onumeric left right.
+Proof. reflexivity. Qed.
+
+Lemma numeric_min_commutative : forall left right,
+  numeric_min left right = numeric_min right left.
+Proof.
+  intros left right; rewrite !numeric_minimum_is_ordered_minimum.
+  apply ordered_minimum_commutative.
+Qed.
+
+Lemma numeric_min_associative : forall first second third,
+  numeric_min (numeric_min first second) third =
+    numeric_min first (numeric_min second third).
+Proof.
+  intros first second third; rewrite !numeric_minimum_is_ordered_minimum.
+  apply ordered_minimum_associative.
+Qed.
+
+Lemma numeric_max_commutative : forall left right,
+  numeric_max left right = numeric_max right left.
+Proof.
+  intros left right; rewrite !numeric_maximum_is_ordered_maximum.
+  apply ordered_maximum_commutative.
+Qed.
+
+Lemma numeric_max_associative : forall first second third,
+  numeric_max (numeric_max first second) third =
+    numeric_max first (numeric_max second third).
+Proof.
+  intros first second third; rewrite !numeric_maximum_is_ordered_maximum.
+  apply ordered_maximum_associative.
+Qed.
+
+Lemma checked_fold_nonempty_permutation :
+  forall (A B : Type) (predicate : value -> bool)
+    (extract : list value -> list A) (operation : A -> A -> A)
+    (wrap : option A -> B) left right,
+    Permutation left right ->
+    Permutation (extract left) (extract right) ->
+    (forall first second, operation first second = operation second first) ->
+    (forall first second third,
+      operation (operation first second) third =
+      operation first (operation second third)) ->
+    (if forallb predicate left
+     then wrap (fold_nonempty operation (extract left))
+     else wrap None) =
+    (if forallb predicate right
+     then wrap (fold_nonempty operation (extract right))
+     else wrap None).
+Proof.
+  intros A B predicate extract operation wrap left right Hvalues Hextract
+    Hcomm Hassoc.
+  rewrite (forallb_permutation value predicate left right Hvalues).
+  destruct (forallb predicate right); [|reflexivity].
+  f_equal; now apply fold_nonempty_permutation.
+Qed.
+
+Lemma interp_min_z_permutation : forall left right,
+  Permutation left right -> interp_min_z left = interp_min_z right.
+Proof.
+  intros left right Hperm; unfold interp_min_z.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply z_values_permutation.
+  - apply Z.min_comm.
+  - symmetry; apply Z.min_assoc.
+Qed.
+
+Lemma interp_max_z_permutation : forall left right,
+  Permutation left right -> interp_max_z left = interp_max_z right.
+Proof.
+  intros left right Hperm; unfold interp_max_z.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply z_values_permutation.
+  - apply Z.max_comm.
+  - symmetry; apply Z.max_assoc.
+Qed.
+
+Lemma interp_min_int32_permutation : forall left right,
+  Permutation left right -> interp_min_int32 left = interp_min_int32 right.
+Proof.
+  intros left right Hperm; unfold interp_min_int32.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply int32_values_permutation.
+  - apply int32_minimum_commutative.
+  - apply int32_minimum_associative.
+Qed.
+
+Lemma interp_max_int32_permutation : forall left right,
+  Permutation left right -> interp_max_int32 left = interp_max_int32 right.
+Proof.
+  intros left right Hperm; unfold interp_max_int32.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply int32_values_permutation.
+  - apply int32_maximum_commutative.
+  - apply int32_maximum_associative.
+Qed.
+
+Lemma interp_min_int64_permutation : forall left right,
+  Permutation left right -> interp_min_int64 left = interp_min_int64 right.
+Proof.
+  intros left right Hperm; unfold interp_min_int64.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply int64_values_permutation.
+  - apply int64_minimum_commutative.
+  - apply int64_minimum_associative.
+Qed.
+
+Lemma interp_max_int64_permutation : forall left right,
+  Permutation left right -> interp_max_int64 left = interp_max_int64 right.
+Proof.
+  intros left right Hperm; unfold interp_max_int64.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply int64_values_permutation.
+  - apply int64_maximum_commutative.
+  - apply int64_maximum_associative.
+Qed.
+
+Lemma interp_min_numeric_permutation : forall left right,
+  Permutation left right -> interp_min_numeric left = interp_min_numeric right.
+Proof.
+  intros left right Hperm; unfold interp_min_numeric.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply numeric_values_permutation.
+  - apply numeric_min_commutative.
+  - apply numeric_min_associative.
+Qed.
+
+Lemma interp_max_numeric_permutation : forall left right,
+  Permutation left right -> interp_max_numeric left = interp_max_numeric right.
+Proof.
+  intros left right Hperm; unfold interp_max_numeric.
+  eapply checked_fold_nonempty_permutation; try eassumption.
+  - now apply numeric_values_permutation.
+  - apply numeric_max_commutative.
+  - apply numeric_max_associative.
 Qed.
 
 Lemma interp_sum_int32_as_int64_permutation : forall left right,
@@ -949,6 +1268,69 @@ Proof.
   - rewrite IH; cbn [integer_stats_transition]; lia.
 Qed.
 
+Lemma integer_stats_fold_interval_invariant :
+  forall (values : list Z) lower upper count sum sum_squares,
+    0 <= lower ->
+    count * lower <= sum ->
+    sum_squares <= upper * sum ->
+    Forall (fun value => lower <= value <= upper) values ->
+    let '(final_count, (final_sum, final_sum_squares)) :=
+      fold_left integer_stats_transition values
+        (count, (sum, sum_squares)) in
+    final_count * lower <= final_sum /\
+    final_sum_squares <= upper * final_sum.
+Proof.
+  induction values as [|value values IH];
+    intros lower upper count sum sum_squares
+      Hlower Hsum Hsquares Hvalues.
+  - cbn; tauto.
+  - inversion Hvalues as [|? ? Hvalue Htail]; subst.
+    cbn [integer_stats_transition].
+    apply IH; try assumption.
+    + nia.
+    + destruct Hvalue as [Hvalue_lower Hvalue_upper].
+      assert (0 <= value) by lia.
+      assert (value * value <= upper * value) by nia.
+      nia.
+Qed.
+
+Lemma integer_stats_initial_interval_bounds :
+  forall (values : list Z) lower upper final_count final_sum
+      final_sum_squares,
+    0 <= lower ->
+    Forall (fun value => lower <= value <= upper) values ->
+    fold_left integer_stats_transition values (0, (0, 0)) =
+      (final_count, (final_sum, final_sum_squares)) ->
+    final_count * lower <= final_sum /\
+    final_sum_squares <= upper * final_sum.
+Proof.
+  intros values lower upper final_count final_sum final_sum_squares
+    Hlower Hvalues Hfold.
+  assert (Hzero : 0 <= upper * 0) by nia.
+  pose proof
+    (integer_stats_fold_interval_invariant values lower upper 0 0 0
+      Hlower (Z.le_refl 0) Hzero Hvalues) as Hbounds.
+  rewrite Hfold in Hbounds.
+  exact Hbounds.
+Qed.
+
+Lemma bounded_integer_stats_sum_positive :
+  forall (values : list Z) lower upper count sum sum_squares,
+    0 < lower ->
+    Forall (fun value => lower <= value <= upper) values ->
+    fold_left integer_stats_transition values (0, (0, 0)) =
+      (count, (sum, sum_squares)) ->
+    1 <= count ->
+    0 < sum.
+Proof.
+  intros values lower upper count sum sum_squares
+    Hlower Hvalues Hfold Hcount.
+  destruct
+    (integer_stats_initial_interval_bounds values lower upper
+      count sum sum_squares)
+    as [Hsum Hsquares]; try lia; try assumption.
+Qed.
+
 Lemma numeric_avg_scale_transition_total_count_exact :
   forall scale state next,
     numeric_avg_scale_total_count
@@ -1212,4 +1594,580 @@ destruct Hbound as [Hstrict | Hequal].
     numeric_zero (numeric_of_Z lower) value Hzero_lower Hstrict).
 - exact (Oset.compare_lt_eq_trans Onumeric
     numeric_zero (numeric_of_Z lower) value Hzero_lower Hequal).
+Qed.
+
+(** PostgreSQL's integer rounding primitive differs from the exact quotient
+    by at most one half.  Keeping the certificate in doubled integer form
+    avoids introducing an inexact real carrier and makes the tie-away rule
+    explicit. *)
+Lemma numeric_round_quot_nonnegative_half_ulp :
+  forall numerator denominator,
+    0 <= numerator ->
+    0 < denominator ->
+    2 * numerator - denominator <=
+      2 * numeric_round_quot numerator denominator * denominator <=
+    2 * numerator + denominator.
+Proof.
+intros numerator denominator Hnumerator Hdenominator.
+assert (Hdenominator_nonzero : denominator <> 0) by lia.
+pose proof
+  (Z.quot_rem numerator denominator Hdenominator_nonzero) as Hdecompose.
+pose proof
+  (Z.rem_nonneg numerator denominator Hdenominator_nonzero Hnumerator)
+  as Hremainder_nonnegative.
+pose proof
+  (Z.rem_bound_abs numerator denominator Hdenominator_nonzero)
+  as Hremainder_bound.
+rewrite (Z.abs_eq (Z.rem numerator denominator) Hremainder_nonnegative),
+  (Z.abs_eq denominator (Z.lt_le_incl _ _ Hdenominator))
+  in Hremainder_bound.
+unfold numeric_round_quot.
+rewrite (Z.abs_eq (Z.rem numerator denominator) Hremainder_nonnegative),
+  (Z.abs_eq denominator (Z.lt_le_incl _ _ Hdenominator)).
+assert (Hproduct_nonnegative : 0 <= numerator * denominator) by nia.
+rewrite (proj2 (Z.ltb_ge (numerator * denominator) 0)
+  Hproduct_nonnegative).
+destruct (2 * Z.rem numerator denominator >=? denominator)%Z
+  eqn:Hround.
+- apply Z.geb_le in Hround; nia.
+- rewrite Z.geb_leb in Hround.
+  apply Z.leb_gt in Hround; nia.
+Qed.
+
+(** A display scale selected by PostgreSQL's division rule is always inside
+    the runtime scale domain.  Value range remains a separate result check. *)
+Lemma numeric_pg_div_scale_display_valid :
+  forall left left_scale right right_scale result_scale,
+    numeric_pg_div_scale left left_scale right right_scale =
+      Some result_scale ->
+    numeric_display_scale_valid_bool result_scale = true.
+Proof.
+intros left left_scale right right_scale result_scale Hscale.
+unfold numeric_pg_div_scale in Hscale.
+destruct (numeric_decimal_parts left) as [[left_coeff left_decimal_scale]|];
+  [|discriminate].
+destruct (numeric_decimal_parts right) as [[right_coeff right_decimal_scale]|];
+  [|discriminate].
+inversion Hscale; subst result_scale; clear Hscale.
+unfold numeric_display_scale_valid_bool,
+  postgres_numeric_max_fractional_digits,
+  postgres_numeric_max_display_scale,
+  postgres_numeric_min_display_scale.
+apply andb_true_iff; split; apply Z.leb_le.
+- apply Z.min_glb; [apply Z.le_max_r|lia].
+- pose proof (Z.le_min_r
+    (Z.max
+      (Z.max
+        (Z.max
+          (postgres_numeric_min_sig_digits -
+           (if numeric_pg_first_digit left_coeff left_decimal_scale <=?
+               numeric_pg_first_digit right_coeff right_decimal_scale
+            then numeric_pg_weight left_coeff left_decimal_scale -
+                 numeric_pg_weight right_coeff right_decimal_scale - 1
+            else numeric_pg_weight left_coeff left_decimal_scale -
+                 numeric_pg_weight right_coeff right_decimal_scale) *
+             postgres_numeric_dec_digits)
+          left_scale) right_scale) 0) 1000) as Hupper.
+  lia.
+Qed.
+
+Local Opaque Qred.
+
+(** Cross multiplication is sound for canonical fixed-point values at any
+    two nonnegative display scales. *)
+Lemma numeric_of_scaled_compare_lt :
+  forall left_coeff left_scale right_coeff right_scale,
+    0 <= left_scale ->
+    0 <= right_scale ->
+    left_coeff * Z.pow 10 right_scale <
+      right_coeff * Z.pow 10 left_scale ->
+    numeric_compare
+      (numeric_of_scaled left_coeff left_scale)
+      (numeric_of_scaled right_coeff right_scale) = Lt.
+Proof.
+intros left_coeff left_scale right_coeff right_scale
+  Hleft_scale Hright_scale Hcross.
+unfold numeric_of_scaled.
+rewrite (proj2 (Z.leb_le 0 left_scale) Hleft_scale),
+  (proj2 (Z.leb_le 0 right_scale) Hright_scale).
+cbn [numeric_compare].
+apply (proj1 (Qclt_alt _ _)).
+unfold Qclt, Qcdiv, Qcmult, Qcinv.
+simpl; rewrite !Qred_correct.
+change
+  ((inject_Z left_coeff / inject_Z (10 ^ left_scale)) <
+   (inject_Z right_coeff / inject_Z (10 ^ right_scale)))%Q.
+assert (Hleft_factor : (0 < inject_Z (10 ^ left_scale))%Q).
+{
+  replace 0%Q with (inject_Z 0) by reflexivity.
+  rewrite <- Zlt_Qlt.
+  apply Z.pow_pos_nonneg; lia.
+}
+assert (Hright_factor : (0 < inject_Z (10 ^ right_scale))%Q).
+{
+  replace 0%Q with (inject_Z 0) by reflexivity.
+  rewrite <- Zlt_Qlt.
+  apply Z.pow_pos_nonneg; lia.
+}
+apply Qlt_shift_div_r; [exact Hleft_factor|].
+setoid_replace
+  ((inject_Z right_coeff / inject_Z (10 ^ right_scale)) *
+    inject_Z (10 ^ left_scale))%Q
+  with
+  ((inject_Z right_coeff * inject_Z (10 ^ left_scale)) /
+    inject_Z (10 ^ right_scale))%Q
+  by (unfold Qdiv; ring).
+apply Qlt_shift_div_l; [exact Hright_factor|].
+rewrite <- !inject_Z_mult, <- Zlt_Qlt.
+exact Hcross.
+Qed.
+
+(** The exact half-unit certificate for the fixed-point coefficient emitted
+    by finite NUMERIC rounding.  The premise says that the scaled rational is
+    nonnegative; signed rounding needs a corresponding two-sided treatment
+    and is intentionally not inferred here. *)
+Lemma numeric_round_to_scale_nonnegative_half_ulp :
+  forall q scale,
+    let scaled := this (Qcmult q (numeric_scale_factor scale)) in
+    0 <= Qnum scaled ->
+    let coefficient :=
+      numeric_round_quot (Qnum scaled) (Zpos (Qden scaled)) in
+    numeric_round_to_scale (NumericFinite q) scale =
+      numeric_of_scaled coefficient scale /\
+    2 * Qnum scaled - Zpos (Qden scaled) <=
+      2 * coefficient * Zpos (Qden scaled) <=
+    2 * Qnum scaled + Zpos (Qden scaled).
+Proof.
+intros q scale scaled Hnonnegative coefficient.
+subst scaled coefficient.
+cbn [numeric_round_to_scale numeric_rounded_coeff
+  numeric_finite_rounded_coeff].
+split; [reflexivity|].
+apply numeric_round_quot_nonnegative_half_ulp; [exact Hnonnegative|lia].
+Qed.
+
+(** Successful finite division is exactly one rational division followed by
+    rounding at the PostgreSQL-selected display scale. *)
+Lemma finite_numeric_division_result_rounding :
+  forall left right left_scale right_scale result_scale,
+    numeric_eqb (NumericFinite right) numeric_zero = false ->
+    numeric_pg_div_scale
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale = Some result_scale ->
+    numeric_div_at_scales
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale =
+    Some
+      (numeric_round_to_scale
+        (NumericFinite (Qcdiv left right)) result_scale).
+Proof.
+intros left right left_scale right_scale result_scale Hnonzero Hscale.
+unfold numeric_div_at_scales.
+rewrite Hnonzero, Hscale.
+reflexivity.
+Qed.
+
+(** A strict comparison survives finite NUMERIC division whenever the exact
+    scaled quotient stays below the target by more than the half-unit added
+    by PostgreSQL rounding.  The runtime premises are deliberately separate:
+    scale-domain validity and result-range fit are observable SQL error
+    boundaries, not consequences of rational order. *)
+Theorem finite_numeric_division_strict_margin :
+  forall left right left_scale right_scale result_scale
+      threshold_coeff threshold_scale,
+    let quotient := Qcdiv left right in
+    let scaled := this (Qcmult quotient
+      (numeric_scale_factor result_scale)) in
+    let result_coeff :=
+      numeric_round_quot (Qnum scaled) (Zpos (Qden scaled)) in
+    numeric_eqb (NumericFinite right) numeric_zero = false ->
+    numeric_pg_div_scale
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale = Some result_scale ->
+    numeric_display_scale_valid_bool left_scale = true ->
+    numeric_display_scale_valid_bool right_scale = true ->
+    0 <= threshold_scale ->
+    0 <= Qnum scaled ->
+    (2 * Qnum scaled + Zpos (Qden scaled)) *
+        Z.pow 10 threshold_scale <
+      2 * threshold_coeff * Zpos (Qden scaled) *
+        Z.pow 10 result_scale ->
+    numeric_runtime_fits_bool
+      (numeric_of_scaled result_coeff result_scale) = true ->
+    numeric_div_at_scales
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale =
+        Some (numeric_of_scaled result_coeff result_scale) /\
+    numeric_compare
+      (numeric_of_scaled result_coeff result_scale)
+      (numeric_of_scaled threshold_coeff threshold_scale) = Lt /\
+    numeric_div_runtime_error
+      [Value_numeric (Some (NumericFinite left)); Value_Z (Some left_scale);
+       Value_numeric (Some (NumericFinite right)); Value_Z (Some right_scale)] =
+      None.
+Proof.
+intros left right left_scale right_scale result_scale
+  threshold_coeff threshold_scale quotient scaled result_coeff
+  Hnonzero Hscale Hleft_scale Hright_scale Hthreshold_scale
+  Hscaled_nonnegative Hmargin Hfits.
+subst quotient scaled.
+pose proof
+  (numeric_round_to_scale_nonnegative_half_ulp
+    (Qcdiv left right) result_scale Hscaled_nonnegative)
+  as [Hround [_ Hround_upper]].
+pose proof
+  (finite_numeric_division_result_rounding
+    left right left_scale right_scale result_scale Hnonzero Hscale)
+  as Hdivision.
+rewrite Hround in Hdivision.
+assert (Hthreshold_factor : 0 < Z.pow 10 threshold_scale).
+{ apply Z.pow_pos_nonneg; lia. }
+assert (Hresult_cross :
+  result_coeff * Z.pow 10 threshold_scale <
+    threshold_coeff * Z.pow 10 result_scale) by nia.
+split; [exact Hdivision|].
+split.
+- pose proof
+    (numeric_pg_div_scale_display_valid
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale result_scale Hscale)
+    as Hresult_scale.
+  unfold numeric_display_scale_valid_bool in Hresult_scale.
+  apply andb_true_iff in Hresult_scale.
+  destruct Hresult_scale as [Hresult_nonnegative _].
+  apply Z.leb_le in Hresult_nonnegative.
+  now apply numeric_of_scaled_compare_lt.
+- eapply finite_numeric_division_runtime_error_none; eassumption.
+Qed.
+
+(** The complementary finite-division error branches retain PostgreSQL's
+    observable category instead of collapsing every failed premise into a
+    generic safety condition. *)
+Lemma finite_numeric_division_runtime_error_zero_divisor :
+  forall left right left_scale right_scale,
+    numeric_eqb (NumericFinite right) numeric_zero = true ->
+    numeric_div_runtime_error
+      [Value_numeric (Some (NumericFinite left)); Value_Z (Some left_scale);
+       Value_numeric (Some (NumericFinite right)); Value_Z (Some right_scale)] =
+      Some (DataException DivisionByZero).
+Proof.
+intros left right left_scale right_scale Hzero.
+cbn [numeric_div_runtime_error numeric_is_nan].
+now rewrite Hzero.
+Qed.
+
+Lemma finite_numeric_division_runtime_error_invalid_scale :
+  forall left right left_scale right_scale,
+    numeric_eqb (NumericFinite right) numeric_zero = false ->
+    (numeric_display_scale_valid_bool left_scale = false \/
+     numeric_display_scale_valid_bool right_scale = false) ->
+    numeric_div_runtime_error
+      [Value_numeric (Some (NumericFinite left)); Value_Z (Some left_scale);
+       Value_numeric (Some (NumericFinite right)); Value_Z (Some right_scale)] =
+      Some (DataException NumericValueOutOfRange).
+Proof.
+intros left right left_scale right_scale Hnonzero Hinvalid.
+cbn [numeric_div_runtime_error numeric_is_nan].
+rewrite Hnonzero.
+destruct Hinvalid as [Hleft | Hright].
+- rewrite Hleft; reflexivity.
+- rewrite Hright.
+  now destruct (numeric_display_scale_valid_bool left_scale).
+Qed.
+
+Lemma finite_numeric_division_runtime_error_missing_result :
+  forall left right left_scale right_scale,
+    numeric_eqb (NumericFinite right) numeric_zero = false ->
+    numeric_display_scale_valid_bool left_scale = true ->
+    numeric_display_scale_valid_bool right_scale = true ->
+    numeric_div_at_scales
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale = None ->
+    numeric_div_runtime_error
+      [Value_numeric (Some (NumericFinite left)); Value_Z (Some left_scale);
+       Value_numeric (Some (NumericFinite right)); Value_Z (Some right_scale)] =
+      Some (DataException NumericValueOutOfRange).
+Proof.
+intros left right left_scale right_scale
+  Hnonzero Hleft_scale Hright_scale Hdivision.
+cbn [numeric_div_runtime_error numeric_is_nan].
+now rewrite Hnonzero, Hleft_scale, Hright_scale, Hdivision.
+Qed.
+
+Lemma finite_numeric_division_runtime_error_result_out_of_range :
+  forall left right left_scale right_scale result,
+    numeric_eqb (NumericFinite right) numeric_zero = false ->
+    numeric_display_scale_valid_bool left_scale = true ->
+    numeric_display_scale_valid_bool right_scale = true ->
+    numeric_div_at_scales
+      (NumericFinite left) left_scale
+      (NumericFinite right) right_scale = Some result ->
+    numeric_runtime_fits_bool result = false ->
+    numeric_div_runtime_error
+      [Value_numeric (Some (NumericFinite left)); Value_Z (Some left_scale);
+       Value_numeric (Some (NumericFinite right)); Value_Z (Some right_scale)] =
+      Some (DataException NumericValueOutOfRange).
+Proof.
+intros left right left_scale right_scale result
+  Hnonzero Hleft_scale Hright_scale Hdivision Hfits.
+cbn [numeric_div_runtime_error numeric_is_nan].
+rewrite Hnonzero, Hleft_scale, Hright_scale, Hdivision.
+unfold numeric_result_runtime_error, numeric_value_out_of_range.
+now rewrite Hfits.
+Qed.
+
+(** [numeric_sqrt_at_scale] returns either the integer square-root lower
+    coefficient or its successor.  The branch certificate exposes the exact
+    half-unit midpoint comparison used by PostgreSQL, while the common lower
+    square bound connects the result back to the input rational. *)
+Lemma numeric_sqrt_at_scale_half_ulp_shape :
+  forall q scale,
+    0 <= scale ->
+    let raw := this q in
+    0 <= Qnum raw ->
+    let factor := Z.pow 10 scale in
+    let numerator := Qnum raw * factor * factor in
+    let denominator := Zpos (Qden raw) in
+    let lower := Z.sqrt (Z.div numerator denominator) in
+    let midpoint_twice := 2 * lower + 1 in
+    let coefficient :=
+      if denominator * midpoint_twice * midpoint_twice <=? 4 * numerator
+      then lower + 1
+      else lower in
+    numeric_sqrt_at_scale (NumericFinite q) scale =
+      Some (numeric_of_scaled coefficient scale) /\
+    0 <= lower /\
+    denominator * lower * lower <= numerator /\
+    numerator < denominator * (lower + 1) * (lower + 1) /\
+    ((coefficient = lower /\
+      4 * numerator <
+        denominator * midpoint_twice * midpoint_twice) \/
+     (coefficient = lower + 1 /\
+      denominator * midpoint_twice * midpoint_twice <= 4 * numerator)).
+Proof.
+intros q scale Hscale raw Hraw factor numerator denominator lower
+  midpoint_twice coefficient.
+subst raw factor numerator denominator lower midpoint_twice coefficient.
+assert (Hfactor : 0 < 10 ^ scale).
+{ apply Z.pow_pos_nonneg; lia. }
+assert (Hnumerator : 0 <= Qnum q * 10 ^ scale * 10 ^ scale) by nia.
+assert (Hdenominator : 0 < Zpos (Qden q)) by lia.
+assert (Hquotient :
+  0 <= (Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)).
+{ apply Z.div_pos; assumption. }
+pose proof (Z.sqrt_spec _ Hquotient) as Hsqrt; cbn in Hsqrt.
+pose proof
+  (Z.mul_div_le
+    (Qnum q * 10 ^ scale * 10 ^ scale)
+    (Zpos (Qden q)) Hdenominator)
+  as Hdivision_lower.
+assert (Hlower :
+  Zpos (Qden q) *
+      Z.sqrt ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) *
+      Z.sqrt ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) <=
+    Qnum q * 10 ^ scale * 10 ^ scale) by nia.
+pose proof
+  (Z.div_mod
+    (Qnum q * 10 ^ scale * 10 ^ scale)
+    (Zpos (Qden q)) ltac:(lia)) as Hdivision_exact.
+pose proof
+  (Z.mod_pos_bound
+    (Qnum q * 10 ^ scale * 10 ^ scale)
+    (Zpos (Qden q)) Hdenominator) as Hremainder.
+assert (Hupper :
+  Qnum q * 10 ^ scale * 10 ^ scale <
+    Zpos (Qden q) *
+      (Z.sqrt
+        ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) + 1) *
+      (Z.sqrt
+        ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) + 1)) by nia.
+unfold numeric_sqrt_at_scale.
+rewrite (proj2 (Z.ltb_ge scale 0) Hscale),
+  (proj2 (Z.ltb_ge (Qnum q) 0) Hraw).
+destruct
+  (Zpos (Qden q) *
+      (2 * Z.sqrt
+        ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) + 1) *
+      (2 * Z.sqrt
+        ((Qnum q * 10 ^ scale * 10 ^ scale) / Zpos (Qden q)) + 1) <=?
+    4 * (Qnum q * 10 ^ scale * 10 ^ scale))
+  eqn:Hmidpoint.
+- split; [reflexivity|].
+  split; [apply Z.sqrt_nonneg|].
+  split; [exact Hlower|].
+  split; [exact Hupper|].
+  right; split; [reflexivity|].
+  now apply Z.leb_le in Hmidpoint.
+- split; [reflexivity|].
+  split; [apply Z.sqrt_nonneg|].
+  split; [exact Hlower|].
+  split; [exact Hupper|].
+  left; split; [reflexivity|].
+  now apply Z.leb_gt in Hmidpoint.
+Qed.
+
+(** On the positive-variance branch, the scale-preserving sample standard
+    deviation finalizer is exactly variance division followed by the rounded
+    square root at the selected scale. *)
+Theorem numeric_integer_stddev_samp_positive_success_iff :
+  forall count sum sum_squares stddev scale,
+    2 <= count ->
+    0 < count * sum_squares - sum * sum ->
+    (numeric_integer_stddev_samp_with_scale count sum sum_squares =
+      Some (stddev, scale) <->
+     exists variance,
+       numeric_pg_div_scale
+         (numeric_of_Z (count * sum_squares - sum * sum)) 0
+         (numeric_of_Z (count * (count - 1))) 0 = Some scale /\
+       numeric_div_at_scales
+         (numeric_of_Z (count * sum_squares - sum * sum)) 0
+         (numeric_of_Z (count * (count - 1))) 0 = Some variance /\
+       numeric_sqrt_at_scale variance scale = Some stddev).
+Proof.
+intros count sum sum_squares stddev scale Hcount Hnumerator.
+assert (Hnonempty : (count =? 0) = false).
+{ apply Z.eqb_neq; lia. }
+assert (Hsample : (count <=? 1) = false).
+{ apply Z.leb_gt; lia. }
+assert (Hpositive :
+  (count * sum_squares - sum * sum <=? 0) = false).
+{ apply Z.leb_gt; lia. }
+unfold numeric_integer_stddev_samp_with_scale.
+rewrite Hnonempty, Hsample, Hpositive.
+split.
+- intro Hsuccess.
+  destruct
+    (numeric_pg_div_scale
+      (numeric_of_Z (count * sum_squares - sum * sum)) 0
+      (numeric_of_Z (count * (count - 1))) 0)
+    as [selected_scale|] eqn:Hscale; [|discriminate].
+  destruct
+    (numeric_div_at_scales
+      (numeric_of_Z (count * sum_squares - sum * sum)) 0
+      (numeric_of_Z (count * (count - 1))) 0)
+    as [variance|] eqn:Hvariance; [|discriminate].
+  destruct (numeric_sqrt_at_scale variance selected_scale)
+    as [result|] eqn:Hsqrt; [|discriminate].
+  inversion Hsuccess; subst result selected_scale.
+  exists variance; repeat split; assumption.
+- intros [variance [Hscale [Hvariance Hsqrt]]].
+  now rewrite Hscale, Hvariance, Hsqrt.
+Qed.
+
+(** The value and display scale of nonempty AVG(int4) expose the same finite
+    division components.  This is the raw-state counterpart of
+    [interp_avg_int32_value_dscale_coherent]. *)
+Theorem int32_avg_numeric_with_scale_success_iff :
+  forall values count sum average scale,
+    values <> [] ->
+    fold_left int32_avg_transition values (0, 0) = (count, sum) ->
+    (int32_avg_numeric_with_scale values = Some (average, scale) <->
+     numeric_pg_div_scale
+       (numeric_of_Z sum) 0 (numeric_of_Z count) 0 = Some scale /\
+     numeric_div_at_scales
+       (numeric_of_Z sum) 0 (numeric_of_Z count) 0 = Some average).
+Proof.
+intros values count sum average scale Hnonempty Hfold.
+assert (Hcount : 0 < count).
+{
+  pose proof (int32_avg_fold_count_exact values 0 0) as Hcount_exact.
+  rewrite Hfold in Hcount_exact; cbn in Hcount_exact.
+  destruct values; [contradiction|cbn in Hcount_exact; lia].
+}
+destruct values as [|first rest]; [contradiction|].
+unfold int32_avg_numeric_with_scale.
+rewrite Hfold.
+rewrite (proj2 (Z.eqb_neq count 0) ltac:(lia)).
+split.
+- intro Hsuccess.
+  destruct
+    (numeric_pg_div_scale
+      (numeric_of_Z sum) 0 (numeric_of_Z count) 0)
+    as [selected_scale|] eqn:Hscale; [|discriminate].
+  destruct
+    (numeric_div_at_scales
+      (numeric_of_Z sum) 0 (numeric_of_Z count) 0)
+    as [result|] eqn:Hdivision; [|discriminate].
+  inversion Hsuccess; subst result selected_scale.
+  split; reflexivity.
+- intros [Hscale Hdivision].
+  now rewrite Hscale, Hdivision.
+Qed.
+
+(** The non-strict counterpart of [numeric_of_scaled_compare_lt].  It is
+    stated as exclusion of [Gt] because SQL's comparison consumers branch on
+    the three-way result; equality at the unit boundary must remain visible. *)
+Lemma numeric_of_scaled_compare_not_gt :
+  forall left_coeff left_scale right_coeff right_scale,
+    0 <= left_scale ->
+    0 <= right_scale ->
+    left_coeff * Z.pow 10 right_scale <=
+      right_coeff * Z.pow 10 left_scale ->
+    numeric_compare
+      (numeric_of_scaled left_coeff left_scale)
+      (numeric_of_scaled right_coeff right_scale) <> Gt.
+Proof.
+intros left_coeff left_scale right_coeff right_scale
+  Hleft_scale Hright_scale Hcross.
+unfold numeric_of_scaled.
+rewrite (proj2 (Z.leb_le 0 left_scale) Hleft_scale),
+  (proj2 (Z.leb_le 0 right_scale) Hright_scale).
+cbn [numeric_compare].
+apply (proj1 (Qcle_alt _ _)).
+unfold Qcle, Qcdiv, Qcmult, Qcinv.
+simpl; rewrite !Qred_correct.
+change
+  ((inject_Z left_coeff / inject_Z (10 ^ left_scale)) <=
+   (inject_Z right_coeff / inject_Z (10 ^ right_scale)))%Q.
+assert (Hleft_factor : (0 < inject_Z (10 ^ left_scale))%Q).
+{
+  replace 0%Q with (inject_Z 0) by reflexivity.
+  rewrite <- Zlt_Qlt.
+  apply Z.pow_pos_nonneg; lia.
+}
+assert (Hright_factor : (0 < inject_Z (10 ^ right_scale))%Q).
+{
+  replace 0%Q with (inject_Z 0) by reflexivity.
+  rewrite <- Zlt_Qlt.
+  apply Z.pow_pos_nonneg; lia.
+}
+apply Qle_shift_div_r; [exact Hleft_factor|].
+setoid_replace
+  ((inject_Z right_coeff / inject_Z (10 ^ right_scale)) *
+    inject_Z (10 ^ left_scale))%Q
+  with
+  ((inject_Z right_coeff * inject_Z (10 ^ left_scale)) /
+    inject_Z (10 ^ right_scale))%Q
+  by (unfold Qdiv; ring).
+apply Qle_shift_div_l; [exact Hright_factor|].
+rewrite <- !inject_Z_mult, <- Zle_Qle.
+exact Hcross.
+Qed.
+
+Lemma positive_numeric_of_scaled_nonzero :
+  forall coefficient scale,
+    0 <= scale ->
+    0 < coefficient ->
+    numeric_eqb (numeric_of_scaled coefficient scale) numeric_zero = false.
+Proof.
+intros coefficient scale Hscale Hcoefficient.
+apply numeric_positive_is_nonzero.
+replace numeric_zero with (numeric_of_scaled 0 0) by reflexivity.
+apply numeric_of_scaled_compare_lt; [lia|exact Hscale|].
+cbn; pose proof (Z.pow_pos_nonneg 10 scale ltac:(lia)); nia.
+Qed.
+
+Lemma numeric_runtime_fits_from_decimal_parts :
+  forall value coefficient scale,
+    numeric_decimal_parts value = Some (coefficient, scale) ->
+    numeric_display_scale_valid_bool scale = true ->
+    numeric_integer_digit_count coefficient scale <=
+      postgres_numeric_max_integer_digits ->
+    numeric_runtime_fits_bool value = true.
+Proof.
+intros value coefficient scale Hparts Hscale Hdigits.
+destruct value as [|finite| |]; try discriminate.
+cbn [numeric_runtime_fits_bool].
+rewrite Hparts, Hscale.
+now rewrite (proj2 (Z.leb_le _ _) Hdigits).
 Qed.

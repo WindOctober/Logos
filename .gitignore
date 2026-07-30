@@ -4,7 +4,8 @@
 /target/
 /var/
 /.cache/
-/.lia.cache
+.lia.cache
+.nia.cache
 /benchmarks/core/.generated/
 /benchmarks/core/wetune/schemas/core/*.schema.report.json
 /benchmarks/core/wetune/schemas/core/manifest.json

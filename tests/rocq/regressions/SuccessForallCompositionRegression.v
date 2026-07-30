@@ -93,19 +93,6 @@ exact
     aggregate_runtime_error value_is_null env formula input property Hinput).
 Qed.
 
-Theorem unordered_success_Forall_regression :
-  forall env input property,
-    tuple_property_semantic_invariant property ->
-    success_Forall env input property ->
-    success_Forall env (QExpr_Unordered input) property.
-Proof.
-intros env input property Hproper Hinput.
-exact
-  (@query_expr_unordered_success_Forall
-    T relname basesort instance unknown symbol_runtime_error
-    aggregate_runtime_error value_is_null env input property Hproper Hinput).
-Qed.
-
 Theorem union_success_Forall_regression :
   forall env left right property,
     query_expr_sort left =S= query_expr_sort right ->
@@ -148,6 +135,5 @@ Print Assumptions query_same_rows_as_bag_Forall_transport.
 Print Assumptions query_same_rows_as_bag_map.
 Print Assumptions query_expr_project_success_Forall.
 Print Assumptions query_expr_filter_success_Forall.
-Print Assumptions query_expr_unordered_success_Forall.
 Print Assumptions query_expr_union_success_Forall.
 Print Assumptions query_expr_cross_join_success_Forall.

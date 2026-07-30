@@ -85,11 +85,6 @@ Example fetch_order_behavior_regression :
     query_expr_order_behavior (QExpr_Fetch count input) = OrderConsuming.
 Proof. reflexivity. Qed.
 
-Example unordered_order_behavior_regression :
-  forall (input : query_expr T relname),
-    query_expr_order_behavior (QExpr_Unordered input) = BagReset.
-Proof. reflexivity. Qed.
-
 Example distinct_order_behavior_regression :
   forall (input : query_expr T relname),
     query_expr_order_behavior (QExpr_Distinct input) = BagReset.
@@ -118,6 +113,96 @@ Example group_resets_consumed_order_regression :
     query_expr_order_behavior
       (QExpr_Group select_list group_terms having
         (QExpr_Fetch count input)) = BagReset.
+Proof. reflexivity. Qed.
+
+(** In the relational inner-join expansion, CROSS JOIN establishes concrete
+    permutation closure and FILTER preserves it while retaining exact
+    predicate-error behavior. *)
+Example filter_cross_join_closure_certificate_regression :
+  forall (formula : formula_expr T relname) (left right : query_expr T relname),
+    query_expr_permutation_closure_certified
+      (QExpr_Filter formula (QExpr_CrossJoin left right)) = true.
+Proof. reflexivity. Qed.
+
+Theorem filter_cross_join_bag_closed_regression :
+  forall env formula left right,
+    BagClosed T
+      (fun rows =>
+        eval_query env
+          (QExpr_Filter formula (QExpr_CrossJoin left right))
+          (SqlSuccess rows)).
+Proof.
+intros.
+apply query_structural_successes_bag_closed.
+reflexivity.
+Qed.
+
+(** A reset-derived certificate propagates structurally through the three
+    pointwise unary constructors.  No projection-safety or predicate
+    extensionality premise is needed here because the certificate reorders the
+    same concrete rows; it does not replace them by merely equivalent rows. *)
+Example transparent_stack_group_closure_certificate_regression :
+  forall (project_select : _select_list T)
+      (filter_formula : formula_expr T relname)
+      (outputs : list (attribute T))
+      (row_map : tuple T -> sql_outcome (tuple T))
+      (group_select : _select_list T) (group_terms : list (@aggterm T))
+      (having : formula_expr T relname) (input : query_expr T relname),
+    query_expr_permutation_closure_certified
+      (QExpr_Project project_select
+        (QExpr_Filter filter_formula
+          (QExpr_RowMap outputs row_map
+            (QExpr_Group group_select group_terms having input)))) = true.
+Proof. reflexivity. Qed.
+
+Theorem transparent_stack_group_bag_closed_regression :
+  forall env project_select filter_formula outputs row_map
+      group_select group_terms having input,
+    BagClosed T
+      (fun rows =>
+        eval_query env
+          (QExpr_Project project_select
+            (QExpr_Filter filter_formula
+              (QExpr_RowMap outputs row_map
+                (QExpr_Group group_select group_terms having input))))
+          (SqlSuccess rows)).
+Proof.
+intros.
+apply query_structural_successes_bag_closed.
+reflexivity.
+Qed.
+
+(** The conservative classifier intentionally does not infer closure across an
+    order-establishing node, even when a surrounding projection might happen
+    to erase every observable order distinction in a special case. *)
+Example project_order_by_group_not_closure_certified_regression :
+  forall (project_select group_select : _select_list T)
+      (keys : list (sort_key T)) (group_terms : list (@aggterm T))
+      (having : formula_expr T relname) (input : query_expr T relname),
+    query_expr_permutation_closure_certified
+      (QExpr_Project project_select
+        (QExpr_OrderBy keys
+          (QExpr_Group group_select group_terms having input))) = false.
+Proof. reflexivity. Qed.
+
+Example project_offset_group_not_closure_certified_regression :
+  forall (project_select group_select : _select_list T) (count : nat)
+      (group_terms : list (@aggterm T)) (having : formula_expr T relname)
+      (input : query_expr T relname),
+    query_expr_permutation_closure_certified
+      (QExpr_Project project_select
+        (QExpr_Offset count
+          (QExpr_Group group_select group_terms having input))) = false.
+Proof. reflexivity. Qed.
+
+Example project_fetch_group_not_closure_certified_regression :
+  forall (project_select group_select : _select_list T) (count : nat)
+      (group_terms : list (@aggterm T)) (having : formula_expr T relname)
+      (input : query_expr T relname),
+    query_expr_permutation_closure_certified
+      (QExpr_Project project_select
+        (QExpr_Fetch count
+          (QExpr_Group group_select group_terms having input))) = false.
 Proof. reflexivity. Qed.
 
 Theorem group_child_eval_iff_regression :
@@ -331,3 +416,4 @@ Print Assumptions query_filter_success_bags_functional_exact.
 Print Assumptions query_expr_filter_bag_closed_exact.
 Print Assumptions query_expr_project_bag_closed_safe.
 Print Assumptions query_expr_project_outcome_equiv_of_success_bags_safe_closed.
+Print Assumptions query_structural_successes_bag_closed.

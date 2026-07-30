@@ -11,6 +11,23 @@ Import ListNotations.
 Import Tuple.
 Open Scope Z_scope.
 
+(** The untrusted proof workspace may establish exactly one of two kernel-
+    checked claims in an unconditional run.  The selector is data, while the
+    propositions selected below are reconstructed independently by the trusted
+    [Goal.v]; changing a generated local goal therefore cannot weaken the
+    certificate boundary. *)
+Inductive verification_claim_kind : Type :=
+  | VerificationEquivalence
+  | VerificationCountermodel.
+
+Definition verification_claim_goal
+    (claim : verification_claim_kind)
+    (equivalence_goal countermodel_goal : Prop) : Prop :=
+  match claim with
+  | VerificationEquivalence => equivalence_goal
+  | VerificationCountermodel => countermodel_goal
+  end.
+
 (** The language deliberately contains no arbitrary [Prop], query evaluator,
     negation, or false constructor.  An agent can select useful input-domain
     restrictions, but cannot restate the equivalence goal as its premise. *)

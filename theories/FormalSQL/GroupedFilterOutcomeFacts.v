@@ -284,6 +284,104 @@ apply rows_bag_eq_of_nodup_support_rel.
     [exact Hterms|intros; eapply Hmember; eassumption|exact Hreflect].
 Qed.
 
+(** Two nonempty GROUP BY operators over the same input may use different
+    grouping-key representations and different output constructors while
+    still denote the same duplicate-free projected support.  Each emitted row
+    must represent a member of its own group, and projected-row equality must
+    reflect each side's own grouping key.  These premises are deliberately
+    local to one GROUP operator: the theorem does not prescribe a surrounding
+    join, filter, aggregate predicate, or query rewrite. *)
+Theorem query_make_groups_heterogeneous_projected_bag_eq :
+  forall env left_terms right_terms
+      (project : tuple T -> tuple T)
+      (left_emit right_emit : list (tuple T) -> tuple T) rows,
+    left_terms <> nil ->
+    right_terms <> nil ->
+    (forall group row,
+      In group (@query_make_groups T env rows left_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (left_emit group) = Eq) ->
+    (forall group row,
+      In group (@query_make_groups T env rows right_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (right_emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env left_terms left =
+      query_grouping_key env left_terms right) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env right_terms left =
+      query_grouping_key env right_terms right) ->
+    bag_eq T
+      (rows_bag T
+        (map left_emit (@query_make_groups T env rows left_terms)))
+      (rows_bag T
+        (map right_emit (@query_make_groups T env rows right_terms))).
+Proof.
+intros env left_terms right_terms project left_emit right_emit rows
+  Hleft_terms Hright_terms Hleft_member Hright_member
+  Hleft_reflect Hright_reflect.
+assert (Hleft_support : list_support_rel
+  (fun row output =>
+    Oeset.compare (OTuple T) (project row) output = Eq)
+  rows (map left_emit (@query_make_groups T env rows left_terms))).
+{
+  eapply query_make_groups_support_rel; [exact Hleft_terms|].
+  intros group row Hgroup Hrow.
+  exact (Hleft_member group row Hgroup Hrow).
+}
+assert (Hright_support : list_support_rel
+  (fun row output =>
+    Oeset.compare (OTuple T) (project row) output = Eq)
+  rows (map right_emit (@query_make_groups T env rows right_terms))).
+{
+  eapply query_make_groups_support_rel; [exact Hright_terms|].
+  intros group row Hgroup Hrow.
+  exact (Hright_member group row Hgroup Hrow).
+}
+apply rows_bag_eq_of_nodup_support_rel.
+- split.
+  + intros left_output Hleft_output.
+    destruct (proj2 Hleft_support left_output Hleft_output)
+      as [row [Hrow Hleft]].
+    destruct (proj1 Hright_support row Hrow)
+      as [right_output [Hright_output Hright]].
+    exists right_output; split; [exact Hright_output|].
+    eapply Oeset.compare_eq_trans.
+    * apply Oeset.compare_eq_sym; exact Hleft.
+    * exact Hright.
+  + intros right_output Hright_output.
+    destruct (proj2 Hright_support right_output Hright_output)
+      as [row [Hrow Hright]].
+    destruct (proj1 Hleft_support row Hrow)
+      as [left_output [Hleft_output Hleft]].
+    exists left_output; split; [exact Hleft_output|].
+    eapply Oeset.compare_eq_trans.
+    * apply Oeset.compare_eq_sym; exact Hleft.
+    * exact Hright.
+- eapply query_make_groups_emit_NoDupA_of_key_reflection;
+    [exact Hleft_terms|].
+  intros left_group left_row right_group right_row
+    Hleft_group Hleft_row Hright_group Hright_row Houtputs.
+  apply Hleft_reflect.
+  eapply Oeset.compare_eq_trans.
+  + exact (Hleft_member left_group left_row Hleft_group Hleft_row).
+  + eapply Oeset.compare_eq_trans; [exact Houtputs|].
+    apply Oeset.compare_eq_sym.
+    exact (Hleft_member right_group right_row Hright_group Hright_row).
+- eapply query_make_groups_emit_NoDupA_of_key_reflection;
+    [exact Hright_terms|].
+  intros left_group left_row right_group right_row
+    Hleft_group Hleft_row Hright_group Hright_row Houtputs.
+  apply Hright_reflect.
+  eapply Oeset.compare_eq_trans.
+  + exact (Hright_member left_group left_row Hleft_group Hleft_row).
+  + eapply Oeset.compare_eq_trans; [exact Houtputs|].
+    apply Oeset.compare_eq_sym.
+    exact (Hright_member right_group right_row Hright_group Hright_row).
+Qed.
+
 End GroupSupportRelations.
 
 (** Semantic permutation has the expected support projection.  This bridge
@@ -337,6 +435,46 @@ unfold bag_eq, rows_bag in Hbags.
 rewrite Febag.nb_occ_equal in Hbags.
 specialize (Hbags row).
 now rewrite 2 Febag.nb_occ_mk_bag in Hbags.
+Qed.
+
+(** Semantic row permutation and equality of the corresponding finite bags
+    are two presentations of the same multiplicity fact.  Keeping this
+    direction next to [rows_bag_eq_implies_permut] lets reset-boundary proofs
+    move between list representatives and bags without reopening occurrence
+    arithmetic. *)
+Lemma rows_permut_implies_bag_eq :
+  forall (T : Tuple.Rcd) left right,
+    Oeset.permut (OTuple T) left right ->
+    bag_eq T (rows_bag T left) (rows_bag T right).
+Proof.
+intros T left right Hpermut.
+unfold bag_eq, rows_bag.
+rewrite Febag.nb_occ_equal; intro row.
+rewrite 2 Febag.nb_occ_mk_bag.
+now apply Oeset.permut_nb_occ.
+Qed.
+
+(** Reversing both representatives preserves semantic permutation.  This is
+    useful at grouping boundaries because the partition implementation stores
+    group members in accumulator order, while SQL exposes only their bag. *)
+Lemma rows_reverse_permut_congr :
+  forall (T : Tuple.Rcd) left right,
+    Oeset.permut (OTuple T) left right ->
+    Oeset.permut (OTuple T) (rev left) (rev right).
+Proof.
+intros T left right Hpermut.
+eapply ListPermut._permut_trans with (l2 := left).
+- intros first second third _ _ _ Hfirst Hsecond.
+  eapply Oeset.compare_eq_trans; eassumption.
+- apply Oeset.permut_sym.
+  apply ListPermut._permut_rev.
+  intros row _; apply Oeset.compare_eq_refl.
+- eapply ListPermut._permut_trans with (l2 := right).
+  + intros first second third _ _ _ Hfirst Hsecond.
+    eapply Oeset.compare_eq_trans; eassumption.
+  + exact Hpermut.
+  + apply ListPermut._permut_rev.
+    intros row _; apply Oeset.compare_eq_refl.
 Qed.
 
 Lemma query_same_rows_as_bag_permut_between :
@@ -520,6 +658,31 @@ Proof.
       inversion Heval; subst.
       * eapply Hleft_error; eassumption.
       * eapply Hright_error; eassumption.
+Qed.
+
+(** An eager right conjunct is acceptance-redundant when it is exact and
+    error-free on every reached evaluation, and is accepting whenever the
+    left guard accepts.  When the left guard rejects, SQL AND rejects
+    regardless of the right Bool3 acceptance, but the right totality premise
+    remains essential because FormalSQL still evaluates it. *)
+Theorem formula_and_redundant_right_acceptance_exact :
+  forall env left right left_accepted right_accepted,
+    formula_acceptance_exact_at env left left_accepted ->
+    formula_acceptance_exact_at env right right_accepted ->
+    (left_accepted = true -> right_accepted = true) ->
+    formula_acceptance_exact_at env
+      (FExpr_Conj And_F left right) left_accepted.
+Proof.
+  intros env left right left_accepted right_accepted
+    Hleft Hright Himplied.
+  pose proof
+    (formula_conj_acceptance_exact
+      env And_F left right left_accepted right_accepted Hleft Hright)
+    as Hexact.
+  cbn [acceptance_interp_conj] in Hexact.
+  destruct left_accepted; [|exact Hexact].
+  rewrite (Himplied eq_refl) in Hexact.
+  exact Hexact.
 Qed.
 
 (** [FExpr_Conj And_F] is eager in FormalSQL: the right formula is evaluated
@@ -1265,7 +1428,7 @@ Theorem eval_group_bag_success_occurrence_property :
       forall group,
         In group
           (@query_make_groups T env
-            (query_canonical_rows representative) group_terms) ->
+            representative group_terms) ->
         P (group_projection env select_list group_terms group)) ->
     eval_group_bag env select_list group_terms having input_bag
       (SqlSuccess output_bag) ->
@@ -1282,7 +1445,7 @@ pose proof
   (eval_groups_success_Forall_projection
     env select_list group_terms having
     (query_make_groups env
-      (query_canonical_rows representative) group_terms)
+      representative group_terms)
     grouped_rows P
     (Hprojection representative H)
     H1) as Hproperties.
@@ -1663,6 +1826,33 @@ Proof.
         reflexivity.
 Qed.
 
+(** SQL global aggregation forms one group even when [rows] is empty.  This
+    specialization packages that global-group rule with exact TRUE-HAVING
+    execution, so clients do not have to unfold the partition scheduler or
+    rebuild the singleton group by hand. *)
+Theorem eval_groups_global_true_outcome_exact :
+  forall env select_list rows,
+    eval_select_aggregates
+      (group_env env [] (rev rows)) select_list = None ->
+    @eval_select_list_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (group_env env [] (rev rows)) select_list = None ->
+    forall outcome,
+      eval_groups env select_list [] FExpr_True
+        (query_make_groups env rows []) outcome <->
+      outcome = SqlSuccess
+        [group_projection env select_list [] (rev rows)].
+Proof.
+intros env select_list rows Haggregates Hruntime outcome.
+rewrite query_make_groups_global_exact.
+apply eval_groups_true_outcome_exact.
+intros group Hgroup.
+destruct Hgroup as [Hgroup | Hgroup]; [subst group|contradiction].
+split; [exact Haggregates|].
+split; [reflexivity|].
+split; [apply formula_true_acceptance_exact|exact Hruntime].
+Qed.
+
 (** Exact group execution for an arbitrary acceptance decision.  SELECT and
     HAVING aggregate finalization still run for every reached group, and the
     HAVING formula must have one exact acceptance decision and no error
@@ -1796,6 +1986,46 @@ Proof.
                  (map (group_projection env select_list group_terms)
                    (filter keep groups))))).
            reflexivity.
+Qed.
+
+(** When every reached HAVING predicate has one exact SQL-nontrue decision,
+    group execution succeeds with the empty bag.  Aggregate finalization for
+    both SELECT and HAVING remains required because the scheduler reaches
+    those phases before testing HAVING.  Scalar SELECT runtime safety is not
+    required: projection is unreachable for a rejected group. *)
+Theorem eval_groups_all_rejected_outcome_exact :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      eval_select_aggregates
+        (group_env env group_terms group) select_list = None /\
+      eval_formula_aggregates
+        (group_env env group_terms group) having = None /\
+      formula_acceptance_exact_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null
+        (group_env env group_terms group) having false) ->
+    forall outcome,
+      eval_groups env select_list group_terms having groups outcome <->
+      outcome = SqlSuccess [].
+Proof.
+  intros env select_list group_terms having groups Hsafe outcome.
+  assert (Hconstant : filter (fun _ : list (tuple T) => false) groups = []).
+  { apply ListFacts.filter_false; intros; reflexivity. }
+  pose proof
+    (eval_groups_acceptance_outcome_exact
+      env select_list group_terms having groups
+      (fun _ : list (tuple T) => false)) as Hexact.
+  rewrite Hconstant in Hexact.
+  cbn [map] in Hexact.
+  apply Hexact.
+  intros group Hgroup.
+  destruct (Hsafe group Hgroup) as
+    [Hselect_aggregates [Hhaving_aggregates Hacceptance]].
+  split; [exact Hselect_aggregates|].
+  split; [exact Hhaving_aggregates|].
+  split; [exact Hacceptance|].
+  intro Htrue; discriminate Htrue.
 Qed.
 
 Definition grouped_key_formula_contract
@@ -2044,6 +2274,19 @@ Proof.
   exact Hleft.
 Qed.
 
+(** A projection is permutation-stable when changing only the representative
+    order of one logical group cannot change its emitted tuple.  This property
+    is deliberately explicit: exact/numeric aggregates generally satisfy it,
+    whereas floating-point SUM and AVG do not. *)
+Definition group_projection_permutation_stable
+    (env : Env.env T) (select_list : _select_list T)
+    (group_terms : list (@aggterm T)) : Prop :=
+  forall left right,
+    Oeset.permut (OTuple T) left right ->
+    Oeset.compare (OTuple T)
+      (group_projection env select_list group_terms left)
+      (group_projection env select_list group_terms right) = Eq.
+
 (** Exact successful list semantics on every legal representative, together
     with semantic permutation of the emitted rows, is sufficient to equate
     the complete grouping-reset outcome relations.  In particular, this does
@@ -2056,19 +2299,17 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
         list (list (tuple T)) -> list (tuple T)),
     (forall representative,
       query_same_rows_as_bag representative left_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms left_having groups outcome <->
         outcome = SqlSuccess (left_rows groups)) ->
     (forall representative,
       query_same_rows_as_bag representative right_bag ->
-      let canonical := query_canonical_rows representative in
-      let groups := query_make_groups env canonical group_terms in
+      let groups := query_make_groups env representative group_terms in
       @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
-        env group_terms canonical = None /\
+        env group_terms representative = None /\
       forall outcome,
         eval_groups env select_list group_terms right_having groups outcome <->
         outcome = SqlSuccess (right_rows groups)) ->
@@ -2077,11 +2318,9 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
       query_same_rows_as_bag right_representative right_bag ->
       Oeset.permut (OTuple T)
         (left_rows
-          (query_make_groups env
-            (query_canonical_rows left_representative) group_terms))
+          (query_make_groups env left_representative group_terms))
         (right_rows
-          (query_make_groups env
-            (query_canonical_rows right_representative) group_terms))) ->
+          (query_make_groups env right_representative group_terms))) ->
     forall outcome,
       eval_group_bag env select_list group_terms left_having left_bag outcome <->
       eval_group_bag env select_list group_terms right_having right_bag outcome.
@@ -2118,8 +2357,7 @@ Proof.
         (grouped_rows :=
           right_rows
             (query_make_groups env
-              (query_canonical_rows
-                (Febag.elements (Fecol.CBag (Tuple.CTuple T)) right_bag))
+              (Febag.elements (Fecol.CBag (Tuple.CTuple T)) right_bag)
               group_terms)).
       * exact Hright_representative.
       * exact Hright_keys.
@@ -2155,8 +2393,7 @@ Proof.
         (grouped_rows :=
           left_rows
             (query_make_groups env
-              (query_canonical_rows
-                (Febag.elements (Fecol.CBag (Tuple.CTuple T)) left_bag))
+              (Febag.elements (Fecol.CBag (Tuple.CTuple T)) left_bag)
               group_terms)).
       * exact Hleft_representative.
       * exact Hleft_keys.
@@ -2165,6 +2402,116 @@ Proof.
         -- apply Oeset.permut_sym.
            eapply Hrows_permut; eassumption.
         -- exact H2.
+Qed.
+
+(** Every legal representative of a global input bag induces its own exact
+    successful aggregate outcome when that representative is runtime-safe.
+    For permutation-stable aggregates these outcomes coincide; for REAL/DOUBLE
+    SUM and AVG this theorem exposes the distinct legal fold-order results. *)
+Theorem eval_group_bag_global_true_success_for_representative :
+  forall env select_list input_bag representative,
+    query_same_rows_as_bag representative input_bag ->
+    @eval_select_list_aggregate_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (Env.env_g T env (@Env.Group_By T []) (rev representative))
+      select_list = None ->
+    @eval_select_list_runtime_error T
+      symbol_runtime_error aggregate_runtime_error
+      (Env.env_g T env (@Env.Group_By T []) (rev representative))
+      select_list = None ->
+    eval_group_bag env select_list [] FExpr_True input_bag
+      (SqlSuccess
+        (rows_bag T
+          [group_projection env select_list [] (rev representative)])).
+Proof.
+intros env select_list input_bag representative
+  Hrepresentative Haggregate Hruntime.
+eapply EGroupBag_Success with
+  (representative := representative)
+  (grouped_rows :=
+    [group_projection env select_list [] (rev representative)]).
+- exact Hrepresentative.
+- unfold group_keys_runtime_error.
+  clear Hrepresentative Haggregate Hruntime.
+  induction representative as [|row rows IH]; [reflexivity|cbn; exact IH].
+- apply (proj2
+    (eval_groups_global_true_outcome_exact
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env select_list representative Haggregate Hruntime
+      (SqlSuccess
+        [group_projection env select_list [] (rev representative)]))).
+  reflexivity.
+- apply query_same_rows_as_bag_iff_bag_eq; apply bag_eq_refl.
+Qed.
+
+(** Runtime-safe global aggregation always has a successful bag outcome.  The
+    premise is intentionally about every possible group representative: bag
+    reset may choose any representative, and this theorem must not hide an
+    aggregate or scalar projection error for one such choice. *)
+Theorem eval_group_bag_global_true_success_exists :
+  forall env select_list input_bag,
+    (forall group,
+      @eval_select_list_aggregate_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None /\
+      @eval_select_list_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None) ->
+    exists output_bag,
+      eval_group_bag env select_list [] FExpr_True input_bag
+        (SqlSuccess output_bag).
+Proof.
+intros env select_list input_bag Hsafe.
+set (representative :=
+  Febag.elements (Fecol.CBag (Tuple.CTuple T)) input_bag).
+exists (rows_bag T
+  [group_projection env select_list [] (rev representative)]).
+destruct (Hsafe (rev representative)) as [Haggregate Hruntime].
+apply eval_group_bag_global_true_success_for_representative; try assumption.
+unfold representative; apply query_elements_same_rows_as_bag.
+Qed.
+
+(** A successful global aggregation has one representative-independent output
+    row only when its projection is permutation-stable.  The explicit premise
+    excludes floating-point SUM/AVG, whose legal results can depend on the
+    order chosen for the input bag representative. *)
+Theorem eval_group_bag_global_true_success_bag_unique_if_stable :
+  forall env select_list input_bag chosen output_bag,
+    query_same_rows_as_bag chosen input_bag ->
+    group_projection_permutation_stable env select_list [] ->
+    (forall group,
+      @eval_select_list_aggregate_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None /\
+      @eval_select_list_runtime_error T
+        symbol_runtime_error aggregate_runtime_error
+        (Env.env_g T env (@Env.Group_By T []) group) select_list = None) ->
+    eval_group_bag env select_list [] FExpr_True input_bag
+      (SqlSuccess output_bag) ->
+    bag_eq T output_bag
+      (rows_bag T
+        [group_projection env select_list []
+          (rev chosen)]).
+Proof.
+intros env select_list input_bag chosen output_bag
+  Hchosen Hstable Hselect Heval.
+inversion Heval; subst.
+destruct (Hselect (rev representative))
+  as [Haggregates Hruntime].
+pose proof (proj1
+  (eval_groups_global_true_outcome_exact
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null env select_list representative
+    Haggregates Hruntime (SqlSuccess grouped_rows)) H2) as Hgrouped.
+injection Hgrouped as Hgrouped; subst grouped_rows.
+apply query_same_rows_as_bag_iff_bag_eq in H7.
+eapply bag_eq_trans; [exact (bag_eq_sym H7)|].
+apply rows_permut_implies_bag_eq.
+apply Oeset.permut_cons.
+- apply Hstable.
+  apply rows_reverse_permut_congr.
+  eapply query_same_rows_as_bag_permut_between; eassumption.
+- apply Oeset.permut_refl.
 Qed.
 
 End ExactGroupBagReset.
@@ -2243,7 +2590,7 @@ eapply eval_group_bag_exact_rows_permut_equiv with
   split; [apply Hkeys|].
   apply eval_groups_true_outcome_exact.
   intros group Hgroup.
-  destruct (Hselect (query_canonical_rows representative) group Hgroup)
+  destruct (Hselect representative group Hgroup)
     as [Haggregate Hruntime].
   split; [exact Haggregate|].
   split; [reflexivity|].
@@ -2252,7 +2599,7 @@ eapply eval_group_bag_exact_rows_permut_equiv with
   split; [apply Hkeys|].
   apply eval_groups_true_outcome_exact.
   intros group Hgroup.
-  destruct (Hselect (query_canonical_rows representative) group Hgroup)
+  destruct (Hselect representative group Hgroup)
     as [Haggregate Hruntime].
   split; [exact Haggregate|].
   split; [reflexivity|].
@@ -2272,19 +2619,11 @@ eapply eval_group_bag_exact_rows_permut_equiv with
       @query_same_rows_as_bag T right_rows (rows_bag T right_rows)).
     { apply query_same_rows_as_bag_iff_bag_eq; apply bag_eq_refl. }
     pose proof
-      (@query_canonical_rows_same_as_bag T
-        left_representative (rows_bag T left_rows)
-        Hleft_representative) as Hleft_canonical.
-    pose proof
-      (@query_canonical_rows_same_as_bag T
-        right_representative (rows_bag T right_rows)
-        Hright_representative) as Hright_canonical.
+      (@query_same_rows_as_bag_permut_between T
+        _ _ _ Hleft_representative Hleft_original) as Hleft_permut.
     pose proof
       (@query_same_rows_as_bag_permut_between T
-        _ _ _ Hleft_canonical Hleft_original) as Hleft_permut.
-    pose proof
-      (@query_same_rows_as_bag_permut_between T
-        _ _ _ Hright_original Hright_canonical) as Hright_permut.
+        _ _ _ Hright_original Hright_representative) as Hright_permut.
     pose proof
       (@oeset_permut_support_rel (tuple T) (OTuple T)
         _ _ Hleft_permut)
@@ -2297,7 +2636,7 @@ eapply eval_group_bag_exact_rows_permut_equiv with
       list_support_rel
         (fun first second =>
           Oeset.compare (OTuple T) (project first) (project second) = Eq)
-        (query_canonical_rows left_representative) left_rows).
+        left_representative left_rows).
     {
       destruct Hleft_rows as [Hforward Hbackward]; split.
       - intros first Hfirst.
@@ -2311,7 +2650,7 @@ eapply eval_group_bag_exact_rows_permut_equiv with
       list_support_rel
         (fun first second =>
           Oeset.compare (OTuple T) (project first) (project second) = Eq)
-        right_rows (query_canonical_rows right_representative)).
+        right_rows right_representative).
     {
       destruct Hright_rows as [Hforward Hbackward]; split.
       - intros first Hfirst.

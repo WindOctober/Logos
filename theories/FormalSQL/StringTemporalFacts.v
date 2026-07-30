@@ -1,6 +1,6 @@
 From Stdlib Require Import Ascii Bool Lia List String ZArith.
 From SQLFS Require Import Bool3 OrderedSet SqlOutcome ValueCore ValuePredicates
-  ValueString ValueTemporal Values.
+  ValueString ValueTemporal ValueTextInteger Values.
 
 Import ListNotations.
 Import NullValues.
@@ -197,6 +197,109 @@ Lemma string_cast_and_coercion_local_runtime_safe : forall cast values,
 Proof.
   intros cast values [-> | ->]; reflexivity.
 Qed.
+
+Lemma string_to_int32_cast_success : forall source input result,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerValue result ->
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Value_int32 (Some result) /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] = None.
+Proof.
+  intros source input result Hparse.
+  unfold interp_scalar_operator, scalar_operator_local_runtime_error.
+  unfold interp_cast_string_to_int32, cast_string_to_int32_runtime_error.
+  cbn [StringValue].
+  rewrite Hparse; split; reflexivity.
+Qed.
+
+Lemma string_to_int64_cast_success : forall source input result,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerValue result ->
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Value_int64 (Some result) /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] = None.
+Proof.
+  intros source input result Hparse.
+  unfold interp_scalar_operator, scalar_operator_local_runtime_error.
+  unfold interp_cast_string_to_int64, cast_string_to_int64_runtime_error.
+  cbn [StringValue].
+  rewrite Hparse; split; reflexivity.
+Qed.
+
+Lemma string_to_int32_cast_invalid : forall source input,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerInvalid ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException InvalidTextRepresentation).
+Proof.
+  intros source input Hparse.
+  unfold scalar_operator_local_runtime_error, cast_string_to_int32_runtime_error.
+  cbn [StringValue].
+  now rewrite Hparse.
+Qed.
+
+Lemma string_to_int64_cast_invalid : forall source input,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerInvalid ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException InvalidTextRepresentation).
+Proof.
+  intros source input Hparse.
+  unfold scalar_operator_local_runtime_error, cast_string_to_int64_runtime_error.
+  cbn [StringValue].
+  now rewrite Hparse.
+Qed.
+
+Lemma string_to_int32_cast_out_of_range : forall source input,
+  parse_text_int32 (string_cast_source_value source input) =
+    TextIntegerOutOfRange ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException NumericValueOutOfRange).
+Proof.
+  intros source input Hparse.
+  unfold scalar_operator_local_runtime_error, cast_string_to_int32_runtime_error.
+  cbn [StringValue].
+  now rewrite Hparse.
+Qed.
+
+Lemma string_to_int64_cast_out_of_range : forall source input,
+  parse_text_int64 (string_cast_source_value source input) =
+    TextIntegerOutOfRange ->
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source (Some input))] =
+      Some (DataException NumericValueOutOfRange).
+Proof.
+  intros source input Hparse.
+  unfold scalar_operator_local_runtime_error, cast_string_to_int64_runtime_error.
+  cbn [StringValue].
+  now rewrite Hparse.
+Qed.
+
+Lemma string_to_integer_casts_preserve_null : forall source,
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source None)] = Value_int32 None /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt32)
+    [Value_string (StringValue source None)] = None /\
+  interp_scalar_operator (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source None)] = Value_int64 None /\
+  scalar_operator_local_runtime_error
+    (ScalarCast ScalarCastStringToInt64)
+    [Value_string (StringValue source None)] = None.
+Proof. intros source; repeat split; reflexivity. Qed.
 
 (** Concatenation consumes a list of already-evaluated string values.  The
     cons laws support proofs without unfolding the recursive payload fold. *)

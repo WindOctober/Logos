@@ -6,7 +6,8 @@ From Stdlib Require Import Bool List.
 From SQLFS Require Import
   ATerms Bool3 Env FiniteBag FiniteCollection FiniteSet FlatData Formula FTuples
   ListPermut OrderedSet Projection SqlErrorSemantics SqlOutcome
-  SqlQueryContexts SqlQuerySemantics SqlQuerySyntax SqlQueryWellFormed.
+  SqlBagAbstraction SqlQueryContexts SqlQueryFacts SqlQuerySemantics SqlQuerySyntax
+  SqlQueryWellFormed.
 From Logos.FormalSQL Require Import
   GroupedFilterOutcomeFacts RelationalAlgebraFacts ScalarPredicateFacts.
 
@@ -197,6 +198,46 @@ Proof.
     symmetry; apply Bool.Bool.orb_assoc.
 Qed.
 
+(** Boolean existence depends on relational support, not multiplicity.  This
+    is intentionally weaker than permutation: it is suitable only after a
+    consumer has reduced observations to an existence decision. *)
+Lemma existsb_support_rel :
+  forall (A B : Type) (R : A -> B -> Prop)
+      (left_predicate : A -> bool) (right_predicate : B -> bool) left right,
+    (forall left_value right_value,
+      R left_value right_value ->
+      left_predicate left_value = right_predicate right_value) ->
+    list_support_rel R left right ->
+    existsb left_predicate left = existsb right_predicate right.
+Proof.
+  intros A B R left_predicate right_predicate left right
+    Hproper [Hforward Hbackward].
+  destruct (existsb left_predicate left) eqn:Hleft,
+    (existsb right_predicate right) eqn:Hright; try reflexivity.
+  - apply existsb_exists in Hleft.
+    destruct Hleft as [left_value [Hleft_value Haccepted]].
+    destruct (Hforward left_value Hleft_value) as
+      [right_value [Hright_value Hrelated]].
+    assert (Hright_accepted : right_predicate right_value = true).
+    { rewrite <- (Hproper left_value right_value Hrelated).
+      exact Haccepted. }
+    assert (Hexists : existsb right_predicate right = true).
+    { apply existsb_exists.
+      exists right_value; now split. }
+    congruence.
+  - apply existsb_exists in Hright.
+    destruct Hright as [right_value [Hright_value Haccepted]].
+    destruct (Hbackward right_value Hright_value) as
+      [left_value [Hleft_value Hrelated]].
+    assert (Hleft_accepted : left_predicate left_value = true).
+    { rewrite (Hproper left_value right_value Hrelated).
+      exact Haccepted. }
+    assert (Hexists : existsb left_predicate left = true).
+    { apply existsb_exists.
+      exists left_value; now split. }
+    congruence.
+Qed.
+
 Section PredicateSubquerySemantics.
 
 Context {T : Tuple.Rcd} {relname : Type}.
@@ -220,12 +261,78 @@ Local Abbreviation eval_formula :=
   (@eval_formula_expr_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
 
+Local Abbreviation eval_exists :=
+  (@eval_query_exists_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null).
+
 Local Abbreviation eval_filter_rows :=
   (@eval_filter_rows_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null).
 
 Local Abbreviation project_rows :=
   (@project_rows_outcome T symbol_runtime_error aggregate_runtime_error).
+
+(** Exact three-valued formula observation at one environment.  This is
+    deliberately stronger than [formula_acceptance_exact_at]: a consumer that
+    applies SQL [NOT] must distinguish FALSE from UNKNOWN even though both are
+    rejected by a filter.  The explicit no-error component also prevents an
+    apparent truth equality from hiding a reachable runtime failure. *)
+Definition formula_truth_exact_at
+    (env : Env.env T) (formula : formula_expr T relname)
+    (expected : Bool.b (B T)) : Prop :=
+  eval_formula env formula (SqlSuccess expected) /\
+  (forall truth,
+    eval_formula env formula (SqlSuccess truth) -> truth = expected) /\
+  (forall error, ~ eval_formula env formula (SqlError error)).
+
+Lemma formula_truth_exact_acceptance_exact :
+  forall env formula expected,
+    formula_truth_exact_at env formula expected ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env formula
+      (Bool.is_true (B T) expected).
+Proof.
+intros env formula expected [Hexists [Hsuccess Herror]].
+unfold formula_acceptance_exact_at.
+split.
+- exists expected; now split.
+- split.
+  + intros truth Htruth; now rewrite (Hsuccess truth Htruth).
+  + exact Herror.
+Qed.
+
+(** Exact truth, rather than mere filter acceptance, composes through SQL
+    negation.  In particular, an UNKNOWN child remains UNKNOWN. *)
+Theorem formula_not_truth_exact :
+  forall env formula expected,
+    formula_truth_exact_at env formula expected ->
+    formula_truth_exact_at env (FExpr_Not formula)
+      (Bool.negb (B T) expected).
+Proof.
+intros env formula expected [Hexists [Hsuccess Herror]].
+unfold formula_truth_exact_at.
+split.
+- now apply EFormula_NotSuccess.
+- split.
+  + intros truth Htruth; inversion Htruth; subst.
+    now rewrite (Hsuccess _ H1).
+  + intros error Hnot_error; inversion Hnot_error; subst.
+    eapply Herror; eassumption.
+Qed.
+
+Corollary formula_not_acceptance_exact :
+  forall env formula expected,
+    formula_truth_exact_at env formula expected ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env (FExpr_Not formula)
+      (Bool.is_true (B T) (Bool.negb (B T) expected)).
+Proof.
+intros env formula expected Hexact.
+apply formula_truth_exact_acceptance_exact.
+now apply formula_not_truth_exact.
+Qed.
 
 (** Raw evaluation-relation equality for one expression at two correlated
     environments.  Unlike [query_expr_outcome_equiv], the query relation below
@@ -554,6 +661,51 @@ Definition quantified_rows_truth
     (quantified_row_truth env which_predicate arguments subquery)
     (query_canonical_rows rows).
 
+(** A quantified predicate observes a successful child only through its
+    finite bag of rows and the pointwise truth function.  The support property
+    allows a caller to state exactly the schema/presence facts under which that
+    truth function respects semantic tuple equality. *)
+Theorem quantified_rows_truth_congr_of_bag_eq :
+  forall env which_quantifier which_predicate arguments subquery left right
+      (property : tuple T -> Prop),
+    @bag_eq T (query_rows_bag left) (query_rows_bag right) ->
+    (forall first second,
+      Oeset.compare (OTuple T) first second = Eq ->
+      (property first <-> property second)) ->
+    Forall property (query_canonical_rows left) ->
+    (forall left_row right_row,
+      Oeset.compare (OTuple T) left_row right_row = Eq ->
+      property left_row ->
+      quantified_row_truth env which_predicate arguments subquery left_row =
+      quantified_row_truth env which_predicate arguments subquery right_row) ->
+    quantified_rows_truth env which_quantifier which_predicate arguments
+      subquery left =
+    quantified_rows_truth env which_quantifier which_predicate arguments
+      subquery right.
+Proof.
+  intros env which_quantifier which_predicate arguments subquery
+    left right property Hbags Hproperty Hleft Hrow.
+  unfold quantified_rows_truth.
+  apply (Formula.interp_quant_eq (B T) (OTuple T)).
+  - eapply query_same_rows_as_bag_permut_between with
+      (bag := query_rows_bag left).
+    + apply query_canonical_rows_same_as_bag.
+      apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl.
+    + eapply query_same_rows_as_bag_bag_transport.
+      * apply query_canonical_rows_same_as_bag.
+        apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl.
+      * exact (bag_eq_sym Hbags).
+  - intros left_row right_row Hmember Hequal.
+    apply Hrow; [exact Hequal|].
+    rewrite Forall_forall in Hleft.
+    destruct (proj1
+      (@Oeset.mem_bool_true_iff (tuple T) (OTuple T)
+        left_row (query_canonical_rows left)) Hmember)
+      as [member [Hrelated Hin]].
+    apply (proj2 (Hproperty left_row member Hrelated)).
+    exact (Hleft member Hin).
+Qed.
+
 Definition in_row_truth
     (env : Env.env T) (select_items : list (@select T))
     (row : tuple T) : Bool.b (B T) :=
@@ -725,6 +877,65 @@ Proof.
     + unfold query_same_rows_as_bag; apply Febag.equal_refl.
 Qed.
 
+(** At an [IN] filter boundary, duplicate insertion/removal is sound whenever
+    both row presentations have the same support up to semantic tuple
+    equality.  This theorem does not equate the underlying FALSE and UNKNOWN
+    Bool3 results and does not claim bag or order equivalence. *)
+Theorem in_rows_acceptance_support_rel :
+  forall env select_items left right,
+    list_support_rel
+      (fun first second =>
+        Oeset.compare (OTuple T) first second = Eq)
+      left right ->
+    Bool.is_true (B T) (in_rows_truth env select_items left) =
+    Bool.is_true (B T) (in_rows_truth env select_items right).
+Proof.
+  intros env select_items left right Hsupport.
+  assert (Hleft :
+    Bool.is_true (B T) (in_rows_truth env select_items left) =
+    existsb
+      (fun row => Bool.is_true (B T) (in_row_truth env select_items row))
+      left).
+  { apply in_rows_acceptance_existsb; intros; reflexivity. }
+  assert (Hright :
+    Bool.is_true (B T) (in_rows_truth env select_items right) =
+    existsb
+      (fun row => Bool.is_true (B T) (in_row_truth env select_items row))
+      right).
+  { apply in_rows_acceptance_existsb; intros; reflexivity. }
+  rewrite Hleft, Hright.
+  eapply existsb_support_rel; [|exact Hsupport].
+  intros first second Hequal.
+  apply f_equal.
+  unfold in_row_truth.
+  apply query_tuple_equal_congr.
+  - apply Oeset.compare_eq_refl.
+  - exact Hequal.
+Qed.
+
+(** Membership acceptance distributes over concatenated candidate supports.
+    Duplicates on either side remain irrelevant only to this Boolean
+    acceptance observation; the theorem makes no statement about subquery
+    evaluation order or errors that produce the candidate lists. *)
+Theorem in_rows_acceptance_append :
+  forall env select_items left right,
+    Bool.is_true (B T)
+      (in_rows_truth env select_items (left ++ right)) =
+    Datatypes.orb
+      (Bool.is_true (B T) (in_rows_truth env select_items left))
+      (Bool.is_true (B T) (in_rows_truth env select_items right)).
+Proof.
+  intros env select_items left right.
+  assert (Haccept : forall rows,
+    Bool.is_true (B T) (in_rows_truth env select_items rows) =
+    existsb
+      (fun row => Bool.is_true (B T) (in_row_truth env select_items row))
+      rows).
+  { intro rows; apply in_rows_acceptance_existsb; intros; reflexivity. }
+  rewrite !Haccept, existsb_app.
+  reflexivity.
+Qed.
+
 (** Two list representatives of the same finite bag agree on emptiness.  The
     proof goes through exact occurrence equality and [Oeset.permut], retaining
     the multiplicity carried by [query_same_rows_as_bag]. *)
@@ -875,6 +1086,49 @@ Proof.
     eapply EFormula_QuantSuccess; eassumption.
 Qed.
 
+(** If every successful observation of a quantified subquery yields one fixed
+    Bool3 result, and neither its arguments nor the subquery can fail, the
+    enclosing predicate has an exact SQL-TRUE acceptance decision.  FALSE and
+    UNKNOWN remain distinct in [fixed_truth]; only the final filter decision is
+    projected through [Bool.is_true]. *)
+Theorem formula_quant_acceptance_exact_of_fixed_truth :
+  forall env quantifier predicate arguments subquery fixed_truth,
+    first_runtime_error
+      (@eval_aggterm_runtime_error T
+        symbol_runtime_error aggregate_runtime_error env) arguments = None ->
+    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
+    (forall rows,
+      eval_query env subquery (SqlSuccess rows) ->
+      quantified_rows_truth env quantifier predicate arguments
+        subquery rows = fixed_truth) ->
+    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env
+      (FExpr_Quant quantifier predicate arguments subquery)
+      (Bool.is_true (B T) fixed_truth).
+Proof.
+  intros env quantifier predicate arguments subquery fixed_truth
+    Harguments [rows Hrows] Hfixed Herrors.
+  unfold formula_acceptance_exact_at.
+  split.
+  - exists fixed_truth; split.
+    + apply eval_formula_quant_success_iff.
+      exists rows; split; [exact Harguments|].
+      split; [exact Hrows|symmetry; now apply Hfixed].
+    + reflexivity.
+  - split.
+    + intros truth Htruth.
+      apply eval_formula_quant_success_iff in Htruth.
+      destruct Htruth as [observed [_ [Hobserved ->]]].
+      now rewrite (Hfixed observed Hobserved).
+    + intros error Herror.
+      apply eval_formula_quant_error_iff in Herror.
+      destruct Herror as [Hargument_error | [_ Hsubquery_error]].
+      * congruence.
+      * now apply (Herrors error).
+Qed.
+
 Lemma eval_formula_quant_forall_empty :
   forall env which_predicate arguments subquery,
     first_runtime_error
@@ -971,9 +1225,118 @@ Proof.
   reflexivity.
 Qed.
 
+(** Exact [IN] truth from a runtime-safe tuple projection and a fixed
+    three-valued result for every successful child observation.  The child
+    may expose any legal representative of its bag; callers must prove that
+    [in_rows_truth] agrees across all of them. *)
+Theorem formula_in_truth_exact :
+  forall env select_items subquery fixed_truth,
+    first_runtime_error
+      (@eval_select_runtime_error T
+        symbol_runtime_error aggregate_runtime_error env)
+      select_items = None ->
+    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
+    (forall rows,
+      eval_query env subquery (SqlSuccess rows) ->
+      in_rows_truth env select_items rows = fixed_truth) ->
+    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    formula_truth_exact_at env (FExpr_In select_items subquery) fixed_truth.
+Proof.
+intros env select_items subquery fixed_truth
+  Harguments [rows Hrows] Hfixed Herrors.
+unfold formula_truth_exact_at.
+split.
+- apply eval_formula_in_success_iff.
+  exists rows; split; [exact Harguments|].
+  split; [exact Hrows|symmetry; now apply Hfixed].
+- split.
+  + intros truth Htruth.
+    apply eval_formula_in_success_iff in Htruth.
+    destruct Htruth as [observed [_ [Hobserved ->]]].
+    now apply Hfixed.
+  + intros error Herror.
+    apply eval_formula_in_error_iff in Herror.
+    destruct Herror as [Hargument_error | [_ Hsubquery_error]].
+    * congruence.
+    * now apply (Herrors error).
+Qed.
+
+(** Filter-level [IN] acceptance can be weaker than exact Bool3 truth: FALSE
+    and UNKNOWN may vary across legal child observations as long as neither is
+    accepted.  Tuple-valued membership and duplicate occurrences remain in
+    [in_row_truth] and [existsb]; no Rocq equality or set collapse is used. *)
+Theorem formula_in_acceptance_exact :
+  forall env select_items subquery (accept : tuple T -> bool) accepted,
+    first_runtime_error
+      (@eval_select_runtime_error T
+        symbol_runtime_error aggregate_runtime_error env)
+      select_items = None ->
+    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
+    (forall row,
+      Bool.is_true (B T) (in_row_truth env select_items row) = accept row) ->
+    (forall rows,
+      eval_query env subquery (SqlSuccess rows) ->
+      existsb accept rows = accepted) ->
+    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env
+      (FExpr_In select_items subquery) accepted.
+Proof.
+intros env select_items subquery accept accepted
+  Harguments [rows Hrows] Haccept Hfixed Herrors.
+unfold formula_acceptance_exact_at.
+split.
+- exists (in_rows_truth env select_items rows); split.
+  + apply eval_formula_in_success_iff.
+    exists rows; repeat split; try assumption; reflexivity.
+  + rewrite (@in_rows_acceptance_existsb
+      env select_items rows accept Haccept).
+    now apply Hfixed.
+- split.
+  + intros truth Htruth.
+    apply eval_formula_in_success_iff in Htruth.
+    destruct Htruth as [observed [_ [Hobserved ->]]].
+    rewrite (@in_rows_acceptance_existsb
+      env select_items observed accept Haccept).
+    now apply Hfixed.
+  + intros error Herror.
+    apply eval_formula_in_error_iff in Herror.
+    destruct Herror as [Hargument_error | [_ Hsubquery_error]].
+    * congruence.
+    * now apply (Herrors error).
+Qed.
+
+(** [NOT IN] cannot be obtained by complementing the filter-acceptance bit of
+    [IN]: SQL [NOT UNKNOWN] is still UNKNOWN.  This interface therefore
+    requires the stronger fixed-truth premise and applies negation before
+    projecting through [Bool.is_true]. *)
+Theorem formula_not_in_acceptance_exact_of_fixed_truth :
+  forall env select_items subquery fixed_truth,
+    first_runtime_error
+      (@eval_select_runtime_error T
+        symbol_runtime_error aggregate_runtime_error env)
+      select_items = None ->
+    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
+    (forall rows,
+      eval_query env subquery (SqlSuccess rows) ->
+      in_rows_truth env select_items rows = fixed_truth) ->
+    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env
+      (FExpr_Not (FExpr_In select_items subquery))
+      (Bool.is_true (B T) (Bool.negb (B T) fixed_truth)).
+Proof.
+intros env select_items subquery fixed_truth
+  Harguments Hsuccess Hfixed Herrors.
+apply formula_not_acceptance_exact.
+now apply formula_in_truth_exact.
+Qed.
+
 Lemma eval_formula_exists_error_iff : forall env subquery error,
   eval_formula env (FExpr_Exists subquery) (SqlError error) <->
-  eval_query env subquery (SqlError error).
+  eval_exists env subquery (SqlError error).
 Proof.
   intros env subquery error; split.
   - intro Heval; inversion Heval; assumption.
@@ -982,28 +1345,28 @@ Qed.
 
 Lemma eval_formula_exists_success_iff : forall env subquery truth,
   eval_formula env (FExpr_Exists subquery) (SqlSuccess truth) <->
-  (truth = Bool.false (B T) /\ eval_query env subquery (SqlSuccess [])) \/
+  (truth = Bool.false (B T) /\
+    eval_exists env subquery (SqlSuccess (Bool.false (B T)))) \/
   (truth = Bool.true (B T) /\
-   exists row rows, eval_query env subquery (SqlSuccess (row :: rows))).
+    eval_exists env subquery (SqlSuccess (Bool.true (B T)))).
 Proof.
   intros env subquery truth; split.
   - intro Heval; inversion Heval; subst.
     + left; now split.
-    + right; split; [reflexivity|].
-      exists row, rows; assumption.
-  - intros [[-> Hempty] | [-> [row [rows Hnonempty]]]].
+    + right; now split.
+  - intros [[-> Hempty] | [-> Hnonempty]].
     + now apply EFormula_ExistsSuccessEmpty.
-    + eapply EFormula_ExistsSuccessNonempty; exact Hnonempty.
+    + now apply EFormula_ExistsSuccessNonempty.
 Qed.
 
-(** Cross-environment congruence for EXISTS.  The child relation is kept
-    exact because this constructor observes only the child's error category
-    and whether its successful row list is empty. *)
+(** Cross-environment congruence for EXISTS uses the native existential
+    observation.  Ordinary row outcomes are intentionally not substitutive:
+    target-list expressions may be dead only to EXISTS. *)
 Lemma eval_formula_exists_env_congr :
   forall left_env right_env subquery,
     (forall outcome,
-      eval_query left_env subquery outcome <->
-      eval_query right_env subquery outcome) ->
+      eval_exists left_env subquery outcome <->
+      eval_exists right_env subquery outcome) ->
     forall outcome,
       eval_formula left_env (FExpr_Exists subquery) outcome <->
       eval_formula right_env (FExpr_Exists subquery) outcome.
@@ -1011,18 +1374,16 @@ Proof.
   intros left_env right_env subquery Hquery [truth|error].
   - rewrite 2 eval_formula_exists_success_iff.
     split.
-    + intros [[Htruth Hempty] | [Htruth [row [rows Hnonempty]]]].
+    + intros [[Htruth Hempty] | [Htruth Hnonempty]].
       * left; split; [exact Htruth|].
-        now apply (proj1 (Hquery (SqlSuccess []))).
+        now apply (proj1 (Hquery (SqlSuccess (Bool.false (B T))))).
       * right; split; [exact Htruth|].
-        exists row, rows.
-        now apply (proj1 (Hquery (SqlSuccess (row :: rows)))).
-    + intros [[Htruth Hempty] | [Htruth [row [rows Hnonempty]]]].
+        now apply (proj1 (Hquery (SqlSuccess (Bool.true (B T))))).
+    + intros [[Htruth Hempty] | [Htruth Hnonempty]].
       * left; split; [exact Htruth|].
-        now apply (proj2 (Hquery (SqlSuccess []))).
+        now apply (proj2 (Hquery (SqlSuccess (Bool.false (B T))))).
       * right; split; [exact Htruth|].
-        exists row, rows.
-        now apply (proj2 (Hquery (SqlSuccess (row :: rows)))).
+        now apply (proj2 (Hquery (SqlSuccess (Bool.true (B T))))).
   - rewrite 2 eval_formula_exists_error_iff.
     apply Hquery.
 Qed.
@@ -1031,7 +1392,9 @@ Qed.
     structural congruence proofs over formula syntax. *)
 Lemma formula_expr_exists_env_congr :
   forall left_env right_env subquery,
-    query_expr_env_outcome_equiv left_env right_env subquery ->
+    (forall outcome,
+      eval_exists left_env subquery outcome <->
+      eval_exists right_env subquery outcome) ->
     formula_expr_env_outcome_equiv left_env right_env
       (FExpr_Exists subquery).
 Proof.
@@ -1117,7 +1480,7 @@ Qed.
 Lemma eval_formula_exists_false_iff : forall env subquery,
   eval_formula env (FExpr_Exists subquery)
     (SqlSuccess (Bool.false (B T))) <->
-  eval_query env subquery (SqlSuccess []).
+  eval_exists env subquery (SqlSuccess (Bool.false (B T))).
 Proof.
   intros env subquery; split.
   - intro Heval.
@@ -1131,16 +1494,14 @@ Qed.
 Lemma eval_formula_exists_true_iff : forall env subquery,
   eval_formula env (FExpr_Exists subquery)
     (SqlSuccess (Bool.true (B T))) <->
-  exists row rows, eval_query env subquery (SqlSuccess (row :: rows)).
+  eval_exists env subquery (SqlSuccess (Bool.true (B T))).
 Proof.
   intros env subquery; split.
   - intro Heval.
     apply eval_formula_exists_success_iff in Heval.
     destruct Heval as [[Hequal _] | [_ Hnonempty]]; [|exact Hnonempty].
-    exfalso; apply (Bool.true_diff_false (B T)).
-    exact Hequal.
-  - intros [row [rows Hnonempty]].
-    eapply EFormula_ExistsSuccessNonempty; exact Hnonempty.
+    exfalso; apply (Bool.true_diff_false (B T)); exact Hequal.
+  - intro Hnonempty; now apply EFormula_ExistsSuccessNonempty.
 Qed.
 
 Local Lemma false_is_not_true :
@@ -1153,49 +1514,99 @@ Proof.
   now apply (proj1 (Bool.true_is_true (B T) (Bool.false (B T)))).
 Qed.
 
+(** The two-valued result of [EXISTS] expressed from the structural emptiness
+    decision of a successful child observation. *)
+Definition exists_truth_from_empty (empty : bool) : Bool.b (B T) :=
+  if empty then Bool.false (B T) else Bool.true (B T).
+
+Lemma exists_truth_from_empty_negation_acceptance :
+  forall empty,
+    Bool.is_true (B T)
+      (Bool.negb (B T) (exists_truth_from_empty empty)) = empty.
+Proof.
+intro empty; destruct empty; unfold exists_truth_from_empty.
+- rewrite Bool.negb_false; apply Bool.true_is_true_alt.
+- rewrite Bool.negb_true; apply false_is_not_true.
+Qed.
+
+(** [EXISTS] has an exact two-valued truth whenever all native existential
+    observations agree and the existential observation cannot fail.  This is
+    intentionally stated over [eval_exists], because ordinary row evaluation
+    may demand target expressions that are dead to EXISTS. *)
+Theorem formula_exists_truth_exact :
+  forall env subquery empty,
+    (exists truth, eval_exists env subquery (SqlSuccess truth)) ->
+    (forall truth,
+      eval_exists env subquery (SqlSuccess truth) ->
+      truth = exists_truth_from_empty empty) ->
+    (forall error, ~ eval_exists env subquery (SqlError error)) ->
+    formula_truth_exact_at env (FExpr_Exists subquery)
+      (exists_truth_from_empty empty).
+Proof.
+intros env subquery empty [truth Htruth] Hfixed Herrors.
+unfold formula_truth_exact_at.
+split.
+- pose proof (Hfixed truth Htruth) as Hequal; subst truth.
+  destruct empty; cbn [exists_truth_from_empty] in *.
+  + now apply EFormula_ExistsSuccessEmpty.
+  + now apply EFormula_ExistsSuccessNonempty.
+- split.
+  + intros observed Hobserved.
+    apply eval_formula_exists_success_iff in Hobserved.
+    destruct Hobserved as [[-> Hfalse] | [-> Htrue]];
+      now apply Hfixed.
+  + intros error Herror.
+    apply eval_formula_exists_error_iff in Herror.
+    now apply (Herrors error).
+Qed.
+
+(** Unlike [NOT IN], [NOT EXISTS] is two-valued.  Its exact acceptance bit is
+    therefore precisely the child's emptiness decision. *)
+Theorem formula_not_exists_acceptance_exact :
+  forall env subquery empty,
+    (exists truth, eval_exists env subquery (SqlSuccess truth)) ->
+    (forall truth,
+      eval_exists env subquery (SqlSuccess truth) ->
+      truth = exists_truth_from_empty empty) ->
+    (forall error, ~ eval_exists env subquery (SqlError error)) ->
+    formula_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error
+      aggregate_runtime_error value_is_null env
+      (FExpr_Not (FExpr_Exists subquery)) empty.
+Proof.
+intros env subquery empty Hsuccess Hemptiness Herrors.
+pose proof
+  (formula_not_acceptance_exact
+    (formula_exists_truth_exact (env := env) (subquery := subquery)
+      empty Hsuccess Hemptiness Herrors)) as Hexact.
+rewrite exists_truth_from_empty_negation_acceptance in Hexact.
+exact Hexact.
+Qed.
+
 (** EXISTS depends only on whether a successful child observation is empty.
     Successful observations may otherwise differ, but they must all agree on
     emptiness at this fixed (possibly correlated) environment.  Inhabitation
     and no-error are explicit so the exact formula contract is not vacuous. *)
 Theorem formula_exists_acceptance_exact :
   forall env subquery empty,
-    (exists rows, eval_query env subquery (SqlSuccess rows)) ->
-    (forall rows,
-      eval_query env subquery (SqlSuccess rows) ->
-      rows_empty_decision rows = empty) ->
-    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    (exists truth, eval_exists env subquery (SqlSuccess truth)) ->
+    (forall truth,
+      eval_exists env subquery (SqlSuccess truth) ->
+      truth = exists_truth_from_empty empty) ->
+    (forall error, ~ eval_exists env subquery (SqlError error)) ->
     formula_acceptance_exact_at
       basesort instance unknown symbol_runtime_error
       aggregate_runtime_error value_is_null env
       (FExpr_Exists subquery) (Datatypes.negb empty).
 Proof.
-  intros env subquery empty [rows Hrows] Hemptiness Herror.
-  unfold formula_acceptance_exact_at.
-  split.
-  - pose proof (Hemptiness rows Hrows) as Hempty.
-    destruct rows as [|row rows].
-    + exists (Bool.false (B T)); split.
-      * now apply EFormula_ExistsSuccessEmpty.
-      * cbn [rows_empty_decision] in Hempty; subst empty.
-        cbn [Datatypes.negb]; apply false_is_not_true.
-    + exists (Bool.true (B T)); split.
-      * eapply EFormula_ExistsSuccessNonempty; exact Hrows.
-      * cbn [rows_empty_decision] in Hempty; subst empty.
-        cbn [Datatypes.negb]; apply Bool.true_is_true_alt.
-  - split.
-    + intros truth Heval.
-      apply eval_formula_exists_success_iff in Heval.
-      destruct Heval as
-        [[-> Hempty_rows] | [-> [row [tail Hnonempty_rows]]]].
-      * pose proof (Hemptiness [] Hempty_rows) as Hempty.
-        cbn [rows_empty_decision] in Hempty; subst empty.
-        cbn [Datatypes.negb]; apply false_is_not_true.
-      * pose proof (Hemptiness (row :: tail) Hnonempty_rows) as Hempty.
-        cbn [rows_empty_decision] in Hempty; subst empty.
-        cbn [Datatypes.negb]; apply Bool.true_is_true_alt.
-    + intros error Heval.
-      apply eval_formula_exists_error_iff in Heval.
-      now apply (Herror error).
+  intros env subquery empty Hsuccess Hfixed Herror.
+  pose proof
+    (formula_truth_exact_acceptance_exact
+      (formula_exists_truth_exact (env := env) (subquery := subquery)
+        empty Hsuccess Hfixed Herror)) as Hexact.
+  destruct empty; cbn [exists_truth_from_empty Datatypes.negb] in *.
+  - rewrite false_is_not_true in Hexact; exact Hexact.
+  - rewrite Bool.true_is_true_alt in Hexact; exact Hexact.
 Qed.
 
 (** Fixed-environment congruence is the useful correlated-query interface:
@@ -1253,7 +1664,7 @@ Qed.
 Lemma eval_formula_exists_subquery_congr :
   forall env left right,
     (forall outcome,
-      eval_query env left outcome <-> eval_query env right outcome) ->
+      eval_exists env left outcome <-> eval_exists env right outcome) ->
     forall outcome,
       eval_formula env (FExpr_Exists left) outcome <->
       eval_formula env (FExpr_Exists right) outcome.
@@ -1263,15 +1674,15 @@ Proof.
   - apply EFormula_ExistsError.
     now apply (proj1 (Hequiv (SqlError error))).
   - apply EFormula_ExistsSuccessEmpty.
-    now apply (proj1 (Hequiv (SqlSuccess []))).
-  - eapply EFormula_ExistsSuccessNonempty.
-    now apply (proj1 (Hequiv (SqlSuccess (row :: rows)))).
+    now apply (proj1 (Hequiv (SqlSuccess (Bool.false (B T))))).
+  - apply EFormula_ExistsSuccessNonempty.
+    now apply (proj1 (Hequiv (SqlSuccess (Bool.true (B T))))).
   - apply EFormula_ExistsError.
     now apply (proj2 (Hequiv (SqlError error))).
   - apply EFormula_ExistsSuccessEmpty.
-    now apply (proj2 (Hequiv (SqlSuccess []))).
-  - eapply EFormula_ExistsSuccessNonempty.
-    now apply (proj2 (Hequiv (SqlSuccess (row :: rows)))).
+    now apply (proj2 (Hequiv (SqlSuccess (Bool.false (B T))))).
+  - apply EFormula_ExistsSuccessNonempty.
+    now apply (proj2 (Hequiv (SqlSuccess (Bool.true (B T))))).
 Qed.
 
 Lemma formula_expr_quant_admissible_iff :
@@ -1279,6 +1690,7 @@ Lemma formula_expr_quant_admissible_iff :
     @formula_expr_admissible T relname basesort
       (FExpr_Quant which_quantifier which_predicate arguments subquery) <->
     @query_expr_admissible T relname basesort subquery /\
+    prop_forall (aggterm_phase_admissible ScalarPhaseHaving) arguments /\
     length arguments = 1%nat /\
     length (query_expr_outputs subquery) = 1%nat /\
     (length arguments + length (query_expr_outputs subquery))%nat =
@@ -1291,6 +1703,8 @@ Lemma formula_expr_in_admissible_iff : forall select_items subquery,
   @formula_expr_admissible T relname basesort
     (FExpr_In select_items subquery) <->
   @query_expr_admissible T relname basesort subquery /\
+  select_list_phase_admissible ScalarPhaseHaving
+    (_Select_List select_items) /\
   select_list_sort (_Select_List select_items) =S= query_expr_sort subquery /\
   query_in_positionally_aligned (_Select_List select_items)
     (query_expr_outputs subquery).

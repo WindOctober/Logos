@@ -2,7 +2,7 @@
 
 Route here for: row-count bounds, functional joins, filters, groups, finite images.
 
-This focused catalog contains 101 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 137 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `bag_map_cardinal`
 
@@ -14,7 +14,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 52), `cardinality` (rank 36)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -38,7 +38,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter` (rank 46), `bag` (rank 52), `cardinality` (rank 36)
+Cross-index: `filter`, `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -65,7 +65,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -86,7 +86,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 24)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -110,7 +110,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 52), `cardinality` (rank 28)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -131,7 +131,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 24)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -159,7 +159,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 24)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -181,7 +181,7 @@ Applicability: Use to replace a projected total-functional join by the exact map
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 38), `cardinality` (rank 36)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -212,7 +212,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `join` (rank 42), `cardinality` (rank 36)
+Cross-index: `filter`, `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `filter`, `WHERE`, `cardinality`
 
@@ -247,7 +247,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -272,7 +272,7 @@ Applicability: Use to replace a projected total-functional join by the exact map
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 38), `cardinality` (rank 36)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -310,7 +310,7 @@ Applicability: Use when each left occurrence has zero or one accepted right occu
 
 Important premises: Retain both matched and padded projection equalities and the per-left at-most-one bound.  No foreign-key totality premise is required; the conclusion is occurrence-preserving permutation.
 
-Cross-index: `join` (rank 10), `cardinality` (rank 36)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `functional LEFT JOIN`, `at-most-one match`, `nullable unmatched key`, `left multiplicity`, `join`, `cardinality`
 
@@ -337,9 +337,56 @@ Lemma map_left_join_functional_permut :
       (map emit left).
 ```
 
+## `map_left_join_functional_branch_permut`
+
+Source: [`theories/FormalSQL/CardinalityCombinators.v:422`](../CardinalityCombinators.v#L422)
+
+Purpose/direction: States the map left join functional branch permut law for join cardinality, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join cardinality.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `join`, `cardinality`
+
+Search aliases: `cardinality composition`, `join`, `cardinality`
+
+```rocq
+Lemma map_left_join_functional_branch_permut :
+  forall (A B : Type) (OB : Oeset.Rcd B)
+      (join : A -> A -> A) (accept : A -> A -> bool)
+      (project matched_emit unmatched_emit : A -> B)
+      (pad : A -> A) left right,
+    (forall left_row right_row,
+      In left_row left ->
+      In right_row right ->
+      accept left_row right_row = true ->
+      Oeset.compare OB (project (join left_row right_row))
+        (matched_emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      Oeset.compare OB (project (pad left_row))
+        (unmatched_emit left_row) = Eq) ->
+    (forall left_row,
+      In left_row left ->
+      (List.length (filter (accept left_row) right) <= 1)%nat) ->
+    Oeset.permut OB
+      (map project
+        (theta_join_list A join accept left right ++
+         map pad
+           (filter
+             (fun left_row => negb (existsb (accept left_row) right)) left)))
+      (map
+        (fun left_row =>
+          if existsb (accept left_row) right
+          then matched_emit left_row
+          else unmatched_emit left_row)
+        left).
+```
+
 ## `NoDupA_map_preimage`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:419`](../CardinalityCombinators.v#L419)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:524`](../CardinalityCombinators.v#L524)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -347,7 +394,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -362,7 +409,7 @@ Lemma NoDupA_map_preimage :
 
 ## `NoDupA_map_of_reflection`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:445`](../CardinalityCombinators.v#L445)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:550`](../CardinalityCombinators.v#L550)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -370,7 +417,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -389,7 +436,7 @@ Lemma NoDupA_map_of_reflection :
 
 ## `NoDupA_flat_map_filter_map_functional_reflection`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:479`](../CardinalityCombinators.v#L479)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:584`](../CardinalityCombinators.v#L584)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -397,7 +444,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -429,7 +476,7 @@ Lemma NoDupA_flat_map_filter_map_functional_reflection :
 
 ## `NoDupA_map_iff_NoDup_on`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:546`](../CardinalityCombinators.v#L546)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:651`](../CardinalityCombinators.v#L651)
 
 Purpose/direction: Gives necessary and sufficient conditions for row cardinality and compositional bounds.
 
@@ -437,7 +484,7 @@ Applicability: Use in either direction to invert or construct a goal about row c
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -454,7 +501,7 @@ Lemma NoDupA_map_iff_NoDup_on :
 
 ## `NoDupA_finite_image_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:594`](../CardinalityCombinators.v#L594)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:699`](../CardinalityCombinators.v#L699)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -462,7 +509,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 22)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -481,7 +528,7 @@ Theorem NoDupA_finite_image_length_le :
 
 ## `NoDupA_finite_product_code_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:620`](../CardinalityCombinators.v#L620)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:725`](../CardinalityCombinators.v#L725)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -489,7 +536,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 23)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -513,7 +560,7 @@ Corollary NoDupA_finite_product_code_length_le :
 
 ## `NoDupA_finite_option_code_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:653`](../CardinalityCombinators.v#L653)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:758`](../CardinalityCombinators.v#L758)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -521,7 +568,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 23)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -545,7 +592,7 @@ Corollary NoDupA_finite_option_code_length_le :
 
 ## `oeset_nb_occ_le_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:690`](../CardinalityCombinators.v#L690)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:795`](../CardinalityCombinators.v#L795)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -553,7 +600,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 52), `cardinality` (rank 28)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`
 
@@ -566,7 +613,7 @@ Lemma oeset_nb_occ_le_length :
 
 ## `instance_row_multiplicity_le_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:715`](../CardinalityCombinators.v#L715)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:820`](../CardinalityCombinators.v#L820)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -574,7 +621,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 51), `cardinality` (rank 27)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -589,7 +636,7 @@ Corollary instance_row_multiplicity_le_length :
 
 ## `instance_row_positive_multiplicity_nonempty`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:728`](../CardinalityCombinators.v#L728)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:833`](../CardinalityCombinators.v#L833)
 
 Purpose/direction: States the exact empty-input or empty-result law for row cardinality and compositional bounds.
 
@@ -597,7 +644,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 51), `cardinality` (rank 35)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -612,7 +659,7 @@ Corollary instance_row_positive_multiplicity_nonempty :
 
 ## `theta_join_list_degree_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:747`](../CardinalityCombinators.v#L747)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:852`](../CardinalityCombinators.v#L852)
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -620,7 +667,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 24)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -637,7 +684,7 @@ Lemma theta_join_list_degree_length_le :
 
 ## `theta_join_list_length_le_product`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:766`](../CardinalityCombinators.v#L766)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:871`](../CardinalityCombinators.v#L871)
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -645,7 +692,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `join` (rank 41), `cardinality` (rank 23)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -659,7 +706,7 @@ Corollary theta_join_list_length_le_product :
 
 ## `filter_theta_join_list_degree_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:780`](../CardinalityCombinators.v#L780)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:885`](../CardinalityCombinators.v#L885)
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -667,7 +714,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 45), `join` (rank 41), `cardinality` (rank 23)
+Cross-index: `filter`, `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `filter`, `WHERE`, `cardinality`
 
@@ -686,7 +733,7 @@ Corollary filter_theta_join_list_degree_length_le :
 
 ## `expansion_pipeline_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:820`](../CardinalityCombinators.v#L820)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:925`](../CardinalityCombinators.v#L925)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -694,7 +741,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 22)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -708,7 +755,7 @@ Theorem expansion_pipeline_length_le :
 
 ## `partition_flatten_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:844`](../CardinalityCombinators.v#L844)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:949`](../CardinalityCombinators.v#L949)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -716,7 +763,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `cardinality` (rank 28)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -731,7 +778,7 @@ Lemma partition_flatten_length :
 
 ## `partition_group_count_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:859`](../CardinalityCombinators.v#L859)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:964`](../CardinalityCombinators.v#L964)
 
 Purpose/direction: States the partition group count upper-bound law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -739,7 +786,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 50), `cardinality` (rank 34)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -761,7 +808,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 24)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -786,7 +833,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 28)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -807,7 +854,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `join` (rank 42), `cardinality` (rank 36)
+Cross-index: `filter`, `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `filter`, `WHERE`, `cardinality`
 
@@ -831,7 +878,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 36)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -855,7 +902,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ro
 
 Important premises: supply the declared equivalence/properness relation.
 
-Cross-index: `cardinality` (rank 36), `scalar` (rank 52)
+Cross-index: `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `predicate`, `Bool3`, `cardinality`, `equivalence`, `congruence`
 
@@ -876,7 +923,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ro
 
 Important premises: keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`, `equivalence`, `congruence`
 
@@ -896,7 +943,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ro
 
 Important premises: keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`, `equivalence`, `congruence`
 
@@ -916,7 +963,7 @@ Applicability: Use to orient, transport, or compose a semantic relation about ro
 
 Important premises: keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`, `equivalence`, `congruence`
 
@@ -937,7 +984,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -961,7 +1008,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `cardinality` (rank 36)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -983,7 +1030,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1004,7 +1051,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1025,7 +1072,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1046,7 +1093,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1067,7 +1114,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1094,7 +1141,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 44), `cardinality` (rank 36)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1117,7 +1164,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 52), `cardinality` (rank 36)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `DISTINCT`, `duplicate elimination`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1141,7 +1188,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 52), `cardinality` (rank 36)
+Cross-index: `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1165,7 +1212,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 50)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1189,7 +1236,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 4)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1213,7 +1260,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 0)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1244,7 +1291,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 6)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1268,7 +1315,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 2)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1289,9 +1336,41 @@ Theorem query_expr_table_success_rows_present_conform_attribute :
     Forall (row_attribute_present_conforms attribute) rows.
 ```
 
-## `query_same_rows_as_conforming_table_attribute`
+## `query_expr_table_success_row_present_conform_attribute_generated_sort`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:585`](../QueryCardinality.v#L585)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `cardinality`, `schema`
+
+Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
+
+```rocq
+Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
+  forall expected constraints actual relation attribute outputs env rows row
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    attribute inS (@_basesort TNull expected relation) ->
+    @_basesort TNull expected relation =S=
+      @query_outputs_sort TNull outputs ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs relation)
+      (SqlSuccess rows) ->
+    In row rows ->
+    row_attribute_present_conforms attribute row.
+```
+
+## `query_same_rows_as_conforming_table_attribute`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:628`](../QueryCardinality.v#L628)
 
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
@@ -1299,7 +1378,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 50)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1318,7 +1397,7 @@ Theorem query_same_rows_as_conforming_table_attribute :
 
 ## `query_expr_table_success_rows_conform_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:633`](../QueryCardinality.v#L633)
+Source: [`theories/FormalSQL/QueryCardinality.v:676`](../QueryCardinality.v#L676)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -1326,7 +1405,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 34), `schema` (rank 50)
+Cross-index: `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
 
@@ -1351,9 +1430,45 @@ Theorem query_expr_table_success_rows_conform_attribute :
     Forall (row_attribute_present_nonnull_conforms attribute) rows.
 ```
 
+## `query_expr_table_success_row_conform_attribute_generated_sort`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:710`](../QueryCardinality.v#L710)
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `cardinality`, `schema`
+
+Search aliases: `cardinality composition`, `schema conformance`, `typing`, `cardinality`
+
+```rocq
+Theorem query_expr_table_success_row_conform_attribute_generated_sort :
+  forall expected constraints actual constraint attribute outputs env rows row
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+    database_conforms_schema expected constraints actual ->
+    In constraint constraints ->
+    attribute inS
+      (@_basesort TNull expected (constraint_relation constraint)) ->
+    In attribute (constraint_not_null constraint) ->
+    @_basesort TNull expected (constraint_relation constraint) =S=
+      @query_outputs_sort TNull outputs ->
+    @eval_query_expr_outcome TNull relname
+      (@_basesort TNull actual) (@_instance TNull actual)
+      unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (@QExpr_Table TNull relname outputs
+        (constraint_relation constraint))
+      (SqlSuccess rows) ->
+    In row rows ->
+    row_attribute_present_nonnull_conforms attribute row.
+```
+
 ## `query_canonical_rows_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:662`](../QueryCardinality.v#L662)
+Source: [`theories/FormalSQL/QueryCardinality.v:755`](../QueryCardinality.v#L755)
 
 Purpose/direction: States the query canonical rows forall law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1361,7 +1476,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 35)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1375,7 +1490,7 @@ Corollary query_canonical_rows_Forall :
 
 ## `query_same_rows_as_bag_filter_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:677`](../QueryCardinality.v#L677)
+Source: [`theories/FormalSQL/QueryCardinality.v:770`](../QueryCardinality.v#L770)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1383,7 +1498,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter` (rank 46), `bag` (rank 52), `cardinality` (rank 28)
+Cross-index: `filter`, `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1400,7 +1515,7 @@ Lemma query_same_rows_as_bag_filter_length :
 
 ## `query_same_rows_as_bag_filter_length_between`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:700`](../QueryCardinality.v#L700)
+Source: [`theories/FormalSQL/QueryCardinality.v:793`](../QueryCardinality.v#L793)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1408,7 +1523,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter` (rank 46), `bag` (rank 52), `cardinality` (rank 28)
+Cross-index: `filter`, `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1423,7 +1538,7 @@ Lemma query_same_rows_as_bag_filter_length_between :
 
 ## `query_canonical_rows_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:714`](../QueryCardinality.v#L714)
+Source: [`theories/FormalSQL/QueryCardinality.v:807`](../QueryCardinality.v#L807)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1431,7 +1546,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `grouping` (rank 16), `cardinality` (rank 28)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1443,7 +1558,7 @@ Lemma query_canonical_rows_length :
 
 ## `row_attribute_present_conforms_join_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:741`](../QueryCardinality.v#L741)
+Source: [`theories/FormalSQL/QueryCardinality.v:834`](../QueryCardinality.v#L834)
 
 Purpose/direction: States the row attribute present conforms join left law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1451,7 +1566,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `join`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `join`, `schema conformance`, `typing`, `cardinality`
 
@@ -1464,7 +1579,7 @@ Lemma row_attribute_present_conforms_join_left :
 
 ## `row_attribute_present_conforms_join_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:754`](../QueryCardinality.v#L754)
+Source: [`theories/FormalSQL/QueryCardinality.v:847`](../QueryCardinality.v#L847)
 
 Purpose/direction: States the row attribute present conforms join right law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1472,7 +1587,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `join`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `join`, `schema conformance`, `typing`, `cardinality`
 
@@ -1486,7 +1601,7 @@ Lemma row_attribute_present_conforms_join_right :
 
 ## `brute_left_join_list_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:768`](../QueryCardinality.v#L768)
+Source: [`theories/FormalSQL/QueryCardinality.v:861`](../QueryCardinality.v#L861)
 
 Purpose/direction: States the brute left join list forall law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1494,7 +1609,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 42), `cardinality` (rank 36)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -1514,7 +1629,7 @@ Lemma brute_left_join_list_Forall :
 
 ## `brute_left_join_list_Forall_left_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:795`](../QueryCardinality.v#L795)
+Source: [`theories/FormalSQL/QueryCardinality.v:888`](../QueryCardinality.v#L888)
 
 Purpose/direction: States the brute left join list forall left attribute law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1522,7 +1637,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `join` (rank 41), `cardinality` (rank 35), `schema` (rank 51)
+Cross-index: `join`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `join`, `schema conformance`, `typing`, `cardinality`
 
@@ -1536,7 +1651,7 @@ Corollary brute_left_join_list_Forall_left_attribute :
 
 ## `brute_left_join_list_Forall_right_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:811`](../QueryCardinality.v#L811)
+Source: [`theories/FormalSQL/QueryCardinality.v:904`](../QueryCardinality.v#L904)
 
 Purpose/direction: States the brute left join list forall right attribute law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1544,7 +1659,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `join` (rank 41), `cardinality` (rank 35), `schema` (rank 51)
+Cross-index: `join`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `join`, `schema conformance`, `typing`, `cardinality`
 
@@ -1559,7 +1674,7 @@ Corollary brute_left_join_list_Forall_right_attribute :
 
 ## `direct_projection_preserves_present_conformance`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:825`](../QueryCardinality.v#L825)
+Source: [`theories/FormalSQL/QueryCardinality.v:918`](../QueryCardinality.v#L918)
 
 Purpose/direction: Shows that the indicated operator preserves the displayed row cardinality and compositional bounds property.
 
@@ -1567,7 +1682,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `projection` (rank 52), `cardinality` (rank 36)
+Cross-index: `projection`, `cardinality`
 
 Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
 
@@ -1583,7 +1698,7 @@ Lemma direct_projection_preserves_present_conformance :
 
 ## `raw_cross_same_rows_as_bag`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:852`](../QueryCardinality.v#L852)
+Source: [`theories/FormalSQL/QueryCardinality.v:945`](../QueryCardinality.v#L945)
 
 Purpose/direction: Bridges the two displayed representations of join cardinality.
 
@@ -1591,7 +1706,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `join` (rank 52), `bag` (rank 52), `cardinality` (rank 36)
+Cross-index: `join`, `bag`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cross product`, `CROSS JOIN`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
@@ -1606,7 +1721,7 @@ Lemma raw_cross_same_rows_as_bag :
 
 ## `raw_cross_filter_count_for_any_representative`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:876`](../QueryCardinality.v#L876)
+Source: [`theories/FormalSQL/QueryCardinality.v:969`](../QueryCardinality.v#L969)
 
 Purpose/direction: States the raw cross filter count for any representative law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1614,7 +1729,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 45), `join` (rank 51), `cardinality` (rank 35)
+Cross-index: `filter`, `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cross product`, `CROSS JOIN`, `filter`, `WHERE`, `cardinality`
 
@@ -1633,7 +1748,7 @@ Corollary raw_cross_filter_count_for_any_representative :
 
 ## `interp_predicate_int32_nonnull_equal`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:893`](../QueryCardinality.v#L893)
+Source: [`theories/FormalSQL/QueryCardinality.v:986`](../QueryCardinality.v#L986)
 
 Purpose/direction: States the interp predicate int32 nonnull equal law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1641,7 +1756,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `cardinality` (rank 22), `scalar` (rank 52)
+Cross-index: `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `predicate`, `Bool3`, `INTEGER`, `int32`, `cardinality`
 
@@ -1659,7 +1774,7 @@ Lemma interp_predicate_int32_nonnull_equal :
 
 ## `interp_predicate_int32_null_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:906`](../QueryCardinality.v#L906)
+Source: [`theories/FormalSQL/QueryCardinality.v:999`](../QueryCardinality.v#L999)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1667,7 +1782,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `cardinality` (rank 22), `scalar` (rank 52)
+Cross-index: `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `INTEGER`, `int32`, `cardinality`
 
@@ -1680,7 +1795,7 @@ Lemma interp_predicate_int32_null_left :
 
 ## `interp_predicate_int32_null_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:914`](../QueryCardinality.v#L914)
+Source: [`theories/FormalSQL/QueryCardinality.v:1007`](../QueryCardinality.v#L1007)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1688,7 +1803,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses.
 
-Cross-index: `cardinality` (rank 22), `scalar` (rank 52)
+Cross-index: `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `INTEGER`, `int32`, `cardinality`
 
@@ -1702,7 +1817,7 @@ Lemma interp_predicate_int32_null_right :
 
 ## `postgres_int32_equal_true_eq`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:928`](../QueryCardinality.v#L928)
+Source: [`theories/FormalSQL/QueryCardinality.v:1021`](../QueryCardinality.v#L1021)
 
 Purpose/direction: States the postgres int32 equal true equality law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1710,7 +1825,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 22), `scalar` (rank 52)
+Cross-index: `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `INTEGER`, `int32`, `cardinality`
 
@@ -1725,7 +1840,7 @@ Lemma postgres_int32_equal_true_eq :
 
 ## `NoDup_map_constant_filter_length_le_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:961`](../QueryCardinality.v#L961)
+Source: [`theories/FormalSQL/QueryCardinality.v:1054`](../QueryCardinality.v#L1054)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1733,7 +1848,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 24)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -1749,7 +1864,7 @@ Lemma NoDup_map_constant_filter_length_le_one :
 
 ## `int32_primary_key_true_matches_at_most_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:999`](../QueryCardinality.v#L999)
+Source: [`theories/FormalSQL/QueryCardinality.v:1092`](../QueryCardinality.v#L1092)
 
 Purpose/direction: States the int32 primary key true matches at most one law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1757,7 +1872,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 22), `schema` (rank 38), `scalar` (rank 52)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `cardinality composition`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1776,7 +1891,7 @@ Lemma int32_primary_key_true_matches_at_most_one :
 
 ## `null_int32_primary_key_matches_none`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1031`](../QueryCardinality.v#L1031)
+Source: [`theories/FormalSQL/QueryCardinality.v:1124`](../QueryCardinality.v#L1124)
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1784,7 +1899,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 22), `schema` (rank 38), `scalar` (rank 52)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `cardinality composition`, `NULL`, `UNKNOWN`, `three-valued logic`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -1800,7 +1915,7 @@ Lemma null_int32_primary_key_matches_none :
 
 ## `partition_member_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1050`](../QueryCardinality.v#L1050)
+Source: [`theories/FormalSQL/QueryCardinality.v:1143`](../QueryCardinality.v#L1143)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1808,7 +1923,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 24)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1822,7 +1937,7 @@ Lemma partition_member_length_le :
 
 ## `query_make_groups_member_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1064`](../QueryCardinality.v#L1064)
+Source: [`theories/FormalSQL/QueryCardinality.v:1157`](../QueryCardinality.v#L1157)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1830,7 +1945,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 40), `cardinality` (rank 22)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1843,7 +1958,7 @@ Theorem query_make_groups_member_length_le :
 
 ## `query_make_groups_member_in`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1082`](../QueryCardinality.v#L1082)
+Source: [`theories/FormalSQL/QueryCardinality.v:1175`](../QueryCardinality.v#L1175)
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -1851,7 +1966,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 42), `cardinality` (rank 36)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1865,7 +1980,7 @@ Lemma query_make_groups_member_in :
 
 ## `query_make_groups_member_nonempty`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1100`](../QueryCardinality.v#L1100)
+Source: [`theories/FormalSQL/QueryCardinality.v:1193`](../QueryCardinality.v#L1193)
 
 Purpose/direction: States the exact empty-input or empty-result law for row cardinality and compositional bounds.
 
@@ -1873,7 +1988,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 42), `cardinality` (rank 36)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1887,7 +2002,7 @@ Lemma query_make_groups_member_nonempty :
 
 ## `partition_member_NoDupA`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1116`](../QueryCardinality.v#L1116)
+Source: [`theories/FormalSQL/QueryCardinality.v:1209`](../QueryCardinality.v#L1209)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -1895,7 +2010,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -1915,7 +2030,7 @@ Lemma partition_member_NoDupA :
 
 ## `query_make_groups_member_NoDupA`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1169`](../QueryCardinality.v#L1169)
+Source: [`theories/FormalSQL/QueryCardinality.v:1262`](../QueryCardinality.v#L1262)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -1923,7 +2038,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 42), `cardinality` (rank 36)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1941,7 +2056,7 @@ Lemma query_make_groups_member_NoDupA :
 
 ## `query_make_groups_member_homogeneous`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1197`](../QueryCardinality.v#L1197)
+Source: [`theories/FormalSQL/QueryCardinality.v:1290`](../QueryCardinality.v#L1290)
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -1949,7 +2064,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 42), `cardinality` (rank 36)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1969,7 +2084,7 @@ Lemma query_make_groups_member_homogeneous :
 
 ## `query_group_env_grouping_expression_member`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1241`](../QueryCardinality.v#L1241)
+Source: [`theories/FormalSQL/QueryCardinality.v:1334`](../QueryCardinality.v#L1334)
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -1977,7 +2092,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 48), `cardinality` (rank 36)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -1996,7 +2111,7 @@ Lemma query_group_env_grouping_expression_member :
 
 ## `query_distinct_group_finite_code_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1297`](../QueryCardinality.v#L1297)
+Source: [`theories/FormalSQL/QueryCardinality.v:1390`](../QueryCardinality.v#L1390)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2004,7 +2119,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 50), `cardinality` (rank 22)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `DISTINCT`, `duplicate elimination`, `cardinality`
 
@@ -2026,7 +2141,7 @@ Theorem query_distinct_group_finite_code_length_le :
 
 ## `query_distinct_group_finite_Z_code_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1335`](../QueryCardinality.v#L1335)
+Source: [`theories/FormalSQL/QueryCardinality.v:1428`](../QueryCardinality.v#L1428)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2034,7 +2149,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 50), `cardinality` (rank 22)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `DISTINCT`, `duplicate elimination`, `cardinality`
 
@@ -2059,7 +2174,7 @@ Theorem query_distinct_group_finite_Z_code_length_le :
 
 ## `project_rows_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1398`](../QueryCardinality.v#L1398)
+Source: [`theories/FormalSQL/QueryCardinality.v:1491`](../QueryCardinality.v#L1491)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2067,7 +2182,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `projection` (rank 52), `cardinality` (rank 28)
+Cross-index: `projection`, `cardinality`
 
 Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
 
@@ -2081,7 +2196,7 @@ Lemma project_rows_success_length :
 
 ## `project_rows_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1417`](../QueryCardinality.v#L1417)
+Source: [`theories/FormalSQL/QueryCardinality.v:1510`](../QueryCardinality.v#L1510)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2089,7 +2204,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `projection` (rank 52), `cardinality` (rank 36)
+Cross-index: `projection`, `cardinality`
 
 Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
 
@@ -2107,9 +2222,713 @@ Lemma project_rows_success_Forall :
     Forall output_property output.
 ```
 
+## `query_same_rows_as_bag_length_N`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1561`](../QueryCardinality.v#L1561)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_same_rows_as_bag_length_N :
+  forall rows bag,
+    @query_same_rows_as_bag T rows bag ->
+    N.of_nat (List.length rows) =
+      Febag.cardinal (Fecol.CBag (CTuple T)) bag.
+```
+
+## `query_same_rows_as_bag_length_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1577`](../QueryCardinality.v#L1577)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_same_rows_as_bag_length_le :
+  forall rows bag bound,
+    @query_same_rows_as_bag T rows bag ->
+    (Febag.cardinal (Fecol.CBag (CTuple T)) bag <=
+      N.of_nat bound)%N ->
+    (List.length rows <= bound)%nat.
+```
+
+## `query_success_length_le_error`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1594`](../QueryCardinality.v#L1594)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `cardinality`
+
+Search aliases: `cardinality composition`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_error :
+  forall env outputs error bound,
+    query_success_length_le env (QExpr_Error outputs error) bound.
+```
+
+## `query_success_length_le_values`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1603`](../QueryCardinality.v#L1603)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_success_length_le_values :
+  forall env outputs values bound,
+    (Febag.cardinal (Fecol.CBag (CTuple T)) values <=
+      N.of_nat bound)%N ->
+    query_success_length_le env (QExpr_Values outputs values) bound.
+```
+
+## `query_success_length_le_table`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1618`](../QueryCardinality.v#L1618)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_success_length_le_table :
+  forall env outputs table bound,
+    @query_outputs_sort T outputs =S= basesort table ->
+    (Febag.cardinal (Fecol.CBag (CTuple T)) (instance table) <=
+      N.of_nat bound)%N ->
+    query_success_length_le env (QExpr_Table outputs table) bound.
+```
+
+## `query_success_length_le_project`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1650`](../QueryCardinality.v#L1650)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `projection`, `cardinality`
+
+Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_project :
+  forall env select_list input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Project select_list input) bound.
+```
+
+## `query_success_length_le_row_map`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1667`](../QueryCardinality.v#L1667)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `projection`, `cardinality`
+
+Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_row_map :
+  forall env outputs row_map input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_RowMap outputs row_map input) bound.
+```
+
+## `query_success_length_le_offset`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1683`](../QueryCardinality.v#L1683)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `OFFSET`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_offset :
+  forall env offset input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Offset offset input) (bound - offset).
+```
+
+## `query_offset_success_nil_of_input_length_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1702`](../QueryCardinality.v#L1702)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `OFFSET`, `cardinality`
+
+```rocq
+Lemma query_offset_success_nil_of_input_length_le :
+  forall env offset input,
+    query_success_length_le env input offset ->
+    forall output,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env (QExpr_Offset offset input) (SqlSuccess output) ->
+      output = nil.
+```
+
+## `query_success_length_le_fetch`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1721`](../QueryCardinality.v#L1721)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `FETCH`, `LIMIT`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_fetch :
+  forall env count input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Fetch count input) (Nat.min count bound).
+```
+
+## `query_success_length_le_fetch_count`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1738`](../QueryCardinality.v#L1738)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `FETCH`, `LIMIT`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_fetch_count :
+  forall env count input,
+    query_success_length_le env (QExpr_Fetch count input) count.
+```
+
+## `query_success_length_le_order_by`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1752`](../QueryCardinality.v#L1752)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `ORDER BY`, `ordered observation`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_order_by :
+  forall env keys input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_OrderBy keys input) bound.
+```
+
+## `tuple_mk_set_cardinal_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1772`](../QueryCardinality.v#L1772)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma tuple_mk_set_cardinal_le :
+  forall rows : list (tuple T),
+    (Feset.cardinal (Fecol.CSet (CTuple T))
+      (Feset.mk_set (Fecol.CSet (CTuple T)) rows) <=
+     List.length rows)%nat.
+```
+
+## `query_distinct_bag_cardinal_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1820`](../QueryCardinality.v#L1820)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `DISTINCT`, `duplicate elimination`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_distinct_bag_cardinal_le :
+  forall input,
+    (Febag.cardinal (Fecol.CBag (CTuple T))
+       (@query_distinct_bag T input) <=
+     Febag.cardinal (Fecol.CBag (CTuple T)) input)%N.
+```
+
+## `query_success_length_le_distinct`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1837`](../QueryCardinality.v#L1837)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `DISTINCT`, `duplicate elimination`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_distinct :
+  forall env input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Distinct input) bound.
+```
+
+## `oeset_pointwise_nb_occ_le_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1873`](../QueryCardinality.v#L1873)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`
+
+```rocq
+Lemma oeset_pointwise_nb_occ_le_length :
+  forall (A : Type) (ordered : Oeset.Rcd A) (left right : list A),
+    (forall value,
+      (Oeset.nb_occ ordered value left <=
+       Oeset.nb_occ ordered value right)%N) ->
+    (List.length left <= List.length right)%nat.
+```
+
+## `febag_cardinal_le_of_nb_occ_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1910`](../QueryCardinality.v#L1910)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_le_of_nb_occ_le :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (forall value,
+      (Febag.nb_occ bags value left <=
+       Febag.nb_occ bags value right)%N) ->
+    (Febag.cardinal bags left <= Febag.cardinal bags right)%N.
+```
+
+## `febag_cardinal_union`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1927`](../QueryCardinality.v#L1927)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_union :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    Febag.cardinal bags (Febag.union bags left right) =
+      (Febag.cardinal bags left + Febag.cardinal bags right)%N.
+```
+
+## `febag_cardinal_union_max_le`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1945`](../QueryCardinality.v#L1945)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_union_max_le :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.union_max bags left right) <=
+      Febag.cardinal bags left + Febag.cardinal bags right)%N.
+```
+
+## `febag_cardinal_inter_le_left`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1958`](../QueryCardinality.v#L1958)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_inter_le_left :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.inter bags left right) <=
+      Febag.cardinal bags left)%N.
+```
+
+## `febag_cardinal_inter_le_right`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1969`](../QueryCardinality.v#L1969)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_inter_le_right :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.inter bags left right) <=
+      Febag.cardinal bags right)%N.
+```
+
+## `febag_cardinal_diff_le_left`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1980`](../QueryCardinality.v#L1980)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma febag_cardinal_diff_le_left :
+  forall (A : Type) (ordered : Oeset.Rcd A)
+      (bags : Febag.Rcd ordered) left right,
+    (Febag.cardinal bags (Febag.diff bags left right) <=
+      Febag.cardinal bags left)%N.
+```
+
+## `query_set_cardinality_bound_union`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1994`](../QueryCardinality.v#L1994)
+
+Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `set operation`, `UNION`, `cardinality`
+
+```rocq
+Lemma query_set_cardinality_bound_union :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Union left right
+      left_bound right_bound (left_bound + right_bound).
+```
+
+## `query_set_cardinality_bound_union_max`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2007`](../QueryCardinality.v#L2007)
+
+Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `set operation`, `UNION`, `cardinality`
+
+```rocq
+Lemma query_set_cardinality_bound_union_max :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound UnionMax left right
+      left_bound right_bound (left_bound + right_bound).
+```
+
+## `query_set_cardinality_bound_inter`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2021`](../QueryCardinality.v#L2021)
+
+Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `set operation`, `INTERSECT`, `cardinality`
+
+```rocq
+Lemma query_set_cardinality_bound_inter :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Inter left right
+      left_bound right_bound (Nat.min left_bound right_bound).
+```
+
+## `query_set_cardinality_bound_diff`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2037`](../QueryCardinality.v#L2037)
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL bag/set operations.
+
+Applicability: Use in either direction to invert or construct a goal about SQL bag/set operations.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `set operation`, `EXCEPT`, `cardinality`
+
+```rocq
+Lemma query_set_cardinality_bound_diff :
+  forall left right left_bound right_bound,
+    query_set_cardinality_bound Diff left right
+      left_bound right_bound left_bound.
+```
+
+## `query_success_length_le_set`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2050`](../QueryCardinality.v#L2050)
+
+Purpose/direction: Provides the stated reusable upper bound for SQL bag/set operations.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `set operation`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_set :
+  forall env operation left right left_bound right_bound output_bound,
+    query_success_length_le env left left_bound ->
+    query_success_length_le env right right_bound ->
+    query_set_cardinality_bound operation left right
+      left_bound right_bound output_bound ->
+    query_success_length_le env (QExpr_Set operation left right) output_bound.
+```
+
+## `query_rank_rows_outcome_success_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2074`](../QueryCardinality.v#L2074)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `runtime`, `cardinality`
+
+Search aliases: `cardinality composition`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma query_rank_rows_outcome_success_length :
+  forall partition_keys order_keys rank_attribute rank_value all_rows rows output,
+    @query_rank_rows_outcome T value_is_null
+      partition_keys order_keys rank_attribute rank_value all_rows rows =
+      Some output ->
+    List.length output = List.length rows.
+```
+
+## `query_rank_bag_rows_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2092`](../QueryCardinality.v#L2092)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`, `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_rank_bag_rows_length :
+  forall rows : list (tuple T),
+    List.length (query_rank_bag_rows (rows_bag T rows)) = List.length rows.
+```
+
+## `query_window_rows_outcome_success_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2107`](../QueryCardinality.v#L2107)
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `runtime`, `cardinality`
+
+Search aliases: `cardinality composition`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma query_window_rows_outcome_success_length :
+  forall env partition_keys items previous position prefix rows output,
+    @query_window_rows_outcome T symbol_runtime_error aggregate_runtime_error
+      value_is_null env partition_keys items previous position prefix rows =
+      Some (SqlSuccess output) ->
+    List.length output = List.length rows.
+```
+
+## `query_success_length_le_rank`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2142`](../QueryCardinality.v#L2142)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `window`, `PARTITION BY`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_rank :
+  forall env partition_keys order_keys rank_attribute rank_value input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+      bound.
+```
+
+## `query_success_length_le_window`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2172`](../QueryCardinality.v#L2172)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `window`, `PARTITION BY`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_window :
+  forall env partition_keys order_keys items input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Window partition_keys order_keys items input) bound.
+```
+
 ## `if_tuple_rows_success_true`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1452`](../QueryCardinality.v#L1452)
+Source: [`theories/FormalSQL/QueryCardinality.v:2212`](../QueryCardinality.v#L2212)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2117,7 +2936,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -2134,7 +2953,7 @@ Lemma if_tuple_rows_success_true :
 
 ## `if_tuple_rows_success_false`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1465`](../QueryCardinality.v#L1465)
+Source: [`theories/FormalSQL/QueryCardinality.v:2225`](../QueryCardinality.v#L2225)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2142,7 +2961,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `cardinality` (rank 36)
+Cross-index: `cardinality`
 
 Search aliases: `cardinality composition`, `cardinality`
 
@@ -2159,7 +2978,7 @@ Lemma if_tuple_rows_success_false :
 
 ## `filter_rows_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1478`](../QueryCardinality.v#L1478)
+Source: [`theories/FormalSQL/QueryCardinality.v:2238`](../QueryCardinality.v#L2238)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2167,7 +2986,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 24)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -2180,9 +2999,30 @@ Lemma filter_rows_success_length_le :
     (List.length output <= List.length rows)%nat.
 ```
 
+## `query_success_length_le_filter`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2270`](../QueryCardinality.v#L2270)
+
+Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `filter`, `cardinality`
+
+Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
+
+```rocq
+Lemma query_success_length_le_filter :
+  forall env formula input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env (QExpr_Filter formula input) bound.
+```
+
 ## `filter_cons_outcome_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1508`](../QueryCardinality.v#L1508)
+Source: [`theories/FormalSQL/QueryCardinality.v:2283`](../QueryCardinality.v#L2283)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2190,7 +3030,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome` (rank 52), `runtime` (rank 52), `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `outcome`, `runtime`, `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -2205,7 +3045,7 @@ Lemma filter_cons_outcome_success_Forall :
 
 ## `filter_rows_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1522`](../QueryCardinality.v#L1522)
+Source: [`theories/FormalSQL/QueryCardinality.v:2297`](../QueryCardinality.v#L2297)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2213,7 +3053,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -2229,7 +3069,7 @@ Lemma filter_rows_success_Forall :
 
 ## `filter_rows_success_Forall_accepted`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1553`](../QueryCardinality.v#L1553)
+Source: [`theories/FormalSQL/QueryCardinality.v:2328`](../QueryCardinality.v#L2328)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2237,7 +3077,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -2258,7 +3098,7 @@ Lemma filter_rows_success_Forall_accepted :
 
 ## `filter_rows_success_exact_count`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1590`](../QueryCardinality.v#L1590)
+Source: [`theories/FormalSQL/QueryCardinality.v:2365`](../QueryCardinality.v#L2365)
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2266,7 +3106,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -2286,7 +3126,7 @@ Lemma filter_rows_success_exact_count :
 
 ## `filter_rows_error_observable`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1631`](../QueryCardinality.v#L1631)
+Source: [`theories/FormalSQL/QueryCardinality.v:2406`](../QueryCardinality.v#L2406)
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for row cardinality and compositional bounds.
 
@@ -2294,7 +3134,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime` (rank 52), `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `runtime`, `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
 
@@ -2314,7 +3154,7 @@ Lemma filter_rows_error_observable :
 
 ## `eval_groups_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1649`](../QueryCardinality.v#L1649)
+Source: [`theories/FormalSQL/QueryCardinality.v:2424`](../QueryCardinality.v#L2424)
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2322,7 +3162,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 52), `cardinality` (rank 24)
+Cross-index: `grouping`, `cardinality`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `cardinality`
 
@@ -2337,7 +3177,7 @@ Lemma eval_groups_success_length_le :
 
 ## `int32_composite_primary_key_true_matches_at_most_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1689`](../QueryCardinality.v#L1689)
+Source: [`theories/FormalSQL/QueryCardinality.v:2464`](../QueryCardinality.v#L2464)
 
 Purpose/direction: States the int32 composite primary key true matches at most one law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -2345,7 +3185,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `cardinality` (rank 22), `schema` (rank 38), `scalar` (rank 52)
+Cross-index: `cardinality`, `schema`, `scalar`
 
 Search aliases: `cardinality composition`, `INTEGER`, `int32`, `integrity constraint`, `key`, `cardinality`
 
@@ -2371,7 +3211,7 @@ Lemma int32_composite_primary_key_true_matches_at_most_one :
 
 ## `functional_theta_join_chain_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1751`](../QueryCardinality.v#L1751)
+Source: [`theories/FormalSQL/QueryCardinality.v:2526`](../QueryCardinality.v#L2526)
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -2379,7 +3219,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `join` (rank 40), `cardinality` (rank 22)
+Cross-index: `join`, `cardinality`
 
 Search aliases: `cardinality composition`, `join`, `cardinality`
 
@@ -2393,7 +3233,7 @@ Theorem functional_theta_join_chain_length_le :
 
 ## `rows_attribute_conform_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1770`](../QueryCardinality.v#L1770)
+Source: [`theories/FormalSQL/QueryCardinality.v:2545`](../QueryCardinality.v#L2545)
 
 Purpose/direction: States the rows attribute conform filter law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -2401,7 +3241,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36), `schema` (rank 52)
+Cross-index: `filter`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `schema conformance`, `typing`, `cardinality`
 
@@ -2414,7 +3254,7 @@ Lemma rows_attribute_conform_filter :
 
 ## `NoDup_map_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1780`](../QueryCardinality.v#L1780)
+Source: [`theories/FormalSQL/QueryCardinality.v:2555`](../QueryCardinality.v#L2555)
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -2422,7 +3262,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36)
+Cross-index: `filter`, `cardinality`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `cardinality`
 
@@ -2435,7 +3275,7 @@ Lemma NoDup_map_filter :
 
 ## `primary_key_conforms_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1800`](../QueryCardinality.v#L1800)
+Source: [`theories/FormalSQL/QueryCardinality.v:2575`](../QueryCardinality.v#L2575)
 
 Purpose/direction: States the primary key conforms filter law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -2443,7 +3283,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
-Cross-index: `filter` (rank 46), `cardinality` (rank 36), `schema` (rank 38)
+Cross-index: `filter`, `cardinality`, `schema`
 
 Search aliases: `cardinality composition`, `filter`, `WHERE`, `integrity constraint`, `key`, `cardinality`
 
@@ -2456,7 +3296,7 @@ Lemma primary_key_conforms_filter :
 
 ## `functional_chain_fixed_first_composite_int32_group_length_2_32`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1817`](../QueryCardinality.v#L1817)
+Source: [`theories/FormalSQL/QueryCardinality.v:2592`](../QueryCardinality.v#L2592)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2464,7 +3304,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 50), `cardinality` (rank 20), `scalar` (rank 50)
+Cross-index: `grouping`, `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `INTEGER`, `int32`, `cardinality`
 
@@ -2490,7 +3330,7 @@ Theorem functional_chain_fixed_first_composite_int32_group_length_2_32 :
 
 ## `functional_chain_composite_int32_occurrence_length_2_64`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1865`](../QueryCardinality.v#L1865)
+Source: [`theories/FormalSQL/QueryCardinality.v:2640`](../QueryCardinality.v#L2640)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2498,7 +3338,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag` (rank 50), `cardinality` (rank 20), `scalar` (rank 50)
+Cross-index: `bag`, `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `INTEGER`, `int32`, `cardinality`, `multiplicity`
 
@@ -2519,7 +3359,7 @@ Theorem functional_chain_composite_int32_occurrence_length_2_64 :
 
 ## `functional_chain_composite_int32_group_length_2_64`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1897`](../QueryCardinality.v#L1897)
+Source: [`theories/FormalSQL/QueryCardinality.v:2672`](../QueryCardinality.v#L2672)
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2527,7 +3367,7 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `grouping` (rank 50), `cardinality` (rank 20), `scalar` (rank 50)
+Cross-index: `grouping`, `cardinality`, `scalar`
 
 Search aliases: `cardinality composition`, `GROUP BY`, `INTEGER`, `int32`, `cardinality`
 
