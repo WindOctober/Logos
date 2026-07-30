@@ -17293,26 +17293,18 @@ fn direct_exists_rejects_intrinsically_risky_window_join_children() {
 }
 
 #[test]
-fn direct_exists_allows_total_fixed_numeric_stddev_join_child() {
+fn direct_exists_rejects_error_capable_fixed_numeric_stddev_join_child() {
     let child = numeric_stddev_samp_query(attested_numeric_stddev_samp_call(), 12, 3).rel;
-    assert!(!rel_expr_may_raise_runtime(&child));
+    assert!(rel_expr_may_raise_runtime(&child));
 
     let lowered = lower_query(&scalar_exists_join_with_left_child(child));
-    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    assert_eq!(lowered.status, LoweringStatus::Blocked, "{lowered:#?}");
+    assert!(lowered.query_expr.is_none());
     assert!(
         lowered
             .diagnostics
             .iter()
-            .all(|diagnostic| { diagnostic.code != "exists_capped_runtime_path_not_supported" })
-    );
-    let module = emit_rocq_query_module_for_test(&scalar_exists_join_with_left_child(
-        numeric_stddev_samp_query(attested_numeric_stddev_samp_call(), 12, 3).rel,
-    ));
-    assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(
-        module
-            .rocq_module
-            .contains("AggregateStddevSampleNumericFixed")
+            .any(|diagnostic| { diagnostic.code == "exists_capped_runtime_path_not_supported" })
     );
 }
 
@@ -17420,8 +17412,8 @@ fn aggregate_runtime_risk_classifier_matches_active_overloads() {
         output: vec![decimal_column_unconstrained("RESULT")],
     };
     assert!(
-        !rel_expr_may_raise_runtime(&numeric_avg),
-        "fixed-NUMERIC AVG stays within its authoritative input range"
+        rel_expr_may_raise_runtime(&numeric_avg),
+        "fixed-NUMERIC AVG retains its FormalSQL finalization error path"
     );
 }
 

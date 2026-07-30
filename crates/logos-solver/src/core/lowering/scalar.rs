@@ -5799,11 +5799,11 @@ fn scalar_ast_may_raise_runtime_with_types(
 }
 
 /// Keep aggregate overloads whose active FormalSQL callback can report an
-/// error visible to query-shape decisions.  Integral/NUMERIC AVG and every
-/// admitted statistic overload are bounded by their authoritative input
-/// domain; floating AVG retains PostgreSQL's error-capable transition.
-/// Unknown AVG overloads fail closed instead of borrowing Calcite's
-/// non-authoritative result type.
+/// error visible to query-shape decisions.  Integral AVG and INTEGER
+/// statistics are total under the supported input authority, while
+/// floating/NUMERIC AVG and fixed-NUMERIC sample standard deviation retain
+/// error-capable finalization.  Unknown overloads fail closed instead of
+/// borrowing Calcite's non-authoritative result type.
 fn postgres_aggregate_function_may_raise_runtime(
     function: &str,
     argument_type: Option<FormalAttributeType>,
@@ -5812,14 +5812,9 @@ fn postgres_aggregate_function_may_raise_runtime(
         "count" | "sum" | "single_value" => true,
         "avg" => !matches!(
             argument_type,
-            Some(
-                FormalAttributeType::Int32
-                    | FormalAttributeType::Int64
-                    | FormalAttributeType::Z
-                    | FormalAttributeType::Numeric
-                    | FormalAttributeType::Decimal { .. }
-            )
+            Some(FormalAttributeType::Int32 | FormalAttributeType::Int64 | FormalAttributeType::Z)
         ),
+        "stddev_samp" | "stddev" => argument_type != Some(FormalAttributeType::Int32),
         _ => false,
     }
 }
