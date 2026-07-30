@@ -16964,6 +16964,32 @@ fn scalar_exists_filter_query(subquery: RelExpr) -> Query {
     }
 }
 
+fn scalar_exists_join_with_left_child(left: RelExpr) -> Query {
+    let right_output = vec![typed_column("RIGHT_VALUE", SqlType::Integer)];
+    let right = RelExpr::Values {
+        rows: vec![vec![scalar(ScalarAst::Literal {
+            raw: "1".to_owned(),
+        })]],
+        output: right_output.clone(),
+    };
+    let output = left
+        .output()
+        .iter()
+        .cloned()
+        .chain(right_output)
+        .collect::<Vec<_>>();
+    scalar_exists_filter_query(RelExpr::Join {
+        left: Box::new(left),
+        right: Box::new(right),
+        join_type: JoinType::Inner,
+        condition: scalar(ScalarAst::Literal {
+            raw: "true".to_owned(),
+        }),
+        correlations: Vec::new(),
+        output,
+    })
+}
+
 #[test]
 fn direct_exists_rejects_runtime_risky_union_below_transparent_projection() {
     let value = vec![typed_column("VALUE", SqlType::Integer)];
@@ -17092,6 +17118,239 @@ fn direct_exists_rejects_runtime_risky_native_outer_join_but_allows_total_paths(
     );
     assert!(module.rocq_module.contains("SExpr_Exists"));
     assert!(module.rocq_module.contains("QExpr_Join"));
+}
+
+#[test]
+fn direct_exists_rejects_inner_join_with_runtime_risky_dead_child_projection() {
+    let left_input_output = vec![typed_column("X", SqlType::Integer)];
+    let left_output = vec![typed_column("DEAD", SqlType::Integer)];
+    let left = RelExpr::Project {
+        input: Box::new(RelExpr::Values {
+            rows: vec![vec![scalar(ScalarAst::Literal {
+                raw: "1".to_owned(),
+            })]],
+            output: left_input_output,
+        }),
+        exprs: vec![scalar(ScalarAst::Call {
+            operator: "/".to_owned(),
+            op: ScalarOp::Divide,
+            args: vec![
+                ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                },
+                ScalarAst::Call {
+                    operator: "-".to_owned(),
+                    op: ScalarOp::Minus,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::Literal {
+                            raw: "1".to_owned(),
+                        },
+                    ],
+                },
+            ],
+        })],
+        correlations: Vec::new(),
+        output: left_output.clone(),
+    };
+    let right_output = vec![typed_column("Y", SqlType::Integer)];
+    let right = RelExpr::Values {
+        rows: vec![vec![scalar(ScalarAst::Literal {
+            raw: "1".to_owned(),
+        })]],
+        output: right_output.clone(),
+    };
+    let join = RelExpr::Join {
+        left: Box::new(left),
+        right: Box::new(right),
+        join_type: JoinType::Inner,
+        condition: scalar(ScalarAst::Literal {
+            raw: "true".to_owned(),
+        }),
+        correlations: Vec::new(),
+        output: left_output
+            .into_iter()
+            .chain(right_output)
+            .collect::<Vec<_>>(),
+    };
+
+    let lowered = lower_query(&scalar_exists_filter_query(join));
+
+    assert_eq!(lowered.status, LoweringStatus::Blocked, "{lowered:#?}");
+    assert!(lowered.query_expr.is_none());
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "exists_capped_runtime_path_not_supported" })
+    );
+}
+
+fn direct_exists_window_join_child(function: &str) -> RelExpr {
+    let input = vec![
+        typed_column("PARTITION_KEY", SqlType::Integer),
+        typed_column("ORDER_KEY", SqlType::Integer),
+        typed_column("AMOUNT", SqlType::BigInt),
+    ];
+    let (window, output) = if function.eq_ignore_ascii_case("RANK") {
+        (
+            default_range_rank_window(
+                vec![ScalarAst::InputRef { index: 0 }],
+                ScalarAst::InputRef { index: 1 },
+                SortDirection::Ascending,
+                SortNullDirection::Last,
+            ),
+            Column {
+                name: "WINDOW_VALUE".to_owned(),
+                ty: SqlType::BigInt,
+                nullable: false,
+            },
+        )
+    } else {
+        let args = if function.eq_ignore_ascii_case("ROW_NUMBER") {
+            Vec::new()
+        } else {
+            vec![ScalarAst::InputRef { index: 2 }]
+        };
+        let output = if function.eq_ignore_ascii_case("SUM") {
+            decimal_column_unconstrained("WINDOW_VALUE")
+        } else {
+            Column {
+                name: "WINDOW_VALUE".to_owned(),
+                ty: SqlType::BigInt,
+                nullable: !function.eq_ignore_ascii_case("ROW_NUMBER"),
+            }
+        };
+        (cumulative_rows_window(function, args), output)
+    };
+    RelExpr::Project {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["WINDOW_VALUES".to_owned()],
+            output: input,
+        }),
+        exprs: vec![window],
+        correlations: Vec::new(),
+        output: vec![output],
+    }
+}
+
+#[test]
+fn direct_exists_rejects_intrinsically_risky_window_join_children() {
+    for function in ["ROW_NUMBER", "SUM", "RANK"] {
+        let child = direct_exists_window_join_child(function);
+        assert!(
+            rel_expr_may_raise_runtime(&child),
+            "{function} must retain its intrinsic runtime error"
+        );
+        let lowered = lower_query(&scalar_exists_join_with_left_child(child));
+        assert_eq!(
+            lowered.status,
+            LoweringStatus::Blocked,
+            "{function}: {lowered:#?}"
+        );
+        assert!(lowered.query_expr.is_none(), "{function}");
+        assert!(
+            lowered.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "exists_capped_runtime_path_not_supported"
+            }),
+            "{function}: {:#?}",
+            lowered.diagnostics
+        );
+    }
+
+    let total_max = direct_exists_window_join_child("MAX");
+    assert!(!rel_expr_may_raise_runtime(&total_max));
+    let lowered = lower_query(&scalar_exists_join_with_left_child(total_max));
+    assert_eq!(
+        lowered.status,
+        LoweringStatus::Lowered,
+        "total MAX control: {lowered:#?}"
+    );
+    let module = emit_rocq_query_module_for_test(&scalar_exists_join_with_left_child(
+        direct_exists_window_join_child("MAX"),
+    ));
+    assert!(module.rocq_module.contains("SExpr_Exists"));
+    assert!(module.rocq_module.contains("WindowAggregateItem"));
+}
+
+#[test]
+fn direct_exists_rejects_fixed_numeric_stddev_join_child() {
+    let child = numeric_stddev_samp_query(attested_numeric_stddev_samp_call(), 12, 3).rel;
+    assert!(rel_expr_may_raise_runtime(&child));
+
+    let lowered = lower_query(&scalar_exists_join_with_left_child(child));
+    assert_eq!(lowered.status, LoweringStatus::Blocked, "{lowered:#?}");
+    assert!(lowered.query_expr.is_none());
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "exists_capped_runtime_path_not_supported" })
+    );
+}
+
+#[test]
+fn aggregate_runtime_risk_classifier_covers_formalsql_error_callbacks() {
+    for function in [
+        "COUNT",
+        "SUM",
+        "AVG",
+        "VAR_POP",
+        "VAR_SAMP",
+        "VARIANCE",
+        "STDDEV_POP",
+        "STDDEV_SAMP",
+        "STDDEV",
+        "SINGLE_VALUE",
+    ] {
+        let input = RelExpr::TableScan {
+            table: vec!["VALUES".to_owned()],
+            output: vec![typed_column("VALUE", SqlType::Integer)],
+        };
+        let rel = RelExpr::Aggregate {
+            input: Box::new(input),
+            group_keys: Vec::new(),
+            grouping_sets: vec![Vec::new()],
+            agg_calls: vec![AggregateCall {
+                raw: format!("{function}($0)"),
+                function: function.to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("RESULT", SqlType::Integer)],
+        };
+        assert!(
+            rel_expr_may_raise_runtime(&rel),
+            "{function} has an error-capable FormalSQL runtime callback"
+        );
+    }
+
+    for function in ["MIN", "MAX", "BIT_AND", "BIT_OR"] {
+        let input = RelExpr::TableScan {
+            table: vec!["VALUES".to_owned()],
+            output: vec![typed_column("VALUE", SqlType::Integer)],
+        };
+        let rel = RelExpr::Aggregate {
+            input: Box::new(input),
+            group_keys: Vec::new(),
+            grouping_sets: vec![Vec::new()],
+            agg_calls: vec![AggregateCall {
+                raw: format!("{function}($0)"),
+                function: function.to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                filter: None,
+            }],
+            output: vec![typed_column("RESULT", SqlType::Integer)],
+        };
+        assert!(
+            !rel_expr_may_raise_runtime(&rel),
+            "{function} over a total INTEGER input has no intrinsic runtime error"
+        );
+    }
 }
 
 #[test]
@@ -23707,6 +23966,40 @@ fn cumulative_rows_window(function: &str, args: Vec<ScalarAst>) -> ScalarExpr {
             },
         },
         source: None,
+    }
+}
+
+#[test]
+fn runtime_risk_tracks_error_capable_window_functions() {
+    let input = RelExpr::TableScan {
+        table: vec!["measurements".to_owned()],
+        output: vec![
+            typed_column("partition_key", SqlType::Integer),
+            typed_column("order_key", SqlType::Integer),
+            typed_column("value", SqlType::Integer),
+        ],
+    };
+
+    for (function, args) in [
+        ("COUNT", vec![ScalarAst::InputRef { index: 2 }]),
+        ("SUM", vec![ScalarAst::InputRef { index: 2 }]),
+        ("AVG", vec![ScalarAst::InputRef { index: 2 }]),
+        ("ROW_NUMBER", Vec::new()),
+        ("RANK", Vec::new()),
+    ] {
+        let window = cumulative_rows_window(function, args);
+        assert!(
+            scalar_ast_may_raise_runtime_for_input(&window.parsed, &input),
+            "{function} must retain its transition/position error path"
+        );
+    }
+
+    for function in ["MIN", "MAX"] {
+        let window = cumulative_rows_window(function, vec![ScalarAst::InputRef { index: 2 }]);
+        assert!(
+            !scalar_ast_may_raise_runtime_for_input(&window.parsed, &input),
+            "{function} over total keys and arguments has no intrinsic runtime error"
+        );
     }
 }
 

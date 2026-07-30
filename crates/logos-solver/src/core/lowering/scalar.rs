@@ -663,7 +663,7 @@ impl LoweringContext {
             self.error(
                 path,
                 "exists_capped_runtime_path_not_supported",
-                "Direct EXISTS over a runtime-error-capable UNION or native outer/semi/anti join is conservatively unsupported. FormalSQL currently evaluates those operators exhaustively, while PostgreSQL may stop after the first existence witness and skip later runtime errors.",
+                "Direct EXISTS over a runtime-error-capable UNION or join is conservatively unsupported. FormalSQL currently evaluates those operators exhaustively, while PostgreSQL may stop after the first existence witness and skip dead target or predicate errors.",
             );
             return None;
         }
@@ -5790,13 +5790,36 @@ fn scalar_ast_may_raise_runtime_with_types(
     }
 }
 
-/// PostgreSQL implements COUNT and COUNT(*) window transitions in signed
-/// BIGINT, exactly like their aggregate counterparts.  A legal partition can
-/// therefore overflow even when every argument, partition key, and ordering
-/// key is itself total.  Keep that intrinsic transition risk visible to every
-/// enclosing declarative expression or query operator.
+/// Keep every aggregate family whose active FormalSQL runtime callback can
+/// report an error visible to query-shape decisions.  This classifier is
+/// deliberately name-level: when one supported overload can fail, treating a
+/// total overload conservatively is preferable to proving totality from
+/// Calcite's non-authoritative type alone.
+fn postgres_aggregate_function_may_raise_runtime(function: &str) -> bool {
+    matches!(
+        function.to_ascii_lowercase().as_str(),
+        "count"
+            | "sum"
+            | "avg"
+            | "var_pop"
+            | "var_samp"
+            | "variance"
+            | "stddev_pop"
+            | "stddev_samp"
+            | "stddev"
+            | "single_value"
+    )
+}
+
+/// PostgreSQL ROW_NUMBER/RANK embed an unbounded logical position in signed
+/// BIGINT, while supported window aggregates use the same error-capable
+/// transition callbacks as ordinary aggregates.  Preserve those intrinsic
+/// errors even when arguments, partition keys, ordering keys, and frames are
+/// themselves total.
 fn postgres_window_function_may_raise_runtime(function: &str) -> bool {
-    function.eq_ignore_ascii_case("count")
+    function.eq_ignore_ascii_case("row_number")
+        || function.eq_ignore_ascii_case("rank")
+        || postgres_aggregate_function_may_raise_runtime(function)
 }
 
 /// Window-frame offsets are evaluated as SQL expressions and PostgreSQL then
@@ -6380,13 +6403,8 @@ fn exists_subquery_has_incomplete_capped_runtime_path(rel: &RelExpr) -> bool {
                     .iter()
                     .any(exists_subquery_has_incomplete_capped_runtime_path)
         }
-        RelExpr::Join {
-            left,
-            right,
-            join_type,
-            ..
-        } => {
-            (!matches!(join_type, JoinType::Inner) && rel_expr_may_raise_runtime(rel))
+        RelExpr::Join { left, right, .. } => {
+            rel_expr_may_raise_runtime(rel)
                 || exists_subquery_has_incomplete_capped_runtime_path(left)
                 || exists_subquery_has_incomplete_capped_runtime_path(right)
         }
@@ -6435,13 +6453,11 @@ pub(super) fn rel_expr_may_raise_runtime(rel: &RelExpr) -> bool {
         } => {
             rel_expr_may_raise_runtime(input)
                 || agg_calls.iter().any(|call| {
-                    matches!(
-                        call.function.to_ascii_lowercase().as_str(),
-                        "count" | "sum" | "avg" | "single_value"
-                    ) || call
-                        .args
-                        .iter()
-                        .any(|expr| scalar_ast_may_raise_runtime_for_input(&expr.parsed, input))
+                    postgres_aggregate_function_may_raise_runtime(&call.function)
+                        || call
+                            .args
+                            .iter()
+                            .any(|expr| scalar_ast_may_raise_runtime_for_input(&expr.parsed, input))
                         || call.filter.as_ref().is_some_and(|expr| {
                             scalar_ast_may_raise_runtime_for_input(&expr.parsed, input)
                         })
