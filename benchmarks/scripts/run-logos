@@ -15614,7 +15614,7 @@ def cleanup_case_proof_containers(
     inspect_format = (
         '{{printf "%s|%s|%s|%s" .Id .Name '
         f'(index .Config.Labels "{PROOF_CONTAINER_MANAGED_LABEL}") '
-        f'(index .Config.Labels "{PROOF_CONTAINER_TOKEN_LABEL}")}}'
+        f'(index .Config.Labels "{PROOF_CONTAINER_TOKEN_LABEL}")}}}}'
     )
     for identity_path in sorted(identity_paths):
         try:

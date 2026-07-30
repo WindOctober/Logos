@@ -2340,6 +2340,12 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             inspect_argv = run.call_args_list[0].args[0]
             self.assertEqual(inspect_argv[:3], ["docker", "inspect", "--format"])
+            self.assertEqual(
+                inspect_argv[3],
+                '{{printf "%s|%s|%s|%s" .Id .Name '
+                '(index .Config.Labels "org.logos.proof-agent.managed") '
+                '(index .Config.Labels "org.logos.proof-agent.cleanup-token")}}',
+            )
             self.assertEqual(inspect_argv[-1], name)
             self.assertEqual(
                 run.call_args_list[1].args[0],
