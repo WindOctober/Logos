@@ -18,9 +18,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--tool",
-        choices=("sqlsolver", "qed", "cosette"),
+        choices=("logos", "sqlsolver", "qed", "cosette"),
         default="sqlsolver",
-        help="Tool-facing generated profile to materialize.",
+        help=(
+            "Generated profile to materialize. Logos is the independent "
+            "PostgreSQL/Calcite authority profile."
+        ),
     )
     parser.add_argument(
         "--target",
@@ -32,7 +35,7 @@ def main() -> int:
         "--output-root",
         default=DEFAULT_OUTPUT_ROOT,
         help=(
-            "Generated output root. For SQLSolver, QED, and Cosette, the script writes "
+            "Generated output root. For Logos, SQLSolver, QED, and Cosette, the script writes "
             "<output-root>/<tool>/{wetune-issues,nonwetune-flat}."
         ),
     )
@@ -62,6 +65,14 @@ def main() -> int:
         action="store_true",
         help="For QED only: write qed.sql without invoking PaperTools/scripts/qed-parser.",
     )
+    parser.add_argument(
+        "--verify-non-rbot-baseline",
+        action="store_true",
+        help=(
+            "For Logos only: verify all 1,320 generated non-R-Bot files against "
+            "the supervisor-owned campaign baseline."
+        ),
+    )
     args = parser.parse_args()
 
     output_root = resolve(args.output_root)
@@ -87,6 +98,27 @@ def resolve(path: str | Path) -> Path:
 
 
 def build_commands(args: argparse.Namespace, output_root: Path) -> list[list[str]]:
+    if args.tool == "logos":
+        command = [
+            sys.executable,
+            str(LOGOS_ROOT / "benchmarks/adapters/materializers/materialize_logos.py"),
+            "--output-dir",
+            str(output_root / "logos"),
+            "--target",
+            args.target,
+        ]
+        if args.force:
+            command.append("--force")
+        for benchmark in args.benchmark or []:
+            command.extend(["--benchmark", benchmark])
+        for case in args.case or []:
+            command.extend(["--case", case])
+        if args.limit is not None:
+            command.extend(["--limit", str(args.limit)])
+        if args.verify_non_rbot_baseline:
+            command.append("--verify-non-rbot-baseline")
+        return [command]
+
     if args.tool == "cosette":
         if args.target == "wetune":
             input_root = output_root / "sqlsolver/wetune-issues"
