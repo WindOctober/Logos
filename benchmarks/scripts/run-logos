@@ -15270,9 +15270,19 @@ _LIBC = ctypes.CDLL(None, use_errno=True)
 
 
 def pidfd_open(process_id: int) -> int | None:
+    python_function = getattr(os, "pidfd_open", None)
+    if python_function is not None:
+        try:
+            return python_function(process_id, 0)
+        except ProcessLookupError:
+            return None
+        except OSError as error:
+            raise RunnerError(
+                f"cannot open pidfd for case process supervisor {process_id}: {error}"
+            ) from error
     function = getattr(_LIBC, "pidfd_open", None)
     if function is None:
-        raise RunnerError("host libc does not provide pidfd_open")
+        raise RunnerError("host Python and libc do not provide pidfd_open")
     function.argtypes = (ctypes.c_int, ctypes.c_uint)
     function.restype = ctypes.c_int
     descriptor = function(process_id, 0)
@@ -15288,9 +15298,20 @@ def pidfd_open(process_id: int) -> int | None:
 
 
 def pidfd_send_signal(descriptor: int, sig: signal.Signals) -> bool:
+    python_function = getattr(signal, "pidfd_send_signal", None)
+    if python_function is not None:
+        try:
+            python_function(descriptor, int(sig), None, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError as error:
+            raise RunnerError(
+                f"cannot signal identity-bound case process supervisor: {error}"
+            ) from error
     function = getattr(_LIBC, "pidfd_send_signal", None)
     if function is None:
-        raise RunnerError("host libc does not provide pidfd_send_signal")
+        raise RunnerError("host Python and libc do not provide pidfd_send_signal")
     function.argtypes = (
         ctypes.c_int,
         ctypes.c_int,
