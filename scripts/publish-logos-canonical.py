@@ -29,9 +29,9 @@ except ModuleNotFoundError:
 LOGOS_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH = "scripts/logos_source_tree_digest.py"
 SOURCE_TREE_DIGEST_HELPER_SHA256 = (
-    "cc3c1eff59c06f4d9209fb72f04773737fb024d8de2cac2d3969afcaab596a56"
+    "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55"
 )
-SOURCE_TREE_DIGEST_HELPER_BYTES = 7_645
+SOURCE_TREE_DIGEST_HELPER_BYTES = 7_880
 
 
 def load_source_tree_digest_helper() -> types.ModuleType:

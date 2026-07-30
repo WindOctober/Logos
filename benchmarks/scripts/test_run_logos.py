@@ -6543,9 +6543,9 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             {
                 "path": "scripts/logos_source_tree_digest.py",
                 "sha256": (
-                    "cc3c1eff59c06f4d9209fb72f04773737fb024d8de2cac2d3969afcaab596a56"
+                    "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55"
                 ),
-                "bytes": 7645,
+                "bytes": 7880,
                 "executionPolicy": "exact-bytes-loaded-before-module-execution-v1",
             },
         )
@@ -7026,7 +7026,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                                 "path": "scripts/logos_source_tree_digest.py",
                                 "kind": "file",
                                 "sha256": "0" * 64,
-                                "bytes": 7645,
+                                "bytes": 7880,
                             }
                         ]
                     }

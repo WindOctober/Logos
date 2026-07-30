@@ -117,6 +117,20 @@ class SourceTreeDigestTests(unittest.TestCase):
             self.assertTrue(formal_sql["dirty"])
             self.assertEqual(formal_sql["entries"][0]["path"], "Semantics.v")
 
+    def test_runner_and_digest_helper_are_bound_even_when_clean(self) -> None:
+        manifest = build_manifest(CLI.parents[1])
+        entries = {
+            entry["path"]: entry for entry in manifest["repository"]["entries"]
+        }
+        for relative in (
+            "benchmarks/scripts/run-logos",
+            "scripts/logos_source_tree_digest.py",
+        ):
+            self.assertEqual(entries[relative]["kind"], "file")
+            self.assertEqual(
+                entries[relative]["sha256"], sha256_file(CLI.parents[1] / relative)
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

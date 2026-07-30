@@ -37,8 +37,8 @@ SCOPE = (
 INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/sqlsolver"
 SOURCE_TREE_DIGEST_HELPER_RECORD = {
     "path": "scripts/logos_source_tree_digest.py",
-    "sha256": "cc3c1eff59c06f4d9209fb72f04773737fb024d8de2cac2d3969afcaab596a56",
-    "bytes": 7645,
+    "sha256": "3ed6d7123ada5585018afcd5c575bedbe564c5c0cb296bc6fb85b1119a509f55",
+    "bytes": 7880,
     "executionPolicy": "exact-bytes-loaded-before-module-execution-v1",
 }
 INPUT_MANIFEST_ALGORITHM = "logos-frozen-input-manifest-v1"

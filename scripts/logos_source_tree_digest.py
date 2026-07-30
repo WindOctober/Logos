@@ -46,6 +46,10 @@ EXCLUDED_NAMES = {
     "Makefile.rocq.conf",
 }
 EXCLUDED_SUFFIXES = (".aux", ".glob", ".vo", ".vok", ".vos")
+ALWAYS_BOUND_PATHS = (
+    "benchmarks/scripts/run-logos",
+    "scripts/logos_source_tree_digest.py",
+)
 
 
 class SourceTreeError(RuntimeError):
@@ -147,6 +151,11 @@ def repository_manifest(repository: Path, workspace_relative: str) -> dict[str, 
             .decode("utf-8", errors="surrogateescape")
             .split("\0"),
         )
+    )
+    changed.update(
+        relative
+        for relative in ALWAYS_BOUND_PATHS
+        if (repository / relative).is_file()
     )
     entries = [
         source_path_record(repository, path)
