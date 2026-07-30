@@ -15543,7 +15543,7 @@ fn scalar_query_runtime_risk_requires_possible_second_row_or_child_error() {
         &outer
     ));
 
-    for function in ["COUNT", "SUM", "AVG", "SINGLE_VALUE"] {
+    for function in ["COUNT", "SUM", "SINGLE_VALUE"] {
         let risky_singleton = RelExpr::Aggregate {
             input: Box::new(inner_table()),
             group_keys: Vec::new(),
@@ -15563,6 +15563,25 @@ fn scalar_query_runtime_risk_requires_possible_second_row_or_child_error() {
             "{function} must retain its transition/finalization risk"
         );
     }
+
+    let total_integral_avg = RelExpr::Aggregate {
+        input: Box::new(inner_table()),
+        group_keys: Vec::new(),
+        grouping_sets: vec![Vec::new()],
+        agg_calls: vec![AggregateCall {
+            raw: "AVG($0)".to_owned(),
+            function: "AVG".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: vec![decimal_column_unconstrained("RESULT")],
+    };
+    assert!(!scalar_ast_may_raise_runtime_for_input(
+        &scalar_query_ast(total_integral_avg),
+        &outer
+    ));
 
     let risky_wrapper = RelExpr::Project {
         input: Box::new(singleton_max_subquery(inner_table())),
@@ -17274,35 +17293,32 @@ fn direct_exists_rejects_intrinsically_risky_window_join_children() {
 }
 
 #[test]
-fn direct_exists_rejects_fixed_numeric_stddev_join_child() {
+fn direct_exists_allows_total_fixed_numeric_stddev_join_child() {
     let child = numeric_stddev_samp_query(attested_numeric_stddev_samp_call(), 12, 3).rel;
-    assert!(rel_expr_may_raise_runtime(&child));
+    assert!(!rel_expr_may_raise_runtime(&child));
 
     let lowered = lower_query(&scalar_exists_join_with_left_child(child));
-    assert_eq!(lowered.status, LoweringStatus::Blocked, "{lowered:#?}");
-    assert!(lowered.query_expr.is_none());
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
     assert!(
         lowered
             .diagnostics
             .iter()
-            .any(|diagnostic| { diagnostic.code == "exists_capped_runtime_path_not_supported" })
+            .all(|diagnostic| { diagnostic.code != "exists_capped_runtime_path_not_supported" })
+    );
+    let module = emit_rocq_query_module_for_test(&scalar_exists_join_with_left_child(
+        numeric_stddev_samp_query(attested_numeric_stddev_samp_call(), 12, 3).rel,
+    ));
+    assert!(module.rocq_module.contains("SExpr_Exists"));
+    assert!(
+        module
+            .rocq_module
+            .contains("AggregateStddevSampleNumericFixed")
     );
 }
 
 #[test]
-fn aggregate_runtime_risk_classifier_covers_formalsql_error_callbacks() {
-    for function in [
-        "COUNT",
-        "SUM",
-        "AVG",
-        "VAR_POP",
-        "VAR_SAMP",
-        "VARIANCE",
-        "STDDEV_POP",
-        "STDDEV_SAMP",
-        "STDDEV",
-        "SINGLE_VALUE",
-    ] {
+fn aggregate_runtime_risk_classifier_matches_active_overloads() {
+    for function in ["COUNT", "SUM", "SINGLE_VALUE"] {
         let input = RelExpr::TableScan {
             table: vec!["VALUES".to_owned()],
             output: vec![typed_column("VALUE", SqlType::Integer)],
@@ -17323,11 +17339,23 @@ fn aggregate_runtime_risk_classifier_covers_formalsql_error_callbacks() {
         };
         assert!(
             rel_expr_may_raise_runtime(&rel),
-            "{function} has an error-capable FormalSQL runtime callback"
+            "{function} has an admitted error-capable overload"
         );
     }
 
-    for function in ["MIN", "MAX", "BIT_AND", "BIT_OR"] {
+    for function in [
+        "AVG",
+        "VAR_POP",
+        "VAR_SAMP",
+        "VARIANCE",
+        "STDDEV_POP",
+        "STDDEV_SAMP",
+        "STDDEV",
+        "MIN",
+        "MAX",
+        "BIT_AND",
+        "BIT_OR",
+    ] {
         let input = RelExpr::TableScan {
             table: vec!["VALUES".to_owned()],
             output: vec![typed_column("VALUE", SqlType::Integer)],
@@ -17348,9 +17376,88 @@ fn aggregate_runtime_risk_classifier_covers_formalsql_error_callbacks() {
         };
         assert!(
             !rel_expr_may_raise_runtime(&rel),
-            "{function} over a total INTEGER input has no intrinsic runtime error"
+            "{function}'s admitted INTEGER callback is total"
         );
     }
+
+    let float_avg = RelExpr::Aggregate {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["VALUES".to_owned()],
+            output: vec![typed_column("VALUE", SqlType::Float)],
+        }),
+        group_keys: Vec::new(),
+        grouping_sets: vec![Vec::new()],
+        agg_calls: vec![AggregateCall {
+            raw: "AVG($0)".to_owned(),
+            function: "AVG".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: vec![typed_column("RESULT", SqlType::Double)],
+    };
+    assert!(
+        rel_expr_may_raise_runtime(&float_avg),
+        "floating AVG retains its range-error callback"
+    );
+
+    let numeric_avg = RelExpr::Aggregate {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["VALUES".to_owned()],
+            output: vec![decimal_column("VALUE", 12, 3)],
+        }),
+        group_keys: Vec::new(),
+        grouping_sets: vec![Vec::new()],
+        agg_calls: vec![AggregateCall {
+            raw: "AVG($0)".to_owned(),
+            function: "AVG".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: vec![decimal_column_unconstrained("RESULT")],
+    };
+    assert!(
+        !rel_expr_may_raise_runtime(&numeric_avg),
+        "fixed-NUMERIC AVG stays within its authoritative input range"
+    );
+}
+
+#[test]
+fn direct_exists_allows_total_integral_avg_join_child() {
+    let child = RelExpr::Aggregate {
+        input: Box::new(RelExpr::TableScan {
+            table: vec!["INTEGER_VALUES".to_owned()],
+            output: vec![typed_column("VALUE", SqlType::Integer)],
+        }),
+        group_keys: Vec::new(),
+        grouping_sets: vec![Vec::new()],
+        agg_calls: vec![AggregateCall {
+            raw: "AVG($0)".to_owned(),
+            function: "AVG".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: vec![decimal_column_unconstrained("AVERAGE_VALUE")],
+    };
+    assert!(!rel_expr_may_raise_runtime(&child));
+
+    let query = scalar_exists_join_with_left_child(child);
+    let lowered = lower_query(&query);
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.code != "exists_capped_runtime_path_not_supported" })
+    );
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("SExpr_Exists"));
+    assert!(module.rocq_module.contains("AggregateAverageInt32Numeric"));
 }
 
 #[test]
@@ -23983,7 +24090,6 @@ fn runtime_risk_tracks_error_capable_window_functions() {
     for (function, args) in [
         ("COUNT", vec![ScalarAst::InputRef { index: 2 }]),
         ("SUM", vec![ScalarAst::InputRef { index: 2 }]),
-        ("AVG", vec![ScalarAst::InputRef { index: 2 }]),
         ("ROW_NUMBER", Vec::new()),
         ("RANK", Vec::new()),
     ] {
@@ -23994,7 +24100,7 @@ fn runtime_risk_tracks_error_capable_window_functions() {
         );
     }
 
-    for function in ["MIN", "MAX"] {
+    for function in ["AVG", "MIN", "MAX"] {
         let window = cumulative_rows_window(function, vec![ScalarAst::InputRef { index: 2 }]);
         assert!(
             !scalar_ast_may_raise_runtime_for_input(&window.parsed, &input),

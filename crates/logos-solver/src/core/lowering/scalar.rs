@@ -5687,7 +5687,11 @@ pub(super) fn scalar_ast_may_raise_runtime(ast: &ScalarAst) -> bool {
         ScalarAst::TypeAnnotation { expr, .. } => scalar_ast_may_raise_runtime(expr),
         ScalarAst::RelSubquery { rel } => !scalar_subquery_rel_is_provably_runtime_total(rel),
         ScalarAst::Window { parsed } => {
-            postgres_window_function_may_raise_runtime(&parsed.function)
+            let argument_type = parsed
+                .args
+                .first()
+                .and_then(|arg| static_cast_operand_type(arg, &[]));
+            postgres_window_function_may_raise_runtime(&parsed.function, argument_type)
                 || parsed.args.iter().any(scalar_ast_may_raise_runtime)
                 || parsed.partition_by.iter().any(scalar_ast_may_raise_runtime)
                 || parsed
@@ -5767,7 +5771,11 @@ fn scalar_ast_may_raise_runtime_with_types(
         }
         ScalarAst::RelSubquery { rel } => !scalar_subquery_rel_is_provably_runtime_total(rel),
         ScalarAst::Window { parsed } => {
-            postgres_window_function_may_raise_runtime(&parsed.function)
+            let argument_type = parsed
+                .args
+                .first()
+                .and_then(|arg| static_cast_operand_type(arg, input_types));
+            postgres_window_function_may_raise_runtime(&parsed.function, argument_type)
                 || parsed
                     .args
                     .iter()
@@ -5790,25 +5798,30 @@ fn scalar_ast_may_raise_runtime_with_types(
     }
 }
 
-/// Keep every aggregate family whose active FormalSQL runtime callback can
-/// report an error visible to query-shape decisions.  This classifier is
-/// deliberately name-level: when one supported overload can fail, treating a
-/// total overload conservatively is preferable to proving totality from
-/// Calcite's non-authoritative type alone.
-fn postgres_aggregate_function_may_raise_runtime(function: &str) -> bool {
-    matches!(
-        function.to_ascii_lowercase().as_str(),
-        "count"
-            | "sum"
-            | "avg"
-            | "var_pop"
-            | "var_samp"
-            | "variance"
-            | "stddev_pop"
-            | "stddev_samp"
-            | "stddev"
-            | "single_value"
-    )
+/// Keep aggregate overloads whose active FormalSQL callback can report an
+/// error visible to query-shape decisions.  Integral/NUMERIC AVG and every
+/// admitted statistic overload are bounded by their authoritative input
+/// domain; floating AVG retains PostgreSQL's error-capable transition.
+/// Unknown AVG overloads fail closed instead of borrowing Calcite's
+/// non-authoritative result type.
+fn postgres_aggregate_function_may_raise_runtime(
+    function: &str,
+    argument_type: Option<FormalAttributeType>,
+) -> bool {
+    match function.to_ascii_lowercase().as_str() {
+        "count" | "sum" | "single_value" => true,
+        "avg" => !matches!(
+            argument_type,
+            Some(
+                FormalAttributeType::Int32
+                    | FormalAttributeType::Int64
+                    | FormalAttributeType::Z
+                    | FormalAttributeType::Numeric
+                    | FormalAttributeType::Decimal { .. }
+            )
+        ),
+        _ => false,
+    }
 }
 
 /// PostgreSQL ROW_NUMBER/RANK embed an unbounded logical position in signed
@@ -5816,10 +5829,13 @@ fn postgres_aggregate_function_may_raise_runtime(function: &str) -> bool {
 /// transition callbacks as ordinary aggregates.  Preserve those intrinsic
 /// errors even when arguments, partition keys, ordering keys, and frames are
 /// themselves total.
-fn postgres_window_function_may_raise_runtime(function: &str) -> bool {
+fn postgres_window_function_may_raise_runtime(
+    function: &str,
+    argument_type: Option<FormalAttributeType>,
+) -> bool {
     function.eq_ignore_ascii_case("row_number")
         || function.eq_ignore_ascii_case("rank")
-        || postgres_aggregate_function_may_raise_runtime(function)
+        || postgres_aggregate_function_may_raise_runtime(function, argument_type)
 }
 
 /// Window-frame offsets are evaluated as SQL expressions and PostgreSQL then
@@ -6451,9 +6467,14 @@ pub(super) fn rel_expr_may_raise_runtime(rel: &RelExpr) -> bool {
         RelExpr::Aggregate {
             input, agg_calls, ..
         } => {
+            let input_types = runtime_risk_authoritative_output_types(input);
             rel_expr_may_raise_runtime(input)
                 || agg_calls.iter().any(|call| {
-                    postgres_aggregate_function_may_raise_runtime(&call.function)
+                    let argument_type = call
+                        .args
+                        .first()
+                        .and_then(|arg| static_cast_operand_type(&arg.parsed, &input_types));
+                    postgres_aggregate_function_may_raise_runtime(&call.function, argument_type)
                         || call
                             .args
                             .iter()
