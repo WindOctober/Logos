@@ -1112,10 +1112,8 @@ def argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Explicitly authorize the exact frozen 389-case campaign without a "
-            "current-source cohort16 gate. This recorded override permits jobs=32 "
-            "or jobs=64 and requires case-timeout=4h, outcome-unconditional "
-            "verification, and PostgreSQL. The 64-worker mode is a noncanonical "
-            "throughput experiment."
+            "current-source cohort16 gate. This recorded override requires jobs=32, "
+            "case-timeout=4h, outcome-unconditional verification, and PostgreSQL."
         ),
     )
     parser.add_argument(
@@ -4709,10 +4707,8 @@ def validate_frozen_full_launch_request(
             )
         return
     errors = []
-    allowed_jobs = (32, 64) if args.allow_ungated_full_run else (32,)
-    if args.jobs not in allowed_jobs:
-        expected_jobs = "32 or 64" if args.allow_ungated_full_run else "32"
-        errors.append(f"--jobs must be {expected_jobs}, got {args.jobs}")
+    if args.jobs != 32:
+        errors.append(f"--jobs must be 32, got {args.jobs}")
     expected_timeout = 14400 if args.allow_ungated_full_run else 3600
     if args.case_timeout != expected_timeout:
         errors.append(

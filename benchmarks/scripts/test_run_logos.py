@@ -7665,25 +7665,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         namespace["validate_frozen_full_launch_request"](
             legacy_root, cases, cases, explicit_four_hour
         )
-        explicit_four_hour_64 = parser.parse_args(
-            [
-                "--jobs",
-                "64",
-                "--case-timeout",
-                "4h",
-                "--postgres-url",
-                "postgresql://logos@127.0.0.1:55490/postgres",
-                "--allow-ungated-full-run",
-            ]
-        )
-        namespace["validate_frozen_full_launch_request"](
-            legacy_root, cases, cases, explicit_four_hour_64
-        )
-        explicit_four_hour_64.jobs = 63
-        with self.assertRaisesRegex(namespace["RunnerError"], "32 or 64"):
-            namespace["validate_frozen_full_launch_request"](
-                legacy_root, cases, cases, explicit_four_hour_64
-            )
         explicit_four_hour.case_timeout = 3600
         with self.assertRaises(namespace["RunnerError"]):
             namespace["validate_frozen_full_launch_request"](
