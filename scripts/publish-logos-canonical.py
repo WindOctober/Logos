@@ -32,12 +32,23 @@ SOURCE_TREE_DIGEST_HELPER_SHA256 = (
     "a2b651399e0103adac71a11822803979c535ac8bc897479a54c4366bd5e44b81"
 )
 SOURCE_TREE_DIGEST_HELPER_BYTES = 8_009
+ENVIRONMENT_HELPER_RELATIVE_PATH = "scripts/logos_env.py"
+ENVIRONMENT_HELPER_SHA256 = (
+    "ab22c326742b390c8c8912e5f87e14b840f2c9499fdde8b8be18ddc6548feebb"
+)
+ENVIRONMENT_HELPER_BYTES = 2_806
 
 
-def load_source_tree_digest_helper() -> types.ModuleType:
+def load_pinned_python_helper(
+    relative_path: str,
+    expected_sha256: str,
+    expected_bytes: int,
+    module_name: str,
+    description: str,
+) -> types.ModuleType:
     """Execute only helper bytes transitively pinned by this publisher."""
 
-    path = LOGOS_ROOT / SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH
+    path = LOGOS_ROOT / relative_path
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = -1
     try:
@@ -45,29 +56,29 @@ def load_source_tree_digest_helper() -> types.ModuleType:
         metadata = os.fstat(descriptor)
         if (
             not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_size != SOURCE_TREE_DIGEST_HELPER_BYTES
+            or metadata.st_size != expected_bytes
         ):
             raise RuntimeError(
-                "source-tree digest helper is not the immutable expected regular file"
+                f"{description} is not the immutable expected regular file"
             )
         with os.fdopen(descriptor, "rb", closefd=True) as stream:
             descriptor = -1
             payload = stream.read()
     except OSError as error:
         raise RuntimeError(
-            f"cannot load immutable source-tree digest helper: {error}"
+            f"cannot load immutable {description}: {error}"
         ) from error
     finally:
         if descriptor >= 0:
             os.close(descriptor)
     if (
-        len(payload) != SOURCE_TREE_DIGEST_HELPER_BYTES
-        or hashlib.sha256(payload).hexdigest() != SOURCE_TREE_DIGEST_HELPER_SHA256
+        len(payload) != expected_bytes
+        or hashlib.sha256(payload).hexdigest() != expected_sha256
     ):
         raise RuntimeError(
-            "source-tree digest helper differs from the immutable publisher binding"
+            f"{description} differs from the immutable publisher binding"
         )
-    module = types.ModuleType("logos_source_tree_digest")
+    module = types.ModuleType(module_name)
     module.__file__ = str(path)
     module.__package__ = ""
     sys.modules[module.__name__] = module
@@ -75,18 +86,41 @@ def load_source_tree_digest_helper() -> types.ModuleType:
     return module
 
 
-_SOURCE_TREE_DIGEST_HELPER = load_source_tree_digest_helper()
+_SOURCE_TREE_DIGEST_HELPER = load_pinned_python_helper(
+    SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH,
+    SOURCE_TREE_DIGEST_HELPER_SHA256,
+    SOURCE_TREE_DIGEST_HELPER_BYTES,
+    "logos_source_tree_digest",
+    "source-tree digest helper",
+)
 SourceTreeError = _SOURCE_TREE_DIGEST_HELPER.SourceTreeError
 build_source_tree_manifest = _SOURCE_TREE_DIGEST_HELPER.build_manifest
 source_tree_manifest_sha256 = _SOURCE_TREE_DIGEST_HELPER.manifest_sha256
 
+_ENVIRONMENT_HELPER = load_pinned_python_helper(
+    ENVIRONMENT_HELPER_RELATIVE_PATH,
+    ENVIRONMENT_HELPER_SHA256,
+    ENVIRONMENT_HELPER_BYTES,
+    "logos_env",
+    "environment helper",
+)
+LogosEnvironmentError = _ENVIRONMENT_HELPER.LogosEnvironmentError
+configured_path = _ENVIRONMENT_HELPER.configured_path
+load_logos_env = _ENVIRONMENT_HELPER.load_logos_env
+load_logos_env(LOGOS_ROOT)
 
-WORKFLOW_ROOT = LOGOS_ROOT.parent
+
 RUNNER_PATH = LOGOS_ROOT / "benchmarks/scripts/run-logos"
 _RUNNER_VALIDATORS: dict[str, Any] | None = None
-DEFAULT_OUTPUT = WORKFLOW_ROOT / "FinalExperiment/Logos"
-FROZEN_SUMMARY_SHA256 = (
-    "be93b4fb307812067194ca55f1b4b9394d2dbdb04d0bf985dcbb03e2f86abcbe"
+DEFAULT_OUTPUT = configured_path(
+    LOGOS_ROOT,
+    "LOGOS_FINAL_EXPERIMENT_DIR",
+    default=LOGOS_ROOT / "var/final-experiment/Logos",
+)
+assert DEFAULT_OUTPUT is not None
+COHORT_AUTHORITY = LOGOS_ROOT / "benchmarks/core/authority/cohort-389.json"
+COHORT_AUTHORITY_SHA256 = (
+    "b8fd9d4136b247782df4dae4671ef61323f587261f1aef11f7d4f53c9a1809f2"
 )
 BENCHMARK_FINGERPRINT = (
     "0c25cb9d500bce29545ede21d42df355fd23efbef32d1725db11ad026b6be91f"
@@ -259,7 +293,7 @@ CODEX_PROVIDER_MANIFEST_ALGORITHM = "logos-codex-provider-manifest-v1"
 POSTGRES_PROFILE_MANIFEST_ALGORITHM = "logos-postgres-server-profile-v1"
 CANONICAL_FRONTEND_SCRIPT = LOGOS_ROOT / "scripts/calcite-ir"
 CANONICAL_FRONTEND_SCRIPT_DISPLAY = CANONICAL_FRONTEND_SCRIPT.relative_to(
-    WORKFLOW_ROOT
+    LOGOS_ROOT
 ).as_posix()
 CANONICAL_FRONTEND_COMMAND = shlex.join(
     (
@@ -460,6 +494,18 @@ class PublishError(RuntimeError):
     pass
 
 
+def configured_java_home() -> Path:
+    variable = (
+        "LOGOS_JAVA_HOME" if os.environ.get("LOGOS_JAVA_HOME") else "JAVA_HOME"
+    )
+    try:
+        path = configured_path(LOGOS_ROOT, variable, required=True)
+    except LogosEnvironmentError as error:
+        raise PublishError(str(error)) from error
+    assert path is not None
+    return path
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -482,6 +528,12 @@ def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def repository_recorded_path(recorded: Path) -> Path:
+    if recorded.parts and recorded.parts[0] == LOGOS_ROOT.name:
+        return LOGOS_ROOT.joinpath(*recorded.parts[1:])
+    return LOGOS_ROOT / recorded
+
+
 def resolve_recorded_file(value: Any, location: str, run_root: Path) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise PublishError(f"{location} must be a nonempty path")
@@ -490,8 +542,7 @@ def resolve_recorded_file(value: Any, location: str, run_root: Path) -> Path:
         (recorded,)
         if recorded.is_absolute()
         else (
-            WORKFLOW_ROOT / recorded,
-            LOGOS_ROOT / recorded,
+            repository_recorded_path(recorded),
             run_root / recorded,
         )
     )
@@ -515,8 +566,7 @@ def resolve_recorded_directory(value: Any, location: str, run_root: Path) -> Pat
         (recorded,)
         if recorded.is_absolute()
         else (
-            WORKFLOW_ROOT / recorded,
-            LOGOS_ROOT / recorded,
+            repository_recorded_path(recorded),
             run_root / recorded,
         )
     )
@@ -772,20 +822,22 @@ def canonical_case(value: str) -> str:
     return value[len(prefix) :] if value.startswith(prefix) else value
 
 
-def expected_cases(output: Path) -> set[str]:
-    frozen = output / "summary.raw.json"
-    if sha256(frozen) != FROZEN_SUMMARY_SHA256:
-        raise PublishError("frozen summary.raw.json digest changed")
-    rows = load_json(frozen).get("results")
-    if not isinstance(rows, list):
-        raise PublishError("frozen summary has no results array")
-    cases = {
-        canonical_case(row["case"])
-        for row in rows
-        if isinstance(row, dict) and isinstance(row.get("case"), str)
-    }
+def expected_cases(_output: Path) -> set[str]:
+    if sha256(COHORT_AUTHORITY) != COHORT_AUTHORITY_SHA256:
+        raise PublishError("repository benchmark cohort authority digest changed")
+    authority = load_json(COHORT_AUTHORITY)
+    rows = authority.get("cases")
+    if (
+        authority.get("schemaVersion") != 1
+        or authority.get("benchmarkFingerprint") != BENCHMARK_FINGERPRINT
+        or authority.get("caseCount") != 389
+        or not isinstance(rows, list)
+        or not all(isinstance(case_id, str) and case_id for case_id in rows)
+    ):
+        raise PublishError("repository benchmark cohort authority is malformed")
+    cases = {canonical_case(case_id) for case_id in rows}
     if len(rows) != 389 or len(cases) != 389:
-        raise PublishError("frozen scope is not 389 unique cases")
+        raise PublishError("repository benchmark cohort is not 389 unique cases")
     return cases
 
 
@@ -3169,7 +3221,7 @@ def validate_runner_launch_environments(
         "CODEX_HOME": symbolic_home,
         "LOGOS_SOLVER_CODEX_HOME": symbolic_home,
         "LOGOS_SOLVER_CODEX_CONFIG": f"{symbolic_home}/config.toml",
-        "JAVA_HOME": str((WORKFLOW_ROOT / "PaperTools/envs/sqlsolver-jdk17").resolve()),
+        "JAVA_HOME": str(configured_java_home()),
         "MAVEN_VERSION": "3.9.11",
         "LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE": str(
             (
@@ -3920,8 +3972,7 @@ def resolve_case_input_directory(value: Any, case: str, run_root: Path) -> Path:
         (recorded,)
         if recorded.is_absolute()
         else (
-            WORKFLOW_ROOT / recorded,
-            LOGOS_ROOT / recorded,
+            repository_recorded_path(recorded),
             run_root / recorded,
         )
     )
@@ -4947,7 +4998,7 @@ def require_real_directory_chain(
 def publisher_workspace_display_path(path: Path) -> str:
     resolved = path.resolve()
     try:
-        return resolved.relative_to(WORKFLOW_ROOT).as_posix()
+        return resolved.relative_to(LOGOS_ROOT).as_posix()
     except ValueError:
         return str(resolved)
 
@@ -6943,8 +6994,7 @@ def validate_proof_metrics(
             (candidate,)
             if candidate.is_absolute()
             else (
-                WORKFLOW_ROOT / candidate,
-                LOGOS_ROOT / candidate,
+                repository_recorded_path(candidate),
                 run_root / candidate,
             )
         )
@@ -7476,8 +7526,13 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         != (image.get("reference") if isinstance(image, dict) else None)
         or nested(document, "configuration", "frozenBenchmark", "benchmarkFingerprint")
         != BENCHMARK_FINGERPRINT
-        or nested(document, "configuration", "frozenBenchmark", "frozenSummarySha256")
-        != FROZEN_SUMMARY_SHA256
+        or nested(
+            document,
+            "configuration",
+            "frozenBenchmark",
+            "cohortAuthoritySha256",
+        )
+        != COHORT_AUTHORITY_SHA256
         or nested(document, "configuration", "frozenBenchmark", "frozenCaseCount")
         != 389
         or nested(document, "configuration", "frozenBenchmark", "generatedCaseCount")
@@ -7491,8 +7546,8 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         != FROZEN_CASE_SET_SHA256
         or nested(document, "provenance", "benchmarkFingerprint")
         != BENCHMARK_FINGERPRINT
-        or nested(document, "provenance", "frozenSummarySha256")
-        != FROZEN_SUMMARY_SHA256
+        or nested(document, "provenance", "cohortAuthoritySha256")
+        != COHORT_AUTHORITY_SHA256
         or not valid_sha256(source_digest)
         or nested(document, "provenance", "frameworkSourceTreeManifestSha256")
         != source_digest

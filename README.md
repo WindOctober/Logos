@@ -130,7 +130,23 @@ vendor/FormalSQL  git@github.com:WindOctober/FormalSQL.git  branch master
 
 ## Build
 
-Logos uses the Rocq-compatible SQLCoq fork in `vendor/FormalSQL`. The workspace `.envrc` exports `ROCQ_OPAM_SWITCH`, `OPAM_SWITCH`, `ROCQLIB`, and `OCAMLFIND_CONF` for the Rocq 9.2 environment. Rocq build targets require `ROCQ_OPAM_SWITCH` or `OPAM_SWITCH`; run `direnv allow` at the workspace root or set one of those variables explicitly before invoking a Rocq target.
+Machine-local paths are not encoded in tracked scripts. Start from the example
+configuration and enable the repository-local direnv environment:
+
+```bash
+cp .env.example .env
+direnv allow
+```
+
+Python entry points also read `.env` directly, while explicit process
+environment variables take precedence. At minimum, set `LOGOS_JAVA_HOME` to a
+JDK 17 installation. External publication and baseline-tool locations use
+`LOGOS_FINAL_EXPERIMENT_DIR`, `LOGOS_QED_PARSER`, and
+`LOGOS_SQLSOLVER_JAR`. Benchmark membership, the proof gate, and materializer
+byte baselines are repository-owned under `benchmarks/core/authority/`; neither
+published results nor `var/` state define a benchmark campaign.
+
+Logos uses the Rocq-compatible SQLCoq fork in `vendor/FormalSQL`. Rocq build targets require `LOGOS_ROCQ_OPAM_SWITCH`, `ROCQ_OPAM_SWITCH`, or `OPAM_SWITCH`; the default repository-local switch is `.opam-rocq`.
 
 Trusted proof checking also requires `bubblewrap` (`bwrap`) on Linux. The checker compiles agent-controlled `Problem.v` from an empty-root sandbox containing only a staged non-example FormalSQL/Logos source-object authority closure, the Rocq runtime and standard library, the exact required OS runtime files, and a disposable writable problem directory. The host repository, catalogs, examples, and retained histories are absent. It then compiles the trusted `Goal.v` from a fresh directory. The batch runner binds the exact `rocq`, `rocqchk`, `rocqworker`, `rocqnative`, and `bwrap` executables, their ELF interpreter/dependency closure, and the effective findlib/runtime metadata in its trusted proof-stack manifest. It also binds a reviewed exhaustive checker-tool list (including the pinned host `bash` and `timeout`, staging utilities, digest tools, and one of the reviewed Ubuntu 22.04/23.04 `ldd` scripts plus its Bash interpreter), every literal `ldd` runtime-loader candidate including required absence state, the system loader cache/preload state, and the fixed NSS identity inputs `/etc/nsswitch.conf` and `/etc/passwd`. Manifest inspection starts from an empty, fixed environment. The runner likewise starts the solver and SQL-frontend preparation from recorded clear-then-fixed environments; the frontend manifest binds its absolute Bash invocation, script tools, Maven shell/tools, JDK, classes, and runtime jars, while the provider manifest binds the Codex wrapper, `/usr/bin/env`/Node interpreter chain, fixed PATH, and command-child policy. The Rust solver independently clears inherited state before the SQL frontend, counterexample provider, trusted checker, and proof-agent launcher, restoring only each boundary's recorded fixed values and explicit contract variables. Thus `BASH_ENV`, exported shell functions, ambient loader/OCaml/Java/Maven paths, proxy/provider overrides, and caller-selected temporary paths cannot replace manifest-bound tools or alter semantic lowering, proof-context staging, or certification. Every manifest and policy digest is recomputed before a run can become terminal-complete. This attestation begins inside the already-running Python runner: the Python interpreter, operating-system kernel, and filesystem implementation remain part of the ambient experiment-host trust boundary rather than recursively self-attested inputs. The solver Docker image installs `bwrap`.
 

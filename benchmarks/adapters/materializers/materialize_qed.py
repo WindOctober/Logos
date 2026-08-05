@@ -52,6 +52,11 @@ except ModuleNotFoundError:  # Imported as benchmarks.adapters.materializers.*
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "scripts"))
+from logos_env import configured_path, load_logos_env  # noqa: E402
+
+load_logos_env(ROOT)
+
 EXPORTER_PATH = ROOT / "scripts/export-benchmark-ir"
 DEFAULT_CONFIG = "benchmarks/core/ingestion.json"
 DEFAULT_OUTPUT = "benchmarks/core/.generated/qed"
@@ -1096,7 +1101,7 @@ def main() -> int:
     parser.add_argument(
         "--skip-parser",
         action="store_true",
-        help="Only write qed.sql/metadata.json; do not invoke PaperTools/scripts/qed-parser.",
+        help="Only write qed.sql/metadata.json; do not invoke LOGOS_QED_PARSER.",
     )
     args = parser.parse_args()
 
@@ -1996,10 +2001,17 @@ def run_qed_parser(sql_path: Path) -> dict[str, Any]:
         path = artifact_base.with_suffix(suffix)
         if path.exists():
             path.unlink()
-    command = [str(ROOT.parent / "PaperTools/scripts/qed-parser"), str(sql_path)]
+    parser = configured_path(ROOT, "LOGOS_QED_PARSER")
+    if parser is None:
+        raise RuntimeError(
+            f"LOGOS_QED_PARSER is unset; configure it in {ROOT / '.env'}"
+        )
+    if not parser.is_file() or not parser.stat().st_mode & 0o111:
+        raise RuntimeError(f"LOGOS_QED_PARSER is not executable: {parser}")
+    command = [str(parser), str(sql_path)]
     started = subprocess.run(
         command,
-        cwd=ROOT.parent,
+        cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

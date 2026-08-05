@@ -14,8 +14,13 @@ import solver_frontend  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "scripts"))
+from logos_env import configured_path, load_logos_env  # noqa: E402
+
+load_logos_env(ROOT)
+
 PREFLIGHT = ROOT / "benchmarks/scripts/sqlsolver-preflight"
-SQLSOLVER_JAR = ROOT.parent / "PaperTools/SQLSolver/build/libs/sqlsolver-v1.1.0.jar"
+SQLSOLVER_JAR = configured_path(ROOT, "LOGOS_SQLSOLVER_JAR")
 POLICY = solver_frontend.SQLSOLVER_POSTGRES_IDENTIFIER_POLICY
 
 
@@ -162,7 +167,9 @@ class SqlSolverBoundaryTest(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    PREFLIGHT.is_file() and SQLSOLVER_JAR.is_file(),
+    PREFLIGHT.is_file()
+    and SQLSOLVER_JAR is not None
+    and SQLSOLVER_JAR.is_file(),
     "SQLSolver frontend artifact is unavailable",
 )
 class ActualSqlSolverPreflightTest(unittest.TestCase):

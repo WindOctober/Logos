@@ -35,7 +35,6 @@ except ModuleNotFoundError:  # Python 3.10 in the frozen workspace.
 
 
 LOGOS_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW_ROOT = LOGOS_ROOT.parent
 DEFAULT_INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/logos"
 LEGACY_FROZEN_INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/sqlsolver"
 RBOT_ROOT = LOGOS_ROOT / "benchmarks/core/rbot"
@@ -183,17 +182,15 @@ MAX_PROOF_AGENT_MEMORY_LIMIT_MIB = 65536
 DEFAULT_PROOF_DOCKER_IMAGE = "logos-solver:latest"
 EXPECTED_MODEL = "gpt-5.6-sol"
 EXPECTED_REASONING_EFFORT = "medium"
-FROZEN_SUMMARY = WORKFLOW_ROOT / "FinalExperiment/Logos/summary.raw.json"
-FROZEN_SUMMARY_SHA256 = (
-    "be93b4fb307812067194ca55f1b4b9394d2dbdb04d0bf985dcbb03e2f86abcbe"
+BENCHMARK_AUTHORITY_ROOT = LOGOS_ROOT / "benchmarks/core/authority"
+FROZEN_COHORT = BENCHMARK_AUTHORITY_ROOT / "cohort-389.json"
+FROZEN_COHORT_SHA256 = (
+    "b8fd9d4136b247782df4dae4671ef61323f587261f1aef11f7d4f53c9a1809f2"
 )
 FROZEN_BENCHMARK_FINGERPRINT = (
     "0c25cb9d500bce29545ede21d42df355fd23efbef32d1725db11ad026b6be91f"
 )
-FROZEN_SCOPE = (
-    WORKFLOW_ROOT
-    / "var/codex-background/logos-proof-agent-context-ablation-20260723.scope.json"
-)
+FROZEN_SCOPE = BENCHMARK_AUTHORITY_ROOT / "proof-gate-16.json"
 FROZEN_SCOPE_SHA256 = "eed6bdea2cdd091f20ea4081c1ac43b6bf477d21556df680bdbda991c3632a82"
 INPUT_MANIFEST_ALGORITHM = "logos-input-manifest-v2"
 LEGACY_INPUT_MANIFEST_ALGORITHM = "logos-frozen-input-manifest-v1"
@@ -372,7 +369,6 @@ MAVEN_EXECUTABLE = MAVEN_ROOT / "bin/mvn"
 CALCITE_ROOT = LOGOS_ROOT / "frontend/calcite-wrapper"
 CALCITE_CLASSES = CALCITE_ROOT / "target/classes"
 CALCITE_CLASSPATH = CALCITE_ROOT / "target/logos-runtime-classpath.txt"
-EXPECTED_JAVA_HOME = WORKFLOW_ROOT / "PaperTools/envs/sqlsolver-jdk17"
 EXPECTED_POSTGRES_VERSION_NUM = "170004"
 DEFAULT_COUNTEREXAMPLE_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
@@ -427,12 +423,23 @@ SOURCE_TREE_DIGEST_HELPER_SHA256 = (
     "a2b651399e0103adac71a11822803979c535ac8bc897479a54c4366bd5e44b81"
 )
 SOURCE_TREE_DIGEST_HELPER_BYTES = 8_009
+ENVIRONMENT_HELPER_RELATIVE_PATH = "scripts/logos_env.py"
+ENVIRONMENT_HELPER_SHA256 = (
+    "ab22c326742b390c8c8912e5f87e14b840f2c9499fdde8b8be18ddc6548feebb"
+)
+ENVIRONMENT_HELPER_BYTES = 2_806
 
 
-def load_source_tree_digest_helper() -> types.ModuleType:
+def load_pinned_python_helper(
+    relative_path: str,
+    expected_sha256: str,
+    expected_bytes: int,
+    module_name: str,
+    description: str,
+) -> types.ModuleType:
     """Execute only the exact helper bytes transitively pinned by this runner."""
 
-    path = LOGOS_ROOT / SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH
+    path = LOGOS_ROOT / relative_path
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = -1
     try:
@@ -440,29 +447,27 @@ def load_source_tree_digest_helper() -> types.ModuleType:
         metadata = os.fstat(descriptor)
         if (
             not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_size != SOURCE_TREE_DIGEST_HELPER_BYTES
+            or metadata.st_size != expected_bytes
         ):
             raise RuntimeError(
-                "source-tree digest helper is not the immutable expected regular file"
+                f"{description} is not the immutable expected regular file"
             )
         with os.fdopen(descriptor, "rb", closefd=True) as stream:
             descriptor = -1
             payload = stream.read()
     except OSError as error:
-        raise RuntimeError(
-            f"cannot load immutable source-tree digest helper: {error}"
-        ) from error
+        raise RuntimeError(f"cannot load immutable {description}: {error}") from error
     finally:
         if descriptor >= 0:
             os.close(descriptor)
     if (
-        len(payload) != SOURCE_TREE_DIGEST_HELPER_BYTES
-        or hashlib.sha256(payload).hexdigest() != SOURCE_TREE_DIGEST_HELPER_SHA256
+        len(payload) != expected_bytes
+        or hashlib.sha256(payload).hexdigest() != expected_sha256
     ):
         raise RuntimeError(
-            "source-tree digest helper differs from the immutable runner binding"
+            f"{description} differs from the immutable runner binding"
         )
-    module = types.ModuleType("logos_source_tree_digest")
+    module = types.ModuleType(module_name)
     module.__file__ = str(path)
     module.__package__ = ""
     sys.modules[module.__name__] = module
@@ -470,7 +475,13 @@ def load_source_tree_digest_helper() -> types.ModuleType:
     return module
 
 
-_SOURCE_TREE_DIGEST_HELPER = load_source_tree_digest_helper()
+_SOURCE_TREE_DIGEST_HELPER = load_pinned_python_helper(
+    SOURCE_TREE_DIGEST_HELPER_RELATIVE_PATH,
+    SOURCE_TREE_DIGEST_HELPER_SHA256,
+    SOURCE_TREE_DIGEST_HELPER_BYTES,
+    "logos_source_tree_digest",
+    "source-tree digest helper",
+)
 SourceTreeError = _SOURCE_TREE_DIGEST_HELPER.SourceTreeError
 atomic_write_bytes = _SOURCE_TREE_DIGEST_HELPER.atomic_write
 build_source_tree_manifest = _SOURCE_TREE_DIGEST_HELPER.build_manifest
@@ -478,6 +489,18 @@ source_tree_manifest_bytes = _SOURCE_TREE_DIGEST_HELPER.canonical_bytes
 source_tree_manifest_sha256 = _SOURCE_TREE_DIGEST_HELPER.manifest_sha256
 sha256_file = _SOURCE_TREE_DIGEST_HELPER.sha256_file
 sha256_text = _SOURCE_TREE_DIGEST_HELPER.sha256_text
+
+_ENVIRONMENT_HELPER = load_pinned_python_helper(
+    ENVIRONMENT_HELPER_RELATIVE_PATH,
+    ENVIRONMENT_HELPER_SHA256,
+    ENVIRONMENT_HELPER_BYTES,
+    "logos_env",
+    "environment helper",
+)
+LogosEnvironmentError = _ENVIRONMENT_HELPER.LogosEnvironmentError
+configured_path = _ENVIRONMENT_HELPER.configured_path
+load_logos_env = _ENVIRONMENT_HELPER.load_logos_env
+load_logos_env(LOGOS_ROOT)
 
 
 def load_launch_runner_record() -> dict[str, Any]:
@@ -1816,23 +1839,51 @@ def tree_file_records(
     return records
 
 
-def validated_frozen_java_home() -> Path:
-    java_home = os.environ.get("JAVA_HOME")
-    if not java_home:
-        raise RunnerError("JAVA_HOME is unset; run the runner through direnv")
-    resolved_java_home = Path(java_home).resolve()
-    if resolved_java_home != EXPECTED_JAVA_HOME.resolve():
+def validated_configured_java_home() -> Path:
+    variable = (
+        "LOGOS_JAVA_HOME" if os.environ.get("LOGOS_JAVA_HOME") else "JAVA_HOME"
+    )
+    try:
+        java_home = configured_path(LOGOS_ROOT, variable, required=True)
+    except LogosEnvironmentError as error:
+        raise RunnerError(str(error)) from error
+    assert java_home is not None
+    java = java_home / "bin/java"
+    javac = java_home / "bin/javac"
+    if not java.is_file() or not os.access(java, os.X_OK):
+        raise RunnerError(f"{variable} has no executable bin/java: {java_home}")
+    if not javac.is_file() or not os.access(javac, os.X_OK):
+        raise RunnerError(f"{variable} has no executable bin/javac: {java_home}")
+    release_candidates = (
+        java_home / "release",
+        java.resolve().parent.parent / "release",
+    )
+    release = next(
+        (candidate for candidate in release_candidates if candidate.is_file()), None
+    )
+    if release is None:
+        raise RunnerError(f"cannot find JDK release metadata below {java_home}")
+    try:
+        release_text = release.read_text(encoding="utf-8")
+    except OSError as error:
         raise RunnerError(
-            "JAVA_HOME differs from the frozen workspace JDK 17; run through direnv"
+            f"cannot read JDK release metadata at {release}: {error}"
+        ) from error
+    if (
+        re.search(
+            r'^JAVA_VERSION="17(?:[._][^"]*)?"$', release_text, re.MULTILINE
         )
-    return resolved_java_home
+        is None
+    ):
+        raise RunnerError(f"{variable} must select JDK 17: {java_home}")
+    return java_home
 
 
 def canonical_frontend_environment(
     *, include_runtime_classpath: bool = False
 ) -> dict[str, str]:
     environment = dict(FRONTEND_FIXED_ENVIRONMENT_ITEMS)
-    environment["JAVA_HOME"] = str(validated_frozen_java_home())
+    environment["JAVA_HOME"] = str(validated_configured_java_home())
     environment["MAVEN_VERSION"] = MAVEN_VERSION
     if include_runtime_classpath:
         if not CALCITE_CLASSPATH.is_file() or CALCITE_CLASSPATH.is_symlink():
@@ -1935,7 +1986,7 @@ def prepare_frontend_stack() -> None:
 
 
 def java_runtime_record() -> dict[str, Any]:
-    java_home = validated_frozen_java_home()
+    java_home = validated_configured_java_home()
     java_invocation = java_home / "bin/java"
     java_path = java_invocation.resolve()
     if not java_path.is_file() or not os.access(java_path, os.X_OK):
@@ -4626,28 +4677,30 @@ def frozen_benchmark_record(
     if input_root.resolve() != LEGACY_FROZEN_INPUT_ROOT.resolve():
         return None
     if (
-        not FROZEN_SUMMARY.is_file()
-        or sha256_file(FROZEN_SUMMARY) != FROZEN_SUMMARY_SHA256
+        not FROZEN_COHORT.is_file()
+        or sha256_file(FROZEN_COHORT) != FROZEN_COHORT_SHA256
     ):
-        raise RunnerError(
-            "frozen FinalExperiment/Logos/summary.raw.json digest changed"
-        )
+        raise RunnerError("repository benchmark cohort authority digest changed")
     try:
-        document = json.loads(FROZEN_SUMMARY.read_text(encoding="utf-8"))
+        document = json.loads(FROZEN_COHORT.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise RunnerError(f"cannot read frozen benchmark summary: {error}") from error
+        raise RunnerError(f"cannot read benchmark cohort authority: {error}") from error
+    if document.get("schemaVersion") != 1:
+        raise RunnerError("benchmark cohort authority is not schemaVersion 1")
     if document.get("benchmarkFingerprint") != FROZEN_BENCHMARK_FINGERPRINT:
         raise RunnerError("frozen benchmark fingerprint changed")
-    rows = document.get("results")
-    if not isinstance(rows, list):
-        raise RunnerError("frozen benchmark summary has no results array")
-    frozen_cases = {
-        row.get("case")
-        for row in rows
-        if isinstance(row, dict) and isinstance(row.get("case"), str)
-    }
-    if len(rows) != 389 or len(frozen_cases) != 389:
-        raise RunnerError("frozen benchmark summary is not 389 unique cases")
+    cases = document.get("cases")
+    if not isinstance(cases, list) or not all(
+        isinstance(case_id, str) and case_id for case_id in cases
+    ):
+        raise RunnerError("benchmark cohort authority has no valid cases array")
+    frozen_cases = set(cases)
+    if (
+        document.get("caseCount") != 389
+        or len(cases) != 389
+        or len(frozen_cases) != 389
+    ):
+        raise RunnerError("benchmark cohort authority is not 389 unique cases")
     generated = {case.case_id for case in available_cases}
     if generated != frozen_cases:
         missing = sorted(frozen_cases - generated)
@@ -4670,8 +4723,8 @@ def frozen_benchmark_record(
         )
     return {
         "benchmarkFingerprint": FROZEN_BENCHMARK_FINGERPRINT,
-        "frozenSummaryPath": workspace_display_path(FROZEN_SUMMARY),
-        "frozenSummarySha256": FROZEN_SUMMARY_SHA256,
+        "cohortAuthorityPath": display_path(FROZEN_COHORT),
+        "cohortAuthoritySha256": FROZEN_COHORT_SHA256,
         "frozenCaseCount": len(frozen_cases),
         "generatedCaseCount": len(generated),
         "selectedCaseSetSha256": sha256_text("\n".join(sorted(selected)) + "\n"),
@@ -4737,7 +4790,7 @@ def resolve_artifact_path(value: str) -> Path:
     if path.is_absolute():
         return path.resolve()
     if path.parts and path.parts[0] == LOGOS_ROOT.name:
-        return (WORKFLOW_ROOT / path).resolve()
+        return LOGOS_ROOT.joinpath(*path.parts[1:]).resolve()
     return (LOGOS_ROOT / path).resolve()
 
 
@@ -6868,7 +6921,7 @@ def private_rocq_namespace_command(
     source_switch_path = Path(source_switch_value)
     if not source_switch_path.is_absolute():
         if source_switch_path.parts and source_switch_path.parts[0] == LOGOS_ROOT.name:
-            source_switch_path = WORKFLOW_ROOT / source_switch_path
+            source_switch_path = LOGOS_ROOT.joinpath(*source_switch_path.parts[1:])
         else:
             source_switch_path = LOGOS_ROOT / source_switch_path
     source_switch_path = Path(os.path.abspath(source_switch_path))
@@ -8292,8 +8345,8 @@ def run_selected_cases(
                         if config.frozen_benchmark is not None
                         else None
                     ),
-                    "frozenSummarySha256": (
-                        config.frozen_benchmark.get("frozenSummarySha256")
+                    "cohortAuthoritySha256": (
+                        config.frozen_benchmark.get("cohortAuthoritySha256")
                         if config.frozen_benchmark is not None
                         else None
                     ),
@@ -15863,10 +15916,7 @@ def display_path(path: Path) -> str:
 
 
 def workspace_display_path(path: Path) -> str:
-    try:
-        return path.resolve().relative_to(WORKFLOW_ROOT).as_posix()
-    except ValueError:
-        return str(path.resolve())
+    return display_path(path)
 
 
 def atomic_write_json(path: Path, value: Any) -> None:

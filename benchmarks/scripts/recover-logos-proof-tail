@@ -30,7 +30,6 @@ from typing import Any
 
 SCRIPT = Path(__file__).resolve()
 LOGOS_ROOT = SCRIPT.parents[2]
-WORKFLOW_ROOT = LOGOS_ROOT.parent
 RUNNER_PATH = SCRIPT.with_name("run-logos")
 RUNNER = runpy.run_path(str(RUNNER_PATH), run_name="proof_tail_recovery_runner")
 RECOVERY_RELATIVE = Path("proof-stage/deterministic-tail-recovery")
@@ -1837,7 +1836,7 @@ def resolve_display_path(value: str) -> Path:
     if path.is_absolute():
         return path
     if path.parts and path.parts[0] == "Logos":
-        return WORKFLOW_ROOT / path
+        return LOGOS_ROOT.joinpath(*path.parts[1:])
     return LOGOS_ROOT / path
 
 

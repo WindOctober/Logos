@@ -14,9 +14,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKSPACE = ROOT.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from logos_env import configured_path, load_logos_env  # noqa: E402
+
+load_logos_env(ROOT)
+
 SOURCE = ROOT / "benchmarks/adapters/materializers/SqlSolverFrontendPreflight.java"
-DEFAULT_JAR = WORKSPACE / "PaperTools/SQLSolver/build/libs/sqlsolver-v1.1.0.jar"
+DEFAULT_JAR = configured_path(ROOT, "LOGOS_SQLSOLVER_JAR")
+if DEFAULT_JAR is None:
+    DEFAULT_JAR = configured_path(ROOT, "SQLSOLVER_JAR")
 POLICY = "sqlsolver-parser-validator-planner-v1"
 
 
@@ -30,13 +36,17 @@ def main() -> int:
     parser.add_argument("--schema", required=True)
     parser.add_argument("--sql1", required=True)
     parser.add_argument("--sql2", required=True)
-    parser.add_argument(
-        "--jar", default=os.environ.get("SQLSOLVER_JAR", str(DEFAULT_JAR))
-    )
+    parser.add_argument("--jar", default=str(DEFAULT_JAR) if DEFAULT_JAR else None)
     parser.add_argument("--timeout-seconds", type=int, default=120)
     args = parser.parse_args()
 
-    jar = Path(args.jar).resolve()
+    if args.jar is None:
+        print(
+            f"LOGOS_SQLSOLVER_JAR is unset; configure it in {ROOT / '.env'}",
+            file=sys.stderr,
+        )
+        return 2
+    jar = Path(args.jar).expanduser().resolve()
     paths = {
         "schema": Path(args.schema).resolve(),
         "before": Path(args.sql1).resolve(),
@@ -47,9 +57,15 @@ def main() -> int:
             print(f"missing {label}: {path}", file=sys.stderr)
             return 2
 
-    java_home = Path(
-        os.environ.get("JAVA_HOME", WORKSPACE / "PaperTools/envs/sqlsolver-jdk17")
-    )
+    java_home = configured_path(ROOT, "LOGOS_JAVA_HOME")
+    if java_home is None:
+        java_home = configured_path(ROOT, "JAVA_HOME")
+    if java_home is None:
+        print(
+            f"LOGOS_JAVA_HOME is unset; configure it in {ROOT / '.env'}",
+            file=sys.stderr,
+        )
+        return 2
     javac = java_home / "bin/javac"
     java = java_home / "bin/java"
     if not javac.is_file() or not java.is_file():

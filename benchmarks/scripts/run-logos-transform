@@ -21,7 +21,6 @@ from typing import Any
 
 
 LOGOS_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW_ROOT = LOGOS_ROOT.parent
 FULL_RUNNER_PATH = Path(__file__).with_name("run-logos")
 FULL_RUNNER = runpy.run_path(
     str(FULL_RUNNER_PATH), run_name="logos_transform_runner_dependencies"
@@ -408,7 +407,7 @@ def atomic_write_json(path: Path, value: Any) -> None:
 
 def workspace_display_path(path: Path) -> str:
     try:
-        return path.resolve().relative_to(WORKFLOW_ROOT).as_posix()
+        return path.resolve().relative_to(LOGOS_ROOT).as_posix()
     except ValueError:
         return str(path.resolve())
 
@@ -419,7 +418,9 @@ def resolve_recorded_path(value: object, description: str) -> Path:
     recorded = Path(value)
     if recorded.is_absolute():
         return recorded.resolve()
-    return (WORKFLOW_ROOT / recorded).resolve()
+    if recorded.parts and recorded.parts[0] == LOGOS_ROOT.name:
+        return LOGOS_ROOT.joinpath(*recorded.parts[1:]).resolve()
+    return (LOGOS_ROOT / recorded).resolve()
 
 
 def iso_now() -> str:

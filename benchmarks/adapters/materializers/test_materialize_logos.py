@@ -19,9 +19,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SCRIPT = HERE / "materialize_logos.py"
 DISPATCHER = ROOT / "benchmarks/scripts/materialize"
-BASELINE = (
-    ROOT.parent / "var/codex-background/logos-rbot-provenance-r1.non-rbot-baseline.json"
-)
+BASELINE = ROOT / "benchmarks/core/authority/non-rbot-materialization-baseline.json"
 
 sys.path.insert(0, str(HERE))
 

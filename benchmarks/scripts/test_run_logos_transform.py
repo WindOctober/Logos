@@ -330,10 +330,7 @@ class TransformRunnerTests(unittest.TestCase):
         return config, dependencies
 
     def resolve_recorded(self, value: str) -> Path:
-        path = Path(value)
-        if path.is_absolute():
-            return path
-        return (self.runner["WORKFLOW_ROOT"] / path).resolve()
+        return self.runner["resolve_recorded_path"](value, "test artifact")
 
     def test_selectors_are_shared_with_the_canonical_runner(self) -> None:
         self.make_case("rbot-dsb", "one", "rbot-dsb", "one")

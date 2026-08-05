@@ -39,15 +39,14 @@ pub fn calcite_ir_command(logos_repo_root: &Path) -> String {
 }
 
 pub fn rocq_opam_switch(logos_repo_root: &Path) -> Option<PathBuf> {
+    // External switches must be explicit; implicit parent-directory probing makes
+    // an otherwise self-contained Logos checkout depend on its host layout.
     [
         std::env::var_os("LOGOS_ROCQ_OPAM_SWITCH").map(PathBuf::from),
         std::env::var_os("ROCQ_OPAM_SWITCH").map(PathBuf::from),
         std::env::var_os("OPAM_SWITCH").map(PathBuf::from),
         Some(logos_repo_root.join(".opam-rocq")),
         Some(logos_repo_root.join(".opam")),
-        logos_repo_root
-            .parent()
-            .map(|parent| parent.join(".opam-rocq")),
     ]
     .into_iter()
     .flatten()

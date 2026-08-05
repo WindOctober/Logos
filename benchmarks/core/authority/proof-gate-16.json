@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "objectiveId": "logos-proof-agent-context-ablation-20260723",
+  "frozenAt": "2026-07-23T00:00:00+08:00",
+  "logosHeadAtLaunch": "47274f8c851d85975989ab66a28be7c256932e07",
+  "formalSqlHeadAtLaunch": "3bbb2cb608303f35b86a67a484cbc525809a8204",
+  "benchmarkFingerprint": "0c25cb9d500bce29545ede21d42df355fd23efbef32d1725db11ad026b6be91f",
+  "frozenCanonicalSummarySha256": "be93b4fb307812067194ca55f1b4b9394d2dbdb04d0bf985dcbb03e2f86abcbe",
+  "fullCaseCount": 389,
+  "fullRunJobs": 32,
+  "caseTimeoutSeconds": 3600,
+  "verificationMode": "outcome-unconditional",
+  "catalogOnMeanElapsedMsMaximum": 1800000,
+  "catalogOnSingleCaseElapsedMsMaximum": 3300000,
+  "staticPromptAndPrimerBytesMaximum": 24576,
+  "queryShapeBytesPerCaseMaximum": 32768,
+  "ablationCases": [
+    "nonwetune-flat__tpcds-variants__query005",
+    "nonwetune-flat__verieql-calcite__calcite-148",
+    "nonwetune-flat__verieql-calcite__calcite-159",
+    "nonwetune-flat__verieql-calcite__calcite-193",
+    "nonwetune-flat__verieql-calcite__calcite-29",
+    "nonwetune-flat__verieql-calcite__calcite-349",
+    "wetune-issues__31",
+    "nonwetune-flat__verieql-calcite__calcite-100"
+  ],
+  "extensionCases": [
+    "nonwetune-flat__verieql-calcite__calcite-83",
+    "nonwetune-flat__verieql-calcite__calcite-376",
+    "nonwetune-flat__verieql-calcite__calcite-383",
+    "nonwetune-flat__verieql-literature__sqlrewrites-productDistributesOverUnion-30",
+    "nonwetune-flat__verieql-literature__sqlrewrites-unionEmpty-37",
+    "nonwetune-flat__verieql-calcite__calcite-233",
+    "nonwetune-flat__verieql-calcite__calcite-11",
+    "nonwetune-flat__verieql-calcite__calcite-106"
+  ],
+  "knownNonEqControlsExcludedFromProofCohort": [
+    "nonwetune-flat__rbot-dsb__query031",
+    "nonwetune-flat__rbot-tpch__query21",
+    "nonwetune-flat__verieql-calcite__calcite-104"
+  ]
+}

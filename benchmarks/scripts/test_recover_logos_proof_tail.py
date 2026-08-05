@@ -282,6 +282,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
         copied_recovery = sandbox_root / "benchmarks/scripts/recover-logos-proof-tail"
         copied_runner = sandbox_root / "benchmarks/scripts/run-logos"
         copied_helper = sandbox_root / "scripts/logos_source_tree_digest.py"
+        copied_env = sandbox_root / "scripts/logos_env.py"
         copied_recovery.parent.mkdir(parents=True)
         copied_helper.parent.mkdir(parents=True)
         shutil.copy2(SCRIPT, copied_recovery)
@@ -290,6 +291,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             SCRIPT.parents[2] / "scripts/logos_source_tree_digest.py",
             copied_helper,
         )
+        shutil.copy2(SCRIPT.parents[2] / "scripts/logos_env.py", copied_env)
         safe = subprocess.run(
             [sys.executable, str(copied_recovery), "--help"],
             text=True,

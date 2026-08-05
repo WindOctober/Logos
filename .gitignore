@@ -4,6 +4,7 @@
 /target/
 /var/
 /.cache/
+/.env
 .lia.cache
 .nia.cache
 /benchmarks/core/.generated/

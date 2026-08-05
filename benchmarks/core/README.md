@@ -15,6 +15,7 @@ wetune/schemas/                                 raw schemas for 7 WeTune applica
 wetune/schemas/core/                            normalized WeTune schemas plus semantic constraints
 licenses/                                       upstream license files
 ingestion.json                                  benchmark-to-Calcite-IR ingestion plan
+authority/                                      versioned cohort, proof-gate, and byte-baseline inputs
 ```
 
 The WeTune schema subset is restricted to the applications referenced by `wetune/issues/issues.tsv`: `diaspora`, `discourse`, `gitlab`, `lobsters`, `redmine`, `solidus`, and `spree`.

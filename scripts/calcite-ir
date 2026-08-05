@@ -2,6 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(/usr/bin/dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -n "${LOGOS_JAVA_HOME:-}" ]]; then
+  if [[ "$LOGOS_JAVA_HOME" = /* ]]; then
+    JAVA_HOME="$LOGOS_JAVA_HOME"
+  else
+    JAVA_HOME="$ROOT_DIR/$LOGOS_JAVA_HOME"
+  fi
+  export JAVA_HOME
+fi
 MAVEN_VERSION="${MAVEN_VERSION:-3.9.11}"
 MAVEN_DIR="$ROOT_DIR/.cache/apache-maven-$MAVEN_VERSION"
 MAVEN_BIN="$MAVEN_DIR/bin/mvn"

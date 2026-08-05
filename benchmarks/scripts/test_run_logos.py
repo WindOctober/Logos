@@ -7027,11 +7027,13 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         sandbox_root = self.root / "digest-helper-bootstrap/Logos"
         copied_runner = sandbox_root / "benchmarks/scripts/run-logos"
         copied_helper = sandbox_root / "scripts/logos_source_tree_digest.py"
+        copied_env = sandbox_root / "scripts/logos_env.py"
         copied_runner.parent.mkdir(parents=True)
         copied_helper.parent.mkdir(parents=True)
         shutil.copy2(RUNNER, copied_runner)
         source_helper = RUNNER.parents[2] / "scripts/logos_source_tree_digest.py"
         shutil.copy2(source_helper, copied_helper)
+        shutil.copy2(RUNNER.parents[2] / "scripts/logos_env.py", copied_env)
         safe = subprocess.run(
             [sys.executable, str(copied_runner), "--help"],
             text=True,
@@ -7103,6 +7105,42 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 namespace["validate_framework_source_tree_helper_binding"](
                     {"repository": {"entries": entries}}
                 )
+
+    def test_runner_rejects_mutable_environment_helper_before_execution(self) -> None:
+        sandbox_root = self.root / "environment-helper-bootstrap/Logos"
+        copied_runner = sandbox_root / "benchmarks/scripts/run-logos"
+        scripts = sandbox_root / "scripts"
+        scripts.mkdir(parents=True)
+        copied_runner.parent.mkdir(parents=True)
+        copied_env = scripts / "logos_env.py"
+        shutil.copy2(RUNNER, copied_runner)
+        shutil.copy2(
+            RUNNER.parents[2] / "scripts/logos_source_tree_digest.py",
+            scripts / "logos_source_tree_digest.py",
+        )
+        shutil.copy2(RUNNER.parents[2] / "scripts/logos_env.py", copied_env)
+        marker = self.root / "mutable-runner-environment-helper-executed"
+        payload = copied_env.read_bytes()
+        prefix = (
+            "from pathlib import Path\n"
+            f"Path({str(marker)!r}).write_text('unsafe', encoding='utf-8')\n"
+        ).encode()
+        copied_env.write_bytes(
+            prefix + b"#" + b"x" * (len(payload) - len(prefix) - 2) + b"\n"
+        )
+        rejected = subprocess.run(
+            [sys.executable, str(copied_runner), "--help"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(
+            "environment helper differs from the immutable runner binding",
+            rejected.stderr,
+        )
+        self.assertFalse(marker.exists())
 
     def test_solver_binary_is_pinned_to_run_private_snapshot(self) -> None:
         namespace = runpy.run_path(str(RUNNER))
@@ -7191,7 +7229,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         ):
             verify(config)
 
-    def test_workspace_artifact_paths_resolve_from_workflow_root(self) -> None:
+    def test_workspace_artifact_paths_are_relative_to_logos_root(self) -> None:
         namespace = runpy.run_path(str(RUNNER))
         logos_root = RUNNER.parents[2]
         value = namespace["workspace_display_path"](
@@ -7199,7 +7237,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         )
         self.assertEqual(
             value,
-            "Logos/var/logos-solver/example/cases/case/report.json",
+            "var/logos-solver/example/cases/case/report.json",
         )
 
     def test_default_input_manifest_is_metadata_bound(self) -> None:
@@ -7284,6 +7322,14 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(
             hashlib.sha256(namespace["FROZEN_SCOPE"].read_bytes()).hexdigest(),
             namespace["FROZEN_SCOPE_SHA256"],
+        )
+        cohort = json.loads(namespace["FROZEN_COHORT"].read_text())
+        self.assertEqual(cohort["caseCount"], 389)
+        self.assertEqual(len(cohort["cases"]), 389)
+        self.assertEqual(len(set(cohort["cases"])), 389)
+        self.assertEqual(
+            hashlib.sha256(namespace["FROZEN_COHORT"].read_bytes()).hexdigest(),
+            namespace["FROZEN_COHORT_SHA256"],
         )
 
     def test_forged_or_incomplete_proof_telemetry_fails_closed(self) -> None:

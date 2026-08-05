@@ -26,14 +26,14 @@ from logos_source_tree_digest import (
 
 
 LOGOS_ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_ROOT = LOGOS_ROOT.parent
+from logos_env import configured_path, load_logos_env  # noqa: E402
+
+load_logos_env(LOGOS_ROOT)
+
 PUBLISHER = LOGOS_ROOT / "scripts/publish-logos-canonical.py"
 RUNNER = LOGOS_ROOT / "benchmarks/scripts/run-logos"
-FROZEN_SUMMARY = WORKFLOW_ROOT / "FinalExperiment/Logos/summary.raw.json"
-SCOPE = (
-    WORKFLOW_ROOT
-    / "var/codex-background/logos-proof-agent-context-ablation-20260723.scope.json"
-)
+COHORT_AUTHORITY = LOGOS_ROOT / "benchmarks/core/authority/cohort-389.json"
+SCOPE = LOGOS_ROOT / "benchmarks/core/authority/proof-gate-16.json"
 INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/sqlsolver"
 SOURCE_TREE_DIGEST_HELPER_RECORD = {
     "path": "scripts/logos_source_tree_digest.py",
@@ -619,14 +619,27 @@ class PublisherOrdinaryTerminalProblemBindingTest(unittest.TestCase):
 
 
 class PublisherSessionSequenceTest(unittest.TestCase):
+    def test_expected_cases_come_from_repository_authority(self) -> None:
+        publisher = runpy.run_path(str(PUBLISHER), run_name="publisher_authority")
+        cases = publisher["expected_cases"](Path("/nonexistent/publication"))
+        self.assertEqual(len(cases), 389)
+        self.assertEqual(
+            hashlib.sha256(COHORT_AUTHORITY.read_bytes()).hexdigest(),
+            publisher["COHORT_AUTHORITY_SHA256"],
+        )
+
     def test_publisher_rejects_mutable_digest_helper_before_execution(self) -> None:
         with tempfile.TemporaryDirectory(prefix="logos-publisher-helper-pin-") as raw:
             sandbox_root = Path(raw) / "Logos"
             copied_publisher = sandbox_root / "scripts/publish-logos-canonical.py"
             copied_helper = sandbox_root / "scripts/logos_source_tree_digest.py"
+            copied_env = sandbox_root / "scripts/logos_env.py"
             copied_publisher.parent.mkdir(parents=True)
             shutil.copy2(PUBLISHER, copied_publisher)
-            shutil.copy2(LOGOS_ROOT / "scripts/logos_source_tree_digest.py", copied_helper)
+            shutil.copy2(
+                LOGOS_ROOT / "scripts/logos_source_tree_digest.py", copied_helper
+            )
+            shutil.copy2(LOGOS_ROOT / "scripts/logos_env.py", copied_env)
             safe = subprocess.run(
                 [sys.executable, str(copied_publisher), "--help"],
                 text=True,
@@ -665,6 +678,42 @@ class PublisherSessionSequenceTest(unittest.TestCase):
                 rejected.stderr,
             )
             self.assertFalse(execution_marker.exists())
+
+    def test_publisher_rejects_mutable_environment_helper_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="logos-publisher-env-pin-") as raw:
+            scripts = Path(raw) / "Logos/scripts"
+            scripts.mkdir(parents=True)
+            copied_publisher = scripts / "publish-logos-canonical.py"
+            copied_digest = scripts / "logos_source_tree_digest.py"
+            copied_env = scripts / "logos_env.py"
+            shutil.copy2(PUBLISHER, copied_publisher)
+            shutil.copy2(
+                LOGOS_ROOT / "scripts/logos_source_tree_digest.py", copied_digest
+            )
+            shutil.copy2(LOGOS_ROOT / "scripts/logos_env.py", copied_env)
+            marker = Path(raw) / "mutable-environment-helper-executed"
+            payload = copied_env.read_bytes()
+            prefix = (
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('unsafe', encoding='utf-8')\n"
+            ).encode()
+            self.assertLess(len(prefix) + 2, len(payload))
+            copied_env.write_bytes(
+                prefix + b"#" + b"x" * (len(payload) - len(prefix) - 2) + b"\n"
+            )
+            rejected = subprocess.run(
+                [sys.executable, str(copied_publisher), "--help"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn(
+                "environment helper differs from the immutable publisher binding",
+                rejected.stderr,
+            )
+            self.assertFalse(marker.exists())
 
     def test_current_semantic_manifest_format_is_bound_and_tamper_rejected(self) -> None:
         publisher = runpy.run_path(
@@ -2160,15 +2209,13 @@ class CanonicalPublisherTest(unittest.TestCase):
         cls.output.mkdir(parents=True)
         cls.source_root.mkdir()
 
-        frozen_bytes = FROZEN_SUMMARY.read_bytes()
-        frozen = json.loads(frozen_bytes)
-        cls.raw_cases = [row["case"] for row in frozen["results"]]
+        cohort = json.loads(COHORT_AUTHORITY.read_text(encoding="utf-8"))
+        cls.raw_cases = cohort["cases"]
         if (len(cls.raw_cases), len(set(cls.raw_cases))) != (389, 389):
-            raise AssertionError("frozen summary is not 389 unique cases")
+            raise AssertionError("benchmark authority is not 389 unique cases")
         cls.inputs = discover_inputs()
         if set(cls.inputs) != set(cls.raw_cases):
             raise AssertionError("generated inputs do not match the frozen cohort")
-        (cls.output / "summary.raw.json").write_bytes(frozen_bytes)
         write_json(cls.output / "audit.json", {"schemaVersion": 1, "status": "passed"})
 
         subprocess.run(
@@ -2200,6 +2247,7 @@ class CanonicalPublisherTest(unittest.TestCase):
         cls.source_file.write_text("value = 1\n", encoding="utf-8")
         bound_source_paths = (
             "scripts/logos_source_tree_digest.py",
+            "scripts/logos_env.py",
             "benchmarks/scripts/run-logos",
         )
         for relative in bound_source_paths:
@@ -2586,7 +2634,7 @@ class CanonicalPublisherTest(unittest.TestCase):
             "shellExecutable": "/usr/bin/bash",
             "shellArguments": ["--noprofile", "--norc", "-c"],
             "commandBody": FRONTEND_LAUNCH_COMMAND_BODY,
-            "scriptArgument": "Logos/scripts/calcite-ir",
+            "scriptArgument": "scripts/calcite-ir",
             "toolCount": len(frontend_tool_paths),
             "frozenDirectJavaToolNames": ["bash", "dirname", "readlink"],
             "frontendPreparationToolNames": [name for name, _ in frontend_tool_paths],
@@ -3009,7 +3057,13 @@ class CanonicalPublisherTest(unittest.TestCase):
             "LOGOS_SOLVER_CODEX_HOME": symbolic_home,
             "LOGOS_SOLVER_CODEX_CONFIG": f"{symbolic_home}/config.toml",
             "JAVA_HOME": str(
-                (WORKFLOW_ROOT / "PaperTools/envs/sqlsolver-jdk17").resolve()
+                configured_path(
+                    LOGOS_ROOT,
+                    "LOGOS_JAVA_HOME"
+                    if os.environ.get("LOGOS_JAVA_HOME")
+                    else "JAVA_HOME",
+                    required=True,
+                )
             ),
             "MAVEN_VERSION": "3.9.11",
             "LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE": str(
@@ -3795,9 +3849,9 @@ class CanonicalPublisherTest(unittest.TestCase):
                     "0c25cb9d500bce29545ede21d42df355f"
                     "d23efbef32d1725db11ad026b6be91f"
                 ),
-                "frozenSummarySha256": (
-                    "be93b4fb307812067194ca55f1b4b939"
-                    "4d2dbdb04d0bf985dcbb03e2f86abcbe"
+                "cohortAuthoritySha256": (
+                    "b8fd9d4136b247782df4dae4671ef613"
+                    "23f587261f1aef11f7d4f53c9a1809f2"
                 ),
                 "frozenCaseCount": 389,
                 "generatedCaseCount": 389,
@@ -3966,9 +4020,9 @@ class CanonicalPublisherTest(unittest.TestCase):
                         "0c25cb9d500bce29545ede21d42df355f"
                         "d23efbef32d1725db11ad026b6be91f"
                     ),
-                    "frozenSummarySha256": (
-                        "be93b4fb307812067194ca55f1b4b939"
-                        "4d2dbdb04d0bf985dcbb03e2f86abcbe"
+                    "cohortAuthoritySha256": (
+                        "b8fd9d4136b247782df4dae4671ef613"
+                        "23f587261f1aef11f7d4f53c9a1809f2"
                     ),
                     "frameworkSourceTreeManifestSha256": cls.source_digest,
                     "frontendStackManifestSha256": cls.frontend_digest,
@@ -4466,7 +4520,13 @@ class CanonicalPublisherTest(unittest.TestCase):
                 "LOGOS_SOLVER_CODEX_HOME": runtime_home,
                 "LOGOS_SOLVER_CODEX_CONFIG": f"{runtime_home}/config.toml",
                 "JAVA_HOME": str(
-                    (WORKFLOW_ROOT / "PaperTools/envs/sqlsolver-jdk17").resolve()
+                    configured_path(
+                        LOGOS_ROOT,
+                        "LOGOS_JAVA_HOME"
+                        if os.environ.get("LOGOS_JAVA_HOME")
+                        else "JAVA_HOME",
+                        required=True,
+                    )
                 ),
                 "MAVEN_VERSION": "3.9.11",
                 "LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE": str(

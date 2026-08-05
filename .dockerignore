@@ -5,7 +5,6 @@ var/
 .lia.cache
 .opam/
 benchmarks/
-../FinalExperiment/
 __pycache__/
 *.pyc
 *.aux

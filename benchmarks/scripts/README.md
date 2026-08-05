@@ -526,7 +526,7 @@ conservative relaxation.
 
 Raw runner output is written once under
 `var/tool-runs/<RUN_LABEL>/{qed,cosette}`. Canonical paper artifacts should be
-copied into the single-tool roots under `FinalExperiment/`; do not create
+copied into the destination configured by `LOGOS_FINAL_EXPERIMENT_DIR`; do not create
 parallel `latest/` or `run/` result aliases. Each canonical tool root has one
 `logs/` evidence subtree; it is not a second result cohort.
 

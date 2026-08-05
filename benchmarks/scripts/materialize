@@ -63,7 +63,7 @@ def main() -> int:
     parser.add_argument(
         "--skip-parser",
         action="store_true",
-        help="For QED only: write qed.sql without invoking PaperTools/scripts/qed-parser.",
+        help="For QED only: write qed.sql without invoking LOGOS_QED_PARSER.",
     )
     parser.add_argument(
         "--verify-non-rbot-baseline",
