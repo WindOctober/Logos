@@ -270,6 +270,8 @@ Definition TNullScalarOperatorOutputType
       TNullRequireArgumentTypes
         [type_numeric; type_Z; type_numeric; type_Z; type_Z; type_Z]
         argument_types type_numeric
+  | ScalarPowerHalfInt64ToInt32 =>
+      TNullRequireArgumentTypes [type_int64] argument_types type_int32
   | ScalarStringConcat =>
       TNullRequireArgumentTypes [type_string; type_string]
         argument_types type_string

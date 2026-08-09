@@ -192,6 +192,7 @@ fn canonical_operator_argument_hints(
             Some(FormalAttributeType::Z),
             Some(FormalAttributeType::Z),
         ],
+        ScalarOperator::PowerHalfInt64ToInt32 => repeated(FormalAttributeType::Int64),
         ScalarOperator::StringConcat => vec![None; arity],
         ScalarOperator::SubstringNonnegative => vec![
             None,
@@ -232,7 +233,8 @@ fn canonical_operator_result_type(
         ScalarOperator::Cast(ScalarCast::Int32ToInt64) => FormalAttributeType::Int64,
         ScalarOperator::Cast(
             ScalarCast::Int64ToInt32 | ScalarCast::NumericToInt32 | ScalarCast::StringToInt32,
-        ) => FormalAttributeType::Int32,
+        )
+        | ScalarOperator::PowerHalfInt64ToInt32 => FormalAttributeType::Int32,
         ScalarOperator::Cast(ScalarCast::StringToInt64) => FormalAttributeType::Int64,
         ScalarOperator::Cast(ScalarCast::DateToTimestamp) => {
             FormalAttributeType::Timestamp { precision: None }
@@ -2252,6 +2254,23 @@ impl LoweringContext {
                         );
                         None
                     })?;
+                    if target_ty == FormalAttributeType::Int32
+                        && let Some(base) = postgres_power_half_int64_base(cast_arg)
+                        && self.infer_numeric_operand_type(
+                            &format!("{path}.powerHalfBase"),
+                            base,
+                            scope,
+                        ) == Some(FormalAttributeType::Int64)
+                    {
+                        return Some(FormalAggregateTerm::ScalarCall {
+                            operator: ScalarOperator::PowerHalfInt64ToInt32,
+                            args: vec![self.lower_aggregate_term(
+                                &format!("{path}.powerHalfBase"),
+                                base,
+                                scope,
+                            )?],
+                        });
+                    }
                     let source_ty = self
                         .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
                         .or_else(|| {
@@ -3753,6 +3772,23 @@ impl LoweringContext {
                         );
                         None
                     })?;
+                    if target_ty == FormalAttributeType::Int32
+                        && let Some(base) = postgres_power_half_int64_base(cast_arg)
+                        && self.infer_numeric_operand_type(
+                            &format!("{path}.powerHalfBase"),
+                            base,
+                            scope,
+                        ) == Some(FormalAttributeType::Int64)
+                    {
+                        return Some(FormalFunctionTerm::ScalarCall {
+                            operator: ScalarOperator::PowerHalfInt64ToInt32,
+                            args: vec![self.lower_function_term(
+                                &format!("{path}.powerHalfBase"),
+                                base,
+                                scope,
+                            )?],
+                        });
+                    }
                     let source_ty = self
                         .infer_cast_operand_type(&format!("{path}.castArg"), cast_arg, scope)
                         .or_else(|| {
@@ -5676,6 +5712,41 @@ fn cast_arg(ast: &ScalarAst) -> Option<&ScalarAst> {
         _ => None,
     }
 }
+
+/// Recognize only the PostgreSQL exact-NUMERIC square-root shape emitted by
+/// the Calcite statistic rewrite.  The explicit NUMERIC annotation on [0.5]
+/// is essential: integral POWER arguments would select the float8 overload.
+fn postgres_power_half_int64_base(ast: &ScalarAst) -> Option<&ScalarAst> {
+    let ScalarAst::Call {
+        op: ScalarOp::Power,
+        args,
+        ..
+    } = ast
+    else {
+        return None;
+    };
+    let [base, exponent] = args.as_slice() else {
+        return None;
+    };
+    let ScalarAst::TypeAnnotation { expr, ty } = exponent else {
+        return None;
+    };
+    if !matches!(
+        formal_type_from_annotation(ty),
+        Some(
+            FormalAttributeType::Numeric
+                | FormalAttributeType::Decimal {
+                    precision: 2,
+                    scale: 1
+                }
+        )
+    ) || !matches!(expr.as_ref(), ScalarAst::Literal { raw } if raw.trim() == "0.5")
+    {
+        return None;
+    }
+    Some(base)
+}
+
 fn parse_interval_literal(raw: &str, ty: &str) -> Option<i64> {
     let value = raw.trim().parse::<i64>().ok()?;
     match interval_unit(ty)? {

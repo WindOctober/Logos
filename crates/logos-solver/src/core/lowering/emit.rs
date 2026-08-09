@@ -5232,6 +5232,7 @@ fn emit_rocq_scalar_operator(operator: ScalarOperator) -> String {
         }
         ScalarOperator::NumericDivideResultScale => "ScalarNumericDivideResultScale".to_owned(),
         ScalarOperator::NumericDivideTypmod => "ScalarNumericDivideTypmod".to_owned(),
+        ScalarOperator::PowerHalfInt64ToInt32 => "ScalarPowerHalfInt64ToInt32".to_owned(),
         ScalarOperator::StringConcat => "ScalarStringConcat".to_owned(),
         ScalarOperator::SubstringNonnegative => "ScalarSubstringNonnegative".to_owned(),
         ScalarOperator::TimestampAdd(unit) => format!(

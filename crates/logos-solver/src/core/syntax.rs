@@ -758,6 +758,7 @@ pub enum ScalarOperator {
     Negate(ScalarNumericKind),
     NumericDivideResultScale,
     NumericDivideTypmod,
+    PowerHalfInt64ToInt32,
     StringConcat,
     SubstringNonnegative,
     TimestampAdd(ScalarTimestampUnit),
@@ -1010,7 +1011,7 @@ impl ScalarOperator {
             Self::Add(_) | Self::Subtract(_) | Self::Multiply(_) => arity == 2,
             Self::Divide(ScalarNumericKind::Numeric) => arity == 4,
             Self::Divide(_) => arity == 2,
-            Self::Negate(_) => arity == 1,
+            Self::Negate(_) | Self::PowerHalfInt64ToInt32 => arity == 1,
             Self::NumericDivideResultScale => arity == 4,
             Self::NumericDivideTypmod => arity == 6,
             Self::StringConcat | Self::TimestampAdd(_) => arity == 2,
@@ -1704,7 +1705,8 @@ fn scalar_operator_result_type_class(
         ScalarOperator::Cast(ScalarCast::Int32ToInt64) => FormalValueTypeClass::Int64,
         ScalarOperator::Cast(
             ScalarCast::Int64ToInt32 | ScalarCast::NumericToInt32 | ScalarCast::StringToInt32,
-        ) => FormalValueTypeClass::Int32,
+        )
+        | ScalarOperator::PowerHalfInt64ToInt32 => FormalValueTypeClass::Int32,
         ScalarOperator::Cast(ScalarCast::StringToInt64) => FormalValueTypeClass::Int64,
         ScalarOperator::Cast(ScalarCast::DateToTimestamp) | ScalarOperator::TimestampAdd(_) => {
             FormalValueTypeClass::Timestamp
@@ -1801,6 +1803,7 @@ fn scalar_operator_argument_types_are_valid(
             FormalValueTypeClass::Z,
             FormalValueTypeClass::Z,
         ]),
+        ScalarOperator::PowerHalfInt64ToInt32 => exact(&[FormalValueTypeClass::Int64]),
         ScalarOperator::StringConcat => {
             exact(&[FormalValueTypeClass::String, FormalValueTypeClass::String])
         }

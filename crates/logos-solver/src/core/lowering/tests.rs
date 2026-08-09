@@ -798,6 +798,7 @@ fn scalar_operator_arity_table_rejects_nearby_malformed_calls() {
         (ScalarOperator::Negate(ScalarNumericKind::Int64), 1),
         (ScalarOperator::NumericDivideResultScale, 4),
         (ScalarOperator::NumericDivideTypmod, 6),
+        (ScalarOperator::PowerHalfInt64ToInt32, 1),
         (ScalarOperator::StringConcat, 2),
         (ScalarOperator::SubstringNonnegative, 3),
         (ScalarOperator::TimestampAdd(ScalarTimestampUnit::Second), 2),
@@ -8783,7 +8784,7 @@ fn infers_integral_power_arguments_as_postgres_double_overload() {
 }
 
 #[test]
-fn rejects_fixed_half_postgres_numeric_power_without_generic_power_semantics() {
+fn lowers_postgres_numeric_power_half_of_int64_directly_to_checked_int32() {
     let input = vec![typed_column("amount", SqlType::BigInt)];
     let query = Query {
         source_sql: None,
@@ -8820,13 +8821,12 @@ fn rejects_fixed_half_postgres_numeric_power_without_generic_power_semantics() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "decimal_function_not_supported")
+    assert_eq!(lowered.status, LoweringStatus::Lowered);
+    let module = emit_rocq_query_module(
+        lowered.query_expr.as_ref().unwrap(),
+        lowered.query_expr.as_ref().unwrap(),
     );
+    assert!(module.rocq_module.contains("ScalarPowerHalfInt64ToInt32"));
 }
 
 #[test]
