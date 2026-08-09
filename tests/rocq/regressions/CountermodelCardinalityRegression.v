@@ -24,10 +24,12 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation length_le :=
-  (@query_success_length_le T symbol_runtime_error aggregate_runtime_error
-    relname basesort instance unknown value_is_null).
+  (@query_success_length_le T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Theorem error_bound_regression :
   forall env outputs error bound,

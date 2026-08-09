@@ -9,6 +9,7 @@ import ctypes
 import dataclasses
 import datetime as dt
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -85,7 +86,7 @@ CASE_PROCESS_SUPERVISOR_ARGUMENTS = (
 )
 CASE_PROCESS_SUPERVISOR_PID_ENVIRONMENT = "LOGOS_CASE_SUPERVISOR_PID"
 TRUSTED_ROCQ_RUNTIME_SNAPSHOT_POLICY = (
-    "run-private-immutable-rocq-runtime-bwrap-closure-v1"
+    "content-addressed-immutable-rocq-runtime-bwrap-closure-v1"
 )
 TRUSTED_ROCQ_RUNTIME_SNAPSHOT_ALGORITHM = (
     "logos-trusted-rocq-runtime-snapshot-v1"
@@ -113,12 +114,12 @@ TRUSTED_ROCQ_RUNTIME_FINDLIB_REWRITE_POLICY = (
 )
 TRUSTED_ROCQ_RUNTIME_CAPTURE_MTIME_NS = 1_000_000_000
 TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY = (
-    "run-private-forced-source-build-closure-v2"
+    "content-addressed-forced-source-build-closure-v3"
 )
 TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_ALGORITHM = (
-    "logos-trusted-rocq-authority-snapshot-v2"
+    "logos-trusted-rocq-authority-snapshot-v3"
 )
-TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_SCHEMA_VERSION = 2
+TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_SCHEMA_VERSION = 3
 TRUSTED_ROCQ_AUTHORITY_BUILD_POLICY = (
     "source-only-capture-sequential-private-compile-fresh-object-v1"
 )
@@ -129,6 +130,11 @@ TRUSTED_ROCQ_AUTHORITY_ENVIRONMENT_POLICY = (
     "clear-then-fixed-snapshot-ocaml-xdg-private-build-v2"
 )
 TRUSTED_ROCQ_AUTHORITY_BUILD_TIMEOUT_SECONDS = 1800
+DEFAULT_TRUSTED_ROCQ_CACHE_ROOT = (
+    LOGOS_ROOT / "var/logos-solver/cache/trusted-rocq"
+)
+TRUSTED_ROCQ_RUNTIME_REFERENCE_NAME = "trusted-rocq-runtime-ref.json"
+TRUSTED_ROCQ_AUTHORITY_REFERENCE_NAME = "trusted-rocq-authority-ref.json"
 SOLVER_PID_MARKER = ".logos-solver.pid"
 SHORT_DIAGNOSTIC_SOCKET_ROOT = Path("/tmp")
 PROOF_CONTAINER_MANAGED_LABEL = "org.logos.proof-agent.managed"
@@ -304,6 +310,7 @@ TRUSTED_HOST_TOOL_NAMES = (
     "readlink",
     "stat",
     "id",
+    "flock",
 )
 FRONTEND_STACK_MANIFEST_ALGORITHM = "logos-sql-frontend-stack-manifest-v2"
 FRONTEND_STACK_MANIFEST_SCHEMA_VERSION = 2
@@ -351,6 +358,9 @@ SOLVER_EXPLICIT_ENVIRONMENT_NAMES = (
     "JAVA_HOME",
     "MAVEN_VERSION",
     "LOGOS_CALCITE_RUNTIME_CLASSPATH_FILE",
+    "LOGOS_SHARED_ROCQ_PREFIX_CACHE_DIR",
+    "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR",
+    "LOGOS_TRUSTED_ROCQ_AUTHORITY_SHA256",
 )
 CODEX_PROVIDER_MANIFEST_ALGORITHM = "logos-codex-provider-manifest-v1"
 POSTGRES_PROFILE_MANIFEST_ALGORITHM = "logos-postgres-server-profile-v1"
@@ -649,6 +659,7 @@ class RunConfig:
     proof_docker_image_effective: str
     proof_docker_image_identity: dict[str, Any]
     proof_rocq_opam_switch: Path
+    trusted_rocq_cache_root: Path
     allow_framework_source_drift: bool
     framework_source_tree: dict[str, Any]
     input_manifest: dict[str, Any]
@@ -776,10 +787,20 @@ def main() -> int:
             print_case_list(selected)
             return 0
 
-        validate_frozen_full_launch_request(input_root, cases, selected, args)
+        effective_postgres_url = required_postgres_url(args)
+        validate_frozen_full_launch_request(
+            input_root,
+            cases,
+            selected,
+            args,
+            effective_postgres_url,
+        )
+        codex_provider_capture = capture_codex_provider_environment()
+        postgres_profile = postgres_profile_document(effective_postgres_url)
 
         solver_source_bin = resolve_path(args.solver_bin)
         requested_proof_rocq_opam_switch = resolve_path(args.proof_rocq_opam_switch)
+        trusted_rocq_cache_root = resolve_path(args.trusted_rocq_cache_dir)
         run_dir = prepare_run_dir(args.run_dir, resume=args.resume)
         framework_source_tree = framework_source_tree_record(
             run_dir,
@@ -823,6 +844,7 @@ def main() -> int:
         rocq_runtime_snapshot = pin_trusted_rocq_runtime(
             requested_proof_rocq_opam_switch,
             run_dir,
+            trusted_rocq_cache_root,
             resume=args.resume,
         )
         proof_rocq_opam_switch = resolve_artifact_path(
@@ -834,6 +856,7 @@ def main() -> int:
             proof_rocq_opam_switch,
             rocq_runtime_snapshot,
             framework_source_tree,
+            trusted_rocq_cache_root,
             resume=args.resume,
         )
         proof_authority_root = resolve_artifact_path(
@@ -861,18 +884,17 @@ def main() -> int:
         )
         codex_provider, codex_source_home = codex_provider_record(
             run_dir,
+            codex_provider_capture,
             resume=args.resume,
         )
         frozen_benchmark = frozen_benchmark_record(input_root, cases, selected)
         proof_docker_image_identity = resolve_docker_image_identity(
             args.proof_docker_image
         )
-        effective_postgres_url = args.postgres_url or os.environ.get(
-            "LOGOS_POSTGRES_URL"
-        )
         postgres_server_profile = postgres_server_profile_record(
             run_dir,
             effective_postgres_url,
+            postgres_profile,
             require_frozen=is_frozen_full_selection(input_root, cases, selected),
             resume=args.resume,
         )
@@ -930,6 +952,7 @@ def main() -> int:
             ],
             proof_docker_image_identity=proof_docker_image_identity,
             proof_rocq_opam_switch=proof_rocq_opam_switch,
+            trusted_rocq_cache_root=trusted_rocq_cache_root,
             allow_framework_source_drift=args.allow_framework_source_drift,
             framework_source_tree=framework_source_tree,
             input_manifest=input_manifest,
@@ -1053,8 +1076,8 @@ def argument_parser() -> argparse.ArgumentParser:
         "--no-rocq-build",
         action="store_true",
         help=(
-            "Compatibility-only flag with no effect: every run still rebuilds the "
-            "trusted Rocq authority from bound sources in its private runtime."
+            "Compatibility-only flag with no effect: the runner always resolves or "
+            "builds the exact content-addressed trusted Rocq authority."
         ),
     )
     parser.add_argument(
@@ -1124,6 +1147,17 @@ def argument_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--trusted-rocq-cache-dir",
+        default=os.environ.get(
+            "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
+            str(DEFAULT_TRUSTED_ROCQ_CACHE_ROOT),
+        ),
+        help=(
+            "Content-addressed immutable Rocq runtime/authority cache "
+            "(default: var/logos-solver/cache/trusted-rocq)."
+        ),
+    )
+    parser.add_argument(
         "--cohort16-gate-summary",
         help=(
             "Prior complete frozen cohort16 runner-summary.json. "
@@ -1149,7 +1183,11 @@ def argument_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--postgres-url", help="Override LOGOS_POSTGRES_URL for each solver case."
+        "--postgres-url",
+        help=(
+            "PostgreSQL validation URL for every executed case; overrides "
+            "LOGOS_POSTGRES_URL. Not required by --list."
+        ),
     )
     parser.add_argument("--sql-time-zone", default="UTC")
     parser.add_argument("--sql-default-collation", default="C")
@@ -2543,7 +2581,9 @@ def codex_cli_record() -> dict[str, Any]:
 
 
 def build_codex_provider_manifest(
-    config_path: Path, endpoint_identity: dict[str, Any]
+    config_path: Path,
+    endpoint_identity: dict[str, Any],
+    host_codex_cli: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not config_path.is_file() or config_path.is_symlink():
         raise RunnerError(f"sanitized Codex config snapshot is missing: {config_path}")
@@ -2565,7 +2605,9 @@ def build_codex_provider_manifest(
         "model": EXPECTED_MODEL,
         "reasoningEffort": EXPECTED_REASONING_EFFORT,
         "endpoint": endpoint_identity,
-        "hostCodexCli": codex_cli_record(),
+        "hostCodexCli": (
+            host_codex_cli if host_codex_cli is not None else codex_cli_record()
+        ),
         "commandShell": {
             "shellExecutable": "/usr/bin/bash",
             "shellArguments": ["--noprofile", "--norc", "-c"],
@@ -2580,11 +2622,20 @@ def build_codex_provider_manifest(
     }
 
 
-def codex_provider_record(run_dir: Path, *, resume: bool) -> tuple[dict[str, Any], Path]:
-    encoded, endpoint, source_home = sanitized_codex_config()
+def codex_provider_record(
+    run_dir: Path,
+    capture: tuple[bytes, dict[str, Any], Path, dict[str, Any]],
+    *,
+    resume: bool,
+) -> tuple[dict[str, Any], Path]:
+    encoded, endpoint, source_home, host_codex_cli = capture
     config_path = run_dir / "codex-provider-config.toml"
     config_digest = write_or_validate_secure_snapshot(config_path, encoded, resume=resume)
-    document = build_codex_provider_manifest(config_path, endpoint)
+    document = build_codex_provider_manifest(
+        config_path,
+        endpoint,
+        host_codex_cli,
+    )
     manifest_path = run_dir / "codex-provider-manifest.json"
     manifest_digest = write_or_validate_manifest(
         manifest_path,
@@ -2809,14 +2860,23 @@ def postgres_profile_document(postgres_url: str | None) -> dict[str, Any]:
 
 def postgres_server_profile_record(
     run_dir: Path,
-    postgres_url: str | None,
+    postgres_url: str,
+    document: dict[str, Any],
     *,
     require_frozen: bool,
     resume: bool,
 ) -> dict[str, Any]:
-    if require_frozen and postgres_url is None:
-        raise RunnerError("frozen full run requires an attested PostgreSQL server URL")
-    document = postgres_profile_document(postgres_url)
+    expected_url_sha256 = hashlib.sha256(postgres_url.encode("utf-8")).hexdigest()
+    if (
+        not document.get("configured")
+        or document.get("urlSha256") != expected_url_sha256
+        or not isinstance(document.get("profile"), dict)
+    ):
+        raise RunnerError("early PostgreSQL server-profile capture is inconsistent")
+    if require_frozen and document["profile"].get("serverVersionNum") != (
+        EXPECTED_POSTGRES_VERSION_NUM
+    ):
+        raise RunnerError("frozen full run requires the attested PostgreSQL profile")
     path = run_dir / "postgres-server-profile.json"
     digest = write_or_validate_manifest(
         path,
@@ -3485,12 +3545,72 @@ def trusted_rocq_runtime_snapshot_summary(
     }
 
 
+def content_addressed_cache_key(kind: str, payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        canonical_json_bytes(
+            {
+                "kind": kind,
+                "schemaVersion": 1,
+                "payload": payload,
+            }
+        )
+    ).hexdigest()
+
+
+def trusted_runtime_capture_identity(capture: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "algorithm": TRUSTED_ROCQ_RUNTIME_SNAPSHOT_ALGORITHM,
+        "policy": TRUSTED_ROCQ_RUNTIME_SNAPSHOT_POLICY,
+        "findlibRewritePolicy": TRUSTED_ROCQ_RUNTIME_FINDLIB_REWRITE_POLICY,
+        "files": [
+            {
+                key: record[key]
+                for key in (
+                    "path",
+                    "capture",
+                    "sourceSha256",
+                    "sourceBytes",
+                    "mode",
+                )
+            }
+            for record in capture["files"]
+        ],
+    }
+
+
+def write_cache_reference(path: Path, value: dict[str, Any]) -> None:
+    if path.exists() or path.is_symlink():
+        raise RunnerError(f"cache reference already exists: {path}")
+    atomic_write_bytes(path, canonical_json_bytes(value))
+    path.chmod(0o444)
+
+
+def read_cache_reference(path: Path, kind: str) -> dict[str, Any]:
+    if (
+        not path.is_file()
+        or path.is_symlink()
+        or stat.S_IMODE(path.stat().st_mode) != 0o444
+    ):
+        raise RunnerError(f"{kind} cache reference is missing or unsafe: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RunnerError(f"cannot read {kind} cache reference: {error}") from error
+    if (
+        not isinstance(value, dict)
+        or value.get("kind") != kind
+        or path.read_bytes() != canonical_json_bytes(value)
+    ):
+        raise RunnerError(f"{kind} cache reference is malformed")
+    return value
+
+
 def load_trusted_rocq_runtime_snapshot_for_switch(
     switch: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     switch = switch.expanduser().resolve()
     if switch.name != TRUSTED_ROCQ_RUNTIME_SNAPSHOT_NAME or switch.parent.name != "runtime":
-        raise RunnerError("trusted Rocq switch is not the canonical run-private snapshot")
+        raise RunnerError("trusted Rocq switch is not a canonical immutable snapshot")
     manifest_path = switch.parent.parent / TRUSTED_ROCQ_RUNTIME_MANIFEST_NAME
     document, digest = read_trusted_rocq_runtime_snapshot_manifest(manifest_path)
     verify_trusted_rocq_runtime_snapshot_tree(switch, document)
@@ -3500,64 +3620,103 @@ def load_trusted_rocq_runtime_snapshot_for_switch(
 
 
 def pin_trusted_rocq_runtime(
-    source_switch: Path, run_dir: Path, *, resume: bool
+    source_switch: Path,
+    run_dir: Path,
+    cache_root: Path,
+    *,
+    resume: bool,
 ) -> dict[str, Any]:
-    runtime_dir = run_dir / "runtime"
-    destination = runtime_dir / TRUSTED_ROCQ_RUNTIME_SNAPSHOT_NAME
-    manifest_path = run_dir / TRUSTED_ROCQ_RUNTIME_MANIFEST_NAME
+    reference_path = run_dir / TRUSTED_ROCQ_RUNTIME_REFERENCE_NAME
     if resume:
+        reference = read_cache_reference(reference_path, "trusted-rocq-runtime")
+        destination = resolve_artifact_path(reference["root"])
+        manifest_path = resolve_artifact_path(reference["manifestPath"])
         document, digest = read_trusted_rocq_runtime_snapshot_manifest(manifest_path)
+        if digest != reference.get("manifestSha256"):
+            raise RunnerError("trusted Rocq runtime cache reference digest drifted")
         verify_trusted_rocq_runtime_snapshot_tree(destination, document)
         return trusted_rocq_runtime_snapshot_summary(
             destination, manifest_path, document, digest
         )
-    if destination.exists() or destination.is_symlink() or manifest_path.exists():
-        raise RunnerError("trusted Rocq runtime snapshot already exists")
-    runtime_dir.mkdir(parents=True, exist_ok=True)
+
     initial_capture = trusted_rocq_runtime_source_capture(source_switch)
-    stage = Path(tempfile.mkdtemp(prefix=".trusted-rocq-switch.", dir=runtime_dir))
-    published = False
+    cache_key = content_addressed_cache_key(
+        "trusted-rocq-runtime", trusted_runtime_capture_identity(initial_capture)
+    )
+    kind_root = cache_root / "runtime"
+    bundle = kind_root / cache_key
+    destination = bundle / "runtime" / TRUSTED_ROCQ_RUNTIME_SNAPSHOT_NAME
+    manifest_path = bundle / TRUSTED_ROCQ_RUNTIME_MANIFEST_NAME
+    kind_root.mkdir(parents=True, exist_ok=True)
+    lock_path = kind_root / f".{cache_key}.lock"
+    lock_descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        files = []
-        for source_record in initial_capture["files"]:
-            files.append(
-                copy_runtime_capture_file(
-                    source_record,
-                    stage / source_record["path"],
-                    destination,
-                )
+        fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
+        if bundle.exists():
+            document, digest = read_trusted_rocq_runtime_snapshot_manifest(manifest_path)
+            verify_trusted_rocq_runtime_snapshot_tree(destination, document)
+        else:
+            stage_bundle = Path(
+                tempfile.mkdtemp(prefix=f".{cache_key}.", dir=kind_root)
             )
-        if trusted_rocq_runtime_source_capture(source_switch) != initial_capture:
-            raise RunnerError("trusted Rocq runtime changed during snapshot capture")
-        document = trusted_rocq_runtime_snapshot_document(initial_capture, files)
-        for directory, directory_names, _ in os.walk(stage, topdown=False):
-            for name in directory_names:
-                (Path(directory) / name).chmod(0o555)
-            Path(directory).chmod(0o555)
-        # The staged findlib file already names the final atomically published
-        # prefix. Structural verification is meaningful only after that rename.
-        trusted_rocq_runtime_expected_files(document)
-        os.replace(stage, destination)
-        published = True
-        directory_fd = os.open(runtime_dir, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+            stage_destination = (
+                stage_bundle / "runtime" / TRUSTED_ROCQ_RUNTIME_SNAPSHOT_NAME
+            )
+            published = False
+            try:
+                files = []
+                for source_record in initial_capture["files"]:
+                    files.append(
+                        copy_runtime_capture_file(
+                            source_record,
+                            stage_destination / source_record["path"],
+                            destination,
+                        )
+                    )
+                if trusted_rocq_runtime_source_capture(source_switch) != initial_capture:
+                    raise RunnerError("trusted Rocq runtime changed during snapshot capture")
+                document = trusted_rocq_runtime_snapshot_document(initial_capture, files)
+                for directory, directory_names, _ in os.walk(
+                    stage_destination, topdown=False
+                ):
+                    for name in directory_names:
+                        (Path(directory) / name).chmod(0o555)
+                    Path(directory).chmod(0o555)
+                encoded = canonical_json_bytes(document)
+                stage_manifest = stage_bundle / TRUSTED_ROCQ_RUNTIME_MANIFEST_NAME
+                atomic_write_bytes(stage_manifest, encoded)
+                stage_manifest.chmod(0o444)
+                stage_bundle.chmod(0o555)
+                os.replace(stage_bundle, bundle)
+                published = True
+                directory_fd = os.open(kind_root, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                if not published and stage_bundle.exists():
+                    make_tree_writable_for_cleanup(stage_bundle)
+                    shutil.rmtree(stage_bundle)
+            document, digest = read_trusted_rocq_runtime_snapshot_manifest(manifest_path)
+            verify_trusted_rocq_runtime_snapshot_tree(destination, document)
     finally:
-        if not published and stage.exists():
-            make_tree_writable_for_cleanup(stage)
-            shutil.rmtree(stage)
-    encoded = canonical_json_bytes(document)
-    atomic_write_bytes(manifest_path, encoded)
-    manifest_path.chmod(0o444)
-    digest = hashlib.sha256(encoded).hexdigest()
-    if sha256_file(manifest_path) != digest:
-        raise RunnerError("trusted Rocq runtime manifest drifted after publication")
-    verify_trusted_rocq_runtime_snapshot_tree(destination, document)
-    return trusted_rocq_runtime_snapshot_summary(
+        fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+        os.close(lock_descriptor)
+
+    summary = trusted_rocq_runtime_snapshot_summary(
         destination, manifest_path, document, digest
     )
+    write_cache_reference(
+        reference_path,
+        {
+            "schemaVersion": 1,
+            "kind": "trusted-rocq-runtime",
+            "cacheKey": cache_key,
+            **summary,
+        },
+    )
+    return summary
 
 
 def frozen_git_blob_bytes(repository: Path, commit: str, relative: str) -> bytes:
@@ -3969,6 +4128,7 @@ def trusted_checker_environment_policy_record() -> dict[str, Any]:
             "LOGOS_PROOF_WORKDIR",
             "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
             "LOGOS_ROCQ_OPAM_SWITCH",
+            "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR",
         ],
         "unlistedEnvironmentPolicy": "excluded_by_env_clear_before_process_start",
         "explicitlyExcludedVariables": list(TRUSTED_LAUNCH_EXCLUDED_VARIABLES),
@@ -4480,7 +4640,7 @@ def build_trusted_stack_manifest(
     }
     executables["bwrap"].update(
         {
-            "selectionPolicy": "exact-run-private-switch-path-v1",
+            "selectionPolicy": "exact-content-addressed-switch-path-v1",
             "runtimeSnapshotManifestSha256": runtime_snapshot["manifestSha256"],
             "selectedPath": str(bwrap_path),
             "selectedPathIsSymlink": False,
@@ -4750,7 +4910,13 @@ def validate_frozen_full_launch_request(
     available_cases: list[BenchmarkCase],
     selected_cases: list[BenchmarkCase],
     args: argparse.Namespace,
+    effective_postgres_url: str | None = None,
 ) -> None:
+    effective_postgres_url = (
+        effective_postgres_url
+        or args.postgres_url
+        or os.environ.get("LOGOS_POSTGRES_URL")
+    )
     full = is_frozen_full_selection(input_root, available_cases, selected_cases)
     if not full:
         if args.allow_ungated_full_run:
@@ -4775,7 +4941,7 @@ def validate_frozen_full_launch_request(
             "--allow-framework-source-drift is not permitted for the exact frozen "
             "389-case campaign"
         )
-    if not args.postgres_url:
+    if not effective_postgres_url:
         errors.append("--postgres-url is required for the frozen full run")
     if not args.allow_ungated_full_run and not args.cohort16_gate_summary:
         errors.append("--cohort16-gate-summary is required")
@@ -4783,6 +4949,22 @@ def validate_frozen_full_launch_request(
         raise RunnerError(
             "frozen full 389-case launch configuration is invalid: " + "; ".join(errors)
         )
+
+
+def required_postgres_url(args: argparse.Namespace) -> str:
+    value = args.postgres_url or os.environ.get("LOGOS_POSTGRES_URL")
+    if not isinstance(value, str) or not value.strip():
+        raise RunnerError(
+            "PostgreSQL validation is required for every Logos execution; "
+            "pass --postgres-url or set LOGOS_POSTGRES_URL"
+        )
+    return value
+
+
+def capture_codex_provider_environment(
+) -> tuple[bytes, dict[str, Any], Path, dict[str, Any]]:
+    encoded, endpoint, source_home = sanitized_codex_config()
+    return encoded, endpoint, source_home, codex_cli_record()
 
 
 def resolve_artifact_path(value: str) -> Path:
@@ -5253,6 +5435,7 @@ def cohort16_gate_record(
         proof_rocq_opam_switch=resolve_artifact_path(
             trusted_stack["rocqRuntimeSnapshot"]["root"]
         ),
+        trusted_rocq_cache_root=gate_path.parent / ".unused-trusted-rocq-cache",
         allow_framework_source_drift=args.allow_framework_source_drift,
         framework_source_tree=framework_source_tree,
         input_manifest=input_manifest,
@@ -6661,7 +6844,6 @@ def private_rocq_inspection_tool_record(
         not resolved.is_file()
         or resolved.is_symlink()
         or metadata.st_size == 0
-        or metadata.st_uid != 0
         or metadata.st_mode & 0o022
         or not os.access(resolved, os.X_OK)
         or (expected_sha256s is not None and digest not in expected_sha256s)
@@ -6779,7 +6961,6 @@ def private_rocq_system_runtime(
                 not source.is_file()
                 or source.is_symlink()
                 or metadata.st_size == 0
-                or metadata.st_uid != 0
                 or metadata.st_mode & 0o022
             ):
                 raise RunnerError(
@@ -7206,13 +7387,9 @@ def validate_rocq_authority_external_bindings(
     framework_source_tree: dict[str, Any],
 ) -> None:
     if (
-        document.get("runtimeSnapshotManifestPath")
-        != runtime_snapshot.get("manifestPath")
-        or document.get("runtimeSnapshotManifestSha256")
+        document.get("runtimeSnapshotManifestSha256")
         != runtime_snapshot.get("manifestSha256")
         or document.get("runtimeSnapshotPolicy") != runtime_snapshot.get("policy")
-        or document.get("frameworkSourceManifestPath")
-        != framework_source_tree.get("manifestPath")
         or document.get("frameworkSourceManifestSha256")
         != framework_source_tree.get("manifestSha256")
     ):
@@ -7235,13 +7412,11 @@ def pin_trusted_rocq_authority(
     runtime_switch: Path,
     runtime_snapshot: dict[str, Any],
     framework_source_tree: dict[str, Any],
+    cache_root: Path,
     *,
     resume: bool,
 ) -> dict[str, Any]:
-    runtime_dir = run_dir / "runtime"
-    destination = runtime_dir / "trusted-rocq-authority"
-    manifest_path = run_dir / "trusted-rocq-authority-manifest.json"
-    build_log_path = run_dir / "trusted-rocq-authority-build.log"
+    reference_path = run_dir / TRUSTED_ROCQ_AUTHORITY_REFERENCE_NAME
 
     if source_root.resolve() != LOGOS_ROOT.resolve():
         raise RunnerError("trusted Rocq authority build requires the framework repository root")
@@ -7252,7 +7427,12 @@ def pin_trusted_rocq_authority(
         raise RunnerError("trusted Rocq authority received a drifting runtime snapshot")
 
     if resume:
+        reference = read_cache_reference(reference_path, "trusted-rocq-authority")
+        destination = resolve_artifact_path(reference["root"])
+        manifest_path = resolve_artifact_path(reference["manifestPath"])
         document, digest = read_rocq_authority_snapshot_manifest(manifest_path)
+        if digest != reference.get("manifestSha256"):
+            raise RunnerError("trusted Rocq authority cache reference digest drifted")
         verify_rocq_authority_snapshot_tree(destination, document)
         validate_rocq_authority_external_bindings(
             document, runtime_snapshot, framework_source_tree
@@ -7261,120 +7441,154 @@ def pin_trusted_rocq_authority(
             destination, manifest_path, document, digest
         )
 
-    if (
-        destination.exists()
-        or destination.is_symlink()
-        or manifest_path.exists()
-        or build_log_path.exists()
-    ):
-        raise RunnerError("trusted Rocq authority snapshot already exists")
-    runtime_dir.mkdir(parents=True, exist_ok=True)
     build_inputs = trusted_rocq_source_build_inputs(framework_source_tree)
-    build_stage = Path(
-        tempfile.mkdtemp(prefix=".trusted-rocq-build.", dir=runtime_dir)
+    compiler = trusted_executable_record(
+        runtime_switch / "_opam/bin/rocq", "private authority Rocq compiler"
     )
-    stage = Path(tempfile.mkdtemp(prefix=".trusted-rocq-authority.", dir=runtime_dir))
-    published = False
+    cache_key = content_addressed_cache_key(
+        "trusted-rocq-authority",
+        {
+            "algorithm": TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_ALGORITHM,
+            "policy": TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY,
+            "buildPolicy": TRUSTED_ROCQ_AUTHORITY_BUILD_POLICY,
+            "namespacePolicy": TRUSTED_ROCQ_AUTHORITY_NAMESPACE_POLICY,
+            "environmentPolicy": TRUSTED_ROCQ_AUTHORITY_ENVIRONMENT_POLICY,
+            "frameworkSourceManifestSha256": framework_source_tree[
+                "manifestSha256"
+            ],
+            "runtimeSnapshotManifestSha256": runtime_snapshot["manifestSha256"],
+            "compilerSha256": compiler["sha256"],
+        },
+    )
+    kind_root = cache_root / "authority"
+    bundle = kind_root / cache_key
+    destination = bundle / "runtime" / "trusted-rocq-authority"
+    manifest_path = bundle / "trusted-rocq-authority-manifest.json"
+    build_log_path = bundle / "trusted-rocq-authority-build.log"
+    kind_root.mkdir(parents=True, exist_ok=True)
+    lock_path = kind_root / f".{cache_key}.lock"
+    lock_descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        outputs, build_log_bytes, private_build_namespace = (
-            build_private_trusted_rocq_objects(
-                source_root,
-                build_stage,
-                runtime_switch,
-                build_inputs,
+        fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
+        if bundle.exists():
+            document, digest = read_rocq_authority_snapshot_manifest(manifest_path)
+            verify_rocq_authority_snapshot_tree(destination, document)
+            validate_rocq_authority_external_bindings(
+                document, runtime_snapshot, framework_source_tree
             )
-        )
-        if trusted_rocq_source_build_inputs(framework_source_tree) != build_inputs:
-            raise RunnerError("framework-bound Rocq sources changed during private build")
-        output_by_source = {record["sourcePath"]: record for record in outputs}
-        for source_record in build_inputs["sources"]:
-            output = output_by_source[source_record["sourcePath"]]
-            copy_trusted_authority_file(
-                build_stage / source_record["sourcePath"],
-                stage / source_record["sourcePath"],
-                source_record["sourceSha256"],
-                source_record["sourceBytes"],
+        else:
+            stage_bundle = Path(
+                tempfile.mkdtemp(prefix=f".{cache_key}.", dir=kind_root)
             )
-            copy_trusted_authority_file(
-                build_stage / output["objectPath"],
-                stage / output["objectPath"],
-                output["objectSha256"],
-                output["objectBytes"],
+            stage_destination = (
+                stage_bundle / "runtime" / "trusted-rocq-authority"
             )
-        captured_pairs = trusted_source_object_pairs(stage)
-        pairs_by_source = {
-            record["sourcePath"]: record for record in captured_pairs
-        }
-        if set(pairs_by_source) != {
-            record["sourcePath"] for record in outputs
-        }:
-            raise RunnerError("private Rocq authority output set drifted")
-        initial_pairs = captured_pairs
-        atomic_write_bytes(build_log_path, build_log_bytes)
-        build_log_path.chmod(0o444)
-        build_log = {
-            "path": workspace_display_path(build_log_path),
-            "sha256": sha256_file(build_log_path),
-            "bytes": build_log_path.stat().st_size,
-        }
-        compiler = trusted_executable_record(
-            runtime_switch / "_opam/bin/rocq", "private authority Rocq compiler"
-        )
-        document = rocq_authority_snapshot_document(
-            initial_pairs,
-            outputs,
-            build_inputs,
-            runtime_snapshot,
-            compiler,
-            build_log,
-            private_build_namespace,
-        )
-        runtime_document_before_publish, runtime_snapshot_before_publish = (
-            load_trusted_rocq_runtime_snapshot_for_switch(runtime_switch)
-        )
-        if (
-            runtime_document_before_publish != runtime_document
-            or runtime_snapshot_before_publish != runtime_snapshot
-        ):
-            raise RunnerError("trusted Rocq runtime changed before authority publication")
-        for directory, directory_names, _ in os.walk(stage, topdown=False):
-            for name in directory_names:
-                (Path(directory) / name).chmod(0o555)
-            Path(directory).chmod(0o555)
-        verify_rocq_authority_snapshot_tree(stage, document)
-        os.replace(stage, destination)
-        published = True
-        directory_fd = os.open(runtime_dir, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+            build_stage = Path(
+                tempfile.mkdtemp(prefix=".trusted-rocq-build.", dir=kind_root)
+            )
+            published = False
+            try:
+                outputs, build_log_bytes, private_build_namespace = (
+                    build_private_trusted_rocq_objects(
+                        source_root,
+                        build_stage,
+                        runtime_switch,
+                        build_inputs,
+                    )
+                )
+                if trusted_rocq_source_build_inputs(framework_source_tree) != build_inputs:
+                    raise RunnerError(
+                        "framework-bound Rocq sources changed during private build"
+                    )
+                output_by_source = {
+                    record["sourcePath"]: record for record in outputs
+                }
+                for source_record in build_inputs["sources"]:
+                    output = output_by_source[source_record["sourcePath"]]
+                    copy_trusted_authority_file(
+                        build_stage / source_record["sourcePath"],
+                        stage_destination / source_record["sourcePath"],
+                        source_record["sourceSha256"],
+                        source_record["sourceBytes"],
+                    )
+                    copy_trusted_authority_file(
+                        build_stage / output["objectPath"],
+                        stage_destination / output["objectPath"],
+                        output["objectSha256"],
+                        output["objectBytes"],
+                    )
+                captured_pairs = trusted_source_object_pairs(stage_destination)
+                if {record["sourcePath"] for record in captured_pairs} != {
+                    record["sourcePath"] for record in outputs
+                }:
+                    raise RunnerError("private Rocq authority output set drifted")
+                stage_build_log_path = (
+                    stage_bundle / "trusted-rocq-authority-build.log"
+                )
+                atomic_write_bytes(stage_build_log_path, build_log_bytes)
+                stage_build_log_path.chmod(0o444)
+                build_log = {
+                    "path": workspace_display_path(build_log_path),
+                    "sha256": sha256_file(stage_build_log_path),
+                    "bytes": stage_build_log_path.stat().st_size,
+                }
+                document = rocq_authority_snapshot_document(
+                    captured_pairs,
+                    outputs,
+                    build_inputs,
+                    runtime_snapshot,
+                    compiler,
+                    build_log,
+                    private_build_namespace,
+                )
+                for directory, directory_names, _ in os.walk(
+                    stage_destination, topdown=False
+                ):
+                    for name in directory_names:
+                        (Path(directory) / name).chmod(0o555)
+                    Path(directory).chmod(0o555)
+                stage_manifest_path = (
+                    stage_bundle / "trusted-rocq-authority-manifest.json"
+                )
+                atomic_write_bytes(stage_manifest_path, canonical_json_bytes(document))
+                stage_manifest_path.chmod(0o444)
+                stage_bundle.chmod(0o555)
+                os.replace(stage_bundle, bundle)
+                published = True
+                directory_fd = os.open(kind_root, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                if build_stage.exists():
+                    make_tree_writable_for_cleanup(build_stage)
+                    shutil.rmtree(build_stage)
+                if not published and stage_bundle.exists():
+                    make_tree_writable_for_cleanup(stage_bundle)
+                    shutil.rmtree(stage_bundle)
+            document, digest = read_rocq_authority_snapshot_manifest(manifest_path)
+            verify_rocq_authority_snapshot_tree(destination, document)
+            validate_rocq_authority_external_bindings(
+                document, runtime_snapshot, framework_source_tree
+            )
     finally:
-        if not published and stage.exists():
-            make_tree_writable_for_cleanup(stage)
-            shutil.rmtree(stage)
-        if build_stage.exists():
-            make_tree_writable_for_cleanup(build_stage)
-            shutil.rmtree(build_stage)
+        fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+        os.close(lock_descriptor)
 
-    encoded = canonical_json_bytes(document)
-    atomic_write_bytes(manifest_path, encoded)
-    manifest_path.chmod(0o444)
-    digest = hashlib.sha256(encoded).hexdigest()
-    if sha256_file(manifest_path) != digest:
-        raise RunnerError("trusted Rocq authority snapshot manifest drifted")
-    verify_rocq_authority_snapshot_tree(destination, document)
-    runtime_document_after, runtime_snapshot_after = (
-        load_trusted_rocq_runtime_snapshot_for_switch(runtime_switch)
-    )
-    if runtime_document_after != runtime_document or runtime_snapshot_after != runtime_snapshot:
-        raise RunnerError("trusted Rocq runtime changed during private authority build")
-    validate_rocq_authority_external_bindings(
-        document, runtime_snapshot, framework_source_tree
-    )
-    return rocq_authority_snapshot_summary(
+    summary = rocq_authority_snapshot_summary(
         destination, manifest_path, document, digest
     )
+    write_cache_reference(
+        reference_path,
+        {
+            "schemaVersion": 1,
+            "kind": "trusted-rocq-authority",
+            "cacheKey": cache_key,
+            **summary,
+        },
+    )
+    return summary
 
 
 def sql_environment_record(config: RunConfig) -> dict[str, str]:
@@ -7898,11 +8112,9 @@ def verify_run_integrity(
     if runtime_snapshot != config.trusted_stack.get("rocqRuntimeSnapshot"):
         raise RunnerError("trusted Rocq runtime snapshot binding changed")
 
-    authority_manifest_path = config.run_dir / "trusted-rocq-authority-manifest.json"
-    if config.rocq_authority_snapshot["manifestPath"] != workspace_display_path(
-        authority_manifest_path
-    ):
-        raise RunnerError("trusted Rocq authority manifest path binding changed")
+    authority_manifest_path = resolve_artifact_path(
+        config.rocq_authority_snapshot["manifestPath"]
+    )
     authority_document, authority_digest = read_rocq_authority_snapshot_manifest(
         authority_manifest_path
     )
@@ -8698,6 +8910,15 @@ def solver_environment(config: RunConfig) -> dict[str, str]:
     )
     for name in FRONTEND_EXPLICIT_ENVIRONMENT_NAMES:
         environment[name] = frontend_environment[name]
+    environment["LOGOS_SHARED_ROCQ_PREFIX_CACHE_DIR"] = str(
+        config.trusted_rocq_cache_root / "generated-prefix"
+    )
+    environment["LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR"] = str(
+        config.trusted_rocq_cache_root / "checker-runtime"
+    )
+    environment["LOGOS_TRUSTED_ROCQ_AUTHORITY_SHA256"] = (
+        config.rocq_authority_snapshot["manifestSha256"]
+    )
     expected_names = {
         "PATH",
         *(name for name, _value in SOLVER_FIXED_ENVIRONMENT_ITEMS),

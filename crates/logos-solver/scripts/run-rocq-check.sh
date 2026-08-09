@@ -231,7 +231,7 @@ if result.get("compilePassed") is True:
     else:
         sys.stdout.write(
             "Host scratch compile passed and retained this exact opaque-Qed subproof. "
-            "It did not advance or certify Problem.v; continue with the proof plan and assembly.\n"
+            "It did not advance or certify Problem.v; continue with proof development and assembly.\n"
         )
     raise SystemExit(0)
 if result.get("timedOut") is True:

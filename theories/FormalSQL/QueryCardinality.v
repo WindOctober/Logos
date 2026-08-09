@@ -502,7 +502,8 @@ Qed.
     evaluator; no assumption is made about whether present cells are NULL. *)
 Theorem query_expr_table_success_rows_absent_attribute :
   forall expected constraints actual relation attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     (attribute inS? @_basesort TNull expected relation) = false ->
     @query_outputs_sort TNull outputs =S=
@@ -510,13 +511,14 @@ Theorem query_expr_table_success_rows_absent_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     Forall (row_attribute_absent attribute) rows.
 Proof.
 intros expected constraints actual relation attribute outputs env rows
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Habsent Hsort Hrows.
 apply eval_query_expr_table_success_iff in Hrows.
 unfold query_table_bag in Hrows.
@@ -555,7 +557,8 @@ Qed.
     denotes the actual table schema. *)
 Theorem query_expr_table_success_rows_present_conform_attribute :
   forall expected constraints actual relation attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @query_outputs_sort TNull outputs =S=
@@ -563,13 +566,14 @@ Theorem query_expr_table_success_rows_present_conform_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     Forall (row_attribute_present_conforms attribute) rows.
 Proof.
 intros expected constraints actual relation attribute outputs env rows
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hattribute Hsort Hrows.
 apply eval_query_expr_table_success_iff in Hrows.
 unfold query_table_bag in Hrows.
@@ -584,7 +588,8 @@ Qed.
     database. *)
 Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
   forall expected constraints actual relation attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @_basesort TNull expected relation =S=
@@ -592,7 +597,7 @@ Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     In row rows ->
@@ -600,6 +605,7 @@ Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
 Proof.
 intros expected constraints actual relation attribute outputs env rows row
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hattribute Hgenerated_sort Hrows Hrow.
 assert (Hactual_sort :
   @query_outputs_sort TNull outputs =S= @_basesort TNull actual relation).
@@ -616,6 +622,7 @@ pose proof
   (query_expr_table_success_rows_present_conform_attribute
     expected constraints actual relation attribute outputs env rows
     unknown symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule
     Hschema Hattribute Hactual_sort Hrows) as Hall.
 rewrite Forall_forall in Hall.
 exact (Hall row Hrow).
@@ -675,7 +682,8 @@ Qed.
     this is precisely the leaf obligation imposed by query admissibility. *)
 Theorem query_expr_table_success_rows_conform_attribute :
   forall expected constraints actual constraint attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
@@ -686,7 +694,7 @@ Theorem query_expr_table_success_rows_conform_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs
         (constraint_relation constraint))
       (SqlSuccess rows) ->
@@ -694,6 +702,7 @@ Theorem query_expr_table_success_rows_conform_attribute :
 Proof.
 intros expected constraints actual constraint attribute outputs env rows
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hconstraint Hattribute Hnot_null Hsort Hrows.
 inversion Hrows; subst.
 unfold query_table_bag in *.
@@ -709,7 +718,8 @@ Qed.
     neither inspects a generated query nor guesses a schema constraint. *)
 Theorem query_expr_table_success_row_conform_attribute_generated_sort :
   forall expected constraints actual constraint attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
@@ -720,7 +730,7 @@ Theorem query_expr_table_success_row_conform_attribute_generated_sort :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs
         (constraint_relation constraint))
       (SqlSuccess rows) ->
@@ -729,6 +739,7 @@ Theorem query_expr_table_success_row_conform_attribute_generated_sort :
 Proof.
 intros expected constraints actual constraint attribute outputs env rows row
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hconstraint Hattribute Hnot_null Hgenerated_sort Hrows Hrow.
 assert (Hactual_sort :
   @query_outputs_sort TNull outputs =S=
@@ -747,6 +758,7 @@ pose proof
   (query_expr_table_success_rows_conform_attribute
     expected constraints actual constraint attribute outputs env rows
     unknown symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule
     Hschema Hconstraint Hattribute Hnot_null Hactual_sort Hrows) as Hall.
 rewrite Forall_forall in Hall.
 exact (Hall row Hrow).
@@ -913,31 +925,6 @@ unfold rows_attribute_present_conform in *.
 eapply brute_left_join_list_Forall; [exact Hleft|exact Hright|].
 intros left_row right_row Habsent Hrow.
 now apply row_attribute_present_conforms_join_right.
-Qed.
-
-Lemma direct_projection_preserves_present_conformance :
-  forall env select_list attribute row,
-    select_list_directly_selects_attr select_list attribute ->
-    select_list_has_unique_outputs select_list ->
-    row_attribute_present_conforms attribute row ->
-    row_attribute_present_conforms attribute
-      (projected_tuple env select_list row).
-Proof.
-intros env [items] attribute row Hselect Hunique [Hpresent Hconforms].
-split.
-- unfold projected_tuple.
-  rewrite (Fset.mem_eq_2 _ _ _
-    (@labels_projection TNull (env_t TNull env row) items)).
-  rewrite Fset.mem_mk_set, Oset.mem_bool_true_iff, in_map_iff.
-  exists (@Select_As TNull
-    (@A_Expr TNull (@F_Dot TNull attribute)) attribute).
-  split; [reflexivity|exact Hselect].
-- pose proof
-    (direct_projection_preserves_attr env (@_Select_List TNull items)
-      attribute Hselect Hunique) as Hpreserves.
-  unfold projection_preserves_attr in Hpreserves.
-  rewrite (Hpreserves row Hpresent).
-  exact Hconforms.
 Qed.
 
 (** The concrete raw Cartesian list represents exactly the cross-join bag,
@@ -1481,66 +1468,59 @@ Qed.
 Section OutcomeLengths.
 
 Context {T : Tuple.Rcd}.
+Variable relname : Type.
+Variable basesort : relname -> Fset.set (A T).
+Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
+Variable unknown : Bool.b (B T).
 Variable symbol_runtime_error :
   scalar_operator T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
+Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Lemma project_rows_success_length :
   forall env select_list rows output,
-    @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-      env select_list rows = SqlSuccess output ->
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list rows (SqlSuccess output) ->
     List.length output = List.length rows.
 Proof.
-intros env select_list rows.
-induction rows as [|row rows IH]; intro output; cbn.
-- inversion 1; reflexivity.
-- destruct (@eval_select_list_runtime_error T
-    symbol_runtime_error aggregate_runtime_error
-    (env_t T env row) select_list); [discriminate|].
-  destruct (@project_rows_outcome T symbol_runtime_error
-    aggregate_runtime_error env select_list rows) eqn:Htail;
-    [|discriminate].
-  inversion 1; subst output; cbn.
-  specialize (IH l eq_refl); lia.
+intros env select_list rows output Heval.
+destruct (eval_project_rows_success_pairs Heval)
+  as [pairs [Hinput [Houtput _]]].
+rewrite <- Hinput, <- Houtput, !length_map; reflexivity.
 Qed.
 
 Lemma project_rows_success_Forall :
   forall env select_list rows output
          (input_property output_property : tuple T -> Prop),
     Forall input_property rows ->
-    (forall row,
-      input_property row ->
-      output_property
-        (projection T (env_t T env row) (@Select_List T select_list))) ->
-    @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-      env select_list rows = SqlSuccess output ->
+    (forall input_row output_row,
+      input_property input_row ->
+      @project_row_success T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list input_row output_row ->
+      output_property output_row) ->
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list rows (SqlSuccess output) ->
     Forall output_property output.
 Proof.
-intros env select_list rows.
-induction rows as [|row rows IH];
-  intros output input_property output_property Hrows Hproject Hout; cbn in Hout.
-- inversion Hout; constructor.
-- inversion Hrows as [|? ? Hrow Hrest]; subst.
-  destruct (@eval_select_list_runtime_error T
-    symbol_runtime_error aggregate_runtime_error
-    (env_t T env row) select_list); [discriminate|].
-  destruct (@project_rows_outcome T symbol_runtime_error
-    aggregate_runtime_error env select_list rows) eqn:Htail;
-    [|discriminate].
-  inversion Hout; subst output.
-  constructor.
-  + now apply Hproject.
-  + eapply IH; [exact Hrest|exact Hproject|reflexivity].
+intros env select_list rows output input_property output_property
+  Hrows Hproject Hout.
+destruct (eval_project_rows_success_pairs Hout)
+  as [pairs [Hinput [Houtput Hpairs]]].
+rewrite <- Houtput; apply Forall_map.
+rewrite Forall_forall in Hrows, Hpairs |- *.
+intros [input_row output_row] Hpair.
+apply Hproject with (input_row := input_row).
+- apply Hrows; rewrite <- Hinput.
+  now apply in_map with (f := @fst (tuple T) (tuple T)) in Hpair.
+- apply Hpairs in Hpair; cbn in Hpair; exact Hpair.
 Qed.
-
-Variable relname : Type.
-Variable basesort : relname -> Fset.set (A T).
-Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
-Variable unknown : Bool.b (B T).
-Variable value_is_null : value T -> bool.
 
 (** A compositional occurrence bound for every successful ordered observation
     of a query.  This contract deliberately does not claim determinism or
@@ -1551,7 +1531,7 @@ Definition query_success_length_le
   forall rows,
     @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env query (SqlSuccess rows) ->
+      boolean_schedule env query (SqlSuccess rows) ->
     (List.length rows <= bound)%nat.
 
 (** Convert the bag equality carried by a successful reset operator into the
@@ -1705,7 +1685,7 @@ Lemma query_offset_success_nil_of_input_length_le :
     forall output,
       @eval_query_expr_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env (QExpr_Offset offset input) (SqlSuccess output) ->
+        boolean_schedule env (QExpr_Offset offset input) (SqlSuccess output) ->
       output = nil.
 Proof.
 intros env offset input Hinput output Houtput.
@@ -2239,7 +2219,7 @@ Lemma filter_rows_success_length_le :
   forall env formula rows output,
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     (List.length output <= List.length rows)%nat.
 Proof.
 intros env formula rows.
@@ -2247,11 +2227,11 @@ induction rows as [|row rows IH]; intros output Hfilter.
 - inversion Hfilter; subst; cbn; lia.
 - inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + match goal with
-    | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _
+    | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _
         ?remaining (SqlSuccess tail_rows) |- _ =>
         pose proof (IH tail_rows Htail) as Hlength
     end.
@@ -2298,7 +2278,7 @@ Lemma filter_rows_success_Forall :
   forall env formula rows output (property : tuple T -> Prop),
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     Forall property rows ->
     Forall property output.
 Proof.
@@ -2308,13 +2288,13 @@ induction rows as [|row rows IH]; intros output property Hfilter Hrows.
 - inversion Hrows as [|? ? Hrow Hrest]; subst.
   inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + eapply filter_cons_outcome_success_Forall.
     * exact Hrow.
     * match goal with
-      | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _
+      | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _
           ?remaining (SqlSuccess tail_rows) |- _ =>
           exact (IH tail_rows property Htail Hrest)
       end.
@@ -2323,19 +2303,19 @@ induction rows as [|row rows IH]; intros output property Hfilter Hrows.
 Qed.
 
 (** A successful filter output satisfies every row property implied by a
-    TRUE formula observation.  Unlike [filter_rows_success_Forall], the
+    TRUE Boolean-expression observation.  Unlike [filter_rows_success_Forall], the
     property need not already hold for rejected input rows. *)
 Lemma filter_rows_success_Forall_accepted :
   forall env formula rows output (property : tuple T -> Prop),
     (forall row truth,
       In row rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null boolean_schedule (env_t T env row) formula (SqlSuccess truth) ->
       Bool.is_true (B T) truth = true ->
       property row) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     Forall property output.
 Proof.
 intros env formula rows.
@@ -2343,7 +2323,7 @@ induction rows as [|row rows IH]; intros output property Hproperty Hfilter.
 - inversion Hfilter; constructor.
 - inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + unfold filter_cons_outcome in *.
@@ -2366,12 +2346,12 @@ Lemma filter_rows_success_exact_count :
   forall env formula rows output keep,
     (forall row truth,
       In row rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null boolean_schedule (env_t T env row) formula (SqlSuccess truth) ->
       Bool.is_true (B T) truth = keep row) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     List.length output = List.length (filter keep rows).
 Proof.
 intros env formula rows.
@@ -2379,7 +2359,7 @@ induction rows as [|row rows IH]; intros output keep Hexact Hfilter.
 - inversion Hfilter; reflexivity.
 - inversion Hfilter; subst.
   match goal with
-  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
+  | Htail : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ rows ?tail |- _ =>
       destruct tail as [tail_rows|tail_error]
   end.
   + unfold filter_cons_outcome in *.
@@ -2407,13 +2387,13 @@ Lemma filter_rows_error_observable :
   forall env formula input input_rows error,
     @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env input (SqlSuccess input_rows) ->
+      boolean_schedule env input (SqlSuccess input_rows) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula input_rows (SqlError error) ->
+      boolean_schedule env formula input_rows (SqlError error) ->
     @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env (QExpr_Filter formula input) (SqlError error).
+      boolean_schedule env (QExpr_Filter formula input) (SqlError error).
 Proof.
 intros env formula input input_rows error Hinput Hfilter.
 eapply EQuery_FilterRows with (input_rows := input_rows).
@@ -2425,7 +2405,8 @@ Lemma eval_groups_success_length_le :
   forall env select_list group_terms having groups output,
     @eval_groups_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env select_list group_terms having groups (SqlSuccess output) ->
+      boolean_schedule env select_list group_terms having groups
+      (SqlSuccess output) ->
     (List.length output <= List.length groups)%nat.
 Proof.
 intros env select_list group_terms having groups.

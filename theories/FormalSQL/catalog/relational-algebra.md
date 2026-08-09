@@ -2,11 +2,13 @@
 
 Route here for: bag/list abstraction, multiplicity, filter/project/join/set operators.
 
-This focused catalog contains 265 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 279 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `join_matched_rows_filter_inputs_exact`
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:45`](../FilterFkEliminationFacts.v#L45)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Factors stable total Boolean join acceptance into input guards and a residual predicate while preserving the exact output list and duplicate occurrences.
 
@@ -36,6 +38,8 @@ Theorem join_matched_rows_filter_inputs_exact :
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:108`](../FilterFkEliminationFacts.v#L108)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Factors stable total Boolean join acceptance into input guards and a residual predicate while preserving the exact output list and duplicate occurrences.
 
 Applicability: Use when the goal or a hypothesis matches the `inner_filter_to_input_filters_exact` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
@@ -64,6 +68,8 @@ Theorem inner_filter_to_input_filters_exact :
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:141`](../FilterFkEliminationFacts.v#L141)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates prefilter and post-join guard reachability only under the displayed match witness; the self form supplies both directions for a reflexive match.
 
 Applicability: Use in either direction to invert or construct a goal about join semantics.
@@ -89,6 +95,8 @@ Theorem join_left_guard_reached_iff_of_witness :
 ## `join_right_guard_reached_iff_of_witness`
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:156`](../FilterFkEliminationFacts.v#L156)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates prefilter and post-join guard reachability only under the displayed match witness; the self form supplies both directions for a reflexive match.
 
@@ -116,6 +124,8 @@ Theorem join_right_guard_reached_iff_of_witness :
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:173`](../FilterFkEliminationFacts.v#L173)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates prefilter and post-join guard reachability only under the displayed match witness; the self form supplies both directions for a reflexive match.
 
 Applicability: Use when the goal or a hypothesis matches the `join_self_guard_reachability_exact` direction for join semantics; do not reverse or strengthen the displayed conclusion.
@@ -140,6 +150,8 @@ Theorem join_self_guard_reachability_exact :
 
 Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:191`](../FilterFkEliminationFacts.v#L191)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that one accepted pair contributes its emitted occurrence to the concrete matched-row scheduler without dropping duplicates.
 
 Applicability: Use when the goal or a hypothesis matches the `join_matched_rows_member_of_accepted_cell` direction for join semantics; do not reverse or strengthen the displayed conclusion.
@@ -163,17 +175,19 @@ Lemma join_matched_rows_member_of_accepted_cell :
 
 ## `query_filter_success_bags_of_stable_total_acceptance`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:245`](../FilterFkEliminationFacts.v#L245)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:247`](../FilterFkEliminationFacts.v#L247)
 
-Purpose/direction: Characterizes successful filter bags by one stable total acceptance callback only after exact per-row formula success and no-error are supplied.
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes successful filter bags by one stable total acceptance callback only after exact per-row Boolean-expression success and no-error are supplied.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter`, `bag`
+Cross-index: `scheduled`, `filter`, `bag`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`, `stable total acceptance`, `success bag`, `non volatility`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`, `stable total acceptance`, `success bag`, `non volatility`
 
 ```rocq
 Theorem query_filter_success_bags_of_stable_total_acceptance :
@@ -181,12 +195,13 @@ Theorem query_filter_success_bags_of_stable_total_acceptance :
     stable_total_filter_acceptance env formula keep ->
     rel_equiv
       (query_success_bags basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null env
+        aggregate_runtime_error value_is_null boolean_schedule env
         (QExpr_Filter formula input))
       (fun output =>
         exists input_bag,
           query_success_bags basesort instance unknown symbol_runtime_error
-            aggregate_runtime_error value_is_null env input input_bag /\
+            aggregate_runtime_error value_is_null boolean_schedule env
+            input input_bag /\
           bag_eq T
             (Febag.filter (Fecol.CBag (CTuple T)) keep input_bag)
             output).
@@ -194,17 +209,19 @@ Theorem query_filter_success_bags_of_stable_total_acceptance :
 
 ## `query_filter_error_iff_of_stable_total_acceptance`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:266`](../FilterFkEliminationFacts.v#L266)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:269`](../FilterFkEliminationFacts.v#L269)
 
-Purpose/direction: Characterizes filter errors under the same stable total acceptance contract, retaining child errors and exact reached formula error categories.
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes filter errors under the same stable total acceptance contract, retaining child errors and exact reached predicate error categories.
 
 Applicability: Use in either direction to invert or construct a goal about relational algebra.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime`, `filter`
+Cross-index: `scheduled`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `runtime outcome`, `runtime safety`, `error propagation`, `stable total acceptance`, `runtime error`, `reachability`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `runtime outcome`, `runtime safety`, `error propagation`, `stable total acceptance`, `runtime error`, `reachability`
 
 ```rocq
 Theorem query_filter_error_iff_of_stable_total_acceptance :
@@ -217,7 +234,9 @@ Theorem query_filter_error_iff_of_stable_total_acceptance :
 
 ## `eval_filter_rows_uniform_error_of_reached_member`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:312`](../FilterFkEliminationFacts.v#L312)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:318`](../FilterFkEliminationFacts.v#L318)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Constructs the sequential FILTER error from one reached bad occurrence when every reached row succeeds or exposes that same category.
 
@@ -233,20 +252,22 @@ Search aliases: `relational algebra`, `filter`, `WHERE`, `runtime outcome`, `run
 Theorem eval_filter_rows_uniform_error_of_reached_member :
   forall env formula rows bad error,
     In bad rows ->
-    eval_formula (env_t T env bad) formula (SqlError error) ->
+    eval_scalar_boolean (env_t T env bad) formula (SqlError error) ->
     (forall row,
       In row rows ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula rows (SqlError error).
 ```
 
 ## `eval_filter_rows_error_category_of_reached_categories`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:372`](../FilterFkEliminationFacts.v#L372)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:378`](../FilterFkEliminationFacts.v#L378)
 
-Purpose/direction: Shows that any FILTER error has the fixed category shared by every reached formula-error observation.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that any FILTER error has the fixed category shared by every reached predicate-error observation.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for relational algebra.
 
@@ -262,7 +283,7 @@ Theorem eval_filter_rows_error_category_of_reached_categories :
     (forall row,
       In row rows ->
       forall observed,
-        eval_formula (env_t T env row) formula (SqlError observed) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlError observed) ->
         observed = expected) ->
     eval_filter_rows env formula rows (SqlError error) ->
     error = expected.
@@ -270,9 +291,11 @@ Theorem eval_filter_rows_error_category_of_reached_categories :
 
 ## `eval_filter_rows_success_excludes_reached_exact_error`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:391`](../FilterFkEliminationFacts.v#L391)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:397`](../FilterFkEliminationFacts.v#L397)
 
-Purpose/direction: Excludes every successful FILTER traversal when one reached occurrence has no successful formula observation.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Excludes every successful FILTER traversal when one reached occurrence has no successful predicate observation.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for relational algebra.
 
@@ -287,14 +310,16 @@ Theorem eval_filter_rows_success_excludes_reached_exact_error :
   forall env formula rows bad,
     In bad rows ->
     (forall truth,
-      ~ eval_formula (env_t T env bad) formula (SqlSuccess truth)) ->
+      ~ eval_scalar_boolean (env_t T env bad) formula (SqlSuccess truth)) ->
     forall output,
       ~ eval_filter_rows env formula rows (SqlSuccess output).
 ```
 
 ## `eval_filter_rows_reached_uniform_error_exact`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:420`](../FilterFkEliminationFacts.v#L420)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:426`](../FilterFkEliminationFacts.v#L426)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Packages FILTER error existence, success exclusion, and uniqueness of the exact runtime category from explicit reached-row premises.
 
@@ -310,18 +335,18 @@ Search aliases: `relational algebra`, `filter`, `WHERE`, `runtime outcome`, `run
 Theorem eval_filter_rows_reached_uniform_error_exact :
   forall env formula rows bad expected,
     In bad rows ->
-    eval_formula (env_t T env bad) formula (SqlError expected) ->
+    eval_scalar_boolean (env_t T env bad) formula (SqlError expected) ->
     (forall row,
       In row rows ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError expected)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError expected)) ->
     (forall truth,
-      ~ eval_formula (env_t T env bad) formula (SqlSuccess truth)) ->
+      ~ eval_scalar_boolean (env_t T env bad) formula (SqlSuccess truth)) ->
     (forall row,
       In row rows ->
       forall observed,
-        eval_formula (env_t T env row) formula (SqlError observed) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlError observed) ->
         observed = expected) ->
     eval_filter_rows env formula rows (SqlError expected) /\
     (forall output,
@@ -333,7 +358,9 @@ Theorem eval_filter_rows_reached_uniform_error_exact :
 
 ## `eval_filter_rows_uniform_error_of_join_witness`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:459`](../FilterFkEliminationFacts.v#L459)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:465`](../FilterFkEliminationFacts.v#L465)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Constructs the FILTER error derivation from a concrete accepted join cell; the self form retains the explicit accepted diagonal witness.
 
@@ -353,20 +380,22 @@ Theorem eval_filter_rows_uniform_error_of_join_witness :
     In left_row left ->
     In right_row right ->
     accept left_row right_row = true ->
-    eval_formula (env_t T env (join left_row right_row)) formula
+    eval_scalar_boolean (env_t T env (join left_row right_row)) formula
       (SqlError error) ->
     (forall row,
       In row (join_matched_rows join accept left right) ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula
       (join_matched_rows join accept left right) (SqlError error).
 ```
 
 ## `eval_filter_rows_uniform_error_of_self_match`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:485`](../FilterFkEliminationFacts.v#L485)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:491`](../FilterFkEliminationFacts.v#L491)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Constructs the FILTER error derivation from a concrete accepted join cell; the self form retains the explicit accepted diagonal witness.
 
@@ -385,19 +414,21 @@ Corollary eval_filter_rows_uniform_error_of_self_match :
       rows bad error,
     In bad rows ->
     accept bad bad = true ->
-    eval_formula (env_t T env (join bad bad)) formula (SqlError error) ->
+    eval_scalar_boolean (env_t T env (join bad bad)) formula (SqlError error) ->
     (forall row,
       In row (join_matched_rows join accept rows rows) ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula
       (join_matched_rows join accept rows rows) (SqlError error).
 ```
 
 ## `nonnull_foreign_key_direct_accept_has_middle`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:514`](../FilterFkEliminationFacts.v#L514)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:520`](../FilterFkEliminationFacts.v#L520)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts a conforming non-NULL foreign key to an explicit referenced middle witness, or derives rejection when no such middle row exists.
 
@@ -441,7 +472,9 @@ Theorem nonnull_foreign_key_direct_accept_has_middle :
 
 ## `nonnull_foreign_key_no_middle_rejects_direct`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:562`](../FilterFkEliminationFacts.v#L562)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:568`](../FilterFkEliminationFacts.v#L568)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts a conforming non-NULL foreign key to an explicit referenced middle witness, or derives rejection when no such middle row exists.
 
@@ -483,7 +516,9 @@ Corollary nonnull_foreign_key_no_middle_rejects_direct :
 
 ## `join_matched_rows_empty_of_rejection`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:609`](../FilterFkEliminationFacts.v#L609)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:615`](../FilterFkEliminationFacts.v#L615)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Eliminates exactly the displayed rejected matched or NULL-padded branch without moving SQL evaluations or changing duplicate multiplicity.
 
@@ -507,7 +542,9 @@ Lemma join_matched_rows_empty_of_rejection :
 
 ## `middle_padding_downstream_empty`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:636`](../FilterFkEliminationFacts.v#L636)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:642`](../FilterFkEliminationFacts.v#L642)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Eliminates exactly the displayed rejected matched or NULL-padded branch without moving SQL evaluations or changing duplicate multiplicity.
 
@@ -536,7 +573,9 @@ Theorem middle_padding_downstream_empty :
 
 ## `filtered_payload_erasure_permut`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:663`](../FilterFkEliminationFacts.v#L663)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:669`](../FilterFkEliminationFacts.v#L669)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports one filtered occurrence block across explicit predicate agreement and a payload relation while preserving multiplicity.
 
@@ -570,7 +609,9 @@ Theorem filtered_payload_erasure_permut :
 
 ## `query_expr_outcome_equiv_of_shared_exact_error`
 
-Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:734`](../FilterFkEliminationFacts.v#L734)
+Source: [`theories/FormalSQL/FilterFkEliminationFacts.v:742`](../FilterFkEliminationFacts.v#L742)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_shared_exact_error` for the public result.
 
 Purpose/direction: Lifts two error-only query relations exposing the same unique category to exact outcome equivalence after successful outcomes are excluded.
 
@@ -578,9 +619,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`
+Cross-index: `scheduled`, `outcome`, `runtime`
 
-Search aliases: `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`, `exact error only`, `error category`, `success exclusion`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`, `exact error only`, `error category`, `success exclusion`
 
 ```rocq
 Theorem query_expr_outcome_equiv_of_shared_exact_error :
@@ -596,16 +637,18 @@ Theorem query_expr_outcome_equiv_of_shared_exact_error :
       eval_query env second (SqlError observed) -> observed = expected) ->
     @query_expr_outcome_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env first second.
+      boolean_schedule env first second.
 ```
 
-## `formula_pred_acceptance_exact_safe`
+## `scalar_expr_pred_acceptance_exact_safe`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:564`](../GroupedFilterOutcomeFacts.v#L564)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:589`](../GroupedFilterOutcomeFacts.v#L589)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Builds an exact SQL TRUE-acceptance contract for an interpreted scalar predicate from explicit argument runtime safety.
 
-Applicability: Use for `FExpr_Pred` only after proving its authoritative `first_runtime_error` classifier is `None`; the decision is `Bool.is_true`, not an equality between SQL FALSE and UNKNOWN.
+Applicability: Use for `SExpr_Pred` only after proving its authoritative `first_runtime_error` classifier is `None`; the decision is `Bool.is_true`, not an equality between SQL FALSE and UNKNOWN.
 
 Important premises: The displayed `first_runtime_error ... arguments = None` premise is mandatory; retain the authoritative predicate interpreter and use `Bool.is_true` only for filter acceptance.
 
@@ -614,27 +657,24 @@ Cross-index: `runtime`, `filter`, `scalar`
 Search aliases: `relational algebra`, `filter`, `WHERE`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
-Lemma formula_pred_acceptance_exact_safe :
-  forall env predicate arguments,
-    first_runtime_error
-      (@eval_aggterm_runtime_error T
-        symbol_runtime_error aggregate_runtime_error env)
-      arguments = None ->
-    formula_acceptance_exact_at env (FExpr_Pred predicate arguments)
-      (Bool.is_true (B T)
-        (interp_predicate T predicate
-          (map (@interp_aggterm T env) arguments))).
+Lemma scalar_expr_pred_acceptance_exact_safe :
+  forall env predicate arguments values,
+    scalar_value_list_exact_at env arguments values ->
+    scalar_expr_acceptance_exact_at env (SExpr_Pred predicate arguments)
+      (Bool.is_true (B T) (interp_predicate T predicate values)).
 ```
 
 ## `eval_filter_rows_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:809`](../GroupedFilterOutcomeFacts.v#L809)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:998`](../GroupedFilterOutcomeFacts.v#L998)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Characterizes row-filter outcomes exactly as successful `List.filter` under per-row exact-acceptance/no-error contracts.
 
-Applicability: Use after proving `formula_acceptance_exact_at` for every input occurrence; the result preserves list order and duplicates and the premise excludes formula errors.
+Applicability: Use after proving `scalar_expr_acceptance_exact_at` for every input occurrence; the result preserves list order and duplicates and the premise excludes predicate errors.
 
-Important premises: Supply the displayed per-row `formula_acceptance_exact_at` contract, including its successful observation and no-error components; do not replace `List.filter` by a set abstraction.
+Important premises: Supply the displayed per-row `scalar_expr_acceptance_exact_at` contract, including its successful observation and no-error components; do not replace `List.filter` by a set abstraction.
 
 Cross-index: `filter`
 
@@ -645,18 +685,20 @@ Theorem eval_filter_rows_acceptance_exact :
   forall env formula rows keep,
     (forall row,
       In row rows ->
-      formula_acceptance_exact_at
+      scalar_expr_acceptance_exact_at
         basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null
+        aggregate_runtime_error value_is_null boolean_schedule
         (env_t T env row) formula (keep row)) ->
     forall outcome,
       eval_filter_rows env formula rows outcome <->
       outcome = SqlSuccess (List.filter keep rows).
 ```
 
-## `filter_formula_observation_equiv_at_sym`
+## `filter_scalar_observation_equiv_at_sym`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:923`](../GroupedFilterOutcomeFacts.v#L923)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1117`](../GroupedFilterOutcomeFacts.v#L1117)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Reverses a proved relational algebra relation.
 
@@ -664,22 +706,24 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Cross-index: `filter`
+Cross-index: `scheduled`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `equivalence`, `congruence`
 
 ```rocq
-Lemma filter_formula_observation_equiv_at_sym :
+Lemma filter_scalar_observation_equiv_at_sym :
   forall left_env left_formula right_env right_formula,
-    filter_formula_observation_equiv_at
+    filter_scalar_observation_equiv_at
       left_env left_formula right_env right_formula ->
-    filter_formula_observation_equiv_at
+    filter_scalar_observation_equiv_at
       right_env right_formula left_env left_formula.
 ```
 
 ## `eval_filter_rows_ordered_outcome_congr_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:961`](../GroupedFilterOutcomeFacts.v#L961)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1155`](../GroupedFilterOutcomeFacts.v#L1155)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -687,9 +731,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma eval_filter_rows_ordered_outcome_congr_forward :
@@ -699,7 +743,7 @@ Lemma eval_filter_rows_ordered_outcome_congr_forward :
       ordered_rows_equiv T left_rows right_rows ->
       (forall left_row right_row,
         Oeset.compare (OTuple T) left_row right_row = Eq ->
-        filter_formula_observation_equiv_at
+        filter_scalar_observation_equiv_at
           (env_t T left_env left_row) left_formula
           (env_t T right_env right_row) right_formula) ->
       exists right_outcome,
@@ -710,7 +754,9 @@ Lemma eval_filter_rows_ordered_outcome_congr_forward :
 
 ## `eval_filter_rows_ordered_outcome_congr`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1048`](../GroupedFilterOutcomeFacts.v#L1048)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1242`](../GroupedFilterOutcomeFacts.v#L1242)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -718,9 +764,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Theorem eval_filter_rows_ordered_outcome_congr :
@@ -729,7 +775,7 @@ Theorem eval_filter_rows_ordered_outcome_congr :
     ordered_rows_equiv T left_rows right_rows ->
     (forall left_row right_row,
       Oeset.compare (OTuple T) left_row right_row = Eq ->
-      filter_formula_observation_equiv_at
+      filter_scalar_observation_equiv_at
         (env_t T left_env left_row) left_formula
         (env_t T right_env right_row) right_formula) ->
     (exists left_outcome,
@@ -741,7 +787,9 @@ Theorem eval_filter_rows_ordered_outcome_congr :
 
 ## `query_expr_filter_outcome_congr_extensional_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1121`](../GroupedFilterOutcomeFacts.v#L1121)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1315`](../GroupedFilterOutcomeFacts.v#L1315)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -749,19 +797,19 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_filter_outcome_congr_extensional_forward :
   forall env left_formula right_formula left_input right_input,
     @query_expr_outcome_observation_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left_input right_input ->
+      boolean_schedule env left_input right_input ->
     (forall left_row right_row,
       Oeset.compare (OTuple T) left_row right_row = Eq ->
-      filter_formula_observation_equiv_at
+      filter_scalar_observation_equiv_at
         (env_t T env left_row) left_formula
         (env_t T env right_row) right_formula) ->
     forall left_outcome,
@@ -774,7 +822,9 @@ Lemma query_expr_filter_outcome_congr_extensional_forward :
 
 ## `query_expr_filter_outcome_congr_extensional`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1192`](../GroupedFilterOutcomeFacts.v#L1192)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1386`](../GroupedFilterOutcomeFacts.v#L1386)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_filter_possible_outcome_equiv_congr_stable_total` for the public result.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -782,9 +832,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_expr_filter_outcome_congr_extensional :
@@ -792,7 +842,7 @@ Theorem query_expr_filter_outcome_congr_extensional :
     query_outcome_equiv env left_input right_input ->
     (forall left_row right_row,
       Oeset.compare (OTuple T) left_row right_row = Eq ->
-      filter_formula_observation_equiv_at
+      filter_scalar_observation_equiv_at
         (env_t T env left_row) left_formula
         (env_t T env right_row) right_formula) ->
     (exists left_outcome,
@@ -805,6 +855,8 @@ Theorem query_expr_filter_outcome_congr_extensional :
 ## `query_set_union_occurrence_exact`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:1073`](../NumericRegroupFacts.v#L1073)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to SQL bag/set operations.
 
@@ -828,6 +880,8 @@ Lemma query_set_union_occurrence_exact : forall left right row,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:1087`](../NumericRegroupFacts.v#L1087)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -850,6 +904,8 @@ Lemma query_bag_duplicate_free_of_rows_NoDupA : forall rows,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:1102`](../NumericRegroupFacts.v#L1102)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports the displayed hypotheses and conclusion for bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -869,7 +925,9 @@ Lemma query_bag_duplicate_free_transport : forall left right,
 
 ## `query_bags_disjoint_sym`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1157`](../NumericRegroupFacts.v#L1157)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1169`](../NumericRegroupFacts.v#L1169)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Reverses a proved bag multiplicity relation.
 
@@ -888,7 +946,9 @@ Lemma query_bags_disjoint_sym : forall left right,
 
 ## `query_set_union_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1164`](../NumericRegroupFacts.v#L1164)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1176`](../NumericRegroupFacts.v#L1176)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query set union duplicate free law for SQL bag/set operations, in the exact direction displayed by the declaration.
 
@@ -910,7 +970,9 @@ Lemma query_set_union_duplicate_free : forall left right,
 
 ## `query_set_union_disjoint_right`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1183`](../NumericRegroupFacts.v#L1183)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1195`](../NumericRegroupFacts.v#L1195)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query set union disjoint right law for SQL bag/set operations, in the exact direction displayed by the declaration.
 
@@ -931,7 +993,9 @@ Lemma query_set_union_disjoint_right : forall first second third,
 
 ## `query_distinct_bag_inert`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1201`](../NumericRegroupFacts.v#L1201)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1213`](../NumericRegroupFacts.v#L1213)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query distinct bag inert law for bag multiplicity, in the exact direction displayed by the declaration.
 
@@ -951,7 +1015,9 @@ Lemma query_distinct_bag_inert : forall bag,
 
 ## `query_distinct_bag_occurrence_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1226`](../NumericRegroupFacts.v#L1226)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1238`](../NumericRegroupFacts.v#L1238)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to bag multiplicity.
 
@@ -972,7 +1038,9 @@ Lemma query_distinct_bag_occurrence_exact : forall bag row,
 
 ## `query_duplicate_free_support_bag_eq`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1249`](../NumericRegroupFacts.v#L1249)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1261`](../NumericRegroupFacts.v#L1261)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query duplicate free support bag equality law for bag multiplicity, in the exact direction displayed by the declaration.
 
@@ -997,7 +1065,9 @@ Lemma query_duplicate_free_support_bag_eq :
 
 ## `query_distinct_union_inert`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1281`](../NumericRegroupFacts.v#L1281)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1293`](../NumericRegroupFacts.v#L1293)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query distinct union inert law for SQL bag/set operations, in the exact direction displayed by the declaration.
 
@@ -1021,7 +1091,9 @@ Corollary query_distinct_union_inert : forall left right,
 
 ## `query_bag_filter_occurrence_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1300`](../NumericRegroupFacts.v#L1300)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1312`](../NumericRegroupFacts.v#L1312)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to bag multiplicity.
 
@@ -1050,7 +1122,9 @@ Lemma query_bag_filter_occurrence_exact :
 
 ## `query_bag_filter_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1323`](../NumericRegroupFacts.v#L1323)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1335`](../NumericRegroupFacts.v#L1335)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query bag filter duplicate free law for bag multiplicity, in the exact direction displayed by the declaration.
 
@@ -1076,7 +1150,9 @@ Lemma query_bag_filter_duplicate_free :
 
 ## `query_bag_reset_success_permutation_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:580`](../OrderedQueryFacts.v#L580)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:574`](../OrderedQueryFacts.v#L574)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Establishes concrete-row permutation closure for successful observations at any constructor classified as a bag reset.
 
@@ -1084,9 +1160,9 @@ Applicability: Use when `query_expr_order_behavior query = BagReset` computes or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Corollary query_bag_reset_success_permutation_closed :
@@ -1098,7 +1174,9 @@ Corollary query_bag_reset_success_permutation_closed :
 
 ## `query_project_preserves_success_permutation_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:591`](../OrderedQueryFacts.v#L591)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:585`](../OrderedQueryFacts.v#L585)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports concrete-row permutation closure of successful observations through pointwise projection.
 
@@ -1106,9 +1184,9 @@ Applicability: Use with `ConcretePermutationClosed` for the child, not merely `B
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `projection`, `bag`
+Cross-index: `scheduled`, `projection`, `bag`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Corollary query_project_preserves_success_permutation_closed :
@@ -1122,7 +1200,9 @@ Corollary query_project_preserves_success_permutation_closed :
 
 ## `query_row_map_preserves_success_permutation_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:604`](../OrderedQueryFacts.v#L604)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:598`](../OrderedQueryFacts.v#L598)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports concrete-row permutation closure of successful observations through pointwise row mapping.
 
@@ -1130,9 +1210,9 @@ Applicability: Use with `ConcretePermutationClosed` for the child, not merely `B
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `projection`, `bag`
+Cross-index: `scheduled`, `projection`, `bag`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Corollary query_row_map_preserves_success_permutation_closed :
@@ -1147,7 +1227,9 @@ Corollary query_row_map_preserves_success_permutation_closed :
 
 ## `query_filter_preserves_success_permutation_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:618`](../OrderedQueryFacts.v#L618)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:612`](../OrderedQueryFacts.v#L612)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports concrete-row permutation closure of successful observations through pointwise filtering.
 
@@ -1155,9 +1237,9 @@ Applicability: Use with `ConcretePermutationClosed` for the child, not merely `B
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter`, `bag`
+Cross-index: `scheduled`, `filter`, `bag`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Corollary query_filter_preserves_success_permutation_closed :
@@ -1171,7 +1253,9 @@ Corollary query_filter_preserves_success_permutation_closed :
 
 ## `query_structural_successes_bag_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:633`](../OrderedQueryFacts.v#L633)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:627`](../OrderedQueryFacts.v#L627)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Turns the syntax-directed reset/Project/Filter/RowMap certificate into observation-level BagClosed for successful rows.
 
@@ -1179,9 +1263,9 @@ Applicability: Try first on a Project/Filter/RowMap stack above a bag reset; the
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Corollary query_structural_successes_bag_closed :
@@ -1193,7 +1277,9 @@ Corollary query_structural_successes_bag_closed :
 
 ## `query_expr_cross_join_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:724`](../OrderedQueryFacts.v#L724)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:718`](../OrderedQueryFacts.v#L718)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for join semantics.
 
@@ -1215,7 +1301,9 @@ Lemma query_expr_cross_join_has_success :
 
 ## `query_expr_join_has_success_of_acceptance_projection_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:744`](../OrderedQueryFacts.v#L744)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:738`](../OrderedQueryFacts.v#L738)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for outer/semi/anti-join semantics.
 
@@ -1237,44 +1325,23 @@ Lemma query_expr_join_has_success_of_acceptance_projection_exact :
     (forall left_row right_row,
       @join_condition_acceptance_exact_at T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_row right_row (accepted left_row right_row)) ->
+        boolean_schedule env predicate left_row right_row
+        (accepted left_row right_row)) ->
     (forall source,
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
+      @join_source_projection_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select source
+        (emit source)) ->
     query_has_success env
       (QExpr_Join kind predicate matched_select left_select right_select
         left right).
 ```
 
-## `eval_query_expr_project_success_iff`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1365`](../OrderedQueryFacts.v#L1365)
-
-Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
-
-Applicability: Use in either direction to invert or construct a goal about relational algebra.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma eval_query_expr_project_success_iff :
-  forall env select_list input output,
-    eval_query env (QExpr_Project select_list input) (SqlSuccess output) <->
-    exists input_rows,
-      eval_query env input (SqlSuccess input_rows) /\
-      @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-        env select_list input_rows = SqlSuccess output.
-```
-
 ## `eval_query_expr_project_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1385`](../OrderedQueryFacts.v#L1385)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1265`](../OrderedQueryFacts.v#L1265)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates relational algebra to the exact list length or bag cardinality shown below.
 
@@ -1282,9 +1349,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `projection`, `cardinality`
+Cross-index: `scheduled`, `projection`, `cardinality`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `cardinality`
 
 ```rocq
 Lemma eval_query_expr_project_success_length :
@@ -1297,7 +1364,9 @@ Lemma eval_query_expr_project_success_length :
 
 ## `eval_query_expr_table_success_cardinal`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1403`](../OrderedQueryFacts.v#L1403)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1286`](../OrderedQueryFacts.v#L1286)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates bag multiplicity to the exact list length or bag cardinality shown below.
 
@@ -1305,9 +1374,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag`, `cardinality`
+Cross-index: `scheduled`, `bag`, `cardinality`
 
-Search aliases: `relational algebra`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `cardinality`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Lemma eval_query_expr_table_success_cardinal :
@@ -1318,33 +1387,11 @@ Lemma eval_query_expr_table_success_cardinal :
       N.of_nat (length rows).
 ```
 
-## `eval_query_expr_filter_success_iff`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1436`](../OrderedQueryFacts.v#L1436)
-
-Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
-
-Applicability: Use in either direction to invert or construct a goal about relational algebra.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: `filter`
-
-Search aliases: `relational algebra`, `filter`, `WHERE`
-
-```rocq
-Lemma eval_query_expr_filter_success_iff :
-  forall env formula input output,
-    eval_query env (QExpr_Filter formula input) (SqlSuccess output) <->
-    exists input_rows,
-      eval_query env input (SqlSuccess input_rows) /\
-      @eval_filter_rows_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null env formula input_rows (SqlSuccess output).
-```
-
 ## `eval_query_expr_filter_success_Forall_accepted`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1454`](../OrderedQueryFacts.v#L1454)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1322`](../OrderedQueryFacts.v#L1322)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
 
@@ -1352,9 +1399,9 @@ Applicability: Use when the goal or a hypothesis matches the `eval_query_expr_fi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter`
+Cross-index: `scheduled`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`
 
 ```rocq
 Lemma eval_query_expr_filter_success_Forall_accepted :
@@ -1362,8 +1409,9 @@ Lemma eval_query_expr_filter_success_Forall_accepted :
     (forall input_rows row truth,
       eval_query env input (SqlSuccess input_rows) ->
       In row input_rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null boolean_schedule (env_t T env row) formula
+        (SqlSuccess truth) ->
       Bool.is_true (B T) truth = true ->
       property row) ->
     eval_query env (QExpr_Filter formula input) (SqlSuccess output) ->
@@ -1372,7 +1420,9 @@ Lemma eval_query_expr_filter_success_Forall_accepted :
 
 ## `query_expr_project_success_Forall`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1477`](../OrderedQueryFacts.v#L1477)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1346`](../OrderedQueryFacts.v#L1346)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
 
@@ -1389,17 +1439,21 @@ Lemma query_expr_project_success_Forall :
   forall env select_list input
       (input_property output_property : tuple T -> Prop),
     query_success_Forall env input input_property ->
-    (forall row,
-      input_property row ->
-      output_property
-        (projection T (env_t T env row) (@Select_List T select_list))) ->
+    (forall input_row output_row,
+      input_property input_row ->
+      @project_row_success T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list input_row output_row ->
+      output_property output_row) ->
     query_success_Forall env
       (QExpr_Project select_list input) output_property.
 ```
 
 ## `query_expr_filter_success_Forall`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1501`](../OrderedQueryFacts.v#L1501)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1383`](../OrderedQueryFacts.v#L1383)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
 
@@ -1420,7 +1474,9 @@ Lemma query_expr_filter_success_Forall :
 
 ## `query_expr_union_success_Forall`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1517`](../OrderedQueryFacts.v#L1517)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1399`](../OrderedQueryFacts.v#L1399)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for SQL bag/set operations.
 
@@ -1444,7 +1500,9 @@ Lemma query_expr_union_success_Forall :
 
 ## `query_expr_cross_join_success_Forall`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1554`](../OrderedQueryFacts.v#L1554)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1436`](../OrderedQueryFacts.v#L1436)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for join semantics.
 
@@ -1452,9 +1510,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `join`, `bag`
+Cross-index: `scheduled`, `join`, `bag`
 
-Search aliases: `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Lemma query_expr_cross_join_success_Forall :
@@ -1472,7 +1530,9 @@ Lemma query_expr_cross_join_success_Forall :
 
 ## `query_filter_success_bags_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1655`](../OrderedQueryFacts.v#L1655)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1538`](../OrderedQueryFacts.v#L1538)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -1480,9 +1540,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter`, `bag`
+Cross-index: `scheduled`, `filter`, `bag`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_filter_success_bags_exact :
@@ -1491,9 +1551,9 @@ Theorem query_filter_success_bags_exact :
       Oeset.compare (OTuple T) left right = Eq ->
       keep left = keep right) ->
     (forall row,
-      formula_acceptance_exact_at
+      scalar_expr_acceptance_exact_at
         basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null
+        aggregate_runtime_error value_is_null boolean_schedule
         (env_t T env row) formula (keep row)) ->
     rel_equiv
       (success_bags env (QExpr_Filter formula input))
@@ -1507,7 +1567,9 @@ Theorem query_filter_success_bags_exact :
 
 ## `query_expr_filter_has_success_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1863`](../OrderedQueryFacts.v#L1863)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1748`](../OrderedQueryFacts.v#L1748)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
 
@@ -1523,9 +1585,9 @@ Search aliases: `relational algebra`, `filter`, `WHERE`
 Lemma query_expr_filter_has_success_exact :
   forall env formula input (keep : tuple T -> bool),
     (forall row,
-      formula_acceptance_exact_at
+      scalar_expr_acceptance_exact_at
         basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null
+        aggregate_runtime_error value_is_null boolean_schedule
         (env_t T env row) formula (keep row)) ->
     query_has_success env input ->
     query_has_success env (QExpr_Filter formula input).
@@ -1533,7 +1595,9 @@ Lemma query_expr_filter_has_success_exact :
 
 ## `query_filter_success_bags_functional_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1936`](../OrderedQueryFacts.v#L1936)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1823`](../OrderedQueryFacts.v#L1823)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -1552,9 +1616,9 @@ Theorem query_filter_success_bags_functional_exact :
       Oeset.compare (OTuple T) left right = Eq ->
       keep left = keep right) ->
     (forall row,
-      formula_acceptance_exact_at
+      scalar_expr_acceptance_exact_at
         basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null
+        aggregate_runtime_error value_is_null boolean_schedule
         (env_t T env row) formula (keep row)) ->
     (forall first second,
       success_bags env input first ->
@@ -1568,7 +1632,9 @@ Theorem query_filter_success_bags_functional_exact :
 
 ## `query_expr_filter_bag_closed_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2008`](../OrderedQueryFacts.v#L2008)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1895`](../OrderedQueryFacts.v#L1895)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Establishes the displayed closure property for bag multiplicity.
 
@@ -1576,9 +1642,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `filter`, `bag`
+Cross-index: `scheduled`, `filter`, `bag`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_expr_filter_bag_closed_exact :
@@ -1587,9 +1653,9 @@ Theorem query_expr_filter_bag_closed_exact :
       Oeset.compare (OTuple T) left right = Eq ->
       keep left = keep right) ->
     (forall row,
-      formula_acceptance_exact_at
+      scalar_expr_acceptance_exact_at
         basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null
+        aggregate_runtime_error value_is_null boolean_schedule
         (env_t T env row) formula (keep row)) ->
     BagClosed T
       (fun rows => eval_query env input (SqlSuccess rows)) ->
@@ -1600,7 +1666,9 @@ Theorem query_expr_filter_bag_closed_exact :
 
 ## `query_success_length_le_cross_join`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2584`](../OrderedQueryFacts.v#L2584)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2471`](../OrderedQueryFacts.v#L2471)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -1623,7 +1691,9 @@ Theorem query_success_length_le_cross_join :
 
 ## `query_success_length_le_natural_join`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2611`](../OrderedQueryFacts.v#L2611)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2498`](../OrderedQueryFacts.v#L2498)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -1646,7 +1716,9 @@ Theorem query_success_length_le_natural_join :
 
 ## `eval_query_expr_join_success_length_le`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2658`](../OrderedQueryFacts.v#L2658)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2545`](../OrderedQueryFacts.v#L2545)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -1654,9 +1726,9 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated outer
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every explicit join-kind branch and predicate/projection premise.
 
-Cross-index: `join`, `cardinality`
+Cross-index: `scheduled`, `join`, `cardinality`
 
-Search aliases: `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
 
 ```rocq
 Theorem eval_query_expr_join_success_length_le :
@@ -1677,7 +1749,9 @@ Theorem eval_query_expr_join_success_length_le :
 
 ## `query_success_length_le_join`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2715`](../OrderedQueryFacts.v#L2715)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2602`](../OrderedQueryFacts.v#L2602)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -1703,7 +1777,9 @@ Corollary query_success_length_le_join :
 
 ## `eval_query_expr_right_join_single_left_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2735`](../OrderedQueryFacts.v#L2735)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2622`](../OrderedQueryFacts.v#L2622)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates outer/semi/anti-join semantics to the exact list length or bag cardinality shown below.
 
@@ -1711,9 +1787,9 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated outer
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every explicit join-kind branch and predicate/projection premise.
 
-Cross-index: `join`, `cardinality`
+Cross-index: `scheduled`, `join`, `cardinality`
 
-Search aliases: `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
 
 ```rocq
 Theorem eval_query_expr_right_join_single_left_success_length :
@@ -1733,7 +1809,9 @@ Theorem eval_query_expr_right_join_single_left_success_length :
 
 ## `query_success_length_le_right_join_single_left`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2775`](../OrderedQueryFacts.v#L2775)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2662`](../OrderedQueryFacts.v#L2662)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -1741,9 +1819,9 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated outer
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain every explicit join-kind branch and predicate/projection premise.
 
-Cross-index: `join`, `cardinality`
+Cross-index: `scheduled`, `join`, `cardinality`
 
-Search aliases: `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `cardinality`
 
 ```rocq
 Corollary query_success_length_le_right_join_single_left :
@@ -1760,17 +1838,19 @@ Corollary query_success_length_le_right_join_single_left :
 
 ## `eval_filter_rows_always_true_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3830`](../OrderedQueryFacts.v#L3830)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3547`](../OrderedQueryFacts.v#L3547)
 
-Purpose/direction: Characterizes successful filtering when every reached formula evaluation succeeds with SQL TRUE.
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_filter_possible_outcome_equiv_of_always_true_uniform` for the public result.
+
+Purpose/direction: Characterizes successful filtering when every reached predicate evaluation succeeds with SQL TRUE.
 
 Applicability: Use only after proving every reached predicate outcome is exactly `SqlSuccess true3`; errors and UNKNOWN are not covered.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `filter`
+Cross-index: `scheduled`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`
 
 ```rocq
 Lemma eval_filter_rows_always_true_iff :
@@ -1778,18 +1858,20 @@ Lemma eval_filter_rows_always_true_iff :
     (forall row,
       In row rows ->
       forall outcome,
-        @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-          value_is_null (env_t T env row) formula outcome <->
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+          value_is_null boolean_schedule (env_t T env row) formula outcome <->
         outcome = SqlSuccess (Bool.true (B T))) ->
     forall outcome,
       @eval_filter_rows_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null env formula rows outcome <->
+        value_is_null boolean_schedule env formula rows outcome <->
       outcome = SqlSuccess rows.
 ```
 
 ## `relational_permutation_map_inv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3932`](../OrderedQueryFacts.v#L3932)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3650`](../OrderedQueryFacts.v#L3650)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Shows that the declared bag multiplicity result is invariant under input permutation.
 
@@ -1810,69 +1892,40 @@ Lemma relational_permutation_map_inv :
       Forall2 R output (map f reordered).
 ```
 
-## `projected_rows_same_as_mapped_bag`
+## `eval_project_rows_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4246`](../OrderedQueryFacts.v#L4246)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3712`](../OrderedQueryFacts.v#L3712)
 
-Purpose/direction: Bridges the two displayed representations of bag multiplicity.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+Applicability: Use when the goal or a hypothesis matches the `eval_project_rows_has_success` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
 
-Cross-index: `bag`
+Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Cross-index: `projection`
 
-```rocq
-Lemma projected_rows_same_as_mapped_bag :
-  forall env select_list rows bag,
-    query_same_rows_as_bag rows bag ->
-    query_same_rows_as_bag
-      (map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        rows)
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        bag).
-```
-
-## `mapped_bag_rows_have_projection_preimage`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4278`](../OrderedQueryFacts.v#L4278)
-
-Purpose/direction: States the mapped bag rows have projection preimage law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `relational algebra`, `projection`, `SELECT list`
 
 ```rocq
-Lemma mapped_bag_rows_have_projection_preimage :
-  forall env select_list bag output,
-    query_same_rows_as_bag output
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        bag) ->
-    exists input_rows,
-      query_same_rows_as_bag input_rows bag /\
-      ordered_rows_equiv T output
-        (map
-          (fun row =>
-            projection T (env_t T env row) (@Select_List T select_list))
-          input_rows).
+Lemma eval_project_rows_has_success :
+  forall env select_list rows,
+    (forall row,
+      In row rows ->
+      scalar_select_values_has_success_at
+        (env_t T env row) select_list) ->
+    exists output,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows (SqlSuccess output).
 ```
 
 ## `query_row_map_success_bags_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4371`](../OrderedQueryFacts.v#L4371)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3875`](../OrderedQueryFacts.v#L3875)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -1880,9 +1933,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `projection`, `bag`
+Cross-index: `scheduled`, `projection`, `bag`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_row_map_success_bags_total :
@@ -1899,7 +1952,9 @@ Theorem query_row_map_success_bags_total :
 
 ## `query_row_map_success_bags_functional_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4501`](../OrderedQueryFacts.v#L4501)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4005`](../OrderedQueryFacts.v#L4005)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -1925,60 +1980,11 @@ Theorem query_row_map_success_bags_functional_of_contract :
       bag_eq T first second.
 ```
 
-## `query_project_success_bags_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4579`](../OrderedQueryFacts.v#L4579)
-
-Purpose/direction: Characterizes the possible successful bags of a locally safe projection as a multiplicity-preserving bag map of child bags.
-
-Applicability: Use after proving scalar SELECT evaluation safe for every row; this is an exact possible-bag characterization, not an ordered-row result.
-
-Important premises: Prove the displayed SELECT-list runtime-error equation for every row; respect `bag_eq` and duplicate multiplicity in both directions.
-
-Cross-index: `runtime`, `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Theorem query_project_success_bags_safe :
-  forall env select_list input,
-    (forall row,
-      @eval_select_list_runtime_error T symbol_runtime_error
-        aggregate_runtime_error (env_t T env row) select_list = None) ->
-    rel_equiv
-      (success_bags env (QExpr_Project select_list input))
-      (fun output =>
-        exists input_bag,
-          success_bags env input input_bag /\
-          bag_eq T (query_project_bag env select_list input_bag) output).
-```
-
-## `query_project_bag_congr`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4748`](../OrderedQueryFacts.v#L4748)
-
-Purpose/direction: Transports input bag equality through the declared projection bag map.
-
-Applicability: Use to map an existing input `bag_eq` through one fixed projection.
-
-Important premises: Supply the displayed input `bag_eq`; the environment and SELECT list stay fixed.
-
-Cross-index: `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_project_bag_congr :
-  forall env select_list left right,
-    bag_eq T left right ->
-    bag_eq T
-      (query_project_bag env select_list left)
-      (query_project_bag env select_list right).
-```
-
 ## `query_values_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4960`](../OrderedQueryFacts.v#L4960)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4086`](../OrderedQueryFacts.v#L4086)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -1986,9 +1992,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_values_success_bags :
@@ -2000,7 +2006,9 @@ Theorem query_values_success_bags :
 
 ## `query_table_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4978`](../OrderedQueryFacts.v#L4978)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4104`](../OrderedQueryFacts.v#L4104)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
 
@@ -2008,9 +2016,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_table_success_bags :
@@ -2025,7 +2033,9 @@ Theorem query_table_success_bags :
 
 ## `query_table_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5049`](../OrderedQueryFacts.v#L5049)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4175`](../OrderedQueryFacts.v#L4175)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Shows that a base table has one possible successful bag modulo bag equality.
 
@@ -2045,62 +2055,11 @@ Theorem query_table_success_bags_functional :
     bag_eq T first second.
 ```
 
-## `project_rows_success_exact`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5270`](../OrderedQueryFacts.v#L5270)
-
-Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
-
-Applicability: Use when the goal or a hypothesis matches the `project_rows_success_exact` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma project_rows_success_exact :
-  forall env select_list rows output,
-    @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-      env select_list rows = SqlSuccess output ->
-    output =
-      map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        rows.
-```
-
-## `query_project_success_bags_functional`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5299`](../OrderedQueryFacts.v#L5299)
-
-Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Theorem query_project_success_bags_functional :
-  forall env select_list input,
-    (forall first second,
-      success_bags env input first ->
-      success_bags env input second ->
-      bag_eq T first second) ->
-    forall first second,
-      success_bags env (QExpr_Project select_list input) first ->
-      success_bags env (QExpr_Project select_list input) second ->
-      bag_eq T first second.
-```
-
 ## `query_set_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5371`](../OrderedQueryFacts.v#L5371)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4266`](../OrderedQueryFacts.v#L4266)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for SQL bag/set operations.
 
@@ -2131,7 +2090,9 @@ Theorem query_set_success_bags_functional :
 
 ## `query_cross_join_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5411`](../OrderedQueryFacts.v#L5411)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4306`](../OrderedQueryFacts.v#L4306)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for join semantics.
 
@@ -2162,7 +2123,9 @@ Theorem query_cross_join_success_bags_functional :
 
 ## `query_natural_join_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5452`](../OrderedQueryFacts.v#L5452)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4347`](../OrderedQueryFacts.v#L4347)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for join semantics.
 
@@ -2191,9 +2154,37 @@ Theorem query_natural_join_success_bags_functional :
       bag_eq T first second.
 ```
 
+## `query_expr_permutation_closure_certified_possible_bag_closed`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4498`](../OrderedQueryFacts.v#L4498)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Shows that the declared bag multiplicity result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `possible`, `outcome`, `runtime`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_expr_permutation_closure_certified_possible_bag_closed :
+  forall env query,
+    query_expr_permutation_closure_certified query = true ->
+    BagClosed T (fun rows =>
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env query (SqlSuccess rows)).
+```
+
 ## `rows_key_aligned_filter`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5832`](../OrderedQueryFacts.v#L5832)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5318`](../OrderedQueryFacts.v#L5318)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports heterogeneous relational order-key alignment through the displayed positional or total deterministic list consumer.
 
@@ -2225,6 +2216,8 @@ Theorem rows_key_aligned_filter :
 
 Source: [`theories/FormalSQL/OuterJoinFilterFacts.v:169`](../OuterJoinFilterFacts.v#L169)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows exact occurrence permutation between LEFT and operand-swapped RIGHT outer schedulers after transposing both match decisions and matched-row emission.
 
 Applicability: Use only after the target condition is the exact transpose and the matched and padded projections agree through one common emitter.  SQL condition/projection errors and semantic tuple equality remain separate.
@@ -2251,6 +2244,8 @@ Theorem left_right_outer_scheduler_swap_Permutation :
 ## `full_outer_filter_to_left_outer_exact`
 
 Source: [`theories/FormalSQL/OuterJoinFilterFacts.v:276`](../OuterJoinFilterFacts.v#L276)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Rewrites a null-rejecting filter over the three FULL-join scheduler branches to a LEFT join over the filtered left input, preserving duplicate occurrences exactly.
 
@@ -2285,6 +2280,8 @@ Theorem full_outer_filter_to_left_outer_exact :
 
 Source: [`theories/FormalSQL/OuterJoinFilterFacts.v:310`](../OuterJoinFilterFacts.v#L310)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Removes exactly the NULL-padded branch of a LEFT outer scheduler under an explicit rejecting consumer, retaining matched-row filtering and duplicate occurrences.
 
 Applicability: Use only when every padded-left row is rejected.  Moving the retained matched-row filter or claiming SQL outcome equivalence additionally requires totality, properness, non-volatility, and exact error premises.
@@ -2307,17 +2304,19 @@ Theorem left_outer_null_reject_to_inner_exact :
 
 ## `tnull_row_eq_refl`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:48`](../ProofAgentFacade.v#L48)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:58`](../ProofAgentFacade.v#L58)
 
-Purpose/direction: Exposes the displayed equivalence law for the facade's semantic TNull row equality without reopening ordered-set internals.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use to compose generated row correspondences through the facade's semantic equality; this is not Leibniz tuple equality.
+Purpose/direction: Establishes reflexivity for relational algebra.
 
-Important premises: No premises beyond the displayed row.
+Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
 
-Cross-index: `facade`, `projection`
+Important premises: supply the declared equivalence/properness relation.
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `row extensionality`, `tuple equality`, `equivalence`, `congruence`
+Cross-index: `facade`
+
+Search aliases: `relational algebra`, `equivalence`, `congruence`
 
 ```rocq
 Lemma tnull_row_eq_refl :
@@ -2326,17 +2325,19 @@ Lemma tnull_row_eq_refl :
 
 ## `tnull_row_eq_sym`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:55`](../ProofAgentFacade.v#L55)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:65`](../ProofAgentFacade.v#L65)
 
-Purpose/direction: Exposes the displayed equivalence law for the facade's semantic TNull row equality without reopening ordered-set internals.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use to compose generated row correspondences through the facade's semantic equality; this is not Leibniz tuple equality.
+Purpose/direction: Reverses a proved relational algebra relation.
 
-Important premises: Supply the displayed semantic TNull row equality in the forward direction.
+Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
 
-Cross-index: `facade`, `projection`
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `row extensionality`, `tuple equality`, `equivalence`, `congruence`
+Cross-index: `facade`
+
+Search aliases: `relational algebra`, `equivalence`, `congruence`
 
 ```rocq
 Lemma tnull_row_eq_sym :
@@ -2347,17 +2348,19 @@ Lemma tnull_row_eq_sym :
 
 ## `tnull_row_eq_trans`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:64`](../ProofAgentFacade.v#L64)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:74`](../ProofAgentFacade.v#L74)
 
-Purpose/direction: Exposes the displayed equivalence law for the facade's semantic TNull row equality without reopening ordered-set internals.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use to compose generated row correspondences through the facade's semantic equality; this is not Leibniz tuple equality.
+Purpose/direction: Composes two relational algebra relations through an intermediate result.
 
-Important premises: Supply both displayed semantic TNull row equalities through the same intermediate row; do not replace them by Leibniz equality.
+Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
 
-Cross-index: `facade`, `projection`
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `row extensionality`, `tuple equality`, `equivalence`, `congruence`
+Cross-index: `facade`
+
+Search aliases: `relational algebra`, `equivalence`, `congruence`
 
 ```rocq
 Lemma tnull_row_eq_trans :
@@ -2367,498 +2370,11 @@ Lemma tnull_row_eq_trans :
     TNullRowEq first third.
 ```
 
-## `tnull_query_program_head_separation_sound`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:791`](../ProofAgentFacade.v#L791)
-
-Purpose/direction: States the tnull query program head separation sound law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_query_program_head_separation_sound` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_query_program_head_separation_sound :
-  forall db env left right left_tail right_tail,
-    TNullQueryExprOutcomeSeparation db env left right ->
-    ~ TNullQueryProgramOutcomeEq db env
-        (left :: left_tail) (right :: right_tail).
-```
-
-## `tnull_query_program_prefix_separation_sound`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:807`](../ProofAgentFacade.v#L807)
-
-Purpose/direction: States the tnull query program prefix separation sound law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_query_program_prefix_separation_sound` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_query_program_prefix_separation_sound :
-  forall db env left_prefix right_prefix left right left_tail right_tail,
-    length left_prefix = length right_prefix ->
-    TNullQueryExprOutcomeSeparation db env left right ->
-    ~ TNullQueryProgramOutcomeEq db env
-        (left_prefix ++ left :: left_tail)
-        (right_prefix ++ right :: right_tail).
-```
-
-## `tnull_select_lookup_head`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:915`](../ProofAgentFacade.v#L915)
-
-Purpose/direction: States the tnull select lookup head law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_head` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_head :
-  forall items expression attribute,
-    TNullSelectLookup
-      (SelectList (SelectAs expression attribute :: items)) attribute =
-    Some expression.
-```
-
-## `tnull_select_lookup_cons_other`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:931`](../ProofAgentFacade.v#L931)
-
-Purpose/direction: States the tnull select lookup cons other law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_cons_other` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_cons_other :
-  forall items head_expression head_attribute attribute,
-    Oset.eq_bool (OAtt TNull) attribute head_attribute = false ->
-    TNullSelectLookup
-      (SelectList (SelectAs head_expression head_attribute :: items))
-      attribute =
-    TNullSelectLookup (SelectList items) attribute.
-```
-
-## `tnull_select_lookup_retained`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:955`](../ProofAgentFacade.v#L955)
-
-Purpose/direction: States the tnull select lookup retained law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_retained` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_retained :
-  forall env select attribute expression row,
-    TNullSelectLookup select attribute = Some expression ->
-    attribute inS
-      TNullRowLabels (TNullProjectRow env select row) /\
-    TNullRowValue (TNullProjectRow env select row) attribute =
-      Interp.interp_aggterm TNull (env_t TNull env row) expression.
-```
-
-## `tnull_select_lookup_some_iff_projected_label`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1017`](../ProofAgentFacade.v#L1017)
-
-Purpose/direction: Relates successful first-match SELECT lookup exactly to membership of the corresponding projected output label.
-
-Applicability: Use in either direction between first-match lookup and projected label presence; repeated aliases do not authorize choosing a later SELECT item.
-
-Important premises: No alias-uniqueness premise is required: the statement follows the authoritative first-match SELECT lookup and exact projected-label membership test.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_some_iff_projected_label :
-  forall env select attribute row,
-    (exists expression,
-      TNullSelectLookup select attribute = Some expression) <->
-    attribute inS TNullRowLabels (TNullProjectRow env select row).
-```
-
-## `tnull_select_lookup_none_iff_projected_label_absent`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1064`](../ProofAgentFacade.v#L1064)
-
-Purpose/direction: Relates failed first-match SELECT lookup exactly to Boolean absence of the corresponding projected output label.
-
-Applicability: Use in either direction to prove concrete lookup failure or output label absence without unfolding projection-label construction.
-
-Important premises: No alias-uniqueness premise is required: the statement follows the authoritative first-match SELECT lookup and exact projected-label membership test.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_none_iff_projected_label_absent :
-  forall env select attribute row,
-    TNullSelectLookup select attribute = None <->
-    (attribute inS? TNullRowLabels (TNullProjectRow env select row)) = false.
-```
-
-## `tnull_select_columns_lookup_output`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1098`](../ProofAgentFacade.v#L1098)
-
-Purpose/direction: Computes the exact first-match lookup of every present SelectColumns output without requiring output uniqueness.
-
-Applicability: Use for a SelectColumns member instead of proving uniqueness or manually reducing first-match lookup over a concrete list.
-
-Important premises: The attribute must belong to the displayed SelectColumns output set. Repeated identical columns remain valid under first-match semantics.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_select_columns_lookup_output :
-  forall columns attribute,
-    attribute inS
-      (@Projection.select_list_sort TNull (SelectColumns columns)) ->
-    TNullSelectLookup (SelectColumns columns) attribute =
-      Some (AExpr (Dot attribute)).
-```
-
-## `tnull_select_lookup_direct_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1148`](../ProofAgentFacade.v#L1148)
-
-Purpose/direction: States the tnull select lookup direct value law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_direct_value` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_direct_value :
-  forall env select source target row,
-    TNullSelectLookup select target = Some (AExpr (Dot source)) ->
-    source inS TNullRowLabels row ->
-    TNullRowValue (TNullProjectRow env select row) target =
-    TNullRowValue row source.
-```
-
-## `tnull_select_lookup_constant_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1170`](../ProofAgentFacade.v#L1170)
-
-Purpose/direction: States the tnull select lookup constant value law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_constant_value` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_constant_value :
-  forall env select target value row,
-    TNullSelectLookup select target = Some (AExpr (Constant value)) ->
-    TNullRowValue (TNullProjectRow env select row) target = value.
-```
-
-## `tnull_select_lookup_direct_compose`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1187`](../ProofAgentFacade.v#L1187)
-
-Purpose/direction: States the tnull select lookup direct compose law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_direct_compose` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_direct_compose :
-  forall env first second source middle target row,
-    TNullSelectLookup first middle = Some (AExpr (Dot source)) ->
-    TNullSelectLookup second target = Some (AExpr (Dot middle)) ->
-    source inS TNullRowLabels row ->
-    target inS
-      TNullRowLabels
-        (TNullProjectRow env second (TNullProjectRow env first row)) /\
-    TNullRowValue
-      (TNullProjectRow env second (TNullProjectRow env first row)) target =
-    TNullRowValue row source.
-```
-
-## `tnull_select_lookup_direct_compose_interp_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1224`](../ProofAgentFacade.v#L1224)
-
-Purpose/direction: Composes two first-match direct projection lookups while retaining the original row-extended expression value, including correlated fallback.
-
-Applicability: Use when both SELECT stages have the displayed first-match direct lookups.  No source-label presence premise is needed because the conclusion preserves the original row-extended interpretation.
-
-Important premises: Both displayed lookup equalities are mandatory and use authoritative first-match semantics; the theorem deliberately has no source-presence premise.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_direct_compose_interp_value :
-  forall env first second source middle target row,
-    TNullSelectLookup first middle = Some (AExpr (Dot source)) ->
-    TNullSelectLookup second target = Some (AExpr (Dot middle)) ->
-    TNullRowValue
-      (TNullProjectRow env second (TNullProjectRow env first row)) target =
-    Interp.interp_aggterm TNull (env_t TNull env row)
-      (AExpr (Dot source)).
-```
-
-## `tnull_select_lookup_constant_direct_compose`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1249`](../ProofAgentFacade.v#L1249)
-
-Purpose/direction: States the tnull select lookup constant direct compose law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_select_lookup_constant_direct_compose` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_select_lookup_constant_direct_compose :
-  forall env first second value middle target row,
-    TNullSelectLookup first middle = Some (AExpr (Constant value)) ->
-    TNullSelectLookup second target = Some (AExpr (Dot middle)) ->
-    target inS
-      TNullRowLabels
-        (TNullProjectRow env second (TNullProjectRow env first row)) /\
-    TNullRowValue
-      (TNullProjectRow env second (TNullProjectRow env first row)) target =
-    value.
-```
-
-## `tnull_direct_projection_preserves_attribute`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1280`](../ProofAgentFacade.v#L1280)
-
-Purpose/direction: Shows that the indicated operator preserves the displayed relational algebra property.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_direct_projection_preserves_attribute` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
-
-Cross-index: `facade`, `projection`, `schema`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `schema conformance`, `typing`
-
-```rocq
-Lemma tnull_direct_projection_preserves_attribute :
-  forall (env : TNullEnvironment) (select : TNullSelectList)
-      (attribute : TNullAttribute) (row : TNullRow),
-    select_list_directly_selects_attr select attribute ->
-    select_list_has_unique_outputs select ->
-    attribute inS TNullRowLabels row ->
-    TNullRowValue (TNullProjectRow env select row) attribute =
-    TNullRowValue row attribute.
-```
-
-## `tnull_direct_projection_alias_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1299`](../ProofAgentFacade.v#L1299)
-
-Purpose/direction: Reads an aliased direct SELECT output exactly as its present source attribute under unique output aliases, preserving NULL values.
-
-Applicability: Use to reduce `dot` at a renamed projection output after proving the literal direct SELECT item, unique output aliases, and source attribute presence in the input row.
-
-Important premises: The displayed direct `source -> target` item and output uniqueness are mandatory; source presence prevents lookup from falling through to the outer environment.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_alias_value :
-  forall (env : TNullEnvironment) (items : list SelectItemT)
-      (source target : TNullAttribute) (row : TNullRow),
-    In
-      (@Select_As TNull
-        (@A_Expr TNull (@F_Dot TNull source)) target)
-      items ->
-    select_list_has_unique_outputs (@_Select_List TNull items) ->
-    source inS TNullRowLabels row ->
-    TNullRowValue
-      (TNullProjectRow env (@_Select_List TNull items) row) target =
-    TNullRowValue row source.
-```
-
-## `tnull_direct_projection_alias_retained`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1333`](../ProofAgentFacade.v#L1333)
-
-Purpose/direction: States the tnull direct projection alias retained law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_direct_projection_alias_retained` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_alias_retained :
-  forall (env : TNullEnvironment) (items : list SelectItemT)
-      (source target : TNullAttribute) (row : TNullRow),
-    In
-      (@Select_As TNull
-        (@A_Expr TNull (@F_Dot TNull source)) target)
-      items ->
-    select_list_has_unique_outputs (@_Select_List TNull items) ->
-    source inS TNullRowLabels row ->
-    target inS
-      TNullRowLabels
-        (TNullProjectRow env (@_Select_List TNull items) row) /\
-    TNullRowValue
-      (TNullProjectRow env (@_Select_List TNull items) row) target =
-    TNullRowValue row source.
-```
-
-## `tnull_direct_projection_alias_reflects_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1365`](../ProofAgentFacade.v#L1365)
-
-Purpose/direction: States the tnull direct projection alias reflects value law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_direct_projection_alias_reflects_value` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_alias_reflects_value :
-  forall (env : TNullEnvironment) (items : list SelectItemT)
-      (source target : TNullAttribute) (left right : TNullRow),
-    In
-      (@Select_As TNull
-        (@A_Expr TNull (@F_Dot TNull source)) target)
-      items ->
-    select_list_has_unique_outputs (@_Select_List TNull items) ->
-    source inS TNullRowLabels left ->
-    source inS TNullRowLabels right ->
-    TNullRowEq
-      (TNullProjectRow env (@_Select_List TNull items) left)
-      (TNullProjectRow env (@_Select_List TNull items) right) ->
-    TNullRowValue left source = TNullRowValue right source.
-```
-
-## `tnull_projected_alias_int32_primary_key_matches_at_most_one`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1403`](../ProofAgentFacade.v#L1403)
-
-Purpose/direction: States the tnull projected alias int32 primary key matches at most one law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_projected_alias_int32_primary_key_matches_at_most_one` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
-
-Cross-index: `facade`, `schema`, `scalar`
-
-Search aliases: `relational algebra`, `INTEGER`, `int32`, `integrity constraint`, `key`
-
-```rocq
-Lemma tnull_projected_alias_int32_primary_key_matches_at_most_one :
-  forall (env : TNullEnvironment) (items : list SelectItemT)
-      source_name target_name (fixed : TNullValue)
-      (raw_rows projected_rows : list TNullRow) (raw_bag : TNullRowBag),
-    Forall
-      (row_attribute_present_conforms (Attr_int32 source_name)) raw_rows ->
-    primary_key_conforms [Attr_int32 source_name] raw_rows ->
-    In
-      (SelectAs (DotInt32 source_name) (AttrInt32 target_name))
-      items ->
-    select_list_has_unique_outputs (SelectList items) ->
-    value_conforms_attribute (Attr_int32 source_name) fixed ->
-    @query_same_rows_as_bag TNull raw_rows raw_bag ->
-    @query_same_rows_as_bag TNull projected_rows
-      (@query_project_bag TNull env (SelectList items) raw_bag) ->
-    (List.length
-      (filter
-        (fun row =>
-          postgres_int32_equal_true fixed
-            (TNullRowValue row (Attr_int32 target_name)))
-        projected_rows) <= 1)%nat.
-```
-
-## `tnull_direct_projection_row_eq`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1586`](../ProofAgentFacade.v#L1586)
-
-Purpose/direction: States the tnull direct projection row equality law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_direct_projection_row_eq` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_row_eq :
-  forall (env : TNullEnvironment) (select : TNullSelectList)
-      (row : TNullRow),
-    select_list_has_unique_outputs select ->
-    (forall attribute,
-      attribute inS TNullRowLabels row ->
-      select_list_directly_selects_attr select attribute) ->
-    TNullAttributeSetEq
-      (TNullRowLabels (TNullProjectRow env select row))
-      (TNullRowLabels row) ->
-    TNullRowEq (TNullProjectRow env select row) row.
-```
-
 ## `tnull_row_permut_implies_rows_bag_eq`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1616`](../ProofAgentFacade.v#L1616)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:98`](../ProofAgentFacade.v#L98)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the tnull row permut implies rows bag equality law for bag multiplicity, in the exact direction displayed by the declaration.
 
@@ -2877,43 +2393,61 @@ Lemma tnull_row_permut_implies_rows_bag_eq :
     TNullBagEq (TNullRowsBag left) (TNullRowsBag right).
 ```
 
-## `tnull_double_projection_bag_eq`
+## `tnull_query_program_head_separation_sound`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1629`](../ProofAgentFacade.v#L1629)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:363`](../ProofAgentFacade.v#L363)
 
-Purpose/direction: States the tnull double projection bag equality law for bag multiplicity, in the exact direction displayed by the declaration.
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+Purpose/direction: States the tnull query program head separation sound law for relational algebra, in the exact direction displayed by the declaration.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_program_head_separation_sound` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
 
-Cross-index: `facade`, `projection`, `bag`
+Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Cross-index: `possible`, `facade`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`
 
 ```rocq
-Lemma tnull_double_projection_bag_eq :
-  forall env outer_left inner_left outer_right inner_right bag,
-    (forall row,
-      TNullRowEq
-        (TNullProjectRow env outer_left
-          (TNullProjectRow env inner_left row))
-        (TNullProjectRow env outer_right
-          (TNullProjectRow env inner_right row))) ->
-    TNullBagEq
-      (TNullBagMap
-        (fun row => TNullProjectRow env outer_left row)
-        (TNullBagMap
-          (fun row => TNullProjectRow env inner_left row) bag))
-      (TNullBagMap
-        (fun row => TNullProjectRow env outer_right row)
-        (TNullBagMap
-          (fun row => TNullProjectRow env inner_right row) bag)).
+Lemma tnull_query_program_head_separation_sound :
+  forall db env left right left_tail right_tail,
+    TNullQueryExprOutcomeSeparation db env left right ->
+    ~ TNullQueryProgramOutcomeEq db env
+        (left :: left_tail) (right :: right_tail).
+```
+
+## `tnull_query_program_prefix_separation_sound`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:379`](../ProofAgentFacade.v#L379)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the tnull query program prefix separation sound law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_program_prefix_separation_sound` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `possible`, `facade`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`
+
+```rocq
+Lemma tnull_query_program_prefix_separation_sound :
+  forall db env left_prefix right_prefix left right left_tail right_tail,
+    length left_prefix = length right_prefix ->
+    TNullQueryExprOutcomeSeparation db env left right ->
+    ~ TNullQueryProgramOutcomeEq db env
+        (left_prefix ++ left :: left_tail)
+        (right_prefix ++ right :: right_tail).
 ```
 
 ## `tnull_map_theta_join_total_functional`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1671`](../ProofAgentFacade.v#L1671)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:428`](../ProofAgentFacade.v#L428)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated join semantics operation under the shown premises.
 
@@ -2946,7 +2480,9 @@ Lemma tnull_map_theta_join_total_functional :
 
 ## `tnull_map_left_join_total_functional`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1694`](../ProofAgentFacade.v#L1694)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:451`](../ProofAgentFacade.v#L451)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated join semantics operation under the shown premises.
 
@@ -2982,7 +2518,9 @@ Lemma tnull_map_left_join_total_functional :
 
 ## `tnull_map_theta_join_total_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1724`](../ProofAgentFacade.v#L1724)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:481`](../ProofAgentFacade.v#L481)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated join semantics operation under the shown premises.
 
@@ -3016,7 +2554,9 @@ Lemma tnull_map_theta_join_total_functional_permut :
 
 ## `tnull_map_theta_join_total_functional_permut_accepted`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1781`](../ProofAgentFacade.v#L1781)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:538`](../ProofAgentFacade.v#L538)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated join semantics operation under the shown premises.
 
@@ -3053,7 +2593,9 @@ Lemma tnull_map_theta_join_total_functional_permut_accepted :
 
 ## `tnull_map_theta_join_functional_permut_filter_exists`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1847`](../ProofAgentFacade.v#L1847)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:604`](../ProofAgentFacade.v#L604)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the tnull map theta join functional permut filter exists law for join semantics, in the exact direction displayed by the declaration.
 
@@ -3088,7 +2630,9 @@ Lemma tnull_map_theta_join_functional_permut_filter_exists :
 
 ## `tnull_map_left_join_total_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1873`](../ProofAgentFacade.v#L1873)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:630`](../ProofAgentFacade.v#L630)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated join semantics operation under the shown premises.
 
@@ -3126,7 +2670,9 @@ Lemma tnull_map_left_join_total_functional_permut :
 
 ## `tnull_map_left_join_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1907`](../ProofAgentFacade.v#L1907)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:664`](../ProofAgentFacade.v#L664)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Identifies a projected at-most-one LEFT JOIN with the mapped left input up to semantic permutation, retaining unmatched and duplicate left occurrences without a total-match premise.
 
@@ -3160,7 +2706,9 @@ Lemma tnull_map_left_join_functional_permut :
 
 ## `tnull_row_eq_of_labels_and_values`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1932`](../ProofAgentFacade.v#L1932)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:689`](../ProofAgentFacade.v#L689)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the tnull row equality of labels and values law for relational algebra, in the exact direction displayed by the declaration.
 
@@ -3168,9 +2716,9 @@ Applicability: Use when the goal or a hypothesis matches the `tnull_row_eq_of_la
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `facade`, `projection`
+Cross-index: `facade`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `row extensionality`, `tuple equality`
+Search aliases: `relational algebra`
 
 ```rocq
 Lemma tnull_row_eq_of_labels_and_values :
@@ -3182,424 +2730,11 @@ Lemma tnull_row_eq_of_labels_and_values :
     TNullRowEq left right.
 ```
 
-## `tnull_project_row_eq_congr`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1950`](../ProofAgentFacade.v#L1950)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `equivalence`, `congruence`
-
-```rocq
-Lemma tnull_project_row_eq_congr :
-  forall env select left right,
-    TNullRowEq left right ->
-    TNullRowEq
-      (TNullProjectRow env select left)
-      (TNullProjectRow env select right).
-```
-
-## `tnull_projected_select_item_reflects_value`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:1968`](../ProofAgentFacade.v#L1968)
-
-Purpose/direction: States the tnull projected select item reflects value law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_projected_select_item_reflects_value` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`
-
-Search aliases: `relational algebra`
-
-```rocq
-Lemma tnull_projected_select_item_reflects_value :
-  forall env items expression attribute left right,
-    In (@Select_As TNull expression attribute) items ->
-    select_list_has_unique_outputs (SelectList items) ->
-    TNullRowEq
-      (TNullProjectRow env (SelectList items) left)
-      (TNullProjectRow env (SelectList items) right) ->
-    Interp.interp_aggterm TNull (env_t TNull env left) expression =
-    Interp.interp_aggterm TNull (env_t TNull env right) expression.
-```
-
-## `tnull_project_rows_select_columns_success`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:2705`](../ProofAgentFacade.v#L2705)
-
-Purpose/direction: Computes direct-column projection of a row list as an exact ordered successful map, discharging all projection-local scalar errors.
-
-Applicability: Use only for `SelectColumns`; it proves projection-local safety and the exact ordered row map, independently of any child-query outcome.
-
-Important premises: The SELECT list must have the displayed direct-column form; the exact ordered map conclusion does not cover arbitrary scalar expressions.
-
-Cross-index: `facade`, `runtime`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma tnull_project_rows_select_columns_success :
-  forall env columns rows,
-    @project_rows_outcome TNull
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error
-      env (SelectColumns columns) rows =
-    SqlSuccess
-      (map
-        (fun row => TNullProjectRow env (SelectColumns columns) row)
-        rows).
-```
-
-## `tnull_projection_envs_eq_of_select_items`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3032`](../ProofAgentFacade.v#L3032)
-
-Purpose/direction: States the tnull projection envs equality of select items law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_projection_envs_eq_of_select_items` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_projection_envs_eq_of_select_items :
-  forall (left_env right_env : Env.env TNull)
-      (left_items right_items : list SelectItemT),
-    Forall2
-      (fun left right =>
-        match left, right with
-        | @Projection.Select_As _ left_expression left_attribute,
-          @Projection.Select_As _ right_expression right_attribute =>
-            left_attribute = right_attribute /\
-            Interp.interp_aggterm TNull left_env left_expression =
-            Interp.interp_aggterm TNull right_env right_expression
-        end)
-      left_items right_items ->
-    TNullRowEq
-      (Projection.projection TNull left_env
-        (@Projection.Select_List TNull (SelectList left_items)))
-      (Projection.projection TNull right_env
-        (@Projection.Select_List TNull (SelectList right_items))).
-```
-
-## `tnull_projection_rows_eq_of_select_items`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3136`](../ProofAgentFacade.v#L3136)
-
-Purpose/direction: States the tnull projection rows equality of select items law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_projection_rows_eq_of_select_items` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_projection_rows_eq_of_select_items :
-  forall env left_row right_row
-      (left_items right_items : list SelectItemT),
-    Forall2
-      (fun left right =>
-        match left, right with
-        | @Projection.Select_As _ left_expression left_attribute,
-          @Projection.Select_As _ right_expression right_attribute =>
-            left_attribute = right_attribute /\
-            Interp.interp_aggterm TNull (env_t TNull env left_row)
-              left_expression =
-            Interp.interp_aggterm TNull (env_t TNull env right_row)
-              right_expression
-        end)
-      left_items right_items ->
-    TNullRowEq
-      (TNullProjectRow env (SelectList left_items) left_row)
-      (TNullProjectRow env (SelectList right_items) right_row).
-```
-
-## `tnull_projection_rows_eq_of_output_values`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3165`](../ProofAgentFacade.v#L3165)
-
-Purpose/direction: Builds semantic equality of two projected rows from equality of their output-label sets and every observable projected cell.
-
-Applicability: Use after proving exact equality of the two SELECT output-label sets and equality of each cell observable through that set.
-
-Important premises: Retain exact output-label-set equality and cell equality for every attribute in the left output set; neither premise follows from arity alone.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_projection_rows_eq_of_output_values :
-  forall env left_select right_select left_row right_row,
-    TNullAttributeSetEq
-      (@Projection.select_list_sort TNull left_select)
-      (@Projection.select_list_sort TNull right_select) ->
-    (forall attribute,
-      attribute inS (@Projection.select_list_sort TNull left_select) ->
-      TNullRowValue (TNullProjectRow env left_select left_row) attribute =
-      TNullRowValue (TNullProjectRow env right_select right_row) attribute) ->
-    TNullRowEq
-      (TNullProjectRow env left_select left_row)
-      (TNullProjectRow env right_select right_row).
-```
-
-## `tnull_direct_projection_fusion_row_eq`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3206`](../ProofAgentFacade.v#L3206)
-
-Purpose/direction: Fuses one direct projection with two direct projections from exact source-to-middle-to-target first-match lookup chains.
-
-Applicability: Applies to composition of one direct projection with a two-stage direct projection after supplying the exact first-match lookup chains.
-
-Important premises: Retain equal final output-label sets and all three first-match lookup equations for every observable target; repeated aliases cannot select a later item.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_fusion_row_eq :
-  forall env single outer inner,
-    TNullAttributeSetEq
-      (@Projection.select_list_sort TNull single)
-      (@Projection.select_list_sort TNull outer) ->
-    (forall target,
-      target inS (@Projection.select_list_sort TNull single) ->
-      exists source middle,
-        TNullSelectLookup single target = Some (AExpr (Dot source)) /\
-        TNullSelectLookup inner middle = Some (AExpr (Dot source)) /\
-        TNullSelectLookup outer target = Some (AExpr (Dot middle))) ->
-    forall row,
-      TNullRowEq
-        (TNullProjectRow env single row)
-        (TNullProjectRow env outer (TNullProjectRow env inner row)).
-```
-
-## `tnull_select_columns_projection_fusion_row_eq`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3245`](../ProofAgentFacade.v#L3245)
-
-Purpose/direction: Fuses direct-column single and double projections from final-label set equality and coverage of every outer label by the inner projection.
-
-Applicability: Applies when the compared projection composition uses SelectColumns; it reduces the row law to output-set equality and outer-to-inner coverage.
-
-Important premises: Retain exact single/outer output-set equality and outer-to-inner set coverage; coverage prevents correlated fallback for an absent inner label.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_select_columns_projection_fusion_row_eq :
-  forall env single outer inner,
-    TNullAttributeSetEq
-      (@Projection.select_list_sort TNull (SelectColumns single))
-      (@Projection.select_list_sort TNull (SelectColumns outer)) ->
-    (@Projection.select_list_sort TNull (SelectColumns outer)) subS
-      (@Projection.select_list_sort TNull (SelectColumns inner)) ->
-    forall row,
-      TNullRowEq
-        (TNullProjectRow env (SelectColumns single) row)
-        (TNullProjectRow env (SelectColumns outer)
-          (TNullProjectRow env (SelectColumns inner) row)).
-```
-
-## `tnull_direct_projection_row_eq_on_expected_labels`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3302`](../ProofAgentFacade.v#L3302)
-
-Purpose/direction: States the tnull direct projection row equality on expected labels law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_direct_projection_row_eq_on_expected_labels` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_direct_projection_row_eq_on_expected_labels :
-  forall env select expected row,
-    select_list_has_unique_outputs select ->
-    (forall attribute,
-      attribute inS expected ->
-      select_list_directly_selects_attr select attribute) ->
-    TNullAttributeSetEq
-      (TNullRowLabels (TNullProjectRow env select row)) expected ->
-    TNullAttributeSetEq (TNullRowLabels row) expected ->
-    TNullRowEq (TNullProjectRow env select row) row.
-```
-
-## `tnull_bag_map_ext`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3328`](../ProofAgentFacade.v#L3328)
-
-Purpose/direction: States the tnull bag map ext law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `facade`, `bag`
-
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma tnull_bag_map_ext :
-  forall left_map right_map bag,
-    (forall row,
-      In row (Febag.elements TNullRowBagRecord bag) ->
-      TNullRowEq (left_map row) (right_map row)) ->
-    TNullBagEq
-      (TNullBagMap left_map bag)
-      (TNullBagMap right_map bag).
-```
-
-## `tnull_bag_map_identity`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3345`](../ProofAgentFacade.v#L3345)
-
-Purpose/direction: States the tnull bag map identity law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `facade`, `bag`
-
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma tnull_bag_map_identity :
-  forall bag,
-    TNullBagEq (TNullBagMap (fun row => row) bag) bag.
-```
-
-## `tnull_projection_bag_map_compose`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3358`](../ProofAgentFacade.v#L3358)
-
-Purpose/direction: States the tnull projection bag map compose law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `facade`, `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma tnull_projection_bag_map_compose :
-  forall env outer inner bag,
-    TNullBagEq
-      (TNullBagMap
-        (fun row => TNullProjectRow env outer row)
-        (TNullBagMap
-          (fun row => TNullProjectRow env inner row) bag))
-      (TNullBagMap
-        (fun row =>
-          TNullProjectRow env outer (TNullProjectRow env inner row)) bag).
-```
-
-## `tnull_single_double_projection_bag_eq`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3402`](../ProofAgentFacade.v#L3402)
-
-Purpose/direction: States the tnull single double projection bag equality law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `facade`, `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma tnull_single_double_projection_bag_eq :
-  forall env single outer inner bag,
-    (forall row,
-      In row (Febag.elements TNullRowBagRecord bag) ->
-      TNullRowEq
-        (TNullProjectRow env single row)
-        (TNullProjectRow env outer (TNullProjectRow env inner row))) ->
-    TNullBagEq
-      (TNullBagMap (fun row => TNullProjectRow env single row) bag)
-      (TNullBagMap
-        (fun row => TNullProjectRow env outer row)
-        (TNullBagMap
-          (fun row => TNullProjectRow env inner row) bag)).
-```
-
-## `tnull_project_fusion_success_bag_contract_of_row_eq`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3428`](../ProofAgentFacade.v#L3428)
-
-Purpose/direction: Lifts a total single-versus-double projection row law to the named reachable-child-bag fusion contract without changing multiplicities.
-
-Applicability: Applies when the projection-composition row law is valid for every row. A law restricted to reachable rows must instead discharge the original reachable-bag contract.
-
-Important premises: The displayed all-row semantic equality is a stronger sufficient premise; the resulting contract still ranges only over reachable child bags.
-
-Cross-index: `facade`, `projection`, `bag`, `scalar`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `NULL`, `UNKNOWN`, `three-valued logic`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma tnull_project_fusion_success_bag_contract_of_row_eq :
-  forall db env single outer inner input,
-    (forall row,
-      TNullRowEq
-        (TNullProjectRow env single row)
-        (TNullProjectRow env outer (TNullProjectRow env inner row))) ->
-    @project_fusion_success_bag_contract TNull relname
-      (@_basesort TNull db) (@_instance TNull db) unknown3
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
-      env single outer inner input.
-```
-
-## `tnull_same_select_projection_labels`
-
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3455`](../ProofAgentFacade.v#L3455)
-
-Purpose/direction: States the tnull same select projection labels law for relational algebra, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_same_select_projection_labels` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: `facade`, `projection`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`
-
-```rocq
-Lemma tnull_same_select_projection_labels :
-  forall env select left right,
-    TNullAttributeSetEq
-      (TNullRowLabels (TNullProjectRow env select left))
-      (TNullRowLabels (TNullProjectRow env select right)).
-```
-
 ## `tnull_theta_join_by_witness`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3522`](../ProofAgentFacade.v#L3522)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:754`](../ProofAgentFacade.v#L754)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the tnull theta join by witness law for join semantics, in the exact direction displayed by the declaration.
 
@@ -3639,7 +2774,9 @@ Lemma tnull_theta_join_by_witness :
 
 ## `tnull_total_functional_theta_project_nodup`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3583`](../ProofAgentFacade.v#L3583)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:815`](../ProofAgentFacade.v#L815)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -3673,7 +2810,9 @@ Lemma tnull_total_functional_theta_project_nodup :
 
 ## `tnull_total_functional_theta_project_nodup_accepted`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3618`](../ProofAgentFacade.v#L3618)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:850`](../ProofAgentFacade.v#L850)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -3710,7 +2849,9 @@ Lemma tnull_total_functional_theta_project_nodup_accepted :
 
 ## `tnull_functional_theta_project_nodup_of_key_reflection`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3658`](../ProofAgentFacade.v#L3658)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:890`](../ProofAgentFacade.v#L890)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -3748,7 +2889,9 @@ Lemma tnull_functional_theta_project_nodup_of_key_reflection :
 
 ## `tnull_nodup_occ_le_one`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:3704`](../ProofAgentFacade.v#L3704)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:936`](../ProofAgentFacade.v#L936)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -3771,6 +2914,8 @@ Lemma tnull_nodup_occ_le_one :
 ## `list_flat_map_permut_rel`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:68`](../RelationalAlgebraFacts.v#L68)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the list flat map permut rel law for relational algebra, in the exact direction displayed by the declaration.
 
@@ -3804,6 +2949,8 @@ Lemma list_flat_map_permut_rel :
 ## `theta_filter_map_permut_rel`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:131`](../RelationalAlgebraFacts.v#L131)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the theta filter map permut rel law for relational algebra, in the exact direction displayed by the declaration.
 
@@ -3864,6 +3011,8 @@ Lemma theta_filter_map_permut_rel :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:209`](../RelationalAlgebraFacts.v#L209)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp direct attribute in env t law for relational algebra, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_direct_attribute_in_env_t` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
@@ -3886,6 +3035,8 @@ Lemma interp_direct_attribute_in_env_t :
 ## `list_support_rel_compose`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:238`](../RelationalAlgebraFacts.v#L238)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports bidirectional row support through the displayed relation; it does not preserve duplicate multiplicity by itself.
 
@@ -3911,6 +3062,8 @@ Lemma list_support_rel_compose :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:264`](../RelationalAlgebraFacts.v#L264)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports bidirectional row support through the displayed relation; it does not preserve duplicate multiplicity by itself.
 
 Applicability: Use to connect row-existence witnesses across relational stages; do not treat the conclusion as bag equality or multiplicity preservation.
@@ -3933,6 +3086,8 @@ Lemma list_support_rel_map_transport :
 ## `list_support_rel_filter_transport`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:294`](../RelationalAlgebraFacts.v#L294)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports bidirectional relational support through two total filters whose decisions agree only on actually related representatives.
 
@@ -3960,6 +3115,8 @@ Lemma list_support_rel_filter_transport :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:330`](../RelationalAlgebraFacts.v#L330)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports bidirectional row support through the displayed relation; it does not preserve duplicate multiplicity by itself.
 
 Applicability: Use to connect row-existence witnesses across relational stages; do not treat the conclusion as bag equality or multiplicity preservation.
@@ -3983,6 +3140,8 @@ Lemma list_support_rel_map_iff :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:358`](../RelationalAlgebraFacts.v#L358)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports bidirectional row support through the displayed relation; it does not preserve duplicate multiplicity by itself.
 
 Applicability: Use to connect row-existence witnesses across relational stages; do not treat the conclusion as bag equality or multiplicity preservation.
@@ -4003,6 +3162,8 @@ Lemma list_support_rel_unmap_left :
 ## `list_support_rel_map_left_with_witness`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:378`](../RelationalAlgebraFacts.v#L378)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports bidirectional row support through the displayed relation; it does not preserve duplicate multiplicity by itself.
 
@@ -4028,6 +3189,8 @@ Lemma list_support_rel_map_left_with_witness :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:403`](../RelationalAlgebraFacts.v#L403)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
 Applicability: Use when the goal or a hypothesis matches the `all_diff_map_key_NoDupA` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
@@ -4050,6 +3213,8 @@ Lemma all_diff_map_key_NoDupA :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:423`](../RelationalAlgebraFacts.v#L423)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes reflexivity for relational algebra.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
@@ -4070,6 +3235,8 @@ Lemma rel_equiv_refl :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:430`](../RelationalAlgebraFacts.v#L430)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Reverses a proved relational algebra relation.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
@@ -4089,6 +3256,8 @@ Lemma rel_equiv_sym :
 ## `rel_equiv_trans`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:439`](../RelationalAlgebraFacts.v#L439)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Composes two relational algebra relations through an intermediate result.
 
@@ -4112,6 +3281,8 @@ Lemma rel_equiv_trans :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:453`](../RelationalAlgebraFacts.v#L453)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes reflexivity for relational algebra.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
@@ -4131,6 +3302,8 @@ Lemma rel_incl_refl :
 ## `rel_incl_trans`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:460`](../RelationalAlgebraFacts.v#L460)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Composes two relational algebra relations through an intermediate result.
 
@@ -4154,6 +3327,8 @@ Lemma rel_incl_trans :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:470`](../RelationalAlgebraFacts.v#L470)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
 
 Applicability: Use in either direction to invert or construct a goal about relational algebra.
@@ -4174,6 +3349,8 @@ Lemma rel_equiv_iff_mutual_incl :
 ## `alpha_rel_incl`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:484`](../RelationalAlgebraFacts.v#L484)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the alpha rel incl law for relational algebra, in the exact direction displayed by the declaration.
 
@@ -4197,6 +3374,8 @@ Lemma alpha_rel_incl :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:494`](../RelationalAlgebraFacts.v#L494)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes bag multiplicity across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
@@ -4218,6 +3397,8 @@ Lemma bag_closed_rel_equiv_transport :
 ## `bag_closed_union`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:507`](../RelationalAlgebraFacts.v#L507)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed closure property for bag multiplicity.
 
@@ -4241,6 +3422,8 @@ Lemma bag_closed_union :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:523`](../RelationalAlgebraFacts.v#L523)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed closure property for bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4263,6 +3446,8 @@ Lemma bag_closed_exists :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:538`](../RelationalAlgebraFacts.v#L538)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates relational algebra to the exact list length or bag cardinality shown below.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
@@ -4283,6 +3468,8 @@ Lemma ordered_rows_equiv_length :
 ## `ordered_rows_equiv_occ`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:548`](../RelationalAlgebraFacts.v#L548)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -4307,6 +3494,8 @@ Lemma ordered_rows_equiv_occ :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:560`](../RelationalAlgebraFacts.v#L560)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates membership or occurrence evidence to bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4327,6 +3516,8 @@ Lemma rows_bag_occ :
 ## `bag_eq_iff_occurrences`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:570`](../RelationalAlgebraFacts.v#L570)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for bag multiplicity.
 
@@ -4352,6 +3543,8 @@ Lemma bag_eq_iff_occurrences :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:583`](../RelationalAlgebraFacts.v#L583)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates bag multiplicity to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4374,6 +3567,8 @@ Lemma bag_eq_cardinal :
 ## `bag_occurrences_disjoint_of_boolean_separator`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:600`](../RelationalAlgebraFacts.v#L600)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to bag multiplicity.
 
@@ -4405,6 +3600,8 @@ Lemma bag_occurrences_disjoint_of_boolean_separator :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:640`](../RelationalAlgebraFacts.v#L640)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports finite-bag filtering across bag-equal inputs when two predicates agree on semantic tuple occurrences in the left support.
 
 Applicability: Use when an environment-dependent row predicate has been proved equal to another predicate only on represented input rows; input bags need be semantically bag-equal, not Leibniz-equal.
@@ -4434,6 +3631,8 @@ Lemma bag_filter_congr_on_support :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:658`](../RelationalAlgebraFacts.v#L658)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates bag multiplicity to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4454,6 +3653,8 @@ Lemma rows_bag_cardinal :
 ## `query_same_rows_as_bag_cardinal`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:668`](../RelationalAlgebraFacts.v#L668)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates bag multiplicity to the exact list length or bag cardinality shown below.
 
@@ -4478,6 +3679,8 @@ Lemma query_same_rows_as_bag_cardinal :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:682`](../RelationalAlgebraFacts.v#L682)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates bag multiplicity to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4500,6 +3703,8 @@ Lemma query_same_rows_as_bag_length :
 ## `query_same_rows_as_bag_iff_occurrences`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:696`](../RelationalAlgebraFacts.v#L696)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for bag multiplicity.
 
@@ -4525,6 +3730,8 @@ Lemma query_same_rows_as_bag_iff_occurrences :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:748`](../RelationalAlgebraFacts.v#L748)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4547,6 +3754,8 @@ Lemma query_same_rows_as_bag_semantic_permut_elements :
 ## `query_same_rows_as_bag_Forall_transport`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:768`](../RelationalAlgebraFacts.v#L768)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for bag multiplicity.
 
@@ -4571,6 +3780,8 @@ Lemma query_same_rows_as_bag_Forall_transport :
 ## `query_same_rows_as_bag_filter`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:798`](../RelationalAlgebraFacts.v#L798)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of bag multiplicity.
 
@@ -4597,6 +3808,8 @@ Lemma query_same_rows_as_bag_filter :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:824`](../RelationalAlgebraFacts.v#L824)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4617,6 +3830,8 @@ Lemma query_canonical_rows_same_as_bag :
 ## `query_canonical_rows_length_between`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:838`](../RelationalAlgebraFacts.v#L838)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates relational algebra to the exact list length or bag cardinality shown below.
 
@@ -4640,6 +3855,8 @@ Lemma query_canonical_rows_length_between :
 ## `query_canonical_rows_filter_permut`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:854`](../RelationalAlgebraFacts.v#L854)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query canonical rows filter permut law for bag multiplicity, in the exact direction displayed by the declaration.
 
@@ -4669,6 +3886,8 @@ Lemma query_canonical_rows_filter_permut :
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:918`](../RelationalAlgebraFacts.v#L918)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bag multiplicity.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
@@ -4692,51 +3911,11 @@ Lemma query_same_rows_as_filtered_bag_preimage :
       filter keep input_rows = rows.
 ```
 
-## `double_projection_bag_eq`
+## `oeset_nb_occ_of_NoDupA`
 
 Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:991`](../RelationalAlgebraFacts.v#L991)
 
-Purpose/direction: States the double projection bag equality law for bag multiplicity, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `projection`, `bag`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Lemma double_projection_bag_eq :
-  forall (T : Tuple.Rcd) (env : Env.env T)
-      (outer_left inner_left outer_right inner_right : _select_list T)
-      (bag : SqlQuerySemantics.bagT T),
-    (forall row,
-      Oeset.compare (OTuple T)
-        (projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_left)))
-          (@Select_List T outer_left))
-        (projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_right)))
-          (@Select_List T outer_right)) = Eq) ->
-    bag_eq T
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row => projection T (env_t T env row) (@Select_List T outer_left))
-        (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-          (fun row => projection T (env_t T env row) (@Select_List T inner_left))
-          bag))
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row => projection T (env_t T env row) (@Select_List T outer_right))
-        (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-          (fun row => projection T (env_t T env row) (@Select_List T inner_right))
-          bag)).
-```
-
-## `oeset_nb_occ_of_NoDupA`
-
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1088`](../RelationalAlgebraFacts.v#L1088)
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -4760,7 +3939,9 @@ Lemma oeset_nb_occ_of_NoDupA :
 
 ## `oeset_NoDupA_same_support_same_occurrences`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1124`](../RelationalAlgebraFacts.v#L1124)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1027`](../RelationalAlgebraFacts.v#L1027)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for relational algebra.
 
@@ -4788,7 +3969,9 @@ Lemma oeset_NoDupA_same_support_same_occurrences :
 
 ## `rows_bag_eq_of_nodup_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1146`](../RelationalAlgebraFacts.v#L1146)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1049`](../RelationalAlgebraFacts.v#L1049)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for bag multiplicity.
 
@@ -4820,7 +4003,9 @@ Lemma rows_bag_eq_of_nodup_support_rel :
 
 ## `alpha_membership_iff_occurrence_representative`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1198`](../RelationalAlgebraFacts.v#L1198)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1101`](../RelationalAlgebraFacts.v#L1101)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for bag multiplicity.
 
@@ -4846,7 +4031,9 @@ Lemma alpha_membership_iff_occurrence_representative :
 
 ## `query_set_union_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1231`](../RelationalAlgebraFacts.v#L1231)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1134`](../RelationalAlgebraFacts.v#L1134)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -4869,7 +4056,9 @@ Lemma query_set_union_empty_left :
 
 ## `query_set_union_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1244`](../RelationalAlgebraFacts.v#L1244)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1147`](../RelationalAlgebraFacts.v#L1147)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -4892,7 +4081,9 @@ Lemma query_set_union_empty_right :
 
 ## `query_set_union_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1257`](../RelationalAlgebraFacts.v#L1257)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1160`](../RelationalAlgebraFacts.v#L1160)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared SQL bag/set operations operator.
 
@@ -4913,7 +4104,9 @@ Lemma query_set_union_comm :
 
 ## `query_set_union_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1268`](../RelationalAlgebraFacts.v#L1268)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1171`](../RelationalAlgebraFacts.v#L1171)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared SQL bag/set operations operator.
 
@@ -4935,7 +4128,9 @@ Lemma query_set_union_assoc :
 
 ## `query_set_union_max_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1280`](../RelationalAlgebraFacts.v#L1280)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1183`](../RelationalAlgebraFacts.v#L1183)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared SQL bag/set operations operator.
 
@@ -4956,7 +4151,9 @@ Lemma query_set_union_max_comm :
 
 ## `query_set_union_max_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1291`](../RelationalAlgebraFacts.v#L1291)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1194`](../RelationalAlgebraFacts.v#L1194)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared SQL bag/set operations operator.
 
@@ -4980,7 +4177,9 @@ Lemma query_set_union_max_assoc :
 
 ## `query_set_union_max_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1305`](../RelationalAlgebraFacts.v#L1305)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1208`](../RelationalAlgebraFacts.v#L1208)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes idempotence for the declared SQL bag/set operations operator.
 
@@ -5000,7 +4199,9 @@ Lemma query_set_union_max_idempotent :
 
 ## `query_set_union_max_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1315`](../RelationalAlgebraFacts.v#L1315)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1218`](../RelationalAlgebraFacts.v#L1218)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5023,7 +4224,9 @@ Lemma query_set_union_max_empty_left :
 
 ## `query_set_union_max_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1328`](../RelationalAlgebraFacts.v#L1328)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1231`](../RelationalAlgebraFacts.v#L1231)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5046,7 +4249,9 @@ Lemma query_set_union_max_empty_right :
 
 ## `query_set_inter_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1341`](../RelationalAlgebraFacts.v#L1341)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1244`](../RelationalAlgebraFacts.v#L1244)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared SQL bag/set operations operator.
 
@@ -5067,7 +4272,9 @@ Lemma query_set_inter_comm :
 
 ## `query_set_inter_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1352`](../RelationalAlgebraFacts.v#L1352)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1255`](../RelationalAlgebraFacts.v#L1255)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared SQL bag/set operations operator.
 
@@ -5091,7 +4298,9 @@ Lemma query_set_inter_assoc :
 
 ## `query_set_inter_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1366`](../RelationalAlgebraFacts.v#L1366)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1269`](../RelationalAlgebraFacts.v#L1269)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes idempotence for the declared SQL bag/set operations operator.
 
@@ -5111,7 +4320,9 @@ Lemma query_set_inter_idempotent :
 
 ## `query_set_inter_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1376`](../RelationalAlgebraFacts.v#L1376)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1279`](../RelationalAlgebraFacts.v#L1279)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5134,7 +4345,9 @@ Lemma query_set_inter_empty_left :
 
 ## `query_set_inter_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1389`](../RelationalAlgebraFacts.v#L1389)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1292`](../RelationalAlgebraFacts.v#L1292)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5157,7 +4370,9 @@ Lemma query_set_inter_empty_right :
 
 ## `query_set_union_max_inter_absorb`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1402`](../RelationalAlgebraFacts.v#L1402)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1305`](../RelationalAlgebraFacts.v#L1305)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed absorption law for SQL bag/set operations.
 
@@ -5179,7 +4394,9 @@ Lemma query_set_union_max_inter_absorb :
 
 ## `query_set_inter_union_max_absorb`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1414`](../RelationalAlgebraFacts.v#L1414)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1317`](../RelationalAlgebraFacts.v#L1317)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed absorption law for SQL bag/set operations.
 
@@ -5201,7 +4418,9 @@ Lemma query_set_inter_union_max_absorb :
 
 ## `query_set_diff_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1426`](../RelationalAlgebraFacts.v#L1426)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1329`](../RelationalAlgebraFacts.v#L1329)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5224,7 +4443,9 @@ Lemma query_set_diff_empty_left :
 
 ## `query_set_diff_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1439`](../RelationalAlgebraFacts.v#L1439)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1342`](../RelationalAlgebraFacts.v#L1342)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5247,7 +4468,9 @@ Lemma query_set_diff_empty_right :
 
 ## `query_set_diff_self_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1452`](../RelationalAlgebraFacts.v#L1452)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1355`](../RelationalAlgebraFacts.v#L1355)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for SQL bag/set operations.
 
@@ -5268,7 +4491,9 @@ Lemma query_set_diff_self_empty :
 
 ## `query_set_diff_union_cancel_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1463`](../RelationalAlgebraFacts.v#L1463)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1366`](../RelationalAlgebraFacts.v#L1366)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed cancellation direction for SQL bag/set operations.
 
@@ -5290,7 +4515,9 @@ Lemma query_set_diff_union_cancel_right :
 
 ## `query_set_diff_union_cancel_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1475`](../RelationalAlgebraFacts.v#L1475)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1378`](../RelationalAlgebraFacts.v#L1378)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed cancellation direction for SQL bag/set operations.
 
@@ -5312,7 +4539,9 @@ Lemma query_set_diff_union_cancel_left :
 
 ## `query_cross_join_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1487`](../RelationalAlgebraFacts.v#L1487)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1390`](../RelationalAlgebraFacts.v#L1390)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for join semantics.
 
@@ -5339,7 +4568,9 @@ Lemma query_cross_join_empty :
 
 ## `query_natural_join_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1513`](../RelationalAlgebraFacts.v#L1513)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1416`](../RelationalAlgebraFacts.v#L1416)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for join semantics.
 
@@ -5366,7 +4597,9 @@ Lemma query_natural_join_empty :
 
 ## `query_distinct_bag_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1540`](../RelationalAlgebraFacts.v#L1540)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1443`](../RelationalAlgebraFacts.v#L1443)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for bag multiplicity.
 
@@ -5387,7 +4620,9 @@ Lemma query_distinct_bag_empty :
 
 ## `query_distinct_bag_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1558`](../RelationalAlgebraFacts.v#L1558)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1461`](../RelationalAlgebraFacts.v#L1461)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes idempotence for the declared bag multiplicity operator.
 
@@ -5408,7 +4643,9 @@ Lemma query_distinct_bag_idempotent :
 
 ## `query_cross_join_bag_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1576`](../RelationalAlgebraFacts.v#L1576)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1479`](../RelationalAlgebraFacts.v#L1479)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates join cardinality to the exact list length or bag cardinality shown below.
 
@@ -5431,7 +4668,9 @@ Lemma query_cross_join_bag_cardinal :
 
 ## `query_natural_join_bag_cardinal_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1610`](../RelationalAlgebraFacts.v#L1610)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1513`](../RelationalAlgebraFacts.v#L1513)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -5454,7 +4693,9 @@ Lemma query_natural_join_bag_cardinal_le :
 
 ## `query_join_matched_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1659`](../RelationalAlgebraFacts.v#L1659)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1562`](../RelationalAlgebraFacts.v#L1562)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -5474,7 +4715,9 @@ Lemma query_join_matched_sources_length_le :
 
 ## `query_join_left_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1668`](../RelationalAlgebraFacts.v#L1668)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1571`](../RelationalAlgebraFacts.v#L1571)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -5500,7 +4743,9 @@ Lemma query_join_left_sources_length_le :
 
 ## `query_join_unmatched_right_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1699`](../RelationalAlgebraFacts.v#L1699)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1602`](../RelationalAlgebraFacts.v#L1602)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -5522,7 +4767,9 @@ Lemma query_join_unmatched_right_sources_length_le :
 
 ## `query_join_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1711`](../RelationalAlgebraFacts.v#L1711)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1614`](../RelationalAlgebraFacts.v#L1614)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -5550,7 +4797,9 @@ Lemma query_join_sources_length_le :
 
 ## `query_join_full_sources_member_iff`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1969`](../RelationalAlgebraFacts.v#L1969)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1872`](../RelationalAlgebraFacts.v#L1872)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for outer-join semantics.
 
@@ -5585,7 +4834,9 @@ Theorem query_join_full_sources_member_iff :
 
 ## `query_join_sources_member_iff`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2277`](../RelationalAlgebraFacts.v#L2277)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2180`](../RelationalAlgebraFacts.v#L2180)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Characterizes scheduler-source membership for every native join kind, keeping matched, unmatched-left, unmatched-right, semi, and anti reachability distinct.
 
@@ -5608,7 +4859,9 @@ Theorem query_join_sources_member_iff :
 
 ## `query_join_sources_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2640`](../RelationalAlgebraFacts.v#L2640)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2543`](../RelationalAlgebraFacts.v#L2543)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports bidirectional source support across all six native join constructors under exact match-decision correspondence.
 
@@ -5640,7 +4893,9 @@ Theorem query_join_sources_support_rel :
 
 ## `query_join_sources_projected_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2709`](../RelationalAlgebraFacts.v#L2709)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2612`](../RelationalAlgebraFacts.v#L2612)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts all-kind join-source support through reached-only emitters, without claiming multiplicity, ordering, or runtime-error equivalence.
 
@@ -5683,7 +4938,9 @@ Theorem query_join_sources_projected_support_rel :
 
 ## `query_join_full_projected_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2771`](../RelationalAlgebraFacts.v#L2771)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2674`](../RelationalAlgebraFacts.v#L2674)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query join full projected support rel law for outer-join semantics, in the exact direction displayed by the declaration.
 
@@ -5737,7 +4994,9 @@ Theorem query_join_full_projected_support_rel :
 
 ## `query_bag_filter_union`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2934`](../RelationalAlgebraFacts.v#L2934)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2837`](../RelationalAlgebraFacts.v#L2837)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the named multiplicity-preserving finite-bag filter/map homomorphism under semantic predicate or row-map properness.
 
@@ -5765,7 +5024,9 @@ Lemma query_bag_filter_union :
 
 ## `query_bag_map_union`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2957`](../RelationalAlgebraFacts.v#L2957)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2860`](../RelationalAlgebraFacts.v#L2860)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the named multiplicity-preserving finite-bag filter/map homomorphism under semantic predicate or row-map properness.
 
@@ -5795,7 +5056,9 @@ Lemma query_bag_map_union :
 
 ## `query_bag_map_congr`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2999`](../RelationalAlgebraFacts.v#L2999)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2902`](../RelationalAlgebraFacts.v#L2902)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the named multiplicity-preserving finite-bag filter/map homomorphism under semantic predicate or row-map properness.
 
@@ -5823,7 +5086,9 @@ Lemma query_bag_map_congr :
 
 ## `query_bag_filter_commute`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3024`](../RelationalAlgebraFacts.v#L3024)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2927`](../RelationalAlgebraFacts.v#L2927)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the named multiplicity-preserving finite-bag filter/map homomorphism under semantic predicate or row-map properness.
 
@@ -5853,7 +5118,9 @@ Lemma query_bag_filter_commute :
 
 ## `query_bag_filter_map_fusion`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3051`](../RelationalAlgebraFacts.v#L3051)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2954`](../RelationalAlgebraFacts.v#L2954)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the named multiplicity-preserving finite-bag filter/map homomorphism under semantic predicate or row-map properness.
 
@@ -5886,7 +5153,9 @@ Lemma query_bag_filter_map_fusion :
 
 ## `query_bag_map_pairwise_equiv_of_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3087`](../RelationalAlgebraFacts.v#L3087)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2990`](../RelationalAlgebraFacts.v#L2990)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Equates two mapped bags of equal cardinality when every reached left mapped row is semantically equal to every reached right one.
 
@@ -5917,7 +5186,9 @@ Lemma query_bag_map_pairwise_equiv_of_cardinal :
 
 ## `query_cross_join_bag_singleton_right_map`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3139`](../RelationalAlgebraFacts.v#L3139)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3042`](../RelationalAlgebraFacts.v#L3042)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Normalizes a CROSS JOIN with one right bag occurrence to the corresponding multiplicity-preserving row map of the left bag.
 
@@ -5941,7 +5212,9 @@ Lemma query_cross_join_bag_singleton_right_map :
 
 ## `eval_join_row_conditions_acceptance_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3313`](../RelationalAlgebraFacts.v#L3313)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3219`](../RelationalAlgebraFacts.v#L3219)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Characterizes one left row's complete join-condition evaluation as the successful Boolean acceptance map over right rows.
 
@@ -5963,13 +5236,15 @@ Lemma eval_join_row_conditions_acceptance_exact :
     forall outcome,
       @eval_join_row_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left rights outcome <->
+        boolean_schedule env predicate left rights outcome <->
       outcome = SqlSuccess (map accepted rights).
 ```
 
 ## `eval_join_conditions_acceptance_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3366`](../RelationalAlgebraFacts.v#L3366)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3272`](../RelationalAlgebraFacts.v#L3272)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts pairwise exact join acceptance to the complete row-major successful condition matrix, excluding condition errors.
 
@@ -5993,15 +5268,17 @@ Lemma eval_join_conditions_acceptance_exact :
     forall outcome,
       @eval_join_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate lefts rights outcome <->
+        boolean_schedule env predicate lefts rights outcome <->
       outcome =
         SqlSuccess
           (map (fun left => map (accepted left) rights) lefts).
 ```
 
-## `project_join_sources_outcome_exact_map`
+## `eval_project_join_sources_exact_map`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3435`](../RelationalAlgebraFacts.v#L3435)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3363`](../RelationalAlgebraFacts.v#L3363)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts exact projection of every reached matched or padded join source to one ordered successful map over the source list.
 
@@ -6014,24 +5291,26 @@ Cross-index: `outcome`, `runtime`, `projection`, `join`
 Search aliases: `relational algebra`, `join`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
-Lemma project_join_sources_outcome_exact_map :
+Lemma eval_project_join_sources_exact_map :
   forall env matched_select left_select right_select sources
       (emit : query_join_source T -> tuple T),
     (forall source,
       In source sources ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
-    @project_join_sources_outcome T symbol_runtime_error
-      aggregate_runtime_error env
-      matched_select left_select right_select sources =
-    SqlSuccess (map emit sources).
+      join_source_projection_exact_at env
+        matched_select left_select right_select source (emit source)) ->
+    forall outcome,
+      @eval_project_join_sources_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select
+        sources outcome <->
+      outcome = SqlSuccess (map emit sources).
 ```
 
 ## `eval_join_bag_safe_of_acceptance_projection_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3464`](../RelationalAlgebraFacts.v#L3464)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3419`](../RelationalAlgebraFacts.v#L3419)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Combines total exact pair acceptance with exact matched/padded projection to construct a successful join bag and rule out every local join error for any modeled join kind.
 
@@ -6053,25 +5332,25 @@ Theorem eval_join_bag_safe_of_acceptance_projection_exact :
       join_condition_acceptance_exact_at
         env predicate left right (accepted left right)) ->
     (forall source,
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
+      join_source_projection_exact_at env
+        matched_select left_select right_select source (emit source)) ->
     (exists output_bag,
       @eval_join_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env kind predicate matched_select left_select right_select
+        boolean_schedule env kind predicate matched_select left_select right_select
         left_bag right_bag (SqlSuccess output_bag)) /\
     (forall error,
       ~ @eval_join_bag_outcome T relname basesort instance unknown
           symbol_runtime_error aggregate_runtime_error value_is_null
-          env kind predicate matched_select left_select right_select
+          boolean_schedule env kind predicate matched_select left_select right_select
           left_bag right_bag (SqlError error)).
 ```
 
 ## `eval_join_row_conditions_success_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3556`](../RelationalAlgebraFacts.v#L3556)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3502`](../RelationalAlgebraFacts.v#L3502)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates join cardinality to the exact list length or bag cardinality shown below.
 
@@ -6087,13 +5366,16 @@ Search aliases: `relational algebra`, `join`, `cardinality`
 Lemma eval_join_row_conditions_success_length :
   forall env predicate left rights flags,
     @eval_join_row_conditions_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env predicate left rights (SqlSuccess flags) ->
+      value_is_null boolean_schedule env predicate left rights
+      (SqlSuccess flags) ->
     length flags = length rights.
 ```
 
 ## `eval_join_conditions_success_dimensions`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3569`](../RelationalAlgebraFacts.v#L3569)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3516`](../RelationalAlgebraFacts.v#L3516)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for join semantics.
 
@@ -6109,14 +5391,17 @@ Search aliases: `relational algebra`, `join`
 Lemma eval_join_conditions_success_dimensions :
   forall env predicate lefts rights matrix,
     @eval_join_conditions_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env predicate lefts rights (SqlSuccess matrix) ->
+      value_is_null boolean_schedule env predicate lefts rights
+      (SqlSuccess matrix) ->
     length matrix = length lefts /\
     Forall (fun flags => length flags = length rights) matrix.
 ```
 
 ## `query_join_right_single_left_sources_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3628`](../RelationalAlgebraFacts.v#L3628)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3576`](../RelationalAlgebraFacts.v#L3576)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates outer-join semantics to the exact list length or bag cardinality shown below.
 
@@ -6140,7 +5425,9 @@ Lemma query_join_right_single_left_sources_length :
 
 ## `query_same_rows_as_bag_map`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3833`](../RelationalAlgebraFacts.v#L3833)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3789`](../RelationalAlgebraFacts.v#L3789)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of bag multiplicity.
 
@@ -6167,7 +5454,9 @@ Lemma query_same_rows_as_bag_map :
 
 ## `query_join_left_functional_projection_bag_on_representatives`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3868`](../RelationalAlgebraFacts.v#L3868)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3824`](../RelationalAlgebraFacts.v#L3824)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query join left functional projection bag on representatives law for join semantics, in the exact direction displayed by the declaration.
 
@@ -6194,31 +5483,36 @@ Theorem query_join_left_functional_projection_bag_on_representatives :
       query_same_rows_as_bag right_rows right_bag ->
       @eval_join_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_rows right_rows (SqlSuccess matrix) ->
+        boolean_schedule env predicate left_rows right_rows
+        (SqlSuccess matrix) ->
       Forall
         (fun flags =>
           (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
         matrix) ->
-    (forall left_rows right_rows left right output,
+    (forall left_rows right_rows left right values,
       query_same_rows_as_bag left_rows left_bag ->
       query_same_rows_as_bag right_rows right_bag ->
       In left left_rows ->
       In right right_rows ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceMatched T (join_tuple T left right)) =
-      SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
-    (forall left_rows left output,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env (join_tuple T left right))
+        (map fst matched_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row matched_select values)) (emit left) = Eq) ->
+    (forall left_rows left values,
       query_same_rows_as_bag left_rows left_bag ->
       In left left_rows ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceLeft T left) = SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env left)
+        (map fst left_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row left_select values)) (emit left) = Eq) ->
     @eval_join_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env QueryJoinLeft predicate matched_select left_select right_select
+      boolean_schedule env QueryJoinLeft predicate matched_select left_select
+      right_select
       left_bag right_bag (SqlSuccess joined_bag) ->
     bag_eq T
       (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
@@ -6229,7 +5523,9 @@ Theorem query_join_left_functional_projection_bag_on_representatives :
 
 ## `project_join_sources_success_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3970`](../RelationalAlgebraFacts.v#L3970)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3935`](../RelationalAlgebraFacts.v#L3935)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates join cardinality to the exact list length or bag cardinality shown below.
 
@@ -6244,15 +5540,18 @@ Search aliases: `relational algebra`, `join`, `projection`, `SELECT list`, `card
 ```rocq
 Lemma project_join_sources_success_length :
   forall env matched_select left_select right_select sources output,
-    @project_join_sources_outcome T symbol_runtime_error
-      aggregate_runtime_error env matched_select left_select right_select
-      sources = SqlSuccess output ->
+    @eval_project_join_sources_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env matched_select left_select right_select sources
+      (SqlSuccess output) ->
     length output = length sources.
 ```
 
 ## `eval_join_bag_success_cardinal_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3990`](../RelationalAlgebraFacts.v#L3990)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3964`](../RelationalAlgebraFacts.v#L3964)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for outer/semi/anti-join semantics.
 
@@ -6269,7 +5568,8 @@ Theorem eval_join_bag_success_cardinal_le :
   forall env kind predicate matched_select left_select right_select
          left_bag right_bag output_bag,
     @eval_join_bag_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null env kind
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env kind
       predicate matched_select left_select right_select left_bag right_bag
       (SqlSuccess output_bag) ->
     (Febag.cardinal (Fecol.CBag (CTuple T)) output_bag <=
@@ -6295,7 +5595,9 @@ Theorem eval_join_bag_success_cardinal_le :
 
 ## `eval_join_bag_right_single_left_success_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4066`](../RelationalAlgebraFacts.v#L4066)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4044`](../RelationalAlgebraFacts.v#L4044)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates outer-join semantics to the exact list length or bag cardinality shown below.
 
@@ -6313,7 +5615,8 @@ Theorem eval_join_bag_right_single_left_success_cardinal :
          left_bag right_bag output_bag,
     Febag.cardinal (Fecol.CBag (CTuple T)) left_bag = 1%N ->
     @eval_join_bag_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null env
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
       QueryJoinRight predicate matched_select left_select right_select
       left_bag right_bag (SqlSuccess output_bag) ->
     Febag.cardinal (Fecol.CBag (CTuple T)) output_bag =
@@ -6322,7 +5625,9 @@ Theorem eval_join_bag_right_single_left_success_cardinal :
 
 ## `query_grouping_sets_actual_success_bags_congr`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4113`](../RelationalAlgebraFacts.v#L4113)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4093`](../RelationalAlgebraFacts.v#L4093)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes bag multiplicity across the declared equivalence.
 
@@ -6330,9 +5635,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about ba
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `grouping`, `bag`
+Cross-index: `scheduled`, `grouping`, `bag`
 
-Search aliases: `relational algebra`, `grouping sets`, `GROUP BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `grouping sets`, `GROUP BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_grouping_sets_actual_success_bags_congr :
@@ -6345,7 +5650,9 @@ Lemma query_grouping_sets_actual_success_bags_congr :
 
 ## `query_expr_equiv_implies_success_bags`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4139`](../RelationalAlgebraFacts.v#L4139)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4122`](../RelationalAlgebraFacts.v#L4122)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes bag multiplicity across the declared equivalence.
 
@@ -6353,22 +5660,24 @@ Applicability: Use to orient, transport, or compose a semantic relation about ba
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_equiv_implies_success_bags :
   forall env left right,
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left right ->
+      boolean_schedule env left right ->
     rel_equiv (success_bags env left) (success_bags env right).
 ```
 
 ## `query_expr_outcome_equiv_implies_success_bags`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4156`](../RelationalAlgebraFacts.v#L4156)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4139`](../RelationalAlgebraFacts.v#L4139)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Projects fixed-environment error-preserving ordered equivalence to equality of possible successful bags, including the error-only case.
 
@@ -6376,22 +5685,24 @@ Applicability: Use to forget successful row order at one environment; the theore
 
 Important premises: Supply the exact fixed-environment child outcome equivalence; this conclusion preserves successful multiplicity but intentionally does not carry the error relation.
 
-Cross-index: `outcome`, `runtime`, `bag`
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
 
-Search aliases: `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_outcome_equiv_implies_success_bags :
   forall env left right,
     @query_expr_outcome_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left right ->
+      boolean_schedule env left right ->
     rel_equiv (success_bags env left) (success_bags env right).
 ```
 
 ## `query_set_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4169`](../RelationalAlgebraFacts.v#L4169)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4152`](../RelationalAlgebraFacts.v#L4152)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes SQL bag/set operations across the declared equivalence.
 
@@ -6399,19 +5710,19 @@ Applicability: Use to orient, transport, or compose a semantic relation about SQ
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`
+Cross-index: `scheduled`, `bag`
 
-Search aliases: `relational algebra`, `set operation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_set_success_bags_congr_of_query_expr_equiv :
   forall env operation left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_Set operation left right))
       (success_bags env (QExpr_Set operation left' right')).
@@ -6419,7 +5730,9 @@ Lemma query_set_success_bags_congr_of_query_expr_equiv :
 
 ## `query_natural_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4193`](../RelationalAlgebraFacts.v#L4193)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4176`](../RelationalAlgebraFacts.v#L4176)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes join semantics across the declared equivalence.
 
@@ -6427,19 +5740,19 @@ Applicability: Use to orient, transport, or compose a semantic relation about jo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `join`, `bag`
+Cross-index: `scheduled`, `join`, `bag`
 
-Search aliases: `relational algebra`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_natural_join_success_bags_congr_of_query_expr_equiv :
   forall env left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_NaturalJoin left right))
       (success_bags env (QExpr_NaturalJoin left' right')).
@@ -6447,7 +5760,9 @@ Lemma query_natural_join_success_bags_congr_of_query_expr_equiv :
 
 ## `query_cross_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4211`](../RelationalAlgebraFacts.v#L4211)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4194`](../RelationalAlgebraFacts.v#L4194)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes join semantics across the declared equivalence.
 
@@ -6455,19 +5770,19 @@ Applicability: Use to orient, transport, or compose a semantic relation about jo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `join`, `bag`
+Cross-index: `scheduled`, `join`, `bag`
 
-Search aliases: `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_cross_join_success_bags_congr_of_query_expr_equiv :
   forall env left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_CrossJoin left right))
       (success_bags env (QExpr_CrossJoin left' right')).
@@ -6475,7 +5790,9 @@ Lemma query_cross_join_success_bags_congr_of_query_expr_equiv :
 
 ## `query_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4229`](../RelationalAlgebraFacts.v#L4229)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4212`](../RelationalAlgebraFacts.v#L4212)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes outer/semi/anti-join semantics across the declared equivalence.
 
@@ -6483,9 +5800,9 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated outer
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain every explicit join-kind branch and predicate/projection premise; supply the declared equivalence/properness relation.
 
-Cross-index: `join`, `bag`
+Cross-index: `scheduled`, `join`, `bag`
 
-Search aliases: `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_join_success_bags_congr_of_query_expr_equiv :
@@ -6493,10 +5810,10 @@ Lemma query_join_success_bags_congr_of_query_expr_equiv :
          left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env
         (QExpr_Join kind predicate matched_select left_select right_select
@@ -6508,7 +5825,9 @@ Lemma query_join_success_bags_congr_of_query_expr_equiv :
 
 ## `query_cross_join_union_right_success_bags`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4256`](../RelationalAlgebraFacts.v#L4256)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:4239`](../RelationalAlgebraFacts.v#L4239)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Distributes CROSS JOIN over right-hand UNION ALL at the possible-bag layer while preserving duplicate multiplicity.
 
@@ -6516,9 +5835,9 @@ Applicability: Use for right-hand UNION ALL distribution only after proving both
 
 Important premises: Both set-operation sort equalities and pairwise possible-bag functionality of the duplicated left child are mandatory; UNION is multiplicity-preserving UNION ALL here.
 
-Cross-index: `join`, `bag`
+Cross-index: `scheduled`, `join`, `bag`
 
-Search aliases: `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `set operation`, `UNION`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `set operation`, `UNION`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_cross_join_union_right_success_bags :
@@ -6541,7 +5860,9 @@ Theorem query_cross_join_union_right_success_bags :
 
 ## `query_expr_join_no_error_of_acceptance_projection_exact`
 
-Source: [`theories/FormalSQL/SemijoinCompositionFacts.v:39`](../SemijoinCompositionFacts.v#L39)
+Source: [`theories/FormalSQL/SemijoinCompositionFacts.v:41`](../SemijoinCompositionFacts.v#L41)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Rules out every native join error after both children are error-free and every reached condition and matched/padded projection has one exact success.
 
@@ -6563,12 +5884,13 @@ Theorem query_expr_join_no_error_of_acceptance_projection_exact :
     (forall left_row right_row,
       @join_condition_acceptance_exact_at T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_row right_row (accepted left_row right_row)) ->
+        boolean_schedule env predicate left_row right_row
+        (accepted left_row right_row)) ->
     (forall source,
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
+      @join_source_projection_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select source
+        (emit source)) ->
     forall error,
       ~ eval_query env
           (QExpr_Join kind predicate matched_select left_select right_select
@@ -6577,7 +5899,9 @@ Theorem query_expr_join_no_error_of_acceptance_projection_exact :
 
 ## `partial_semijoin_projection_support_rel`
 
-Source: [`theories/FormalSQL/SemijoinCompositionFacts.v:98`](../SemijoinCompositionFacts.v#L98)
+Source: [`theories/FormalSQL/SemijoinCompositionFacts.v:101`](../SemijoinCompositionFacts.v#L101)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the support of surviving semijoin rows to the support of projected matching join cells without assuming a functional match; repeated right matches remain present on the join side.
 
@@ -6607,245 +5931,11 @@ Theorem partial_semijoin_projection_support_rel :
       (map project (partial_semijoin_rows join accept left right)).
 ```
 
-## `eval_filter_rows_formula_congr_forward`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:550`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L550)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `filter`
-
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_filter_rows_formula_congr_forward :
-  forall left right,
-    formula_expr_global_outcome_equiv left right ->
-    forall env rows outcome,
-      eval_filter_rows env left rows outcome ->
-      eval_filter_rows env right rows outcome.
-```
-
-## `eval_filter_rows_formula_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:567`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L567)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `filter`
-
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_filter_rows_formula_congr :
-  forall left right,
-    formula_expr_global_outcome_equiv left right ->
-    forall env rows outcome,
-      eval_filter_rows env left rows outcome <->
-      eval_filter_rows env right rows outcome.
-```
-
-## `eval_filter_rows_formula_acceptance_congr_forward`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:585`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L585)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `filter`
-
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_filter_rows_formula_acceptance_congr_forward :
-  forall left right,
-    formula_expr_global_filter_outcome_equiv left right ->
-    forall env rows outcome,
-      eval_filter_rows env left rows outcome ->
-      eval_filter_rows env right rows outcome.
-```
-
-## `eval_filter_rows_formula_acceptance_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:607`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L607)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `filter`
-
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_filter_rows_formula_acceptance_congr :
-  forall left right,
-    formula_expr_global_filter_outcome_equiv left right ->
-    forall env rows outcome,
-      eval_filter_rows env left rows outcome <->
-      eval_filter_rows env right rows outcome.
-```
-
-## `eval_join_row_conditions_formula_congr_forward`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:724`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L724)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_row_conditions_formula_congr_forward :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env left_rows right_rows outcome,
-      eval_join_row_conditions env first left_rows right_rows outcome ->
-      eval_join_row_conditions env second left_rows right_rows outcome.
-```
-
-## `eval_join_row_conditions_formula_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:741`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L741)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_row_conditions_formula_congr :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env left_rows right_rows outcome,
-      eval_join_row_conditions env first left_rows right_rows outcome <->
-      eval_join_row_conditions env second left_rows right_rows outcome.
-```
-
-## `eval_join_conditions_formula_congr_forward`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:754`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L754)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_conditions_formula_congr_forward :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env left_rows right_rows outcome,
-      eval_join_conditions env first left_rows right_rows outcome ->
-      eval_join_conditions env second left_rows right_rows outcome.
-```
-
-## `eval_join_conditions_formula_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:773`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L773)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_conditions_formula_congr :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env left_rows right_rows outcome,
-      eval_join_conditions env first left_rows right_rows outcome <->
-      eval_join_conditions env second left_rows right_rows outcome.
-```
-
-## `eval_join_bag_formula_congr_forward`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:786`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L786)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`, `bag`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_bag_formula_congr_forward :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env kind matched_select left_select right_select
-           left_bag right_bag outcome,
-      eval_join_bag env kind first matched_select left_select right_select
-        left_bag right_bag outcome ->
-      eval_join_bag env kind second matched_select left_select right_select
-        left_bag right_bag outcome.
-```
-
-## `eval_join_bag_formula_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:821`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L821)
-
-Purpose/direction: Transports or composes join semantics across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `join`, `bag`
-
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Lemma eval_join_bag_formula_congr :
-  forall first second,
-    formula_expr_global_outcome_equiv first second ->
-    forall env kind matched_select left_select right_select
-           left_bag right_bag outcome,
-      eval_join_bag env kind first matched_select left_select right_select
-        left_bag right_bag outcome <->
-      eval_join_bag env kind second matched_select left_select right_select
-        left_bag right_bag outcome.
-```
-
 ## `query_expr_set_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:839`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L839)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1096`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1096)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes SQL bag/set operations across the declared equivalence.
 
@@ -6853,9 +5943,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about SQ
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `schema`
 
-Search aliases: `relational algebra`, `set operation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_set_global_typed_congr :
@@ -6868,7 +5958,9 @@ Lemma query_expr_set_global_typed_congr :
 
 ## `query_expr_natural_join_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:882`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L882)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1139`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1139)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes join semantics across the declared equivalence.
 
@@ -6876,9 +5968,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about jo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `join`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `schema`
 
-Search aliases: `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_natural_join_global_typed_congr :
@@ -6891,7 +5983,9 @@ Lemma query_expr_natural_join_global_typed_congr :
 
 ## `query_expr_cross_join_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:912`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L912)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1169`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1169)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes join semantics across the declared equivalence.
 
@@ -6899,9 +5993,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about jo
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `join`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `schema`
 
-Search aliases: `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_cross_join_global_typed_congr :
@@ -6914,7 +6008,9 @@ Lemma query_expr_cross_join_global_typed_congr :
 
 ## `query_expr_join_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:942`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L942)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1199`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1199)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes outer/semi/anti-join semantics across the declared equivalence.
 
@@ -6922,27 +6018,28 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated outer
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; retain every explicit join-kind branch and predicate/projection premise; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `join`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `schema`
 
-Search aliases: `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_join_global_typed_congr :
-  forall kind predicate predicate' matched_select left_select right_select
+  forall kind predicate matched_select left_select right_select
          left left' right right',
-    formula_expr_global_outcome_equiv predicate predicate' ->
     query_expr_global_typed_outcome_equiv left left' ->
     query_expr_global_typed_outcome_equiv right right' ->
     query_expr_global_typed_outcome_equiv
       (QExpr_Join kind predicate matched_select left_select right_select
         left right)
-      (QExpr_Join kind predicate' matched_select left_select right_select
+      (QExpr_Join kind predicate matched_select left_select right_select
         left' right').
 ```
 
 ## `query_expr_project_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:991`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L991)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1242`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1242)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -6950,9 +6047,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `projection`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `schema`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_project_global_typed_congr :
@@ -6962,32 +6059,11 @@ Lemma query_expr_project_global_typed_congr :
       (QExpr_Project select_list first) (QExpr_Project select_list second).
 ```
 
-## `query_expr_scalar_project_global_typed_congr`
-
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1006`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1006)
-
-Purpose/direction: Transports or composes relational algebra across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `outcome`, `runtime`, `projection`, `schema`
-
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_scalar_project_global_typed_congr :
-  forall select_list first second,
-    query_expr_global_typed_outcome_equiv first second ->
-    query_expr_global_typed_outcome_equiv
-      (QExpr_ScalarProject select_list first)
-      (QExpr_ScalarProject select_list second).
-```
-
 ## `query_expr_row_map_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1028`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1028)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1261`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1261)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -6995,9 +6071,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `projection`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `schema`
 
-Search aliases: `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_row_map_global_typed_congr :
@@ -7010,7 +6086,9 @@ Lemma query_expr_row_map_global_typed_congr :
 
 ## `query_expr_filter_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1044`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1044)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1277`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1277)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
@@ -7018,61 +6096,2197 @@ Applicability: Use to orient, transport, or compose a semantic relation about re
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`, `schema`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_filter_global_typed_congr :
-  forall formula formula' input input',
-    formula_expr_global_outcome_equiv formula formula' ->
+  forall expression input input',
     query_expr_global_typed_outcome_equiv input input' ->
     query_expr_global_typed_outcome_equiv
-      (QExpr_Filter formula input) (QExpr_Filter formula' input').
+      (QExpr_Filter expression input) (QExpr_Filter expression input').
 ```
 
-## `query_expr_scalar_filter_global_typed_congr`
+## `eval_filter_rows_expression_global_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1064`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1064)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1525`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1525)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
-Lemma query_expr_scalar_filter_global_typed_congr :
-  forall expression first second,
-    query_expr_global_typed_outcome_equiv first second ->
-    query_expr_global_typed_outcome_equiv
-      (QExpr_ScalarFilter expression first)
-      (QExpr_ScalarFilter expression second).
+Lemma eval_filter_rows_expression_global_congr_forward :
+  forall left right,
+    scalar_expr_global_outcome_equiv left right ->
+    forall env rows outcome,
+      @eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env left rows outcome ->
+      @eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env right rows outcome.
 ```
 
-## `query_expr_filter_global_typed_acceptance_congr`
+## `eval_filter_rows_expression_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1089`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1089)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1546`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1546)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes relational algebra across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `filter`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
 
-Search aliases: `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
-Lemma query_expr_filter_global_typed_acceptance_congr :
-  forall formula formula' input input',
-    formula_expr_global_filter_outcome_equiv formula formula' ->
-    query_expr_global_typed_outcome_equiv input input' ->
-    query_expr_global_typed_outcome_equiv
-      (QExpr_Filter formula input) (QExpr_Filter formula' input').
+Lemma eval_filter_rows_expression_global_congr :
+  forall left right,
+    scalar_expr_global_outcome_equiv left right ->
+    forall env rows outcome,
+      @eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env left rows outcome <->
+      @eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env right rows outcome.
+```
+
+## `eval_join_row_conditions_expression_global_congr_forward`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1603`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1603)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_row_conditions_expression_global_congr_forward :
+  forall first second,
+    scalar_expr_global_outcome_equiv first second ->
+    forall env left_row right_rows outcome,
+      eval_join_row_conditions env first left_row right_rows outcome ->
+      eval_join_row_conditions env second left_row right_rows outcome.
+```
+
+## `eval_join_row_conditions_expression_global_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1620`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1620)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_row_conditions_expression_global_congr :
+  forall first second,
+    scalar_expr_global_outcome_equiv first second ->
+    forall env left_row right_rows outcome,
+      eval_join_row_conditions env first left_row right_rows outcome <->
+      eval_join_row_conditions env second left_row right_rows outcome.
+```
+
+## `eval_join_conditions_expression_global_congr_forward`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1634`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1634)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_conditions_expression_global_congr_forward :
+  forall first second,
+    scalar_expr_global_outcome_equiv first second ->
+    forall env left_rows right_rows outcome,
+      eval_join_conditions env first left_rows right_rows outcome ->
+      eval_join_conditions env second left_rows right_rows outcome.
+```
+
+## `eval_join_conditions_expression_global_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1653`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1653)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_conditions_expression_global_congr :
+  forall first second,
+    scalar_expr_global_outcome_equiv first second ->
+    forall env left_rows right_rows outcome,
+      eval_join_conditions env first left_rows right_rows outcome <->
+      eval_join_conditions env second left_rows right_rows outcome.
+```
+
+## `eval_join_bag_scalar_global_congr_forward`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1756`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1756)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_bag_scalar_global_congr_forward :
+  forall left_predicate right_predicate
+      left_matched right_matched left_left right_left left_right right_right,
+    scalar_expr_global_outcome_equiv left_predicate right_predicate ->
+    scalar_select_list_global_outcome_equiv left_matched right_matched ->
+    scalar_select_list_global_outcome_equiv left_left right_left ->
+    scalar_select_list_global_outcome_equiv left_right right_right ->
+    forall env kind left_bag right_bag outcome,
+      eval_join_bag env kind left_predicate
+        left_matched left_left left_right left_bag right_bag outcome ->
+      eval_join_bag env kind right_predicate
+        right_matched right_left right_right left_bag right_bag outcome.
+```
+
+## `eval_join_bag_scalar_global_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1792`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1792)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes join semantics across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_join_bag_scalar_global_congr :
+  forall left_predicate right_predicate
+      left_matched right_matched left_left right_left left_right right_right,
+    scalar_expr_global_outcome_equiv left_predicate right_predicate ->
+    scalar_select_list_global_outcome_equiv left_matched right_matched ->
+    scalar_select_list_global_outcome_equiv left_left right_left ->
+    scalar_select_list_global_outcome_equiv left_right right_right ->
+    forall env kind left_bag right_bag outcome,
+      eval_join_bag env kind left_predicate
+        left_matched left_left left_right left_bag right_bag outcome <->
+      eval_join_bag env kind right_predicate
+        right_matched right_left right_right left_bag right_bag outcome.
+```
+
+## `query_binary_bag_outcome_operation`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3870`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3870)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query binary bag outcome operation law for bag multiplicity, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_binary_bag_outcome_operation : Type :=
+  constructor_bagT -> constructor_bagT ->
+  sql_outcome constructor_bagT -> Prop.
+```
+
+## `query_success_only_binary_bag_operation`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3876`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3876)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_success_only_binary_bag_operation
+    (operation : binary_bag_relation T) :
+    query_binary_bag_outcome_operation :=
+  fun left_bag right_bag outcome =>
+    match outcome with
+    | SqlSuccess output_bag => operation left_bag right_bag output_bag
+    | SqlError _ => False
+    end.
+```
+
+## `query_eager_left_binary_outcome_relation`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3885`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3885)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query eager left binary outcome relation law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for relational algebra.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Definition query_eager_left_binary_outcome_relation
+    (operation : query_binary_bag_outcome_operation) :
+    binary_bag_outcome_relation T :=
+  fun left_outcome right_outcome output =>
+    match left_outcome with
+    | SqlError error => output = SqlError error
+    | SqlSuccess left_bag =>
+        match right_outcome with
+        | SqlError error => output = SqlError error
+        | SqlSuccess right_bag => operation left_bag right_bag output
+        end
+    end.
+```
+
+## `query_binary_bag_outcome_operation_extensional`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3899`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3899)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query binary bag outcome operation extensional law for bag multiplicity, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_binary_bag_outcome_operation_extensional
+    (operation : query_binary_bag_outcome_operation) : Prop :=
+  forall left_bag left_bag' right_bag right_bag' output output',
+    bag_eq T left_bag left_bag' ->
+    bag_eq T right_bag right_bag' ->
+    outcome_equiv (@bag_eq T) output output' ->
+    (operation left_bag right_bag output <->
+     operation left_bag' right_bag' output').
+```
+
+## `query_binary_bag_outcome_operations_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3911`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3911)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query binary bag outcome operations compatible law for bag multiplicity, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_binary_bag_outcome_operations_compatible
+    (left_operation right_operation :
+      query_binary_bag_outcome_operation) : Prop :=
+  forall left_bag left_bag' right_bag right_bag',
+    bag_eq T left_bag left_bag' ->
+    bag_eq T right_bag right_bag' ->
+    outcome_relation_equiv (@bag_eq T)
+      (left_operation left_bag right_bag)
+      (right_operation left_bag' right_bag').
+```
+
+## `binary_bag_outcome_relations_cross_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3921`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3921)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the binary bag outcome relations cross compatible law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition binary_bag_outcome_relations_cross_compatible
+    (left_operation right_operation : binary_bag_outcome_relation T) : Prop :=
+  forall left_input left_input' right_input right_input',
+    outcome_equiv (@bag_eq T) left_input left_input' ->
+    outcome_equiv (@bag_eq T) right_input right_input' ->
+    outcome_relation_equiv (@bag_eq T)
+      (left_operation left_input right_input)
+      (right_operation left_input' right_input').
+```
+
+## `query_error_singleton_outcome_relation_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3930`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3930)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes bag multiplicity across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_error_singleton_outcome_relation_equiv :
+  forall error,
+    outcome_relation_equiv (@bag_eq T)
+      (fun outcome : sql_outcome constructor_bagT =>
+        outcome = SqlError error)
+      (fun outcome : sql_outcome constructor_bagT =>
+        outcome = SqlError error).
+```
+
+## `query_eager_left_binary_outcome_relation_cross_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3944`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3944)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query eager left binary outcome relation cross compatible law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_eager_left_binary_outcome_relation_cross_compatible :
+  forall left_operation right_operation,
+    query_binary_bag_outcome_operations_compatible
+      left_operation right_operation ->
+    binary_bag_outcome_relations_cross_compatible
+      (query_eager_left_binary_outcome_relation left_operation)
+      (query_eager_left_binary_outcome_relation right_operation).
+```
+
+## `query_scheduled_binary_parent_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4060`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4060)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Builds the generic eager-left scheduled parent characterization from exact success/error inversion laws and an extensional local operation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply exact two-sided success and error inversion laws, an extensional operator-local outcome relation, and an inhabited right-child scheduled relation for eager-left errors.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_scheduled_binary_parent_bag_outcomes_characterization :
+  forall schedule env parent left right operation,
+    (forall output,
+      eval_scheduled_query schedule env parent (SqlSuccess output) <->
+      exists left_rows, exists right_rows, exists output_bag,
+        eval_scheduled_query schedule env left (SqlSuccess left_rows) /\
+        eval_scheduled_query schedule env right (SqlSuccess right_rows) /\
+        operation (rows_bag T left_rows) (rows_bag T right_rows)
+          (SqlSuccess output_bag) /\
+        query_same_rows_as_bag output output_bag) ->
+    (forall error,
+      eval_scheduled_query schedule env parent (SqlError error) <->
+      eval_scheduled_query schedule env left (SqlError error) \/
+      exists left_rows,
+        eval_scheduled_query schedule env left (SqlSuccess left_rows) /\
+        (eval_scheduled_query schedule env right (SqlError error) \/
+         exists right_rows,
+           eval_scheduled_query schedule env right (SqlSuccess right_rows) /\
+           operation (rows_bag T left_rows) (rows_bag T right_rows)
+             (SqlError error))) ->
+    query_binary_bag_outcome_operation_extensional operation ->
+    possible_bag_outcome_relation_inhabited
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env right) ->
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env parent)
+      (lift_possible_bag_outcome_binary
+        (query_eager_left_binary_outcome_relation operation)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right)).
+```
+
+## `query_success_only_binary_bag_operation_extensional`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4245`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4245)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_success_only_binary_bag_operation_extensional :
+  forall relation,
+    binary_bag_relation_extensional relation ->
+    query_binary_bag_outcome_operation_extensional
+      (@query_success_only_binary_bag_operation T relation).
+```
+
+## `query_success_only_binary_bag_operations_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4258`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4258)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for bag multiplicity.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_success_only_binary_bag_operations_compatible :
+  forall relation,
+    binary_bag_relation_extensional relation ->
+    (forall left_bag right_bag,
+      exists output_bag, relation left_bag right_bag output_bag) ->
+    query_binary_bag_outcome_operations_compatible
+      (@query_success_only_binary_bag_operation T relation)
+      (@query_success_only_binary_bag_operation T relation).
+```
+
+## `query_set_outcome_operations_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4291`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4291)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query set outcome operations compatible law for SQL bag/set operations, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL bag/set operations.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_set_outcome_operations_compatible :
+  forall operation left left' right right',
+    query_expr_sort left =S= query_expr_sort left' ->
+    query_expr_sort right =S= query_expr_sort right' ->
+    query_binary_bag_outcome_operations_compatible
+      (query_set_outcome_operation operation left right)
+      (query_set_outcome_operation operation left' right').
+```
+
+## `query_natural_join_outcome_operations_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4341`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4341)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query natural join outcome operations compatible law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_natural_join_outcome_operations_compatible :
+  query_binary_bag_outcome_operations_compatible
+    query_natural_join_outcome_operation
+    query_natural_join_outcome_operation.
+```
+
+## `query_cross_join_outcome_operations_compatible`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4354`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4354)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query cross join outcome operations compatible law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_cross_join_outcome_operations_compatible :
+  query_binary_bag_outcome_operations_compatible
+    query_cross_join_outcome_operation
+    query_cross_join_outcome_operation.
+```
+
+## `query_join_outcome_operation_extensional`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4369`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4369)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query join outcome operation extensional law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_join_outcome_operation_extensional :
+  forall schedule env kind predicate matched_select left_select right_select,
+    query_binary_bag_outcome_operation_extensional
+      (query_join_outcome_operation schedule env kind predicate
+        matched_select left_select right_select).
+```
+
+## `eval_adapter_query_set_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4415`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4415)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL bag/set operations.
+
+Applicability: Use in either direction to invert or construct a goal about SQL bag/set operations.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_adapter_query_set_error_iff :
+  forall schedule env operation left right error,
+    eval_adapter_query schedule env (QExpr_Set operation left right)
+      (SqlError error) <->
+    eval_adapter_query schedule env left (SqlError error) \/
+    exists left_rows,
+      eval_adapter_query schedule env left (SqlSuccess left_rows) /\
+      eval_adapter_query schedule env right (SqlError error).
+```
+
+## `eval_adapter_query_natural_join_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4431`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4431)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for join semantics.
+
+Applicability: Use in either direction to invert or construct a goal about join semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_adapter_query_natural_join_error_iff :
+  forall schedule env left right error,
+    eval_adapter_query schedule env (QExpr_NaturalJoin left right)
+      (SqlError error) <->
+    eval_adapter_query schedule env left (SqlError error) \/
+    exists left_rows,
+      eval_adapter_query schedule env left (SqlSuccess left_rows) /\
+      eval_adapter_query schedule env right (SqlError error).
+```
+
+## `eval_adapter_query_cross_join_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4447`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4447)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for join semantics.
+
+Applicability: Use in either direction to invert or construct a goal about join semantics.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_adapter_query_cross_join_error_iff :
+  forall schedule env left right error,
+    eval_adapter_query schedule env (QExpr_CrossJoin left right)
+      (SqlError error) <->
+    eval_adapter_query schedule env left (SqlError error) \/
+    exists left_rows,
+      eval_adapter_query schedule env left (SqlSuccess left_rows) /\
+      eval_adapter_query schedule env right (SqlError error).
+```
+
+## `query_set_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4463`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4463)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled binary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: Retain the fixed schedule, exact eager-left success/error behavior, operator extensionality, and inhabitation of the actual right-child scheduled outcome relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_set_scheduled_bag_outcomes_characterization :
+  forall schedule env operation left right,
+    possible_bag_outcome_relation_inhabited
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env right) ->
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env (QExpr_Set operation left right))
+      (lift_possible_bag_outcome_binary
+        (query_eager_left_binary_outcome_relation
+          (query_set_outcome_operation operation left right))
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right)).
+```
+
+## `query_natural_join_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4524`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4524)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled binary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: Retain the fixed schedule, exact eager-left success/error behavior, operator extensionality, and inhabitation of the actual right-child scheduled outcome relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_natural_join_scheduled_bag_outcomes_characterization :
+  forall schedule env left right,
+    possible_bag_outcome_relation_inhabited
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env right) ->
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env (QExpr_NaturalJoin left right))
+      (lift_possible_bag_outcome_binary
+        (query_eager_left_binary_outcome_relation
+          query_natural_join_outcome_operation)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right)).
+```
+
+## `query_cross_join_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4586`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4586)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled binary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: Retain the fixed schedule, exact eager-left success/error behavior, operator extensionality, and inhabitation of the actual right-child scheduled outcome relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_cross_join_scheduled_bag_outcomes_characterization :
+  forall schedule env left right,
+    possible_bag_outcome_relation_inhabited
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env right) ->
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env (QExpr_CrossJoin left right))
+      (lift_possible_bag_outcome_binary
+        (query_eager_left_binary_outcome_relation
+          query_cross_join_outcome_operation)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right)).
+```
+
+## `query_join_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4648`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4648)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled binary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: Retain the fixed schedule, exact eager-left success/error behavior, operator extensionality, and inhabitation of the actual right-child scheduled outcome relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_join_scheduled_bag_outcomes_characterization :
+  forall schedule env kind predicate matched_select left_select right_select
+         left right,
+    possible_bag_outcome_relation_inhabited
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env right) ->
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right))
+      (lift_possible_bag_outcome_binary
+        (query_eager_left_binary_outcome_relation
+          (query_join_outcome_operation schedule env kind predicate
+            matched_select left_select right_select))
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right)).
+```
+
+## `query_set_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4681`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4681)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports both child bag/error relations under one matched schedule pair through the complete scheduled binary constructor semantics.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL bag/set operations.
+
+Important premises: Supply complete bag/error equivalence for both children under the same matched schedule pair; neither errors nor multiplicity may be projected away. SET also retains both child sort equalities.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `set operation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_set_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env operation
+         left_first left_second right_first right_second,
+    query_expr_sort left_first =S= query_expr_sort right_first ->
+    query_expr_sort left_second =S= query_expr_sort right_second ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_Set operation left_first left_second))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_Set operation right_first right_second)).
+```
+
+## `query_natural_join_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4723`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4723)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports both child bag/error relations under one matched schedule pair through the complete scheduled binary constructor semantics.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: Supply complete bag/error equivalence for both children under the same matched schedule pair; neither errors nor multiplicity may be projected away.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_natural_join_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env
+         left_first left_second right_first right_second,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_NaturalJoin left_first left_second))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_NaturalJoin right_first right_second)).
+```
+
+## `query_cross_join_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4762`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4762)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports both child bag/error relations under one matched schedule pair through the complete scheduled binary constructor semantics.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: Supply complete bag/error equivalence for both children under the same matched schedule pair; neither errors nor multiplicity may be projected away.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_cross_join_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env
+         left_first left_second right_first right_second,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_CrossJoin left_first left_second))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_CrossJoin right_first right_second)).
+```
+
+## `query_join_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4801`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4801)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports both child bag/error relations under one matched schedule pair through the complete scheduled binary constructor semantics.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: Supply complete bag/error equivalence for both children under the same matched schedule pair; neither errors nor multiplicity may be projected away. JOIN also retains cross-schedule compatibility of the exact local join outcome operations.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_join_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env kind predicate
+         matched_select left_select right_select
+         left_first left_second right_first right_second,
+    query_binary_bag_outcome_operations_compatible
+      (query_join_outcome_operation left_schedule env kind predicate
+        matched_select left_select right_select)
+      (query_join_outcome_operation right_schedule env kind predicate
+        matched_select left_select right_select) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left_first left_second))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          right_first right_second)).
+```
+
+## `query_expr_set_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4856`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4856)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL bag/set operations.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `set operation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_set_possible_bag_schedule_transport :
+  forall env operation left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Set operation left_first left_second)
+      (QExpr_Set operation right_first right_second).
+```
+
+## `query_expr_set_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4881`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4881)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL bag/set operations.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `set operation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_set_possible_bag_outcome_equiv :
+  forall env operation left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Set operation left_first left_second)
+      (QExpr_Set operation right_first right_second).
+```
+
+## `query_expr_natural_join_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4897`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4897)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_natural_join_possible_bag_schedule_transport :
+  forall env left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_NaturalJoin left_first left_second)
+      (QExpr_NaturalJoin right_first right_second).
+```
+
+## `query_expr_natural_join_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4923`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4923)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_natural_join_possible_bag_outcome_equiv :
+  forall env left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_NaturalJoin left_first left_second)
+      (QExpr_NaturalJoin right_first right_second).
+```
+
+## `query_expr_cross_join_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4939`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4939)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_cross_join_possible_bag_schedule_transport :
+  forall env left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_CrossJoin left_first left_second)
+      (QExpr_CrossJoin right_first right_second).
+```
+
+## `query_expr_cross_join_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4960`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4960)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about join semantics.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `join`, `cross product`, `CROSS JOIN`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_cross_join_possible_bag_outcome_equiv :
+  forall env left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_CrossJoin left_first left_second)
+      (QExpr_CrossJoin right_first right_second).
+```
+
+## `query_expr_join_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4981`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4981)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns a compositional possible-bag schedule transport.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient. JOIN additionally requires the displayed cross-schedule compatibility of the two actual `eval_join_bag_outcome` relations.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_join_possible_bag_schedule_transport :
+  forall env kind predicate matched_select left_select right_select
+         left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_first)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_first) ->
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_second)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_second) ->
+      query_binary_bag_outcome_operations_compatible
+        (@eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env kind predicate
+          matched_select left_select right_select)
+        (@eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env kind predicate
+          matched_select left_select right_select)) ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left_first left_second)
+      (QExpr_Join kind predicate matched_select left_select right_select
+        right_first right_second).
+```
+
+## `query_expr_join_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5031`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5031)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts joint same-schedule transport through the named binary SQL constructor and returns possible-bag/outcome equivalence.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: Supply one joint bidirectional schedule transport relating both child pairs; independent marginal witnesses are insufficient. JOIN additionally requires the displayed cross-schedule compatibility of the two actual `eval_join_bag_outcome` relations.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_join_possible_bag_outcome_equiv :
+  forall env kind predicate matched_select left_select right_select
+         left_first left_second right_first right_second,
+    @query_expr_possible_bag_joint_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left_first left_second right_first right_second ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_first)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_first) ->
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_second)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_second) ->
+      query_binary_bag_outcome_operations_compatible
+        (@eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env kind predicate
+          matched_select left_select right_select)
+        (@eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env kind predicate
+          matched_select left_select right_select)) ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left_first left_second)
+      (QExpr_Join kind predicate matched_select left_select right_select
+        right_first right_second).
+```
+
+## `query_rows_to_bag_outcome_relation`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5109`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5109)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Names the generic relation from one actual ordered child row list to a complete successful-bag or runtime-error outcome.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_rows_to_bag_outcome_relation : Type :=
+  list unary_tuple -> sql_outcome unary_bagT -> Prop.
+```
+
+## `query_actual_rows_bag_outcome_bind`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5115`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5115)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Defines eager unary composition over actual child row lists, passing child errors through and evaluating local work only after success.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_actual_rows_bag_outcome_bind
+    (child : sql_outcome (list unary_tuple) -> Prop)
+    (local : query_rows_to_bag_outcome_relation) :
+    sql_outcome unary_bagT -> Prop :=
+  fun outcome =>
+    match outcome with
+    | SqlSuccess output_bag =>
+        exists input_rows,
+          child (SqlSuccess input_rows) /\
+          local input_rows (SqlSuccess output_bag)
+    | SqlError error =>
+        child (SqlError error) \/
+        exists input_rows,
+          child (SqlSuccess input_rows) /\
+          local input_rows (SqlError error)
+    end.
+```
+
+## `scheduled_local_rows_to_bag_contract`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5137`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5137)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Requires exact local bag/error equivalence on every reachable pair of bag-equal child lists under one matched schedule pair.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition scheduled_local_rows_to_bag_contract
+    (left_child right_child : sql_outcome (list unary_tuple) -> Prop)
+    (left_local right_local : query_rows_to_bag_outcome_relation) : Prop :=
+  forall left_rows right_rows,
+    left_child (SqlSuccess left_rows) ->
+    right_child (SqlSuccess right_rows) ->
+    bag_eq T (rows_bag T left_rows) (rows_bag T right_rows) ->
+    outcome_relation_equiv (@bag_eq T)
+      (left_local left_rows) (right_local right_rows).
+```
+
+## `outcome_alpha_success_match_left_rows`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5147`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5147)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Extracts a concrete successful-list match or exact error equivalence from an outcome-alpha possible-bag relation equivalence.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply the complete outcome-alpha bag/error equivalence and the displayed concrete success or error observation; no representative is guessed.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma outcome_alpha_success_match_left_rows :
+  forall (left right : sql_outcome (list unary_tuple) -> Prop) left_rows,
+    outcome_relation_equiv (@bag_eq T)
+      (@outcome_alpha T left) (@outcome_alpha T right) ->
+    left (SqlSuccess left_rows) ->
+    exists right_rows,
+      right (SqlSuccess right_rows) /\
+      bag_eq T (rows_bag T left_rows) (rows_bag T right_rows).
+```
+
+## `outcome_alpha_success_match_right_rows`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5170`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5170)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Extracts a concrete successful-list match or exact error equivalence from an outcome-alpha possible-bag relation equivalence.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply the complete outcome-alpha bag/error equivalence and the displayed concrete success or error observation; no representative is guessed.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma outcome_alpha_success_match_right_rows :
+  forall (left right : sql_outcome (list unary_tuple) -> Prop) right_rows,
+    outcome_relation_equiv (@bag_eq T)
+      (@outcome_alpha T left) (@outcome_alpha T right) ->
+    right (SqlSuccess right_rows) ->
+    exists left_rows,
+      left (SqlSuccess left_rows) /\
+      bag_eq T (rows_bag T left_rows) (rows_bag T right_rows).
+```
+
+## `outcome_alpha_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5192`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5192)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Extracts a concrete successful-list match or exact error equivalence from an outcome-alpha possible-bag relation equivalence.
+
+Applicability: Use in either direction to invert or construct a goal about bag multiplicity.
+
+Important premises: Supply the complete outcome-alpha bag/error equivalence and the displayed concrete success or error observation; no representative is guessed.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma outcome_alpha_error_iff :
+  forall (left right : sql_outcome (list unary_tuple) -> Prop) error,
+    outcome_relation_equiv (@bag_eq T)
+      (@outcome_alpha T left) (@outcome_alpha T right) ->
+    (left (SqlError error) <-> right (SqlError error)).
+```
+
+## `query_actual_rows_bag_outcome_bind_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5205`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5205)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Combines scheduled child bag/error equivalence with the exact local-row contract to transport eager unary composition.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply outcome-alpha equivalence for the two exact child relations and the reachable, bag-equal actual-row local contract; successful bags and runtime-error categories remain explicit.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_actual_rows_bag_outcome_bind_congr :
+  forall left_child right_child left_local right_local,
+    outcome_relation_equiv (@bag_eq T)
+      (@outcome_alpha T left_child) (@outcome_alpha T right_child) ->
+    scheduled_local_rows_to_bag_contract
+      left_child right_child left_local right_local ->
+    outcome_relation_equiv (@bag_eq T)
+      (query_actual_rows_bag_outcome_bind left_child left_local)
+      (query_actual_rows_bag_outcome_bind right_child right_local).
+```
+
+## `query_project_rows_bag_outcomes`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5317`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5317)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Defines the constructor-local successful-bag and runtime-error relation on one actual ordered child row list.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_project_rows_bag_outcomes
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (env : Env.env T) (select_list : @query_select_list T relname)
+    (rows : list unary_sem_tuple) : sql_outcome unary_sem_bagT -> Prop :=
+  @outcome_alpha T
+    (@eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      env select_list rows).
+```
+
+## `query_row_map_rows_bag_outcomes`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5326`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5326)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Defines the constructor-local successful-bag and runtime-error relation on one actual ordered child row list.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_row_map_rows_bag_outcomes
+    (row_map : unary_sem_tuple -> sql_outcome unary_sem_tuple)
+    (rows : list unary_sem_tuple) : sql_outcome unary_sem_bagT -> Prop :=
+  @outcome_alpha T
+    (fun outcome => @row_map_rows_outcome T row_map rows = outcome).
+```
+
+## `query_filter_rows_bag_outcomes`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5332`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5332)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Defines the constructor-local successful-bag and runtime-error relation on one actual ordered child row list.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_filter_rows_bag_outcomes
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (env : Env.env T)
+    (predicate : scalar_expr T relname ScalarResultBoolean)
+    (rows : list unary_sem_tuple) : sql_outcome unary_sem_bagT -> Prop :=
+  @outcome_alpha T
+    (@eval_filter_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      env predicate rows).
+```
+
+## `eval_unary_project_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5407`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5407)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
+
+Applicability: Use in either direction to invert or construct a goal about relational algebra.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_unary_project_error_iff :
+  forall schedule env select_list input error,
+    eval_unary_sem_query schedule env (QExpr_Project select_list input)
+      (SqlError error) <->
+    eval_unary_sem_query schedule env input (SqlError error) \/
+    exists input_rows,
+      eval_unary_sem_query schedule env input (SqlSuccess input_rows) /\
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env select_list input_rows (SqlError error).
+```
+
+## `eval_unary_row_map_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5425`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5425)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
+
+Applicability: Use in either direction to invert or construct a goal about relational algebra.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_unary_row_map_error_iff :
+  forall schedule env outputs row_map input error,
+    eval_unary_sem_query schedule env
+      (QExpr_RowMap outputs row_map input) (SqlError error) <->
+    eval_unary_sem_query schedule env input (SqlError error) \/
+    exists input_rows,
+      eval_unary_sem_query schedule env input (SqlSuccess input_rows) /\
+      @row_map_rows_outcome T row_map input_rows = SqlError error.
+```
+
+## `eval_unary_filter_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5441`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5441)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for relational algebra.
+
+Applicability: Use in either direction to invert or construct a goal about relational algebra.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_unary_filter_error_iff :
+  forall schedule env predicate input error,
+    eval_unary_sem_query schedule env (QExpr_Filter predicate input)
+      (SqlError error) <->
+    eval_unary_sem_query schedule env input (SqlError error) \/
+    exists input_rows,
+      eval_unary_sem_query schedule env input (SqlSuccess input_rows) /\
+      @eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env predicate input_rows (SqlError error).
+```
+
+## `query_project_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5487`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5487)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled unary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: No semantic premise is hidden: this is the exact fixed-schedule characterization of the displayed constructor-local relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_project_scheduled_bag_outcomes_characterization :
+  forall schedule env select_list input,
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project select_list input))
+      (@query_actual_rows_bag_outcome_bind T
+        (eval_unary_sem_query schedule env input)
+        (query_project_rows_bag_outcomes schedule env select_list)).
+```
+
+## `query_row_map_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5514`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5514)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled unary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: No semantic premise is hidden: this is the exact fixed-schedule characterization of the displayed constructor-local relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_row_map_scheduled_bag_outcomes_characterization :
+  forall schedule env outputs row_map input,
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap outputs row_map input))
+      (@query_actual_rows_bag_outcome_bind T
+        (eval_unary_sem_query schedule env input)
+        (query_row_map_rows_bag_outcomes row_map)).
+```
+
+## `query_filter_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5541`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5541)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled unary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: No semantic premise is hidden: this is the exact fixed-schedule characterization of the displayed constructor-local relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_filter_scheduled_bag_outcomes_characterization :
+  forall schedule env predicate input,
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter predicate input))
+      (@query_actual_rows_bag_outcome_bind T
+        (eval_unary_sem_query schedule env input)
+        (query_filter_rows_bag_outcomes schedule env predicate)).
+```
+
+## `query_project_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5768`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5768)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports one child bag/error relation under a matched schedule pair using the exact reachable-list local contract.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply complete child bag/error equivalence under the matched schedule pair and the exact reachable-list `scheduled_local_rows_to_bag_contract`.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_project_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env left_select right_select left right,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right) ->
+    scheduled_local_rows_to_bag_contract
+      (eval_congr_query left_schedule env left)
+      (eval_congr_query right_schedule env right)
+      (@query_project_rows_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_select)
+      (@query_project_rows_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_select) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_Project left_select left))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_Project right_select right)).
+```
+
+## `query_row_map_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5802`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5802)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports one child bag/error relation under a matched schedule pair using the exact reachable-list local contract.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply complete child bag/error equivalence under the matched schedule pair and the exact reachable-list `scheduled_local_rows_to_bag_contract`.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_row_map_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env
+      left_outputs right_outputs left_map right_map left right,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right) ->
+    scheduled_local_rows_to_bag_contract
+      (eval_congr_query left_schedule env left)
+      (eval_congr_query right_schedule env right)
+      (@query_row_map_rows_bag_outcomes T left_map)
+      (@query_row_map_rows_bag_outcomes T right_map) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_RowMap left_outputs left_map left))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_RowMap right_outputs right_map right)).
+```
+
+## `query_filter_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5833`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5833)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports one child bag/error relation under a matched schedule pair using the exact reachable-list local contract.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply complete child bag/error equivalence under the matched schedule pair and the exact reachable-list `scheduled_local_rows_to_bag_contract`.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_filter_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env
+      left_predicate right_predicate left right,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right) ->
+    scheduled_local_rows_to_bag_contract
+      (eval_congr_query left_schedule env left)
+      (eval_congr_query right_schedule env right)
+      (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_predicate)
+      (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_predicate) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env (QExpr_Filter left_predicate left))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env (QExpr_Filter right_predicate right)).
+```
+
+## `query_expr_project_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6009`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6009)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_project_possible_bag_schedule_transport :
+  forall env left_select right_select left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    scalar_select_outputs left_select = scalar_select_outputs right_select ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_project_rows_bag_outcomes T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null
+          left_schedule env left_select)
+        (@query_project_rows_bag_outcomes T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null
+          right_schedule env right_select)) ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Project left_select left) (QExpr_Project right_select right).
+```
+
+## `query_expr_project_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6049`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6049)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_project_possible_bag_outcome_equiv :
+  forall env left_select right_select left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    scalar_select_outputs left_select = scalar_select_outputs right_select ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_project_rows_bag_outcomes T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null
+          left_schedule env left_select)
+        (@query_project_rows_bag_outcomes T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null
+          right_schedule env right_select)) ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Project left_select left) (QExpr_Project right_select right).
+```
+
+## `query_expr_row_map_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6084`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6084)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_row_map_possible_bag_schedule_transport :
+  forall env left_outputs right_outputs left_map right_map left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    left_outputs = right_outputs ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_row_map_rows_bag_outcomes T left_map)
+        (@query_row_map_rows_bag_outcomes T right_map)) ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_RowMap left_outputs left_map left)
+      (QExpr_RowMap right_outputs right_map right).
+```
+
+## `query_expr_row_map_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6120`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6120)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_row_map_possible_bag_outcome_equiv :
+  forall env left_outputs right_outputs left_map right_map left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    left_outputs = right_outputs ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_row_map_rows_bag_outcomes T left_map)
+        (@query_row_map_rows_bag_outcomes T right_map)) ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_RowMap left_outputs left_map left)
+      (QExpr_RowMap right_outputs right_map right).
+```
+
+## `query_expr_filter_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6151`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6151)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `filter`, `WHERE`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_filter_possible_bag_schedule_transport :
+  forall env left_predicate right_predicate left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_predicate)
+        (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_predicate)) ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Filter left_predicate left) (QExpr_Filter right_predicate right).
+```
+
+## `query_expr_filter_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6189`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6189)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about bag multiplicity.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `filter`, `bag`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_filter_possible_bag_outcome_equiv :
+  forall env left_predicate right_predicate left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left_predicate)
+        (@query_filter_rows_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right_predicate)) ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Filter left_predicate left) (QExpr_Filter right_predicate right).
 ```

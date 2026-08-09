@@ -12,6 +12,7 @@ import json
 import os
 import runpy
 import signal
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -35,6 +36,11 @@ CANONICAL_FRONTEND_COMMAND = FULL_RUNNER["CANONICAL_FRONTEND_COMMAND"]
 INPUT_MANIFEST_ALGORITHM = FULL_RUNNER["INPUT_MANIFEST_ALGORITHM"]
 GENERATED_MODULE_TREE_ALGORITHM = "logos-generated-module-tree-v1"
 TRANSFORM_ARTIFACT_SET_ALGORITHM = "logos-transform-artifact-set-v1"
+GENERATED_ADMISSIBILITY_CHECK_ALGORITHM = (
+    "logos-generated-admissibility-rocq-compile-v1"
+)
+GENERATED_ADMISSIBILITY_MODULES = ("Schema.v", "Queries.v")
+GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS = 20 * 60
 DEFAULT_RUN_ROOT = LOGOS_ROOT / "var/logos-solver/transform-runs"
 DEFAULT_CASE_TIMEOUT_SECONDS = 20 * 60
 DEFAULT_TERMINATION_GRACE_SECONDS = 10.0
@@ -109,6 +115,18 @@ class ProcessRegistry:
         with self._lock:
             processes = list(self._processes.values())
         FULL_RUNNER["terminate_process_trees"](processes, grace_seconds)
+
+
+def integrity_source_matches_case(
+    canonical_paths: dict[str, Path], integrity_source: str
+) -> bool:
+    """Accept only integrity authorities frozen into this case's input manifest."""
+
+    allowed = {canonical_paths["metadata"]}
+    semantic_sidecar = canonical_paths.get("semanticSidecar")
+    if semantic_sidecar is not None:
+        allowed.add(semantic_sidecar)
+    return Path(integrity_source).resolve() in allowed
 
 
 def argument_parser() -> argparse.ArgumentParser:
@@ -560,6 +578,11 @@ def configuration_record(config: RunConfig) -> dict[str, Any]:
         "transformOnly": True,
         "counterexampleSearch": "disabled",
         "proofAgent": "disabled",
+        "generatedAdmissibilityCheck": {
+            "algorithm": GENERATED_ADMISSIBILITY_CHECK_ALGORITHM,
+            "modules": list(GENERATED_ADMISSIBILITY_MODULES),
+            "moduleTimeoutSeconds": GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS,
+        },
         "solverBinary": config.solver_binary,
         "runnerBinary": config.runner_binary,
         "canonicalFrontendCommand": CANONICAL_FRONTEND_COMMAND,
@@ -603,6 +626,7 @@ def base_result(case: BenchmarkCase, config: RunConfig) -> dict[str, Any]:
         "workspaceEvidence": [],
         "generatedModuleEvidence": None,
         "transformArtifactEvidence": None,
+        "admissibilityEvidence": None,
     }
 
 
@@ -730,6 +754,159 @@ def generated_module_tree_record(module_dir: Path) -> dict[str, Any]:
         "fileCount": file_count,
         "sha256": hashlib.sha256(canonical_json_bytes(rows)).hexdigest(),
         "entries": rows,
+    }
+
+
+def generated_admissibility_source_record(module_dir: Path) -> dict[str, Any]:
+    modules = []
+    for name in GENERATED_ADMISSIBILITY_MODULES:
+        path = module_dir / name
+        if not path.is_file() or path.is_symlink():
+            raise RunnerError(f"generated admissibility source is unavailable: {name}")
+        modules.append(
+            {
+                "name": name,
+                "sha256": sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+        )
+    return {
+        "algorithm": GENERATED_ADMISSIBILITY_CHECK_ALGORITHM,
+        "sources": modules,
+    }
+
+
+def validate_generated_admissibility_modules(
+    module_dir: Path, config: RunConfig, registry: ProcessRegistry
+) -> dict[str, Any]:
+    source_record = generated_admissibility_source_record(module_dir)
+    switch_prefix = config.proof_rocq_opam_switch / "_opam"
+    rocq = switch_prefix / "bin/rocq"
+    coqlib = switch_prefix / "lib/coq"
+    if (
+        not rocq.is_file()
+        or rocq.is_symlink()
+        or not os.access(rocq, os.X_OK)
+        or not coqlib.is_dir()
+    ):
+        raise RunnerError(
+            "configured Rocq switch cannot compile generated admissibility modules"
+        )
+
+    started = time.monotonic()
+    module_results = []
+    with tempfile.TemporaryDirectory(
+        prefix=".generated-admissibility-", dir=config.run_dir
+    ) as temporary:
+        build_root = Path(temporary)
+        for name in GENERATED_ADMISSIBILITY_MODULES:
+            shutil.copyfile(module_dir / name, build_root / name)
+        home = build_root / "home"
+        tmp = build_root / "tmp"
+        home.mkdir()
+        tmp.mkdir()
+        environment = {
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(home),
+            "TMPDIR": str(tmp),
+            "LC_ALL": "C",
+            "LANG": "C",
+            "COQLIB": str(coqlib),
+            "ROCQLIB": str(coqlib),
+            "OCAMLLIB": str(switch_prefix / "lib/ocaml"),
+            "OCAMLFIND_CONF": str(switch_prefix / "lib/findlib.conf"),
+            "CAML_LD_LIBRARY_PATH": os.pathsep.join(
+                (
+                    str(switch_prefix / "lib/stublibs"),
+                    str(switch_prefix / "lib/ocaml/stublibs"),
+                )
+            ),
+        }
+        base_command = [
+            str(rocq),
+            "compile",
+            "-q",
+            "-noglob",
+            "-coqlib",
+            str(coqlib),
+            "-Q",
+            str(LOGOS_ROOT / "vendor/FormalSQL/src"),
+            "SQLFS",
+            "-Q",
+            str(LOGOS_ROOT / "theories"),
+            "Logos",
+            "-Q",
+            str(build_root),
+            "LogosGenerated",
+        ]
+        for name in GENERATED_ADMISSIBILITY_MODULES:
+            module_started = time.monotonic()
+            stdout_path = build_root / f"{name}.stdout"
+            stderr_path = build_root / f"{name}.stderr"
+            timed_out = False
+            try:
+                with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+                    process = subprocess.Popen(
+                        [*base_command, str(build_root / name)],
+                        cwd=build_root,
+                        env=environment,
+                        stdout=stdout,
+                        stderr=stderr,
+                        start_new_session=True,
+                    )
+                    managed = registry.register(process)
+                    try:
+                        try:
+                            return_code = managed.wait(
+                                GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS
+                            )
+                        except subprocess.TimeoutExpired:
+                            timed_out = True
+                            FULL_RUNNER["terminate_process_group"](
+                                managed, config.termination_grace_seconds
+                            )
+                            return_code = managed.wait(0.0)
+                    finally:
+                        if not managed.has_exited():
+                            FULL_RUNNER["terminate_process_group"](
+                                managed, config.termination_grace_seconds
+                            )
+                        else:
+                            managed.wait(0.0)
+                        registry.unregister(managed)
+            except OSError as error:
+                raise RunnerError(
+                    f"generated admissibility compile failed for {name}: "
+                    f"{type(error).__name__}"
+                ) from error
+            elapsed_ms = round((time.monotonic() - module_started) * 1000)
+            diagnostic = stderr_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).strip()[-4_000:]
+            if timed_out:
+                raise RunnerError(
+                    f"generated admissibility compile timed out for {name} after "
+                    f"{GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS} seconds"
+                )
+            if return_code != 0:
+                raise RunnerError(
+                    f"generated admissibility compile failed for {name} "
+                    f"with return code {return_code}: {diagnostic}"
+                )
+            module_results.append(
+                {
+                    "name": name,
+                    "returnCode": return_code,
+                    "elapsedMs": elapsed_ms,
+                }
+            )
+    return {
+        **source_record,
+        "passed": True,
+        "compiler": executable_record(rocq, "Rocq compiler"),
+        "moduleTimeoutSeconds": GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS,
+        "elapsedMs": round((time.monotonic() - started) * 1000),
+        "modules": module_results,
     }
 
 
@@ -920,6 +1097,9 @@ def run_case(
     if report_error is None:
         try:
             validate_transform_artifact_semantics(case, config, case_dir)
+            result["admissibilityEvidence"] = validate_generated_admissibility_modules(
+                case_dir / "proof-stage/formal-sql", config, registry
+            )
         except RunnerError as error:
             report_error = str(error)
     if timed_out:
@@ -1143,12 +1323,16 @@ def validate_transform_artifact_semantics(
     if (
         integrity.get("caseId") != expected_case_id
         or not isinstance(integrity_source, str)
-        or Path(integrity_source).resolve() != canonical_paths["metadata"]
+        or not integrity_source_matches_case(canonical_paths, integrity_source)
     ):
         raise RunnerError(f"integrity contract borrows another case: {case.case_id}")
 
     schema_tables = schema_ir.get("tables")
-    integrity_tables = integrity.get("tables")
+    # The canonical contract omits `tables` when the schema has no integrity
+    # declarations.  Normalize that wire-level omission to the semantic empty
+    # list; any real schema constraint still makes the exact comparison below
+    # fail if it is absent from the contract.
+    integrity_tables = integrity.get("tables", [])
     if not isinstance(schema_tables, list) or not isinstance(integrity_tables, list):
         raise RunnerError(f"schema/integrity table bindings are malformed: {case.case_id}")
     schema_constraints = []
@@ -1380,6 +1564,44 @@ def verify_transform_artifact_evidence(
     validate_transform_artifact_semantics(case, config, case_dir)
 
 
+def verify_admissibility_evidence(result: dict[str, Any], case_dir: Path) -> None:
+    evidence = result.get("admissibilityEvidence")
+    if result.get("status") != "completed":
+        if evidence is not None:
+            raise RunnerError(
+                f"non-completed case retained admissibility success evidence: "
+                f"{result['caseId']}"
+            )
+        return
+    expected_sources = generated_admissibility_source_record(
+        case_dir / "proof-stage/formal-sql"
+    )
+    if (
+        not isinstance(evidence, dict)
+        or evidence.get("algorithm") != expected_sources["algorithm"]
+        or evidence.get("sources") != expected_sources["sources"]
+        or evidence.get("passed") is not True
+        or not isinstance(evidence.get("compiler"), dict)
+        or evidence.get("moduleTimeoutSeconds")
+        != GENERATED_ADMISSIBILITY_MODULE_TIMEOUT_SECONDS
+        or not isinstance(evidence.get("elapsedMs"), int)
+        or evidence["elapsedMs"] < 0
+        or not isinstance(evidence.get("modules"), list)
+        or [module.get("name") for module in evidence["modules"]]
+        != list(GENERATED_ADMISSIBILITY_MODULES)
+        or any(
+            module.get("returnCode") != 0
+            or not isinstance(module.get("elapsedMs"), int)
+            or module["elapsedMs"] < 0
+            for module in evidence["modules"]
+        )
+    ):
+        raise RunnerError(
+            f"generated admissibility evidence is malformed or stale: "
+            f"{result['caseId']}"
+        )
+
+
 def verify_run_integrity(
     available_cases: list[BenchmarkCase],
     selected_cases: list[BenchmarkCase],
@@ -1444,6 +1666,7 @@ def verify_run_integrity(
         raise RunnerError("terminal result accounting is incomplete or duplicated")
     case_by_id = {case.case_id: case for case in selected_cases}
     transform_artifact_sets = []
+    admissibility_checks = []
     for result in results:
         case_id = result["caseId"]
         if result.get("status") not in TERMINAL_STATUSES:
@@ -1506,6 +1729,7 @@ def verify_run_integrity(
         verify_transform_artifact_evidence(
             result, case_by_id[case_id], config, case_dir
         )
+        verify_admissibility_evidence(result, case_dir)
         artifact_evidence = result.get("transformArtifactEvidence")
         if isinstance(artifact_evidence, dict):
             transform_artifact_sets.append(
@@ -1513,6 +1737,17 @@ def verify_run_integrity(
                     "caseId": case_id,
                     "artifactCount": artifact_evidence.get("artifactCount"),
                     "artifactsSha256": artifact_evidence.get("artifactsSha256"),
+                }
+            )
+        admissibility_evidence = result.get("admissibilityEvidence")
+        if isinstance(admissibility_evidence, dict):
+            admissibility_checks.append(
+                {
+                    "caseId": case_id,
+                    "sources": admissibility_evidence.get("sources"),
+                    "compilerSha256": admissibility_evidence.get("compiler", {}).get(
+                        "sha256"
+                    ),
                 }
             )
         if result.get("status") == "completed":
@@ -1528,6 +1763,7 @@ def verify_run_integrity(
         if case_by_id[case_id].case_id != case_id:
             raise RunnerError(f"case identity changed: {case_id}")
     transform_artifact_sets.sort(key=lambda row: row["caseId"])
+    admissibility_checks.sort(key=lambda row: row["caseId"])
     return {
         "verified": True,
         "verifiedAt": iso_now(),
@@ -1541,6 +1777,10 @@ def verify_run_integrity(
         "transformArtifactEvidenceCaseCount": len(transform_artifact_sets),
         "transformArtifactEvidenceSha256": hashlib.sha256(
             canonical_json_bytes(transform_artifact_sets)
+        ).hexdigest(),
+        "admissibilityCheckedCaseCount": len(admissibility_checks),
+        "admissibilityEvidenceSha256": hashlib.sha256(
+            canonical_json_bytes(admissibility_checks)
         ).hexdigest(),
     }
 

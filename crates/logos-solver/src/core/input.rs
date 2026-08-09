@@ -15,6 +15,8 @@ pub struct VerificationInput {
     schema: SchemaInput,
     source_query: QueryInput,
     target_query: QueryInput,
+    #[serde(skip)]
+    cached_ir: Option<VerificationIr>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,17 +68,38 @@ impl VerificationInput {
                 path: target,
                 sql: target_sql,
             },
+            cached_ir: None,
         })
     }
 
     pub fn load_ir(&self, ir_frontend: &dyn SqlIrFrontend) -> Result<VerificationIr> {
+        if let Some(ir) = &self.cached_ir {
+            return Ok(ir.clone());
+        }
         // Load the target first so a terminal target syntax error is not
         // hidden by an unrelated conservative source-conversion rejection.
         // This changes only error precedence when both programs are invalid:
         // no IR is returned after either failure, and a parseable target still
         // proceeds to the unchanged fail-closed source conversion below.
-        let mut target_ir = ir_frontend.load_sql(&self.schema.path, &self.target_query.path)?;
-        let mut source_ir = ir_frontend.load_sql(&self.schema.path, &self.source_query.path)?;
+        let target_count =
+            split_input_query_program(&self.target_query.path, &self.target_query.sql)?.len();
+        let source_count =
+            split_input_query_program(&self.source_query.path, &self.source_query.sql)?.len();
+        let mut imports = ir_frontend.load_sql_batch(
+            &self.schema.path,
+            &[&self.target_query.path, &self.source_query.path],
+            &[target_count, source_count],
+        )?;
+        let mut source_ir = imports.pop().expect("two-input batch has a source IR");
+        let mut target_ir = imports.pop().expect("two-input batch has a target IR");
+        self.verification_ir_from_imports(&mut source_ir, &mut target_ir)
+    }
+
+    fn verification_ir_from_imports(
+        &self,
+        source_ir: &mut logos_ir::ir::LogosIrFile,
+        target_ir: &mut logos_ir::ir::LogosIrFile,
+    ) -> Result<VerificationIr> {
         if source_ir.environment != self.sql_environment {
             return Err(Error::InvalidLogosIrInput(format!(
                 "source Calcite import attested SQL environment {:?}, expected {:?}",
@@ -89,8 +112,8 @@ impl VerificationInput {
                 target_ir.environment, self.sql_environment
             )));
         }
-        let source_program = take_query_program(&self.source_query.path, &mut source_ir)?;
-        let target_program = take_query_program(&self.target_query.path, &mut target_ir)?;
+        let source_program = take_query_program(&self.source_query.path, source_ir)?;
+        let target_program = take_query_program(&self.target_query.path, target_ir)?;
         bind_query_program_to_sql(
             &self.source_query.path,
             &self.source_query.sql,
@@ -108,7 +131,7 @@ impl VerificationInput {
             ));
         }
 
-        let mut schema = source_ir.schema;
+        let mut schema = source_ir.schema.clone();
         self.integrity_contract.merge_into_schema(&mut schema)?;
 
         Ok(VerificationIr {
@@ -132,7 +155,24 @@ impl VerificationInput {
         if self.integrity_contract.case_id.is_none() {
             return self.ensure_integrity_environment();
         }
-        let schema_ir = ir_frontend.load_sql(&self.schema.path, schema_probe_query)?;
+        let target_count =
+            split_input_query_program(&self.target_query.path, &self.target_query.sql)?.len();
+        let source_count =
+            split_input_query_program(&self.source_query.path, &self.source_query.sql)?.len();
+        let mut imports = ir_frontend.load_sql_batch(
+            &self.schema.path,
+            &[
+                &self.target_query.path,
+                &self.source_query.path,
+                schema_probe_query,
+            ],
+            &[target_count, source_count, 1],
+        )?;
+        let schema_ir = imports
+            .pop()
+            .expect("three-input batch has a schema probe IR");
+        let mut source_ir = imports.pop().expect("three-input batch has a source IR");
+        let mut target_ir = imports.pop().expect("three-input batch has a target IR");
         if schema_ir.environment != self.sql_environment {
             return Err(Error::InvalidLogosIrInput(format!(
                 "schema probe attested SQL environment {:?}, expected {:?}",
@@ -142,7 +182,16 @@ impl VerificationInput {
         self.integrity_contract = self
             .integrity_contract
             .merged_with_schema(&schema_ir.schema)?;
-        self.ensure_integrity_environment()
+        self.ensure_integrity_environment()?;
+        // The generic trait fallback may provide only a schema document for
+        // this hydration call. Production ShellSqlIrFrontend batches complete
+        // target/source programs and can cache them; otherwise load_ir retains
+        // its existing fail-closed program validation path.
+        if !source_ir.queries.is_empty() && !target_ir.queries.is_empty() {
+            self.cached_ir =
+                Some(self.verification_ir_from_imports(&mut source_ir, &mut target_ir)?);
+        }
+        Ok(())
     }
 
     /// Fail closed before any consumer uses string-valued integrity
@@ -1310,6 +1359,7 @@ mod tests {
                 path: PathBuf::from("target.sql"),
                 sql: "select distinct on (id) id from t".to_owned(),
             },
+            cached_ir: None,
         };
 
         let error = input
@@ -1896,6 +1946,7 @@ mod tests {
                 path: PathBuf::from("target.sql"),
                 sql: target_sql.to_owned(),
             },
+            cached_ir: None,
         }
     }
 

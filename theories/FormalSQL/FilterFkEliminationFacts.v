@@ -224,21 +224,23 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Definition stable_total_filter_acceptance
-    (env : Env.env T) (formula : formula_expr T relname)
+    (env : Env.env T) (formula : scalar_expr T relname ScalarResultBoolean)
     (keep : tuple T -> bool) : Prop :=
   (forall first second,
     Oeset.compare (OTuple T) first second = Eq ->
     keep first = keep second) /\
   (forall row,
-    formula_acceptance_exact_at
+    scalar_expr_acceptance_exact_at
       basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null (env_t T env row) formula (keep row)).
+      value_is_null boolean_schedule (env_t T env row) formula (keep row)).
 
 (** The stable-total contract exposes successful filtering as the exact
     finite-bag filter, retaining semantic row multiplicities. *)
@@ -247,12 +249,13 @@ Theorem query_filter_success_bags_of_stable_total_acceptance :
     stable_total_filter_acceptance env formula keep ->
     rel_equiv
       (query_success_bags basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null env
+        aggregate_runtime_error value_is_null boolean_schedule env
         (QExpr_Filter formula input))
       (fun output =>
         exists input_bag,
           query_success_bags basesort instance unknown symbol_runtime_error
-            aggregate_runtime_error value_is_null env input input_bag /\
+            aggregate_runtime_error value_is_null boolean_schedule env
+            input input_bag /\
           bag_eq T
             (Febag.filter (Fecol.CBag (CTuple T)) keep input_bag)
             output).
@@ -297,13 +300,16 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_filter_rows :=
   (@eval_filter_rows_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 (** A reached bad occurrence forces the sequential FILTER traversal to expose
     its error category when every preceding occurrence can either succeed or
@@ -312,12 +318,12 @@ Local Abbreviation eval_filter_rows :=
 Theorem eval_filter_rows_uniform_error_of_reached_member :
   forall env formula rows bad error,
     In bad rows ->
-    eval_formula (env_t T env bad) formula (SqlError error) ->
+    eval_scalar_boolean (env_t T env bad) formula (SqlError error) ->
     (forall row,
       In row rows ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula rows (SqlError error).
 Proof.
 intros env formula rows.
@@ -342,7 +348,7 @@ Local Lemma eval_filter_rows_error_has_reached_member :
     eval_filter_rows env formula rows (SqlError error) ->
     exists row,
       In row rows /\
-      eval_formula (env_t T env row) formula (SqlError error).
+      eval_scalar_boolean (env_t T env row) formula (SqlError error).
 Proof.
 intros env formula rows.
 induction rows as [|head tail IH]; intros error Hfilter.
@@ -374,7 +380,7 @@ Theorem eval_filter_rows_error_category_of_reached_categories :
     (forall row,
       In row rows ->
       forall observed,
-        eval_formula (env_t T env row) formula (SqlError observed) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlError observed) ->
         observed = expected) ->
     eval_filter_rows env formula rows (SqlError error) ->
     error = expected.
@@ -392,7 +398,7 @@ Theorem eval_filter_rows_success_excludes_reached_exact_error :
   forall env formula rows bad,
     In bad rows ->
     (forall truth,
-      ~ eval_formula (env_t T env bad) formula (SqlSuccess truth)) ->
+      ~ eval_scalar_boolean (env_t T env bad) formula (SqlSuccess truth)) ->
     forall output,
       ~ eval_filter_rows env formula rows (SqlSuccess output).
 Proof.
@@ -407,7 +413,7 @@ induction rows as [|head tail IH]; intros bad Hbad Hexclude output Hfilter.
   + destruct Hbad as [Hbad|Hbad].
     * subst bad.
       match goal with
-      | Hhead : eval_formula _ formula (SqlSuccess ?truth) |- _ =>
+      | Hhead : eval_scalar_boolean _ formula (SqlSuccess ?truth) |- _ =>
           exact (Hexclude truth Hhead)
       end.
     * eapply IH; [exact Hbad|exact Hexclude|eassumption].
@@ -420,18 +426,18 @@ Qed.
 Theorem eval_filter_rows_reached_uniform_error_exact :
   forall env formula rows bad expected,
     In bad rows ->
-    eval_formula (env_t T env bad) formula (SqlError expected) ->
+    eval_scalar_boolean (env_t T env bad) formula (SqlError expected) ->
     (forall row,
       In row rows ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError expected)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError expected)) ->
     (forall truth,
-      ~ eval_formula (env_t T env bad) formula (SqlSuccess truth)) ->
+      ~ eval_scalar_boolean (env_t T env bad) formula (SqlSuccess truth)) ->
     (forall row,
       In row rows ->
       forall observed,
-        eval_formula (env_t T env row) formula (SqlError observed) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlError observed) ->
         observed = expected) ->
     eval_filter_rows env formula rows (SqlError expected) /\
     (forall output,
@@ -463,13 +469,13 @@ Theorem eval_filter_rows_uniform_error_of_join_witness :
     In left_row left ->
     In right_row right ->
     accept left_row right_row = true ->
-    eval_formula (env_t T env (join left_row right_row)) formula
+    eval_scalar_boolean (env_t T env (join left_row right_row)) formula
       (SqlError error) ->
     (forall row,
       In row (join_matched_rows join accept left right) ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula
       (join_matched_rows join accept left right) (SqlError error).
 Proof.
@@ -488,12 +494,12 @@ Corollary eval_filter_rows_uniform_error_of_self_match :
       rows bad error,
     In bad rows ->
     accept bad bad = true ->
-    eval_formula (env_t T env (join bad bad)) formula (SqlError error) ->
+    eval_scalar_boolean (env_t T env (join bad bad)) formula (SqlError error) ->
     (forall row,
       In row (join_matched_rows join accept rows rows) ->
       (exists truth,
-        eval_formula (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_formula (env_t T env row) formula (SqlError error)) ->
+        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
+      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
     eval_filter_rows env formula
       (join_matched_rows join accept rows rows) (SqlError error).
 Proof.
@@ -721,10 +727,12 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 (** Two error-only queries are outcome-equivalent when each actually exposes
     the same fixed category, neither can expose a successful row list, and
@@ -744,7 +752,7 @@ Theorem query_expr_outcome_equiv_of_shared_exact_error :
       eval_query env second (SqlError observed) -> observed = expected) ->
     @query_expr_outcome_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env first second.
+      boolean_schedule env first second.
 Proof.
 intros env first second expected Houtputs Hfirst_error Hsecond_error
   Hfirst_no_success Hsecond_no_success Hfirst_category Hsecond_category.

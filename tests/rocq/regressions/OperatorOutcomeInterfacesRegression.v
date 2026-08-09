@@ -4,11 +4,11 @@
 
 From Stdlib Require Import List NArith.
 From SQLFS Require Import
-  Bool3 Env FiniteBag FiniteCollection FiniteSet Formula Projection SqlErrorSemantics
+  Bool3 Env FiniteBag FiniteCollection FiniteSet SqlErrorSemantics
   SqlBagAbstraction SqlOutcome SqlQueryContexts SqlQueryFacts SqlQuerySemantics
   SqlQuerySyntax.
 From Logos.FormalSQL Require Import
-  OrderedQueryFacts QueryCardinality RelationalAlgebraFacts.
+  OrderedQueryFacts RelationalAlgebraFacts.
 
 Import Tuple.
 
@@ -26,26 +26,32 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation eval_filter_rows :=
   (@eval_filter_rows_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_safe :=
   (query_expr_runtime_safe basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_has_success :=
   (query_expr_has_success basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Theorem safe_inhabited_query_has_success_regression :
   forall env query,
@@ -57,26 +63,28 @@ intros; now eapply query_expr_has_success_of_runtime_safe_and_outcome.
 Qed.
 
 Theorem filter_rows_total_regression :
-  forall env formula rows,
+  forall env predicate rows,
     (forall row,
       In row rows ->
-      exists outcome, eval_formula (env_t T env row) formula outcome) ->
-    exists outcome, eval_filter_rows env formula rows outcome.
+      exists outcome,
+        eval_scalar_boolean (env_t T env row) predicate outcome) ->
+    exists outcome, eval_filter_rows env predicate rows outcome.
 Proof.
-intros; now eapply eval_filter_rows_has_outcome_of_formula_total.
+intros; now eapply eval_filter_rows_has_outcome_of_scalar_total.
 Qed.
 
 Theorem filter_query_total_regression :
-  forall env formula input,
+  forall env predicate input,
     (forall input_rows,
       eval_query env input (SqlSuccess input_rows) ->
       forall row,
         In row input_rows ->
-        exists outcome, eval_formula (env_t T env row) formula outcome) ->
+        exists outcome,
+          eval_scalar_boolean (env_t T env row) predicate outcome) ->
     (exists outcome, eval_query env input outcome) ->
-    exists outcome, eval_query env (QExpr_Filter formula input) outcome.
+    exists outcome, eval_query env (QExpr_Filter predicate input) outcome.
 Proof.
-intros; now eapply query_expr_filter_has_outcome_of_formula_total.
+intros; now eapply query_expr_filter_has_outcome_of_scalar_total.
 Qed.
 
 Theorem set_runtime_safe_regression :
@@ -134,10 +142,12 @@ intros; now apply query_expr_cross_join_has_outcome.
 Qed.
 
 Theorem project_runtime_safe_regression :
-  forall env (select_list : @_select_list T) input,
+  forall env (select_list : @query_select_list T relname) input,
     (forall row,
-      @eval_select_list_runtime_error T symbol_runtime_error
-        aggregate_runtime_error (env_t T env row) select_list = None) ->
+      scalar_select_values_runtime_safe_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null boolean_schedule
+        (env_t T env row) select_list) ->
     query_safe env input ->
     query_safe env (QExpr_Project select_list input).
 Proof.
@@ -145,10 +155,12 @@ intros; now apply query_expr_project_runtime_safe.
 Qed.
 
 Theorem project_inhabited_regression :
-  forall env (select_list : @_select_list T) input,
+  forall env (select_list : @query_select_list T relname) input,
     (forall row,
-      @eval_select_list_runtime_error T symbol_runtime_error
-        aggregate_runtime_error (env_t T env row) select_list = None) ->
+      scalar_select_values_has_success_at
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null boolean_schedule
+        (env_t T env row) select_list) ->
     (exists outcome, eval_query env input outcome) ->
     exists outcome, eval_query env (QExpr_Project select_list input) outcome.
 Proof.
@@ -180,8 +192,8 @@ End OperatorOutcomeInterfacesRegression.
 
 (** The generic package must not introduce assumptions. *)
 Print Assumptions query_expr_has_success_of_runtime_safe_and_outcome.
-Print Assumptions eval_filter_rows_has_outcome_of_formula_total.
-Print Assumptions query_expr_filter_has_outcome_of_formula_total.
+Print Assumptions eval_filter_rows_has_outcome_of_scalar_total.
+Print Assumptions query_expr_filter_has_outcome_of_scalar_total.
 Print Assumptions query_expr_set_runtime_safe.
 Print Assumptions query_expr_cross_join_runtime_safe.
 Print Assumptions query_expr_set_has_success.
@@ -191,4 +203,3 @@ Print Assumptions query_expr_cross_join_has_outcome.
 Print Assumptions query_expr_project_runtime_safe.
 Print Assumptions query_expr_project_has_outcome_safe.
 Print Assumptions bag_occurrences_disjoint_of_boolean_separator.
-Print Assumptions tnull_predicate_keep_proper.

@@ -2,11 +2,13 @@
 
 Route here for: exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT.
 
-This focused catalog contains 94 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 102 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `tuple_list_semantic_rel_app`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:65`](../OrderedObservationTransportFacts.v#L65)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the tuple list semantic rel app law for ordered query equivalence, in the exact direction displayed by the declaration.
 
@@ -30,6 +32,8 @@ Lemma tuple_list_semantic_rel_app :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:99`](../OrderedObservationTransportFacts.v#L99)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the prefix scan observation app law for window/rank evaluation, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `prefix_scan_observation_app` direction for window/rank evaluation; do not reverse or strengthen the displayed conclusion.
@@ -52,6 +56,8 @@ Lemma prefix_scan_observation_app :
 ## `prefix_scan_observation_tail_transport`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:137`](../OrderedObservationTransportFacts.v#L137)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for window/rank evaluation.
 
@@ -79,6 +85,8 @@ Theorem prefix_scan_observation_tail_transport :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:183`](../OrderedObservationTransportFacts.v#L183)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the prefix scan observation adjacent peer law for window/rank evaluation, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `prefix_scan_observation_adjacent_peer` direction for window/rank evaluation; do not reverse or strengthen the displayed conclusion.
@@ -105,6 +113,8 @@ Theorem prefix_scan_observation_adjacent_peer :
 ## `prefix_scan_observation_adjacent_peer_transport`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:223`](../OrderedObservationTransportFacts.v#L223)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for window/rank evaluation.
 
@@ -135,6 +145,8 @@ Theorem prefix_scan_observation_adjacent_peer_transport :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:247`](../OrderedObservationTransportFacts.v#L247)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports the post-filter semantic row observation of a cumulative prefix scan across every caller-certified adjacent peer permutation.
 
 Applicability: Use only after proving the adjacent-peer contract for every allowed swap: the two affected post-filter observations and every later observed prefix must agree semantically.  The outcome form additionally requires exact error-category equivalence and does not equate hidden window rows.
@@ -162,6 +174,8 @@ Theorem prefix_scan_observation_peer_transport :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:285`](../OrderedObservationTransportFacts.v#L285)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Applies tie-aware prefix-observation transport independently to aligned partition blocks, resetting the cumulative prefix at each boundary.
 
 Applicability: Use only after proving the adjacent-peer contract for every allowed swap: the two affected post-filter observations and every later observed prefix must agree semantically.  The outcome form additionally requires exact error-category equivalence and does not equate hidden window rows.
@@ -188,6 +202,8 @@ Theorem partitioned_prefix_scan_observation_peer_transport :
 ## `prefix_scan_outcome_peer_transport_iff`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:322`](../OrderedObservationTransportFacts.v#L322)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts peer-order prefix-observation transport to exact success/error outcomes only after the two evaluation schedules' error categories are equated explicitly.
 
@@ -217,6 +233,8 @@ Theorem prefix_scan_outcome_peer_transport_iff :
 ## `partitioned_prefix_scan_outcome_peer_transport_iff`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:360`](../OrderedObservationTransportFacts.v#L360)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Lifts aligned partition-block peer transport to exact outcome observations under an explicit equality of the two schedules' runtime-error categories.
 
@@ -249,6 +267,8 @@ Theorem partitioned_prefix_scan_outcome_peer_transport_iff :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:412`](../OrderedObservationTransportFacts.v#L412)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes totality of the indicated ordered query equivalence operation under the shown premises.
 
 Applicability: Use when the goal or a hypothesis matches the `ordered_rows_total_map` direction for ordered query equivalence; do not reverse or strengthen the displayed conclusion.
@@ -273,6 +293,8 @@ Theorem ordered_rows_total_map :
 ## `ordered_rows_total_map_reflect`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:436`](../OrderedObservationTransportFacts.v#L436)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated ordered query equivalence operation under the shown premises.
 
@@ -300,6 +322,8 @@ Lemma ordered_rows_total_map_reflect :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:471`](../OrderedObservationTransportFacts.v#L471)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes totality of the indicated ordered query observation operation under the shown premises.
 
 Applicability: Use when the goal or a hypothesis matches the `order_by_rows_total_map` direction for ordered query observation; do not reverse or strengthen the displayed conclusion.
@@ -325,6 +349,8 @@ Theorem order_by_rows_total_map :
 ## `order_by_rows_total_map_preimage`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:509`](../OrderedObservationTransportFacts.v#L509)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Pulls every legal ordered representative of a total mapped bag back to a source ordering, preserving occurrences even when the map is non-injective.
 
@@ -353,6 +379,8 @@ Theorem order_by_rows_total_map_preimage :
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:544`](../OrderedObservationTransportFacts.v#L544)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the map firstn exact law for ordered slicing, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `map_firstn_exact` direction for ordered slicing; do not reverse or strengthen the displayed conclusion.
@@ -372,6 +400,8 @@ Lemma map_firstn_exact :
 ## `total_map_order_fetch_observation_iff`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:577`](../OrderedObservationTransportFacts.v#L577)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Equates all legal ORDER BY/FETCH observations before and after a total semantic row map whose order-key comparison is preserved and reflected.
 
@@ -399,6 +429,8 @@ Theorem total_map_order_fetch_observation_iff :
 ## `total_map_order_fetch_outcome_observation_iff`
 
 Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:640`](../OrderedObservationTransportFacts.v#L640)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Adds an explicit exact error relation to total-map ORDER BY/FETCH observation transport; it does not infer error safety from the successful mapping law.
 
@@ -430,6 +462,8 @@ Theorem total_map_order_fetch_outcome_observation_iff :
 
 Source: [`theories/FormalSQL/OrderedQueryFacts.v:22`](../OrderedQueryFacts.v#L22)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
@@ -451,6 +485,8 @@ Lemma ordered_rows_equiv_skipn :
 
 Source: [`theories/FormalSQL/OrderedQueryFacts.v:40`](../OrderedQueryFacts.v#L40)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
@@ -470,7 +506,9 @@ Lemma ordered_rows_equiv_firstn :
 
 ## `query_expr_values_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:171`](../OrderedQueryFacts.v#L171)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:179`](../OrderedQueryFacts.v#L179)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query equivalence.
 
@@ -490,7 +528,9 @@ Lemma query_expr_values_has_success :
 
 ## `query_rank_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:524`](../OrderedQueryFacts.v#L524)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:518`](../OrderedQueryFacts.v#L518)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -498,9 +538,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_rank_success_bags_congr_extensional :
@@ -522,7 +562,9 @@ Theorem query_rank_success_bags_congr_extensional :
 
 ## `query_window_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:550`](../OrderedQueryFacts.v#L550)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:544`](../OrderedQueryFacts.v#L544)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -530,9 +572,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_window_success_bags_congr_extensional :
@@ -555,7 +597,9 @@ Theorem query_window_success_bags_congr_extensional :
 
 ## `query_expr_set_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:709`](../OrderedQueryFacts.v#L709)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:703`](../OrderedQueryFacts.v#L703)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for SQL bag/set operations.
 
@@ -577,7 +621,9 @@ Lemma query_expr_set_has_success :
 
 ## `ordered_rows_equiv_filter`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1978`](../OrderedQueryFacts.v#L1978)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1865`](../OrderedQueryFacts.v#L1865)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -603,7 +649,9 @@ Lemma ordered_rows_equiv_filter :
 
 ## `eval_query_expr_distinct_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2092`](../OrderedQueryFacts.v#L2092)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1979`](../OrderedQueryFacts.v#L1979)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered query equivalence.
 
@@ -611,9 +659,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime`, `ordered`
+Cross-index: `scheduled`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_expr_distinct_error_iff :
@@ -624,7 +672,9 @@ Lemma eval_query_expr_distinct_error_iff :
 
 ## `query_expr_distinct_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2105`](../OrderedQueryFacts.v#L2105)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1992`](../OrderedQueryFacts.v#L1992)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for ordered query equivalence.
 
@@ -645,7 +695,9 @@ Lemma query_expr_distinct_runtime_safe :
 
 ## `query_expr_distinct_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2116`](../OrderedQueryFacts.v#L2116)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2003`](../OrderedQueryFacts.v#L2003)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query equivalence.
 
@@ -666,7 +718,9 @@ Lemma query_expr_distinct_has_success :
 
 ## `query_expr_distinct_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2130`](../OrderedQueryFacts.v#L2130)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2017`](../OrderedQueryFacts.v#L2017)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query expr distinct has outcome law for ordered query equivalence, in the exact direction displayed by the declaration.
 
@@ -674,9 +728,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for ordered 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_expr_distinct_has_outcome :
@@ -687,7 +741,9 @@ Lemma query_expr_distinct_has_outcome :
 
 ## `query_expr_distinct_global_typed_inert_reset`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2148`](../OrderedQueryFacts.v#L2148)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2035`](../OrderedQueryFacts.v#L2035)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_inert_reset` for the public result.
 
 Purpose/direction: States the query expr distinct global typed inert reset law for ordered query equivalence, in the exact direction displayed by the declaration.
 
@@ -695,9 +751,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
 
-Cross-index: `bag`, `ordered`, `schema`
+Cross-index: `scheduled`, `bag`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `schema conformance`, `typing`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `schema conformance`, `typing`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_expr_distinct_global_typed_inert_reset :
@@ -705,14 +761,16 @@ Theorem query_expr_distinct_global_typed_inert_reset :
     query_expr_order_behavior input = BagReset ->
     (forall env bag,
       query_success_bags basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null
-        env input bag ->
+        boolean_schedule env input bag ->
       bag_eq T (query_distinct_bag bag) bag) ->
     query_global_typed_outcome_equiv (QExpr_Distinct input) input.
 ```
 
 ## `eval_query_expr_rank_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2184`](../OrderedQueryFacts.v#L2184)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2071`](../OrderedQueryFacts.v#L2071)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for window/rank evaluation.
 
@@ -720,9 +778,9 @@ Applicability: Use in either direction to invert or construct a goal about windo
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
 
-Cross-index: `runtime`, `ordered`
+Cross-index: `scheduled`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_expr_rank_error_iff :
@@ -742,7 +800,9 @@ Lemma eval_query_expr_rank_error_iff :
 
 ## `eval_query_expr_window_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2209`](../OrderedQueryFacts.v#L2209)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2096`](../OrderedQueryFacts.v#L2096)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for window/rank evaluation.
 
@@ -750,9 +810,9 @@ Applicability: Use in either direction to invert or construct a goal about windo
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
 
-Cross-index: `runtime`, `ordered`
+Cross-index: `scheduled`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_expr_window_error_iff :
@@ -772,7 +832,9 @@ Lemma eval_query_expr_window_error_iff :
 
 ## `query_expr_order_by_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2238`](../OrderedQueryFacts.v#L2238)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2125`](../OrderedQueryFacts.v#L2125)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for ordered query observation.
 
@@ -793,7 +855,9 @@ Lemma query_expr_order_by_runtime_safe :
 
 ## `query_expr_order_by_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2251`](../OrderedQueryFacts.v#L2251)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2138`](../OrderedQueryFacts.v#L2138)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -814,7 +878,9 @@ Lemma query_expr_order_by_has_success :
 
 ## `query_expr_order_by_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2260`](../OrderedQueryFacts.v#L2260)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2147`](../OrderedQueryFacts.v#L2147)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query expr order by has outcome law for ordered query observation, in the exact direction displayed by the declaration.
 
@@ -822,9 +888,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for ordered 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_expr_order_by_has_outcome :
@@ -835,7 +901,9 @@ Lemma query_expr_order_by_has_outcome :
 
 ## `query_expr_offset_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2273`](../OrderedQueryFacts.v#L2273)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2160`](../OrderedQueryFacts.v#L2160)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for ordered slicing.
 
@@ -856,7 +924,9 @@ Lemma query_expr_offset_runtime_safe :
 
 ## `query_expr_offset_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2286`](../OrderedQueryFacts.v#L2286)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2173`](../OrderedQueryFacts.v#L2173)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered slicing.
 
@@ -877,7 +947,9 @@ Lemma query_expr_offset_has_success :
 
 ## `query_expr_offset_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2296`](../OrderedQueryFacts.v#L2296)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2183`](../OrderedQueryFacts.v#L2183)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query expr offset has outcome law for ordered slicing, in the exact direction displayed by the declaration.
 
@@ -885,9 +957,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for ordered 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_expr_offset_has_outcome :
@@ -898,7 +970,9 @@ Lemma query_expr_offset_has_outcome :
 
 ## `query_expr_fetch_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2309`](../OrderedQueryFacts.v#L2309)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2196`](../OrderedQueryFacts.v#L2196)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for ordered slicing.
 
@@ -919,7 +993,9 @@ Lemma query_expr_fetch_runtime_safe :
 
 ## `query_expr_fetch_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2322`](../OrderedQueryFacts.v#L2322)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2209`](../OrderedQueryFacts.v#L2209)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered slicing.
 
@@ -940,7 +1016,9 @@ Lemma query_expr_fetch_has_success :
 
 ## `query_expr_fetch_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2332`](../OrderedQueryFacts.v#L2332)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2219`](../OrderedQueryFacts.v#L2219)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query expr fetch has outcome law for ordered slicing, in the exact direction displayed by the declaration.
 
@@ -948,9 +1026,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for ordered 
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_expr_fetch_has_outcome :
@@ -961,7 +1039,9 @@ Lemma query_expr_fetch_has_outcome :
 
 ## `eval_query_expr_offset_zero_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2348`](../OrderedQueryFacts.v#L2348)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2235`](../OrderedQueryFacts.v#L2235)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -969,9 +1049,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`
 
 ```rocq
 Lemma eval_query_expr_offset_zero_iff :
@@ -982,7 +1062,9 @@ Lemma eval_query_expr_offset_zero_iff :
 
 ## `eval_query_expr_fetch_zero_success_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2363`](../OrderedQueryFacts.v#L2363)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2250`](../OrderedQueryFacts.v#L2250)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -990,9 +1072,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma eval_query_expr_fetch_zero_success_iff :
@@ -1003,7 +1085,9 @@ Lemma eval_query_expr_fetch_zero_success_iff :
 
 ## `query_expr_fetch_zero_annihilator_outcome_equiv_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2380`](../OrderedQueryFacts.v#L2380)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2267`](../OrderedQueryFacts.v#L2267)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_zero_possible_outcome_equiv_safe` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1011,9 +1095,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_expr_fetch_zero_annihilator_outcome_equiv_safe :
@@ -1029,7 +1113,9 @@ Theorem query_expr_fetch_zero_annihilator_outcome_equiv_safe :
 
 ## `eval_query_expr_offset_offset_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2416`](../OrderedQueryFacts.v#L2416)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2303`](../OrderedQueryFacts.v#L2303)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -1037,9 +1123,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`
 
 ```rocq
 Lemma eval_query_expr_offset_offset_iff :
@@ -1050,7 +1136,9 @@ Lemma eval_query_expr_offset_offset_iff :
 
 ## `eval_query_expr_fetch_fetch_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2446`](../OrderedQueryFacts.v#L2446)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2333`](../OrderedQueryFacts.v#L2333)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -1058,9 +1146,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma eval_query_expr_fetch_fetch_iff :
@@ -1071,7 +1159,9 @@ Lemma eval_query_expr_fetch_fetch_iff :
 
 ## `eval_query_expr_offset_fetch_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2476`](../OrderedQueryFacts.v#L2476)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2363`](../OrderedQueryFacts.v#L2363)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -1079,9 +1169,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma eval_query_expr_offset_fetch_comm_iff :
@@ -1094,7 +1184,9 @@ Lemma eval_query_expr_offset_fetch_comm_iff :
 
 ## `eval_query_expr_fetch_offset_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2514`](../OrderedQueryFacts.v#L2514)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2401`](../OrderedQueryFacts.v#L2401)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
 
@@ -1102,9 +1194,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma eval_query_expr_fetch_offset_comm_iff :
@@ -1117,7 +1209,9 @@ Lemma eval_query_expr_fetch_offset_comm_iff :
 
 ## `eval_query_expr_offset_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2552`](../OrderedQueryFacts.v#L2552)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2439`](../OrderedQueryFacts.v#L2439)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates ordered slicing to the exact list length or bag cardinality shown below.
 
@@ -1125,9 +1219,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`, `cardinality`
+Cross-index: `scheduled`, `ordered`, `cardinality`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `cardinality`
 
 ```rocq
 Lemma eval_query_expr_offset_success_length :
@@ -1140,7 +1234,9 @@ Lemma eval_query_expr_offset_success_length :
 
 ## `eval_query_expr_fetch_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2566`](../OrderedQueryFacts.v#L2566)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2453`](../OrderedQueryFacts.v#L2453)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates ordered slicing to the exact list length or bag cardinality shown below.
 
@@ -1148,9 +1244,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`, `cardinality`
+Cross-index: `scheduled`, `ordered`, `cardinality`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `cardinality`
 
 ```rocq
 Lemma eval_query_expr_fetch_success_length :
@@ -1163,7 +1259,9 @@ Lemma eval_query_expr_fetch_success_length :
 
 ## `eval_query_expr_order_by_success_occurrences`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2797`](../OrderedQueryFacts.v#L2797)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2684`](../OrderedQueryFacts.v#L2684)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -1171,9 +1269,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`
 
 ```rocq
 Lemma eval_query_expr_order_by_success_occurrences :
@@ -1188,7 +1286,9 @@ Lemma eval_query_expr_order_by_success_occurrences :
 
 ## `eval_query_expr_order_by_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2820`](../OrderedQueryFacts.v#L2820)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2707`](../OrderedQueryFacts.v#L2707)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Relates ordered query observation to the exact list length or bag cardinality shown below.
 
@@ -1196,9 +1296,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`, `cardinality`
+Cross-index: `scheduled`, `ordered`, `cardinality`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `cardinality`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `cardinality`
 
 ```rocq
 Lemma eval_query_expr_order_by_success_length :
@@ -1211,7 +1311,9 @@ Lemma eval_query_expr_order_by_success_length :
 
 ## `eval_query_expr_order_by_success_ordered`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2841`](../OrderedQueryFacts.v#L2841)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2728`](../OrderedQueryFacts.v#L2728)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -1219,9 +1321,9 @@ Applicability: Use when the goal or a hypothesis matches the `eval_query_expr_or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`
 
 ```rocq
 Lemma eval_query_expr_order_by_success_ordered :
@@ -1232,7 +1334,9 @@ Lemma eval_query_expr_order_by_success_ordered :
 
 ## `query_order_by_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2856`](../OrderedQueryFacts.v#L2856)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2743`](../OrderedQueryFacts.v#L2743)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -1240,9 +1344,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_order_by_success_bags :
@@ -1254,7 +1358,9 @@ Theorem query_order_by_success_bags :
 
 ## `query_order_by_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2884`](../OrderedQueryFacts.v#L2884)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2771`](../OrderedQueryFacts.v#L2771)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query observation.
 
@@ -1281,7 +1387,9 @@ Theorem query_order_by_success_bags_functional :
 
 ## `query_order_by_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2904`](../OrderedQueryFacts.v#L2904)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2791`](../OrderedQueryFacts.v#L2791)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -1289,9 +1397,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_order_by_success_bags_congr :
@@ -1304,7 +1412,9 @@ Theorem query_order_by_success_bags_congr :
 
 ## `query_offset_success_bags_congr_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2983`](../OrderedQueryFacts.v#L2983)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2870`](../OrderedQueryFacts.v#L2870)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1312,9 +1422,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Corollary query_offset_success_bags_congr_closed :
@@ -1329,7 +1439,9 @@ Corollary query_offset_success_bags_congr_closed :
 
 ## `query_fetch_success_bags_congr_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3003`](../OrderedQueryFacts.v#L3003)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2890`](../OrderedQueryFacts.v#L2890)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1337,9 +1449,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `bag`, `ordered`
+Cross-index: `scheduled`, `bag`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Corollary query_fetch_success_bags_congr_closed :
@@ -1354,7 +1466,9 @@ Corollary query_fetch_success_bags_congr_closed :
 
 ## `query_same_rows_as_bag_length_le_one_ordered_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3026`](../OrderedQueryFacts.v#L3026)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2913`](../OrderedQueryFacts.v#L2913)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for ordered query equivalence.
 
@@ -1376,7 +1490,9 @@ Lemma query_same_rows_as_bag_length_le_one_ordered_equiv :
 
 ## `query_expr_order_by_outcome_equiv_of_success_length_le_one`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3062`](../OrderedQueryFacts.v#L3062)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2949`](../OrderedQueryFacts.v#L2949)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_possible_outcome_equiv_of_success_length_le_one` for the public result.
 
 Purpose/direction: Provides the stated reusable upper bound for ordered query observation.
 
@@ -1384,9 +1500,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `cardinality`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `cardinality`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_expr_order_by_outcome_equiv_of_success_length_le_one :
@@ -1400,7 +1516,9 @@ Theorem query_expr_order_by_outcome_equiv_of_success_length_le_one :
 
 ## `eval_query_expr_order_by_order_by_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3108`](../OrderedQueryFacts.v#L3108)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2995`](../OrderedQueryFacts.v#L2995)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for ordered query observation.
 
@@ -1408,9 +1526,9 @@ Applicability: Use in either direction to invert or construct a goal about order
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `ordered`
+Cross-index: `scheduled`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`
 
 ```rocq
 Lemma eval_query_expr_order_by_order_by_iff :
@@ -1422,7 +1540,9 @@ Lemma eval_query_expr_order_by_order_by_iff :
 
 ## `query_expr_offset_zero_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3156`](../OrderedQueryFacts.v#L3156)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3043`](../OrderedQueryFacts.v#L3043)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_zero_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1430,9 +1550,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_offset_zero_global_typed_equiv :
@@ -1442,7 +1562,9 @@ Lemma query_expr_offset_zero_global_typed_equiv :
 
 ## `query_expr_offset_offset_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3164`](../OrderedQueryFacts.v#L3164)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3051`](../OrderedQueryFacts.v#L3051)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_offset_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1450,9 +1572,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_offset_offset_global_typed_equiv :
@@ -1464,7 +1586,9 @@ Lemma query_expr_offset_offset_global_typed_equiv :
 
 ## `query_expr_fetch_fetch_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3174`](../OrderedQueryFacts.v#L3174)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3061`](../OrderedQueryFacts.v#L3061)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_fetch_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1472,9 +1596,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_fetch_fetch_global_typed_equiv :
@@ -1486,7 +1610,9 @@ Lemma query_expr_fetch_fetch_global_typed_equiv :
 
 ## `query_expr_offset_fetch_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3184`](../OrderedQueryFacts.v#L3184)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3071`](../OrderedQueryFacts.v#L3071)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_fetch_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1494,9 +1620,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_offset_fetch_global_typed_equiv :
@@ -1508,7 +1634,9 @@ Lemma query_expr_offset_fetch_global_typed_equiv :
 
 ## `query_expr_fetch_offset_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3194`](../OrderedQueryFacts.v#L3194)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3081`](../OrderedQueryFacts.v#L3081)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_offset_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1516,9 +1644,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_fetch_offset_global_typed_equiv :
@@ -1530,7 +1658,9 @@ Lemma query_expr_fetch_offset_global_typed_equiv :
 
 ## `query_expr_order_by_order_by_global_typed_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3204`](../OrderedQueryFacts.v#L3204)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3091`](../OrderedQueryFacts.v#L3091)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_order_by_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -1538,9 +1668,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `ordered`, `schema`
+Cross-index: `scheduled`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_order_by_order_by_global_typed_equiv :
@@ -1552,7 +1682,9 @@ Lemma query_expr_order_by_order_by_global_typed_equiv :
 
 ## `query_expr_distinct_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3218`](../OrderedQueryFacts.v#L3218)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3105`](../OrderedQueryFacts.v#L3105)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -1560,9 +1692,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_distinct_outcome_equiv_congr :
@@ -1574,7 +1706,9 @@ Lemma query_expr_distinct_outcome_equiv_congr :
 
 ## `query_expr_order_by_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3278`](../OrderedQueryFacts.v#L3278)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3165`](../OrderedQueryFacts.v#L3165)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_possible_outcome_equiv_congr` for the public result.
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -1582,9 +1716,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_order_by_outcome_equiv_congr :
@@ -1596,7 +1730,9 @@ Lemma query_expr_order_by_outcome_equiv_congr :
 
 ## `query_expr_offset_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3338`](../OrderedQueryFacts.v#L3338)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3225`](../OrderedQueryFacts.v#L3225)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_possible_outcome_equiv_congr` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1604,9 +1740,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_offset_outcome_equiv_congr :
@@ -1618,7 +1754,9 @@ Lemma query_expr_offset_outcome_equiv_congr :
 
 ## `query_expr_fetch_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3381`](../OrderedQueryFacts.v#L3381)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3268`](../OrderedQueryFacts.v#L3268)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_possible_outcome_equiv_congr` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -1626,9 +1764,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_fetch_outcome_equiv_congr :
@@ -1640,7 +1778,9 @@ Lemma query_expr_fetch_outcome_equiv_congr :
 
 ## `query_expr_rank_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3424`](../OrderedQueryFacts.v#L3424)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3311`](../OrderedQueryFacts.v#L3311)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_rank_possible_outcome_equiv_congr` for the public result.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -1648,9 +1788,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_rank_outcome_equiv_congr :
@@ -1665,7 +1805,9 @@ Lemma query_expr_rank_outcome_equiv_congr :
 
 ## `query_expr_window_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3553`](../OrderedQueryFacts.v#L3553)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3440`](../OrderedQueryFacts.v#L3440)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_window_possible_outcome_equiv_congr_uniform` for the public result.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -1673,9 +1815,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_window_outcome_equiv_congr :
@@ -1692,136 +1834,11 @@ Lemma query_expr_window_outcome_equiv_congr :
       (QExpr_Window partition_keys order_keys items right).
 ```
 
-## `query_expr_order_by_equiv_congr`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3660`](../OrderedQueryFacts.v#L3660)
-
-Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered query observation.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `ordered`
-
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_order_by_equiv_congr :
-  forall env keys left right,
-    query_equiv env left right ->
-    query_equiv env
-      (QExpr_OrderBy keys left) (QExpr_OrderBy keys right).
-```
-
-## `query_expr_rank_equiv_congr_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3684`](../OrderedQueryFacts.v#L3684)
-
-Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about window/rank evaluation.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `runtime`, `ordered`
-
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_rank_equiv_congr_safe :
-  forall env partition_keys order_keys rank_attribute rank_value left right,
-    query_equiv env left right ->
-    query_safe env
-      (QExpr_Rank
-        partition_keys order_keys rank_attribute rank_value left) ->
-    query_safe env
-      (QExpr_Rank
-        partition_keys order_keys rank_attribute rank_value right) ->
-    query_has_success env
-      (QExpr_Rank
-        partition_keys order_keys rank_attribute rank_value left) ->
-    query_equiv env
-      (QExpr_Rank
-        partition_keys order_keys rank_attribute rank_value left)
-      (QExpr_Rank
-        partition_keys order_keys rank_attribute rank_value right).
-```
-
-## `query_expr_window_equiv_congr_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3716`](../OrderedQueryFacts.v#L3716)
-
-Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about window/rank evaluation.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `runtime`, `ordered`
-
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_window_equiv_congr_safe :
-  forall env partition_keys order_keys items left right,
-    query_equiv env left right ->
-    query_safe env (QExpr_Window partition_keys order_keys items left) ->
-    query_safe env (QExpr_Window partition_keys order_keys items right) ->
-    query_has_success env
-      (QExpr_Window partition_keys order_keys items left) ->
-    query_equiv env
-      (QExpr_Window partition_keys order_keys items left)
-      (QExpr_Window partition_keys order_keys items right).
-```
-
-## `query_expr_offset_equiv_congr`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3744`](../OrderedQueryFacts.v#L3744)
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `ordered`
-
-Search aliases: `ordered query semantics`, `OFFSET`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_offset_equiv_congr :
-  forall env offset left right,
-    query_equiv env left right ->
-    query_equiv env
-      (QExpr_Offset offset left) (QExpr_Offset offset right).
-```
-
-## `query_expr_fetch_equiv_congr`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3785`](../OrderedQueryFacts.v#L3785)
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `ordered`
-
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_fetch_equiv_congr :
-  forall env count left right,
-    query_equiv env left right ->
-    query_equiv env
-      (QExpr_Fetch count left) (QExpr_Fetch count right).
-```
-
 ## `ordered_rows_equiv_of_Forall2`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3962`](../OrderedQueryFacts.v#L3962)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3680`](../OrderedQueryFacts.v#L3680)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -1843,71 +1860,11 @@ Lemma ordered_rows_equiv_of_Forall2 :
     ordered_rows_equiv T left right.
 ```
 
-## `ordered_rows_equiv_map_projection`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3979`](../OrderedQueryFacts.v#L3979)
-
-Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered query equivalence.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
-
-Cross-index: `projection`, `ordered`
-
-Search aliases: `ordered query semantics`, `projection`, `SELECT list`, `equivalence`, `congruence`
-
-```rocq
-Lemma ordered_rows_equiv_map_projection :
-  forall env select_list left right,
-    ordered_rows_equiv T left right ->
-    ordered_rows_equiv T
-      (map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        left)
-      (map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T select_list))
-        right).
-```
-
-## `ordered_rows_equiv_map_two_projections`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4021`](../OrderedQueryFacts.v#L4021)
-
-Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered query equivalence.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
-
-Cross-index: `ordered`
-
-Search aliases: `ordered query semantics`, `equivalence`, `congruence`
-
-```rocq
-Lemma ordered_rows_equiv_map_two_projections :
-  forall env left_select right_select rows,
-    (forall row,
-      In row rows ->
-      Oeset.compare (OTuple T)
-        (projection T (env_t T env row) (@Select_List T left_select))
-        (projection T (env_t T env row) (@Select_List T right_select)) = Eq) ->
-    ordered_rows_equiv T
-      (map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T left_select))
-        rows)
-      (map
-        (fun row =>
-          projection T (env_t T env row) (@Select_List T right_select))
-        rows).
-```
-
 ## `query_distinct_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5488`](../OrderedQueryFacts.v#L5488)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4383`](../OrderedQueryFacts.v#L4383)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for ordered query equivalence.
 
@@ -1934,7 +1891,9 @@ Theorem query_distinct_success_bags_functional :
 
 ## `query_rank_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5522`](../OrderedQueryFacts.v#L5522)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4417`](../OrderedQueryFacts.v#L4417)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for window/rank evaluation.
 
@@ -1963,9 +1922,260 @@ Theorem query_rank_success_bags_functional :
       bag_eq T first second.
 ```
 
+## `eval_query_expr_distinct_possible_error_iff`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4579`](../OrderedQueryFacts.v#L4579)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Gives necessary and sufficient conditions for ordered query equivalence.
+
+Applicability: Use in either direction to invert or construct a goal about ordered query equivalence.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_expr_distinct_possible_error_iff :
+  forall env input error,
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env (QExpr_Distinct input) (SqlError error) <->
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env input (SqlError error).
+```
+
+## `eval_query_expr_order_by_possible_error_iff`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4597`](../OrderedQueryFacts.v#L4597)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Gives necessary and sufficient conditions for ordered query observation.
+
+Applicability: Use in either direction to invert or construct a goal about ordered query observation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_expr_order_by_possible_error_iff :
+  forall env keys input error,
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env (QExpr_OrderBy keys input) (SqlError error) <->
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env input (SqlError error).
+```
+
+## `eval_query_expr_offset_possible_error_iff`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4615`](../OrderedQueryFacts.v#L4615)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
+
+Applicability: Use in either direction to invert or construct a goal about ordered slicing.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `OFFSET`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_expr_offset_possible_error_iff :
+  forall env count input error,
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env (QExpr_Offset count input) (SqlError error) <->
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env input (SqlError error).
+```
+
+## `eval_query_expr_fetch_possible_error_iff`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4633`](../OrderedQueryFacts.v#L4633)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Gives necessary and sufficient conditions for ordered slicing.
+
+Applicability: Use in either direction to invert or construct a goal about ordered slicing.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `FETCH`, `LIMIT`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_expr_fetch_possible_error_iff :
+  forall env count input error,
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env (QExpr_Fetch count input) (SqlError error) <->
+    @eval_query_expr_possible_outcome T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env input (SqlError error).
+```
+
+## `query_expr_distinct_possible_outcome_equiv_congr`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4651`](../OrderedQueryFacts.v#L4651)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_distinct_possible_outcome_equiv_congr :
+  forall env left right,
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Distinct left) (QExpr_Distinct right).
+```
+
+## `query_expr_order_by_possible_outcome_equiv_congr`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4727`](../OrderedQueryFacts.v#L4727)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered query observation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_order_by_possible_outcome_equiv_congr :
+  forall env keys left right,
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_OrderBy keys left) (QExpr_OrderBy keys right).
+```
+
+## `query_expr_rank_possible_outcome_equiv_congr`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4798`](../OrderedQueryFacts.v#L4798)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about window/rank evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_rank_possible_outcome_equiv_congr :
+  forall env partition_keys order_keys rank_attribute rank_value left right,
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value left)
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value right).
+```
+
+## `query_expr_offset_possible_outcome_equiv_congr`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4944`](../OrderedQueryFacts.v#L4944)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_offset_possible_outcome_equiv_congr :
+  forall env count left right,
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Offset count left) (QExpr_Offset count right).
+```
+
+## `query_expr_fetch_possible_outcome_equiv_congr`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4996`](../OrderedQueryFacts.v#L4996)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_fetch_possible_outcome_equiv_congr :
+  forall env count left right,
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Fetch count left) (QExpr_Fetch count right).
+```
+
 ## `position_rows_from_values`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5580`](../OrderedQueryFacts.v#L5580)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5066`](../OrderedQueryFacts.v#L5066)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Characterizes zero-based positions and inclusive prefixes of an arbitrary occurrence list, preserving empty inputs and duplicate rows.
 
@@ -1985,7 +2195,9 @@ Theorem position_rows_from_values :
 
 ## `position_rows_from_filter_le_prefix`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5615`](../OrderedQueryFacts.v#L5615)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5101`](../OrderedQueryFacts.v#L5101)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Characterizes zero-based positions and inclusive prefixes of an arbitrary occurrence list, preserving empty inputs and duplicate rows.
 
@@ -2008,7 +2220,9 @@ Theorem position_rows_from_filter_le_prefix :
 
 ## `partition_runs_by_compare_exact_well_formed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5710`](../OrderedQueryFacts.v#L5710)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5196`](../OrderedQueryFacts.v#L5196)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Partitions an occurrence list into exact adjacent comparator-equal runs and proves both concatenation and boundary inequality without using Rocq equality on SQL rows.
 
@@ -2030,7 +2244,9 @@ Theorem partition_runs_by_compare_exact_well_formed :
 
 ## `rows_key_aligned_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5780`](../OrderedQueryFacts.v#L5780)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5266`](../OrderedQueryFacts.v#L5266)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports heterogeneous relational order-key alignment through the displayed positional or total deterministic list consumer.
 
@@ -2053,7 +2269,9 @@ Theorem rows_key_aligned_length :
 
 ## `rows_key_aligned_firstn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5792`](../OrderedQueryFacts.v#L5792)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5278`](../OrderedQueryFacts.v#L5278)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports heterogeneous relational order-key alignment through the displayed positional or total deterministic list consumer.
 
@@ -2077,7 +2295,9 @@ Theorem rows_key_aligned_firstn :
 
 ## `rows_key_aligned_skipn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5811`](../OrderedQueryFacts.v#L5811)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5297`](../OrderedQueryFacts.v#L5297)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports heterogeneous relational order-key alignment through the displayed positional or total deterministic list consumer.
 
@@ -2101,7 +2321,9 @@ Theorem rows_key_aligned_skipn :
 
 ## `rows_key_aligned_total_map_transport`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5862`](../OrderedQueryFacts.v#L5862)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5348`](../OrderedQueryFacts.v#L5348)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports heterogeneous relational order-key alignment through the displayed positional or total deterministic list consumer.
 
@@ -2135,7 +2357,9 @@ Theorem rows_key_aligned_total_map_transport :
 
 ## `query_expr_rank_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1206`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1206)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1354`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1354)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -2143,9 +2367,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_rank_global_typed_congr :
@@ -2158,7 +2382,9 @@ Lemma query_expr_rank_global_typed_congr :
 
 ## `query_expr_window_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1238`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1238)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1386`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1386)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes window/rank evaluation across the declared equivalence.
 
@@ -2166,9 +2392,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about wi
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_window_global_typed_congr :
@@ -2181,7 +2407,9 @@ Lemma query_expr_window_global_typed_congr :
 
 ## `query_expr_distinct_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1277`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1277)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1425`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1425)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered query equivalence across the declared equivalence.
 
@@ -2189,9 +2417,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_distinct_global_typed_congr :
@@ -2203,7 +2431,9 @@ Lemma query_expr_distinct_global_typed_congr :
 
 ## `query_expr_order_by_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1291`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1291)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1439`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1439)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
 
@@ -2211,9 +2441,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_order_by_global_typed_congr :
@@ -2225,7 +2455,9 @@ Lemma query_expr_order_by_global_typed_congr :
 
 ## `query_expr_offset_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1305`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1305)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1453`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1453)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -2233,9 +2465,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_offset_global_typed_congr :
@@ -2247,7 +2479,9 @@ Lemma query_expr_offset_global_typed_congr :
 
 ## `query_expr_fetch_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1319`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1319)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1467`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1467)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
 
@@ -2255,9 +2489,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about or
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
 
-Cross-index: `outcome`, `runtime`, `ordered`, `schema`
+Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `schema`
 
-Search aliases: `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_expr_fetch_global_typed_congr :
@@ -2265,4 +2499,249 @@ Lemma query_expr_fetch_global_typed_congr :
     query_expr_global_typed_outcome_equiv first second ->
     query_expr_global_typed_outcome_equiv
       (QExpr_Fetch count first) (QExpr_Fetch count second).
+```
+
+## `query_window_rows_bag_outcomes`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5385`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5385)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Defines the constructor-local successful-bag and runtime-error relation on one actual ordered child row list.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about ordered query equivalence.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Definition query_window_rows_bag_outcomes
+    (env : Env.env T)
+    (partition_keys order_keys : list (SqlOrder.sort_key T))
+    (items : list (query_window_item T))
+    (rows : list unary_sem_tuple) : sql_outcome unary_sem_bagT -> Prop :=
+  fun outcome =>
+    match outcome with
+    | SqlSuccess output_bag =>
+        @query_window_bag_relation T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          partition_keys order_keys items (rows_bag T rows) output_bag
+    | SqlError error =>
+        exists ordered_rows,
+          @order_by_rows T value_is_null (partition_keys ++ order_keys)
+            (query_rank_bag_rows (rows_bag T rows)) ordered_rows /\
+          @query_window_rows_outcome T symbol_runtime_error
+            aggregate_runtime_error value_is_null env partition_keys items
+            None 0 nil ordered_rows = Some (SqlError error)
+    end.
+```
+
+## `eval_unary_window_error_iff`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5459`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5459)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Gives necessary and sufficient conditions for window/rank evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about window/rank evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma eval_unary_window_error_iff :
+  forall schedule env partition_keys order_keys items input error,
+    eval_unary_sem_query schedule env
+      (QExpr_Window partition_keys order_keys items input) (SqlError error) <->
+    eval_unary_sem_query schedule env input (SqlError error) \/
+    exists input_rows ordered_rows,
+      eval_unary_sem_query schedule env input (SqlSuccess input_rows) /\
+      @order_by_rows T value_is_null (partition_keys ++ order_keys)
+        (query_rank_bag_rows (rows_bag T input_rows)) ordered_rows /\
+      @query_window_rows_outcome T symbol_runtime_error
+        aggregate_runtime_error value_is_null env partition_keys items
+        None 0 nil ordered_rows = Some (SqlError error).
+```
+
+## `query_window_scheduled_bag_outcomes_characterization`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5683`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5683)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Characterizes one exact scheduled unary parent bag/error relation through its actual child observations and constructor-local relation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about window/rank evaluation.
+
+Important premises: No semantic premise is hidden: this is the exact fixed-schedule characterization of the displayed constructor-local relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_window_scheduled_bag_outcomes_characterization :
+  forall schedule env partition_keys order_keys items input,
+    rel_equiv
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Window partition_keys order_keys items input))
+      (@query_actual_rows_bag_outcome_bind T
+        (eval_reset_query schedule env input)
+        (@query_window_rows_bag_outcomes T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          partition_keys order_keys items)).
+```
+
+## `query_window_scheduled_bag_outcomes_congr`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5941`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5941)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports one child bag/error relation under a matched schedule pair using the exact reachable-list local contract.
+
+Applicability: Use to orient, transport, or compose a semantic relation about window/rank evaluation.
+
+Important premises: Supply complete child bag/error equivalence under the matched schedule pair and the exact reachable-list `scheduled_local_rows_to_bag_contract`.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Theorem query_window_scheduled_bag_outcomes_congr :
+  forall left_schedule right_schedule env
+      left_partition left_order left_items
+      right_partition right_order right_items left right,
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right) ->
+    scheduled_local_rows_to_bag_contract
+      (eval_congr_query left_schedule env left)
+      (eval_congr_query right_schedule env right)
+      (@query_window_rows_bag_outcomes T symbol_runtime_error
+        aggregate_runtime_error value_is_null env
+        left_partition left_order left_items)
+      (@query_window_rows_bag_outcomes T symbol_runtime_error
+        aggregate_runtime_error value_is_null env
+        right_partition right_order right_items) ->
+    outcome_relation_equiv (@bag_eq T)
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env
+        (QExpr_Window left_partition left_order left_items left))
+      (@query_scheduled_bag_outcomes T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env
+        (QExpr_Window right_partition right_order right_items right)).
+```
+
+## `query_expr_window_possible_bag_schedule_transport`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6381`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6381)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns a compositional possible-bag schedule transport.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about window/rank evaluation.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_expr_window_possible_bag_schedule_transport :
+  forall env
+      left_partition left_order left_items
+      right_partition right_order right_items left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    map (@qwi_attribute T) left_items = map (@qwi_attribute T) right_items ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_window_rows_bag_outcomes T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          left_partition left_order left_items)
+        (@query_window_rows_bag_outcomes T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          right_partition right_order right_items)) ->
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Window left_partition left_order left_items left)
+      (QExpr_Window right_partition right_order right_items right).
+```
+
+## `query_expr_window_possible_bag_outcome_equiv`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6425`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6425)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Lifts matched child schedule transport through the named unary SQL constructor's exact local row relation and returns possible-bag/outcome equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about window/rank evaluation.
+
+Important premises: Supply bidirectional child schedule transport, exact constructor output equality where displayed, and `scheduled_local_rows_to_bag_contract` for every matched schedule pair. The local contract retains actual row order, multiplicity, Bool3/aggregate behavior, and runtime errors.
+
+Cross-index: `possible`, `outcome`, `runtime`, `bag`, `ordered`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `ordered query semantics`, `window`, `PARTITION BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+
+```rocq
+Corollary query_expr_window_possible_bag_outcome_equiv :
+  forall env
+      left_partition left_order left_items
+      right_partition right_order right_items left right,
+    @query_expr_possible_bag_schedule_transport T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right ->
+    map (@qwi_attribute T) left_items = map (@qwi_attribute T) right_items ->
+    (forall left_schedule right_schedule,
+      outcome_relation_equiv (@bag_eq T)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left)
+        (@query_scheduled_bag_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right) ->
+      scheduled_local_rows_to_bag_contract
+        (eval_adapter_unary_query left_schedule env left)
+        (eval_adapter_unary_query right_schedule env right)
+        (@query_window_rows_bag_outcomes T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          left_partition left_order left_items)
+        (@query_window_rows_bag_outcomes T symbol_runtime_error
+          aggregate_runtime_error value_is_null env
+          right_partition right_order right_items)) ->
+    @query_expr_possible_bag_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env
+      (QExpr_Window left_partition left_order left_items left)
+      (QExpr_Window right_partition right_order right_items right).
 ```

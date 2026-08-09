@@ -1,13 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::*;
 use crate::core::VerificationMode;
 use crate::core::syntax::{
-    FormalQueryDefinitionGraph, FormalQueryShapeDefinition, FormalQueryShapeKind,
-    FormalQueryStatementSymbols, FormalRowMapAdapter, FormalScalarExpr, FormalScalarQuantifier,
-    FormalScalarResultKind, FormalScalarSelectItem, formula_expr_requires_numeric_exp_model,
-    query_expr_output_signature, scalar_expr_requires_numeric_exp_model,
+    FormalQueryBinding, FormalQueryDefinitionGraph, FormalQueryShapeDefinition,
+    FormalQueryShapeKind, FormalQueryStatementSymbols, FormalRowMapAdapter, FormalScalarExpr,
+    FormalScalarQuantifier, FormalScalarResultKind, FormalScalarSelectItem,
+    formal_query_expr_contains_analysis_error, query_expr_output_signature,
+    scalar_expr_contains_subquery, scalar_expr_requires_numeric_exp_model,
 };
+
+const SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE: usize = 32;
+const SCALAR_SELECT_CERTIFICATE_CHUNK_THRESHOLD: usize = 64;
 
 // This registry is the Rust authority for every module imported directly by a
 // generated proof. The ranks preserve the independently observable per-root
@@ -64,15 +68,17 @@ macro_rules! logos_trusted_rocq_import_registry {
                 (Logos, "FormalSQL.OrderedQueryFacts", Some(19), Some(19), Some(19)),
                 (Logos, "FormalSQL.OrderedObservationTransportFacts", Some(20), Some(20), Some(20)),
                 (Logos, "FormalSQL.RenameTransportFacts", Some(21), Some(21), Some(21)),
-                (Logos, "FormalSQL.ProofAgentFacade", Some(22), Some(22), Some(22)),
-                (Logos, "FormalSQL.SubqueryFacts", Some(23), Some(23), Some(23)),
-                (Logos, "FormalSQL.MembershipCompositionFacts", Some(24), Some(24), Some(24)),
-                (Logos, "FormalSQL.WitnessFacts", Some(25), Some(25), Some(25)),
-                (Logos, "FormalSQL.CountermodelFacts", Some(26), Some(26), Some(26)),
-                (Logos, "FormalSQL.AggregateOutcomeBridgeFacts", Some(27), Some(27), Some(27)),
-                (Logos, "FormalSQL.CorrelatedMembershipFacts", Some(28), Some(28), Some(28)),
-                (Logos, "FormalSQL.MembershipJoinCompositionFacts", Some(29), Some(29), Some(29)),
-                (Logos, "FormalSQL.FilterFkEliminationFacts", Some(30), Some(30), Some(30)),
+                (Logos, "FormalSQL.PossibleOutcomeFacts", Some(22), Some(22), Some(22)),
+                (Logos, "FormalSQL.ProofAgentFacade", Some(23), Some(23), Some(23)),
+                (Logos, "FormalSQL.SubqueryFacts", Some(24), Some(24), Some(24)),
+                (Logos, "FormalSQL.MembershipCompositionFacts", Some(25), Some(25), Some(25)),
+                (Logos, "FormalSQL.WitnessFacts", Some(26), Some(26), Some(26)),
+                (Logos, "FormalSQL.CountermodelFacts", Some(27), Some(27), Some(27)),
+                (Logos, "FormalSQL.AggregateOutcomeBridgeFacts", Some(28), Some(28), Some(28)),
+                (Logos, "FormalSQL.CorrelatedMembershipFacts", Some(29), Some(29), Some(29)),
+                (Logos, "FormalSQL.MembershipJoinCompositionFacts", Some(30), Some(30), Some(30)),
+                (Logos, "FormalSQL.FilterFkEliminationFacts", Some(31), Some(31), Some(31)),
+                (Logos, "FormalSQL.QueryBindingSemantics", Some(32), Some(32), Some(32)),
                 (LogosGenerated, "Schema", Some(0), None, None),
                 (LogosGenerated, "Queries", Some(1), None, None),
                 (LogosGenerated, "Witness", Some(2), None, None),
@@ -353,7 +359,8 @@ Ltac solve_generated_query_metadata :=
     | H : exists _, _ |- _ => destruct H
     | H : ?left = ?right |- _ => first [subst left | subst right]
     end;
-    solve [contradiction | reflexivity | congruence | tauto]
+    solve [contradiction | reflexivity | congruence | tauto |
+           eexists; reflexivity]
   | cbn;
     intros;
     repeat match goal with
@@ -363,14 +370,16 @@ Ltac solve_generated_query_metadata :=
     | H : exists _, _ |- _ => destruct H
     | H : ?left = ?right |- _ => first [subst left | subst right]
     end;
-    solve [contradiction | reflexivity | congruence | tauto]
+    solve [contradiction | reflexivity | congruence | tauto |
+           eexists; reflexivity]
   ].
 
 (* This tactic is used only for one closed scalar-signature equality at a
-   time.  Keep reduction local to the TNull type catalog: native scalar
+   time.  Keep reduction local to the TNull type catalog: typed scalar
    certificates below traverse query and expression syntax compositionally. *)
 Ltac solve_generated_scalar_type :=
-  cbn [TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+  unfold TNullLeafHasType, TNullCallHasType, TNullPredicateHasTypes;
+  cbn [scalar_expr_type
        TNullAggTermType TNullAggTermTypeFuel TNullAggTermTypesFuel
        TNullFunTermType TNullFunTermTypeFuel TNullFunTermTypesFuel
        TNullScalarOperatorOutputType TNullRequireArgumentTypes
@@ -380,7 +389,39 @@ Ltac solve_generated_scalar_type :=
        TNullAggregateFunctionArgumentTypeValid
        TNullAggregateArgumentTypeValid TNullAggregateOutputType
        TNullAggregateFunctionOutputType];
-  reflexivity.
+  repeat split; reflexivity.
+
+(* Query-free scalar trees are closed syntax. This bounded structural tactic
+   proves their one canonical phase-and-type judgment without serializing a
+   whitespace-heavy proof tree into every generated query certificate. *)
+Ltac solve_generated_query_free_scalar_admissibility :=
+  cbn [scalar_expr_admissible prop_forall];
+  repeat split;
+  first [match goal with
+         | |- forall truth, _ => intros []; reflexivity
+         end |
+         left; reflexivity | right; reflexivity |
+         solve_generated_scalar_type | solve_generated_query_metadata].
+
+Ltac solve_generated_query_free_scalar_list_admissibility :=
+  cbn [prop_forall fst snd];
+  lazymatch goal with
+  | |- True => constructor
+  | |- _ /\\ _ => split;
+      [ solve_generated_query_free_scalar_admissibility
+      | solve_generated_query_free_scalar_list_admissibility ]
+  end.
+
+Ltac solve_generated_query_free_select_list_admissibility :=
+  cbn [prop_forall fst snd firstn app];
+  lazymatch goal with
+  | |- True => constructor
+  | |- (_ /\\ _) /\\ _ => split;
+      [ split;
+        [ solve_generated_query_free_scalar_admissibility
+        | solve_generated_query_metadata ]
+      | solve_generated_query_free_select_list_admissibility ]
+  end.
 
 {}
 
@@ -417,12 +458,8 @@ Ltac solve_generated_scalar_type :=
         schema_version: 2,
         notation: "Constructor{compact-fields}(child,...); @identifier is an emitted Rocq definition reference; #role{compact-fields} is an intentionally opaque inline scalar/list argument"
             .to_owned(),
-        opaque_helper_symbols: (0..readable.select_lists.len())
-            .map(|index| format!("select_list_{index}"))
-            .chain(
-                (0..readable.scalar_select_lists.len())
-                    .map(|index| format!("scalar_select_list_{index}")),
-            )
+        opaque_helper_symbols: (0..readable.scalar_select_lists.len())
+            .map(|index| format!("scalar_select_list_{index}"))
             .collect(),
         definitions: shape_definitions,
         source_statements: source_side.statement_symbols,
@@ -434,6 +471,758 @@ Ltac solve_generated_scalar_type :=
     })
 }
 
+pub(super) type BoundProgramPart<'a> = (
+    &'a FormalQueryExpr,
+    &'a [FormalAttribute],
+    &'a [FormalQueryBinding],
+);
+
+pub(crate) fn emit_rocq_bound_query_program_module_with_signatures(
+    source: &[BoundProgramPart<'_>],
+    target: &[BoundProgramPart<'_>],
+) -> Option<FormalQueryModule> {
+    validate_bound_query_program_for_emission(source, target).ok()?;
+
+    let source_queries = bound_program_queries(source);
+    let target_queries = bound_program_queries(target);
+    let readable = RocqQueryDefinitions::from_query_expr_program_pair_with_schema(
+        &source_queries,
+        &target_queries,
+        "generated_binding_schema",
+    );
+    let local_schema_count = source
+        .iter()
+        .chain(target)
+        .map(|(_, _, bindings)| bindings.len())
+        .sum();
+    let local_schemas = emit_rocq_local_query_schemas(source, target);
+    let shared_definitions = readable.emit_definitions();
+    let shared_admissibility_certificates = readable.emit_admissibility_certificates();
+    let source_side = emit_rocq_bound_program_side(&readable, "source", source, local_schema_count);
+    let target_side = emit_rocq_bound_program_side(&readable, "target", target, local_schema_count);
+    let mut statement_definitions = source_side.statement_definitions;
+    statement_definitions.extend(target_side.statement_definitions);
+
+    let rocq_module = format!(
+        "\
+From SQLFS Require Import FTuples FiniteSet FiniteBag FiniteCollection FlatData SqlSyntax GenericInstance Values ValueCore ValueNumeric ValueNumericTypmod ValueString SchemaConstraints SqlOutcome SqlOrder Formula SqlQuerySyntax SqlQuerySemantics SqlQueryWellFormed.
+From Logos Require Import FormalSQL.TNullSyntax FormalSQL.QueryTNullSyntax FormalSQL.QueryBindingSemantics.
+From LogosGenerated Require Import Schema.
+From Stdlib Require Import String ZArith List.
+Import ListNotations.
+Open Scope string_scope.
+Open Scope Z_scope.
+
+Ltac solve_generated_query_metadata :=
+  first [
+    intros;
+    repeat match goal with
+    | H : False |- _ => contradiction
+    | H : _ /\\ _ |- _ => destruct H
+    | H : _ \\/ _ |- _ => destruct H
+    | H : exists _, _ |- _ => destruct H
+    | H : ?left = ?right |- _ => first [subst left | subst right]
+    end;
+    solve [contradiction | reflexivity | congruence | tauto |
+           eexists; reflexivity]
+  | cbn;
+    intros;
+    repeat match goal with
+    | H : False |- _ => contradiction
+    | H : _ /\\ _ |- _ => destruct H
+    | H : _ \\/ _ |- _ => destruct H
+    | H : exists _, _ |- _ => destruct H
+    | H : ?left = ?right |- _ => first [subst left | subst right]
+    end;
+    solve [contradiction | reflexivity | congruence | tauto |
+           eexists; reflexivity]
+  ].
+
+(* Synthetic local relations are host-validated as distinct from every base
+   relation.  Recheck that closed fact against the generated schema rather
+   than asking the general metadata tactic to branch over a long relname
+   disjunction. *)
+Ltac solve_generated_local_schema_freshness :=
+  unfold Schema.generated_schema;
+  cbn;
+  intros H;
+  repeat match type of H with
+  | _ \\/ _ => destruct H
+  end;
+  try contradiction;
+  discriminate.
+
+Ltac solve_generated_scalar_type :=
+  unfold TNullLeafHasType, TNullCallHasType, TNullPredicateHasTypes;
+  cbn [scalar_expr_type
+       TNullAggTermType TNullAggTermTypeFuel TNullAggTermTypesFuel
+       TNullFunTermType TNullFunTermTypeFuel TNullFunTermTypesFuel
+       TNullScalarOperatorOutputType TNullRequireArgumentTypes
+       TNullTypeListEqb TNullTypeEqb TNullPredicateArgumentTypesValid
+       TNullEqualityPairTypes TNullGenericOrderPairTypes TNullIntegralType
+       TNullNumericKindType TNullNumericSourceType TNullCaseResultType
+       TNullAggregateFunctionArgumentTypeValid
+       TNullAggregateArgumentTypeValid TNullAggregateOutputType
+       TNullAggregateFunctionOutputType];
+  repeat split; reflexivity.
+
+Ltac solve_generated_query_free_scalar_admissibility :=
+  cbn [scalar_expr_admissible prop_forall];
+  repeat split;
+  first [match goal with
+         | |- forall truth, _ => intros []; reflexivity
+         end |
+         left; reflexivity | right; reflexivity |
+         solve_generated_scalar_type | solve_generated_query_metadata].
+
+Ltac solve_generated_query_free_scalar_list_admissibility :=
+  cbn [prop_forall fst snd];
+  lazymatch goal with
+  | |- True => constructor
+  | |- _ /\\ _ => split;
+      [ solve_generated_query_free_scalar_admissibility
+      | solve_generated_query_free_scalar_list_admissibility ]
+  end.
+
+Ltac solve_generated_query_free_select_list_admissibility :=
+  cbn [prop_forall fst snd firstn app];
+  lazymatch goal with
+  | |- True => constructor
+  | |- (_ /\\ _) /\\ _ => split;
+      [ split;
+        [ solve_generated_query_free_scalar_admissibility
+        | solve_generated_query_metadata ]
+      | solve_generated_query_free_select_list_admissibility ]
+  end.
+
+{local_schemas}
+
+{shared_definitions}
+
+{shared_admissibility_certificates}
+
+{}
+
+{}
+
+{}
+
+{}
+
+{}
+
+{}
+",
+        statement_definitions.join("\n\n"),
+        source_side.program_definition,
+        target_side.program_definition,
+        source_side.signatures_definition,
+        target_side.signatures_definition,
+        format!(
+            "{}\n\n{}",
+            source_side.program_admissibility_certificates,
+            target_side.program_admissibility_certificates
+        ),
+    );
+
+    let mut shape_definitions = readable.shape_definitions();
+    shape_definitions.extend(source_side.shape_definitions);
+    shape_definitions.extend(target_side.shape_definitions);
+    Some(FormalQueryModule {
+        rocq_module,
+        definition_graph: FormalQueryDefinitionGraph {
+            schema_version: 2,
+            notation: "Constructor{compact-fields}(child,...); @identifier is an emitted Rocq definition reference; #role{compact-fields} is an intentionally opaque inline scalar/list argument"
+                .to_owned(),
+            opaque_helper_symbols: (0..readable.scalar_select_lists.len())
+                .map(|index| format!("scalar_select_list_{index}"))
+                .collect(),
+            definitions: shape_definitions,
+            source_statements: source_side.statement_symbols,
+            target_statements: target_side.statement_symbols,
+        },
+    })
+}
+
+fn bound_program_queries<'a>(program: &'a [BoundProgramPart<'a>]) -> Vec<&'a FormalQueryExpr> {
+    program
+        .iter()
+        .flat_map(|(body, _, bindings)| {
+            bindings
+                .iter()
+                .map(|binding| &binding.query_expr)
+                .chain(std::iter::once(*body))
+        })
+        .collect()
+}
+
+fn validate_bound_query_program_for_emission(
+    source: &[BoundProgramPart<'_>],
+    target: &[BoundProgramPart<'_>],
+) -> Result<(), String> {
+    let mut local_relations = HashMap::new();
+    for (side, statements) in [("source", source), ("target", target)] {
+        for (statement_index, (_, _, bindings)) in statements.iter().enumerate() {
+            for (binding_index, binding) in bindings.iter().enumerate() {
+                if local_relations
+                    .insert(
+                        binding.relation.as_str(),
+                        (
+                            side,
+                            statement_index,
+                            binding_index,
+                            binding.output_signature.as_slice(),
+                        ),
+                    )
+                    .is_some()
+                {
+                    return Err(format!(
+                        "local relation {:?} is not globally fresh",
+                        binding.relation
+                    ));
+                }
+            }
+        }
+    }
+
+    for (side, statements) in [("source", source), ("target", target)] {
+        for (statement_index, (body, output_signature, bindings)) in statements.iter().enumerate() {
+            let mut boolean_sites = HashSet::new();
+            if !bindings.is_empty() && matches!(body, FormalQueryExpr::Error { .. }) {
+                return Err(format!(
+                    "{side}[{statement_index}].body analysis error cannot follow query-local bindings"
+                ));
+            }
+            validate_query_expr_scalar_operators(body)
+                .map_err(|message| format!("{side}[{statement_index}].body: {message}"))?;
+            validate_boolean_sites_into(body, &mut boolean_sites)
+                .map_err(|message| format!("{side}[{statement_index}].body: {message}"))?;
+            validate_local_query_references(body, &local_relations, side, statement_index, None)?;
+            let expected = query_expr_output_signature(body).ok_or_else(|| {
+                format!("{side}[{statement_index}].body has no exact output signature")
+            })?;
+            if expected != *output_signature {
+                return Err(format!(
+                    "{side}[{statement_index}].body output signature does not match its authoritative query expression"
+                ));
+            }
+            let mut binding_ids = HashSet::new();
+            for (binding_index, binding) in bindings.iter().enumerate() {
+                if !binding_ids.insert(binding.id.as_str()) {
+                    return Err(format!(
+                        "{side}[{statement_index}] repeats binding id {:?}",
+                        binding.id
+                    ));
+                }
+                validate_query_expr_scalar_operators(&binding.query_expr).map_err(|message| {
+                    format!("{side}[{statement_index}].bindings[{binding_index}]: {message}")
+                })?;
+                if formal_query_expr_contains_analysis_error(&binding.query_expr) {
+                    return Err(format!(
+                        "{side}[{statement_index}].bindings[{binding_index}] cannot contain an analysis-error relation"
+                    ));
+                }
+                validate_boolean_sites_into(&binding.query_expr, &mut boolean_sites).map_err(
+                    |message| {
+                        format!("{side}[{statement_index}].bindings[{binding_index}]: {message}")
+                    },
+                )?;
+                validate_local_query_references(
+                    &binding.query_expr,
+                    &local_relations,
+                    side,
+                    statement_index,
+                    Some(binding_index),
+                )?;
+                let binding_outputs = query_expr_output_signature(&binding.query_expr)
+                    .ok_or_else(|| {
+                        format!(
+                            "{side}[{statement_index}].bindings[{binding_index}] has no exact output signature"
+                        )
+                    })?;
+                if binding_outputs != binding.output_signature {
+                    return Err(format!(
+                        "{side}[{statement_index}].bindings[{binding_index}] output signature mismatch"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_local_query_references(
+    query: &FormalQueryExpr,
+    local_relations: &HashMap<&str, (&str, usize, usize, &[FormalAttribute])>,
+    side: &str,
+    statement_index: usize,
+    binding_index: Option<usize>,
+) -> Result<(), String> {
+    for (relation, outputs) in query_table_relations(query) {
+        let Some((owner_side, owner_statement, owner_binding, owner_outputs)) =
+            local_relations.get(relation).copied()
+        else {
+            continue;
+        };
+        if owner_side != side || owner_statement != statement_index {
+            return Err(format!(
+                "{side}[{statement_index}] references query-local relation {relation:?} owned by {owner_side}[{owner_statement}]"
+            ));
+        }
+        if outputs != owner_outputs {
+            return Err(format!(
+                "{side}[{statement_index}] references query-local relation {relation:?} with a non-authoritative ordered output signature"
+            ));
+        }
+        if let Some(binding_index) = binding_index
+            && owner_binding >= binding_index
+        {
+            return Err(format!(
+                "{side}[{statement_index}].bindings[{binding_index}] references non-earlier query-local relation {relation:?} at binding index {owner_binding}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn query_table_relations(query: &FormalQueryExpr) -> Vec<(&str, &[FormalAttribute])> {
+    fn scalar<'a>(
+        expression: &'a FormalScalarExpr,
+        relations: &mut Vec<(&'a str, &'a [FormalAttribute])>,
+    ) {
+        match expression {
+            FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => {}
+            FormalScalarExpr::Call { args, .. } | FormalScalarExpr::Predicate { args, .. } => {
+                for argument in args {
+                    scalar(argument, relations);
+                }
+            }
+            FormalScalarExpr::Case {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                scalar(condition, relations);
+                scalar(then_expr, relations);
+                scalar(else_expr, relations);
+            }
+            FormalScalarExpr::BooleanValue { expression }
+            | FormalScalarExpr::ValueBoolean { expression }
+            | FormalScalarExpr::Not { expression } => scalar(expression, relations),
+            FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+                for operand in operands {
+                    scalar(operand, relations);
+                }
+            }
+            FormalScalarExpr::QuantifiedComparison { args, query, .. }
+            | FormalScalarExpr::In { args, query } => {
+                for argument in args {
+                    scalar(argument, relations);
+                }
+                query_expr(query, relations);
+            }
+            FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
+                query_expr(query, relations);
+            }
+        }
+    }
+
+    fn query_expr<'a>(
+        query: &'a FormalQueryExpr,
+        relations: &mut Vec<(&'a str, &'a [FormalAttribute])>,
+    ) {
+        match query {
+            FormalQueryExpr::Table { relation, columns } => {
+                relations.push((relation, columns.as_slice()));
+            }
+            FormalQueryExpr::Error { .. }
+            | FormalQueryExpr::Empty { .. }
+            | FormalQueryExpr::EmptyTuple => {}
+            FormalQueryExpr::Set { left, right, .. }
+            | FormalQueryExpr::CrossJoin { left, right } => {
+                query_expr(left, relations);
+                query_expr(right, relations);
+            }
+            FormalQueryExpr::Join {
+                predicate,
+                matched_select,
+                left_select,
+                right_select,
+                left,
+                right,
+                ..
+            } => {
+                scalar(predicate, relations);
+                for item in matched_select.iter().chain(left_select).chain(right_select) {
+                    scalar(&item.expr, relations);
+                }
+                query_expr(left, relations);
+                query_expr(right, relations);
+            }
+            FormalQueryExpr::Projection { select, input } => {
+                for item in select {
+                    scalar(&item.expr, relations);
+                }
+                query_expr(input, relations);
+            }
+            FormalQueryExpr::Selection { predicate, input } => {
+                scalar(predicate, relations);
+                query_expr(input, relations);
+            }
+            FormalQueryExpr::Group {
+                select,
+                group_by,
+                having,
+                input,
+            } => {
+                for item in select {
+                    scalar(&item.expr, relations);
+                }
+                for expression in group_by {
+                    scalar(expression, relations);
+                }
+                scalar(having, relations);
+                query_expr(input, relations);
+            }
+            FormalQueryExpr::GroupingSets {
+                grouping_sets,
+                input,
+            } => {
+                for grouping_set in grouping_sets {
+                    for item in &grouping_set.select {
+                        scalar(&item.expr, relations);
+                    }
+                    for expression in &grouping_set.group_by {
+                        scalar(expression, relations);
+                    }
+                }
+                query_expr(input, relations);
+            }
+            FormalQueryExpr::RowMap { input, .. }
+            | FormalQueryExpr::Rank { input, .. }
+            | FormalQueryExpr::Window { input, .. }
+            | FormalQueryExpr::Distinct { input }
+            | FormalQueryExpr::OrderBy { input, .. }
+            | FormalQueryExpr::Offset { input, .. }
+            | FormalQueryExpr::Fetch { input, .. } => query_expr(input, relations),
+        }
+    }
+
+    let mut relations = Vec::new();
+    query_expr(query, &mut relations);
+    relations
+}
+
+fn emit_rocq_local_query_schemas(
+    source: &[BoundProgramPart<'_>],
+    target: &[BoundProgramPart<'_>],
+) -> String {
+    let schemas = source
+        .iter()
+        .chain(target)
+        .flat_map(|(_, _, bindings)| bindings.iter())
+        .map(|binding| {
+            format!(
+                "MakeLocalQuerySchema (Rel {}) ({})",
+                rocq_string_literal(&binding.relation),
+                emit_rocq_query_attribute_list(&binding.output_signature)
+            )
+        })
+        .collect::<Vec<_>>();
+    format!(
+        "Definition generated_local_query_schemas : list LocalQuerySchema :=\n{}.\n\nDefinition generated_binding_schema : db_state :=\n  declare_local_query_schemas Schema.generated_schema generated_local_query_schemas.",
+        indent_rocq_expr(&emit_rocq_list_expr(&schemas), 2)
+    )
+}
+
+struct EmittedRocqBoundProgramSide {
+    statement_definitions: Vec<String>,
+    program_definition: String,
+    signatures_definition: String,
+    program_admissibility_certificates: String,
+    shape_definitions: Vec<FormalQueryShapeDefinition>,
+    statement_symbols: Vec<FormalQueryStatementSymbols>,
+}
+
+struct BoundBindingCertificate {
+    binding_name: String,
+    query_name: String,
+    table_reference_count: usize,
+}
+
+fn emit_rocq_bound_program_side(
+    readable: &RocqQueryDefinitions,
+    side: &str,
+    statements: &[BoundProgramPart<'_>],
+    local_schema_count: usize,
+) -> EmittedRocqBoundProgramSide {
+    let singleton = statements.len() == 1;
+    let mut definitions = Vec::new();
+    let mut shape_definitions = Vec::new();
+    let mut statement_symbols = Vec::new();
+    let mut bound_query_names = Vec::new();
+    let mut signature_names = Vec::new();
+    let mut statement_admissibility_lemmas = Vec::new();
+
+    for (statement_index, (body, output_signature, bindings)) in statements.iter().enumerate() {
+        let suffix = if singleton {
+            String::new()
+        } else {
+            format!("_{statement_index}")
+        };
+        let body_name = format!("{side}_query_expr{suffix}");
+        let signature_name = format!("{side}_output_signature{suffix}");
+        emit_bound_query_expr_definition(
+            readable,
+            &mut definitions,
+            &mut shape_definitions,
+            &body_name,
+            body,
+            output_signature,
+        );
+
+        let mut binding_names = Vec::new();
+        let mut binding_certificates = Vec::new();
+        for (binding_index, binding) in bindings.iter().enumerate() {
+            let query_name = format!("{side}_query_binding_{statement_index}_{binding_index}_expr");
+            emit_bound_query_expr_definition(
+                readable,
+                &mut definitions,
+                &mut shape_definitions,
+                &query_name,
+                &binding.query_expr,
+                &binding.output_signature,
+            );
+            let query_argument = if binding.query_expr.requires_numeric_exp_model() {
+                " generated_numeric_exp_model"
+            } else {
+                ""
+            };
+            let binding_name = format!("{side}_query_binding_{statement_index}_{binding_index}");
+            definitions.push(format!(
+                "Definition {binding_name} (generated_numeric_exp_model : NumericExpModel) : LocalQueryBinding :=\n  MakeLocalQueryBinding\n    (Rel {})\n    ({})\n    ({query_name}{query_argument}).",
+                rocq_string_literal(&binding.relation),
+                emit_rocq_query_attribute_list(&binding.output_signature),
+            ));
+            binding_names.push(format!("{binding_name} generated_numeric_exp_model"));
+            definitions.push(emit_local_query_binding_admissibility_certificate(
+                &binding_name,
+                &query_name,
+                binding.query_expr.requires_numeric_exp_model(),
+            ));
+            binding_certificates.push(BoundBindingCertificate {
+                binding_name,
+                query_name,
+                table_reference_count: query_table_relations(&binding.query_expr).len(),
+            });
+        }
+
+        let body_argument = if body.requires_numeric_exp_model() {
+            " generated_numeric_exp_model"
+        } else {
+            ""
+        };
+        let bound_name = format!("{side}_bound_query{suffix}");
+        definitions.push(format!(
+            "Definition {bound_name} (generated_numeric_exp_model : NumericExpModel) : BoundQuery :=\n  MakeBoundQuery\n    ({})\n    ({body_name}{body_argument}).",
+            emit_rocq_list_expr(&binding_names)
+        ));
+        let admissibility_lemma = format!("{bound_name}_admissible_generated_schema");
+        definitions.push(emit_bound_query_admissibility_certificate(
+            &bound_name,
+            &admissibility_lemma,
+            &body_name,
+            body.requires_numeric_exp_model(),
+            query_table_relations(body).len(),
+            &binding_certificates,
+            local_schema_count,
+        ));
+
+        definitions.push(format!(
+            "Definition {signature_name} : list (Tuple.attribute TNull) :=\n{}.",
+            indent_rocq_expr(&emit_rocq_query_attribute_list(output_signature), 2)
+        ));
+        statement_symbols.push(FormalQueryStatementSymbols {
+            statement_index: statement_index + 1,
+            root_symbol: body_name.clone(),
+            output_signature_symbol: signature_name.clone(),
+            requires_numeric_exp_model: body.requires_numeric_exp_model()
+                || bindings
+                    .iter()
+                    .any(|binding| binding.query_expr.requires_numeric_exp_model()),
+        });
+        bound_query_names.push(format!("{bound_name} generated_numeric_exp_model"));
+        signature_names.push(signature_name);
+        statement_admissibility_lemmas.push(admissibility_lemma);
+    }
+
+    let program_definition = format!(
+        "Definition {side}_bound_query_program (generated_numeric_exp_model : NumericExpModel) : BoundQueryProgram :=\n  [{}].",
+        bound_query_names.join("; ")
+    );
+    let signatures_definition = format!(
+        "Definition {side}_program_output_signatures : list (list (Tuple.attribute TNull)) :=\n  [{}].",
+        signature_names.join("; ")
+    );
+    let generated_steps = statement_admissibility_lemmas
+        .iter()
+        .map(|lemma| format!("apply ({lemma} generated_numeric_exp_model)."))
+        .collect::<Vec<_>>();
+    let program_proof = rocq_conjunction_proof(vec![
+        rocq_nodup_list_proof(
+            statements
+                .iter()
+                .map(|(_, _, bindings)| bindings.len())
+                .sum(),
+        ),
+        rocq_forall_list_proof(&generated_steps),
+    ]);
+    let program_admissibility_certificates = format!(
+        "Lemma {side}_bound_query_program_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  bound_query_program_admissible\n    Schema.generated_schema generated_local_query_schemas\n    ({side}_bound_query_program generated_numeric_exp_model).\nProof.\n  unfold {side}_bound_query_program, bound_query_program_admissible.\n  cbn [bound_query_program_binding_relations local_query_binding_relations\n    bound_query_bindings local_binding_relation].\n{}\nQed.\n\nLemma {side}_bound_query_program_admissible\n    (generated_numeric_exp_model : NumericExpModel) (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  bound_query_program_admissible\n    db generated_local_query_schemas\n    ({side}_bound_query_program generated_numeric_exp_model).\nProof.\n  intro Hschema.\n  eapply bound_query_program_admissible_database_schema_transport.\n  - exact Hschema.\n  - apply {side}_bound_query_program_admissible_generated_schema.\nQed.",
+        indent_rocq_expr(&program_proof, 2)
+    );
+
+    EmittedRocqBoundProgramSide {
+        statement_definitions: definitions,
+        program_definition,
+        signatures_definition,
+        program_admissibility_certificates,
+        shape_definitions,
+        statement_symbols,
+    }
+}
+
+fn emit_bound_query_expr_definition(
+    readable: &RocqQueryDefinitions,
+    definitions: &mut Vec<String>,
+    shape_definitions: &mut Vec<FormalQueryShapeDefinition>,
+    query_name: &str,
+    query: &FormalQueryExpr,
+    output_signature: &[FormalAttribute],
+) {
+    definitions.push(readable.emit_query_expr_definition(query_name, query));
+    definitions.push(format!(
+        "Definition {query_name}_expected_outputs :\n    list (Tuple.attribute TNull) :=\n{}.",
+        indent_rocq_expr(&emit_rocq_query_attribute_list(output_signature), 2)
+    ));
+    definitions.push(readable.emit_query_expr_admissibility_certificate(
+        query_name,
+        query,
+        QueryExprReferencePolicy::uniform(true),
+    ));
+    shape_definitions.push(FormalQueryShapeDefinition {
+        symbol: query_name.to_owned(),
+        kind: FormalQueryShapeKind::QueryExpr,
+        tree: readable.shape_query_expr(query, true),
+    });
+}
+
+fn emit_local_query_binding_admissibility_certificate(
+    binding_name: &str,
+    query_name: &str,
+    query_requires_model: bool,
+) -> String {
+    let query_argument = if query_requires_model {
+        " generated_numeric_exp_model"
+    } else {
+        ""
+    };
+    format!(
+        "Lemma {binding_name}_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  local_query_binding_admissible\n    generated_binding_schema generated_local_query_schemas\n    ({binding_name} generated_numeric_exp_model).\nProof.\n  unfold local_query_binding_admissible, {binding_name},\n    local_query_binding_schema.\n  cbn [local_binding_relation local_binding_outputs local_binding_query].\n  split.\n  - solve_generated_query_metadata.\n  - split.\n    + exact (proj1 ({query_name}_admissible_with_outputs_generated_schema{query_argument})).\n    + split.\n      * reflexivity.\n      * exact (proj2 ({query_name}_admissible_with_outputs_generated_schema{query_argument})).\nQed."
+    )
+}
+
+fn rocq_query_local_references_proof(table_reference_count: usize) -> String {
+    let references = vec![rocq_metadata_proof(); table_reference_count];
+    rocq_forall_list_proof(&references)
+}
+
+fn rocq_binding_dependencies_proof(bindings: &[BoundBindingCertificate]) -> String {
+    if let Some((binding, rest)) = bindings.split_first() {
+        rocq_focused_subproofs(
+            "split.",
+            &[
+                rocq_query_local_references_proof(binding.table_reference_count),
+                rocq_binding_dependencies_proof(rest),
+            ],
+        )
+    } else {
+        "constructor.".to_owned()
+    }
+}
+
+fn emit_bound_query_admissibility_certificate(
+    bound_name: &str,
+    lemma_name: &str,
+    body_name: &str,
+    body_requires_model: bool,
+    body_table_reference_count: usize,
+    bindings: &[BoundBindingCertificate],
+    local_schema_count: usize,
+) -> String {
+    let binding_steps = bindings
+        .iter()
+        .map(|binding| {
+            format!(
+                "apply ({}_admissible_generated_schema generated_numeric_exp_model).",
+                binding.binding_name
+            )
+        })
+        .collect::<Vec<_>>();
+    let body_argument = if body_requires_model {
+        " generated_numeric_exp_model"
+    } else {
+        ""
+    };
+    let binding_names = bindings
+        .iter()
+        .map(|binding| binding.binding_name.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let query_names = bindings
+        .iter()
+        .map(|binding| binding.query_name.as_str())
+        .chain(std::iter::once(body_name))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let local_references_proof = rocq_focused_subproofs(
+        "split.",
+        &[
+            rocq_binding_dependencies_proof(bindings),
+            rocq_query_local_references_proof(body_table_reference_count),
+        ],
+    );
+    let site_proof = "unfold bound_query_boolean_sites.\n\
+        apply boolean_sites_well_formedb_sound.\n\
+        reflexivity."
+        .to_owned();
+    let proof = rocq_conjunction_proof(vec![
+        rocq_nodup_list_proof(local_schema_count),
+        format!(
+            "unfold local_query_schemas_fresh.\n{}",
+            rocq_forall_list_proof(&vec![
+                "solve_generated_local_schema_freshness.".to_owned();
+                local_schema_count
+            ])
+        ),
+        rocq_nodup_list_proof(bindings.len()),
+        rocq_forall_list_proof(&binding_steps),
+        format!(
+            "cbn [bound_query_local_references_well_formed\n  local_query_schema_relations local_query_binding_relations\n  local_query_binding_dependencies_well_formed query_local_references_allowed\n  query_expr_table_references scalar_expr_table_references\n  {binding_names} {query_names}].\n{local_references_proof}"
+        ),
+        rocq_metadata_proof(),
+        site_proof,
+        format!(
+            "exact (proj1 ({body_name}_admissible_with_outputs_generated_schema{body_argument}))."
+        ),
+    ]);
+    format!(
+        "Lemma {lemma_name} (generated_numeric_exp_model : NumericExpModel) :\n  bound_query_admissible\n    Schema.generated_schema generated_local_query_schemas\n    ({bound_name} generated_numeric_exp_model).\nProof.\n  unfold bound_query_admissible, {bound_name}.\n  cbn [bound_query_bindings bound_query_body local_query_binding_relations\n    local_binding_relation {binding_names}].\n{}\nQed.",
+        indent_rocq_expr(&proof, 2)
+    )
+}
+
 fn validate_query_program_for_emission(
     source: &[(&FormalQueryExpr, &[FormalAttribute])],
     target: &[(&FormalQueryExpr, &[FormalAttribute])],
@@ -441,6 +1230,8 @@ fn validate_query_program_for_emission(
     for (side, statements) in [("source", source), ("target", target)] {
         for (index, (query, _)) in statements.iter().enumerate() {
             validate_query_expr_scalar_operators(query)
+                .map_err(|message| format!("{side}[{index}]: {message}"))?;
+            validate_boolean_sites(query)
                 .map_err(|message| format!("{side}[{index}]: {message}"))?;
             let expected = query_expr_output_signature(query).ok_or_else(|| {
                 format!("{side}[{index}]: query has no consistent ordered typed output signature")
@@ -454,6 +1245,327 @@ fn validate_query_program_for_emission(
         }
     }
     Ok(())
+}
+
+/// Boolean-site paths are useful Rust diagnostics but expensive Rocq atoms.
+/// Intern them injectively at the generated-module boundary. Since schedules
+/// observe sites only through equality, this alpha-renaming preserves the
+/// exact possible-outcome semantics while making closed uniqueness checks
+/// operate on short strings.
+fn compact_boolean_site_names(
+    source: &[&FormalQueryExpr],
+    target: &[&FormalQueryExpr],
+) -> HashMap<String, String> {
+    fn record(site: &str, names: &mut HashMap<String, String>) {
+        if !names.contains_key(site) {
+            names.insert(site.to_owned(), format!("b{}", names.len()));
+        }
+    }
+
+    fn scalar(expression: &FormalScalarExpr, names: &mut HashMap<String, String>) {
+        match expression {
+            FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => {}
+            FormalScalarExpr::Call { args, .. } | FormalScalarExpr::Predicate { args, .. } => {
+                for argument in args {
+                    scalar(argument, names);
+                }
+            }
+            FormalScalarExpr::Case {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                scalar(condition, names);
+                scalar(then_expr, names);
+                scalar(else_expr, names);
+            }
+            FormalScalarExpr::BooleanValue { expression }
+            | FormalScalarExpr::ValueBoolean { expression }
+            | FormalScalarExpr::Not { expression } => scalar(expression, names),
+            FormalScalarExpr::And {
+                insertion_sites,
+                operands,
+            }
+            | FormalScalarExpr::Or {
+                insertion_sites,
+                operands,
+            } => {
+                for row in insertion_sites {
+                    for site in row {
+                        record(site, names);
+                    }
+                }
+                for operand in operands {
+                    scalar(operand, names);
+                }
+            }
+            FormalScalarExpr::QuantifiedComparison { args, query, .. }
+            | FormalScalarExpr::In { args, query } => {
+                for argument in args {
+                    scalar(argument, names);
+                }
+                relational(query, names);
+            }
+            FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
+                relational(query, names)
+            }
+        }
+    }
+
+    fn select(items: &[FormalScalarSelectItem], names: &mut HashMap<String, String>) {
+        for item in items {
+            scalar(&item.expr, names);
+        }
+    }
+
+    fn relational(query: &FormalQueryExpr, names: &mut HashMap<String, String>) {
+        match query {
+            FormalQueryExpr::Error { .. }
+            | FormalQueryExpr::Empty { .. }
+            | FormalQueryExpr::EmptyTuple
+            | FormalQueryExpr::Table { .. } => {}
+            FormalQueryExpr::Set { left, right, .. }
+            | FormalQueryExpr::CrossJoin { left, right } => {
+                relational(left, names);
+                relational(right, names);
+            }
+            FormalQueryExpr::Join {
+                predicate,
+                matched_select,
+                left_select,
+                right_select,
+                left,
+                right,
+                ..
+            } => {
+                scalar(predicate, names);
+                select(matched_select, names);
+                select(left_select, names);
+                select(right_select, names);
+                relational(left, names);
+                relational(right, names);
+            }
+            FormalQueryExpr::Projection {
+                select: items,
+                input,
+            } => {
+                select(items, names);
+                relational(input, names);
+            }
+            FormalQueryExpr::Selection { predicate, input } => {
+                scalar(predicate, names);
+                relational(input, names);
+            }
+            FormalQueryExpr::Group {
+                select: items,
+                group_by,
+                having,
+                input,
+            } => {
+                select(items, names);
+                for key in group_by {
+                    scalar(key, names);
+                }
+                scalar(having, names);
+                relational(input, names);
+            }
+            FormalQueryExpr::GroupingSets {
+                grouping_sets,
+                input,
+            } => {
+                for grouping_set in grouping_sets {
+                    select(&grouping_set.select, names);
+                    for key in &grouping_set.group_by {
+                        scalar(key, names);
+                    }
+                }
+                relational(input, names);
+            }
+            FormalQueryExpr::RowMap { input, .. }
+            | FormalQueryExpr::Rank { input, .. }
+            | FormalQueryExpr::Window { input, .. }
+            | FormalQueryExpr::Distinct { input }
+            | FormalQueryExpr::OrderBy { input, .. }
+            | FormalQueryExpr::Offset { input, .. }
+            | FormalQueryExpr::Fetch { input, .. } => relational(input, names),
+        }
+    }
+
+    let mut names = HashMap::new();
+    for query in source.iter().chain(target) {
+        relational(query, &mut names);
+    }
+    names
+}
+
+fn validate_boolean_sites(query: &FormalQueryExpr) -> Result<(), String> {
+    validate_boolean_sites_into(query, &mut HashSet::new())
+}
+
+fn validate_boolean_sites_into<'a>(
+    query: &'a FormalQueryExpr,
+    sites: &mut HashSet<&'a str>,
+) -> Result<(), String> {
+    fn record_site<'a>(sites: &mut HashSet<&'a str>, site: &'a str) -> Result<(), String> {
+        if site.is_empty() {
+            return Err("Boolean evaluation site is empty".to_owned());
+        }
+        if !sites.insert(site) {
+            return Err(format!(
+                "Boolean evaluation site {site:?} is reused by distinct syntax nodes"
+            ));
+        }
+        Ok(())
+    }
+
+    fn scalar<'a>(
+        expression: &'a FormalScalarExpr,
+        sites: &mut HashSet<&'a str>,
+    ) -> Result<(), String> {
+        match expression {
+            FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => Ok(()),
+            FormalScalarExpr::Call { args, .. } | FormalScalarExpr::Predicate { args, .. } => {
+                for arg in args {
+                    scalar(arg, sites)?;
+                }
+                Ok(())
+            }
+            FormalScalarExpr::Case {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                scalar(condition, sites)?;
+                scalar(then_expr, sites)?;
+                scalar(else_expr, sites)
+            }
+            FormalScalarExpr::BooleanValue { expression }
+            | FormalScalarExpr::ValueBoolean { expression }
+            | FormalScalarExpr::Not { expression } => scalar(expression, sites),
+            FormalScalarExpr::And {
+                insertion_sites,
+                operands,
+            }
+            | FormalScalarExpr::Or {
+                insertion_sites,
+                operands,
+            } => {
+                if insertion_sites.len() != operands.len() {
+                    return Err(
+                        "Boolean insertion-site rows are not aligned with operands".to_owned()
+                    );
+                }
+                for (index, row) in insertion_sites.iter().enumerate() {
+                    if row.len() != index {
+                        return Err(format!(
+                            "Boolean insertion-site row {index} has length {}, expected {index}",
+                            row.len()
+                        ));
+                    }
+                    for site in row {
+                        record_site(sites, site)?;
+                    }
+                }
+                for operand in operands {
+                    scalar(operand, sites)?;
+                }
+                Ok(())
+            }
+            FormalScalarExpr::QuantifiedComparison { args, query, .. }
+            | FormalScalarExpr::In { args, query } => {
+                for arg in args {
+                    scalar(arg, sites)?;
+                }
+                query_expr(query, sites)
+            }
+            FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
+                query_expr(query, sites)
+            }
+        }
+    }
+
+    fn query_expr<'a>(
+        query: &'a FormalQueryExpr,
+        sites: &mut HashSet<&'a str>,
+    ) -> Result<(), String> {
+        match query {
+            FormalQueryExpr::Error { .. }
+            | FormalQueryExpr::Empty { .. }
+            | FormalQueryExpr::EmptyTuple
+            | FormalQueryExpr::Table { .. } => Ok(()),
+            FormalQueryExpr::Set { left, right, .. }
+            | FormalQueryExpr::CrossJoin { left, right } => {
+                query_expr(left, sites)?;
+                query_expr(right, sites)
+            }
+            FormalQueryExpr::Join {
+                predicate,
+                matched_select,
+                left_select,
+                right_select,
+                left,
+                right,
+                ..
+            } => {
+                scalar(predicate, sites)?;
+                for item in matched_select.iter().chain(left_select).chain(right_select) {
+                    scalar(&item.expr, sites)?;
+                }
+                query_expr(left, sites)?;
+                query_expr(right, sites)
+            }
+            FormalQueryExpr::Projection { select, input } => {
+                for item in select {
+                    scalar(&item.expr, sites)?;
+                }
+                query_expr(input, sites)
+            }
+            FormalQueryExpr::Selection { predicate, input } => {
+                scalar(predicate, sites)?;
+                query_expr(input, sites)
+            }
+            FormalQueryExpr::Group {
+                select,
+                group_by,
+                having,
+                input,
+            } => {
+                for item in select {
+                    scalar(&item.expr, sites)?;
+                }
+                for expression in group_by {
+                    scalar(expression, sites)?;
+                }
+                scalar(having, sites)?;
+                query_expr(input, sites)
+            }
+            FormalQueryExpr::GroupingSets {
+                grouping_sets,
+                input,
+            } => {
+                for grouping_set in grouping_sets {
+                    for item in &grouping_set.select {
+                        scalar(&item.expr, sites)?;
+                    }
+                    for expression in &grouping_set.group_by {
+                        scalar(expression, sites)?;
+                    }
+                }
+                query_expr(input, sites)
+            }
+            FormalQueryExpr::RowMap { input, .. }
+            | FormalQueryExpr::Rank { input, .. }
+            | FormalQueryExpr::Window { input, .. }
+            | FormalQueryExpr::Distinct { input }
+            | FormalQueryExpr::OrderBy { input, .. }
+            | FormalQueryExpr::Offset { input, .. }
+            | FormalQueryExpr::Fetch { input, .. } => query_expr(input, sites),
+        }
+    }
+
+    query_expr(query, sites)
 }
 
 struct EmittedRocqProgramSide {
@@ -520,7 +1632,7 @@ fn emit_rocq_program_side(
             query_name
         });
         statement_admissibility.push((
-            format!("{side}_query_expr{suffix}_admissible"),
+            format!("{side}_query_expr{suffix}"),
             query.requires_numeric_exp_model(),
         ));
         signature_names.push(signature_name);
@@ -560,10 +1672,13 @@ pub(crate) fn emit_rocq_query_expr_proof_module_for_mode(
    source_query_program generated_numeric_exp_model,
    target_query_program generated_numeric_exp_model).";
     let (query_equivalence, program_equivalence) = match verification_mode {
-        VerificationMode::SafeUnconditional => ("query_expr_equiv", "query_program_equiv"),
-        VerificationMode::OutcomeUnconditional | VerificationMode::Conditional => {
-            ("query_expr_outcome_equiv", "query_program_outcome_equiv")
+        VerificationMode::SafeUnconditional => {
+            ("query_expr_possible_equiv", "query_program_possible_equiv")
         }
+        VerificationMode::OutcomeUnconditional | VerificationMode::Conditional => (
+            "query_expr_possible_outcome_equiv",
+            "query_program_possible_outcome_equiv",
+        ),
     };
     let equivalence_goal = match verification_mode {
         VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
@@ -729,10 +1844,9 @@ Definition generated_verification_goal
    For equivalence, begin with [apply generated_equivalence_goal_intro].  The
    helper discharges generated signatures and both admissibility certificates;
    prove runtime safety on both sides and equality of every successful
-   observation for every conforming database.  Use
-   [query_expr_equiv_of_ordered_observations] for a general exact
-   query-expression obligation and [query_program_equiv_cons] to advance
-   through statements.
+   observation for every conforming database and every legal Boolean
+   schedule.  Work at the possible-outcome boundary rather than selecting a
+   fixed schedule; program equivalence advances pointwise through statements.
 
    If [Witness.generated_witness_available] computes to [true], Logos has
    frozen the validated PostgreSQL candidate as the read-only FormalSQL
@@ -760,7 +1874,8 @@ Definition generated_verification_goal
    all successful results and SQL runtime-error categories for every conforming
    database.  When the queries are runtime-safe, the proof may instead
    establish [generated_safe_query_program_equiv] and lift it with
-   [query_program_equiv_implies_outcome_equiv].  Safety must be proved in Rocq.
+   [query_program_possible_equiv_implies_possible_outcome_equiv].  Safety must
+   be proved in Rocq.
 
    If [Witness.generated_witness_available] computes to [true], Logos has
    frozen the validated PostgreSQL candidate as the read-only FormalSQL
@@ -806,7 +1921,7 @@ Definition generated_value_is_null (v : value) : bool :=
 
 Definition eval_generated_query_expr_outcome
     (db : db_state) (q : QueryExpr) :=
-  @eval_query_expr_outcome TNull relname
+  @eval_query_expr_possible_outcome TNull relname
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
@@ -819,7 +1934,7 @@ Definition eval_generated_query_expr_outcome
 Definition generated_safe_query_expr_equiv
     (db : db_state)
     (q1 q2 : QueryExpr) : Prop :=
-  @query_expr_equiv TNull relname
+  @query_expr_possible_equiv TNull relname
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
@@ -833,7 +1948,7 @@ Definition generated_safe_query_expr_equiv
 Definition generated_safe_query_program_equiv
     (db : db_state)
     (left right : list QueryExpr) : Prop :=
-  @query_program_equiv TNull relname
+  @query_program_possible_equiv TNull relname
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
@@ -875,7 +1990,7 @@ Definition generated_query_program_equiv
 Definition generated_query_program_outcome_equiv
     (db : db_state)
     (left right : list QueryExpr) : Prop :=
-  @query_program_outcome_equiv TNull relname
+  @query_program_possible_outcome_equiv TNull relname
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
@@ -889,10 +2004,252 @@ Definition generated_query_program_outcome_equiv
 Definition generated_query_program_admissible
     (db : db_state) (program : list QueryExpr) : Prop :=
   Forall
-    (@query_expr_admissible TNull relname (@_basesort TNull db))
+    (TNullQueryExprAdmissible (@_basesort TNull db))
     program.
 
 {equivalence_input}
+
+{equivalence_goal}
+
+{equivalence_goal_intro}
+
+{verification_claim_contract}
+
+{proof_hole}
+"
+    );
+    FormalProofModule { rocq_module }
+}
+
+pub(crate) fn emit_rocq_bound_query_proof_module_for_mode(
+    verification_mode: VerificationMode,
+) -> FormalProofModule {
+    let selected_equivalence = match verification_mode {
+        VerificationMode::SafeUnconditional => "bound_query_program_possible_equiv",
+        VerificationMode::OutcomeUnconditional | VerificationMode::Conditional => {
+            "bound_query_program_demand_safe_outcome_equiv"
+        }
+    };
+    let equivalence_goal = match verification_mode {
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => format!(
+            "Definition generated_equivalence_goal : Prop :=
+  forall generated_numeric_exp_model : NumericExpModel,
+    source_program_output_signatures =
+      map bound_query_outputs
+        (source_bound_query_program generated_numeric_exp_model) /\\
+    target_program_output_signatures =
+      map bound_query_outputs
+        (target_bound_query_program generated_numeric_exp_model) /\\
+    source_program_output_signatures = target_program_output_signatures /\\
+    (forall db : db_state,
+      Schema.generated_schema_conforms db ->
+      generated_query_program_admissible
+        db (source_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_admissible
+        db (target_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_equiv db
+        (source_bound_query_program generated_numeric_exp_model)
+        (target_bound_query_program generated_numeric_exp_model))."
+        ),
+        VerificationMode::Conditional => "Definition generated_precondition_obligation
+    (source : precondition_source)
+    (condition : verification_condition) : Prop :=
+  precondition_source_obligation
+    Schema.generated_schema
+    Schema.generated_schema_constraints
+    source
+    condition.
+
+Definition generated_equivalence_goal
+    (condition : verification_condition) : Prop :=
+  forall generated_numeric_exp_model : NumericExpModel,
+    source_program_output_signatures =
+      map bound_query_outputs
+        (source_bound_query_program generated_numeric_exp_model) /\\
+    target_program_output_signatures =
+      map bound_query_outputs
+        (target_bound_query_program generated_numeric_exp_model) /\\
+    source_program_output_signatures = target_program_output_signatures /\\
+    (forall db : db_state,
+      Schema.generated_schema_conforms db ->
+      verification_condition_holds db condition ->
+      generated_query_program_admissible
+        db (source_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_admissible
+        db (target_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_equiv db
+        (source_bound_query_program generated_numeric_exp_model)
+        (target_bound_query_program generated_numeric_exp_model))."
+            .to_owned(),
+    };
+    let equivalence_goal_intro = match verification_mode {
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
+            "Lemma generated_equivalence_goal_intro :
+  (forall generated_numeric_exp_model db,
+    Schema.generated_schema_conforms db ->
+    generated_query_program_equiv db
+      (source_bound_query_program generated_numeric_exp_model)
+      (target_bound_query_program generated_numeric_exp_model)) ->
+  generated_equivalence_goal.
+Proof.
+intros Hcore generated_numeric_exp_model.
+split; [reflexivity|].
+split; [reflexivity|].
+split; [reflexivity|].
+intros db Hschema.
+split.
+- apply source_bound_query_program_admissible; exact Hschema.
+- split.
+  + apply target_bound_query_program_admissible; exact Hschema.
+  + exact (Hcore generated_numeric_exp_model db Hschema).
+Qed."
+        }
+        VerificationMode::Conditional => {
+            "Lemma generated_equivalence_goal_intro :
+  forall condition,
+  (forall generated_numeric_exp_model db,
+    Schema.generated_schema_conforms db ->
+    verification_condition_holds db condition ->
+    generated_query_program_equiv db
+      (source_bound_query_program generated_numeric_exp_model)
+      (target_bound_query_program generated_numeric_exp_model)) ->
+  generated_equivalence_goal condition.
+Proof.
+intros condition Hcore generated_numeric_exp_model.
+split; [reflexivity|].
+split; [reflexivity|].
+split; [reflexivity|].
+intros db Hschema Hcondition.
+split.
+- apply source_bound_query_program_admissible; exact Hschema.
+- split.
+  + apply target_bound_query_program_admissible; exact Hschema.
+  + exact (Hcore generated_numeric_exp_model db Hschema Hcondition).
+Qed."
+        }
+    };
+    let verification_claim_contract = match verification_mode {
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
+            "Definition generated_countermodel_goal : Prop :=
+  Witness.generated_witness_available = true /\\
+  Schema.generated_schema_conforms Witness.generated_witness_db /\\
+  forall generated_numeric_exp_model : NumericExpModel,
+      generated_query_program_admissible
+        Witness.generated_witness_db
+        (source_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_admissible
+        Witness.generated_witness_db
+        (target_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_materialization_safe
+        Witness.generated_witness_db
+        (source_bound_query_program generated_numeric_exp_model) /\\
+      generated_query_program_materialization_safe
+        Witness.generated_witness_db
+        (target_bound_query_program generated_numeric_exp_model) /\\
+      ~ generated_query_program_outcome_equiv Witness.generated_witness_db
+          (source_bound_query_program generated_numeric_exp_model)
+          (target_bound_query_program generated_numeric_exp_model).
+
+Lemma generated_countermodel_goal_intro :
+  Witness.generated_witness_available = true ->
+    (forall generated_numeric_exp_model : NumericExpModel,
+      generated_query_program_materialization_safe Witness.generated_witness_db
+        (source_bound_query_program generated_numeric_exp_model)) ->
+    (forall generated_numeric_exp_model : NumericExpModel,
+      generated_query_program_materialization_safe Witness.generated_witness_db
+        (target_bound_query_program generated_numeric_exp_model)) ->
+    (forall generated_numeric_exp_model : NumericExpModel,
+      ~ generated_query_program_outcome_equiv Witness.generated_witness_db
+          (source_bound_query_program generated_numeric_exp_model)
+          (target_bound_query_program generated_numeric_exp_model)) ->
+    generated_countermodel_goal.
+Proof.
+intros Havailable Hsource_safe Htarget_safe Hseparation.
+split; [exact Havailable|].
+pose proof
+  (Witness.generated_witness_schema_conforms Havailable) as Hschema.
+split; [exact Hschema|].
+intro generated_numeric_exp_model.
+split.
+- apply source_bound_query_program_admissible; exact Hschema.
+- split.
+  + apply target_bound_query_program_admissible; exact Hschema.
+  + split.
+    * exact (Hsource_safe generated_numeric_exp_model).
+    * split.
+      -- exact (Htarget_safe generated_numeric_exp_model).
+      -- exact (Hseparation generated_numeric_exp_model).
+Qed.
+
+Definition generated_verification_goal
+    (claim : verification_claim_kind) : Prop :=
+  verification_claim_goal
+    claim generated_equivalence_goal generated_countermodel_goal."
+        }
+        VerificationMode::Conditional => "",
+    };
+    let proof_hole = match verification_mode {
+        VerificationMode::SafeUnconditional => {
+            "(* LOGOS_PROOF_HOLE: select equivalence or a validated countermodel
+   exactly as in an ordinary generated problem.  For equivalence, start with
+   [apply generated_equivalence_goal_intro].  Each local binding is evaluated
+   once; repeated references observe arbitrary list representatives of that
+   one materialized bag.  Finish the selected theorem with [Qed]. *)"
+        }
+        VerificationMode::OutcomeUnconditional => {
+            "(* LOGOS_PROOF_HOLE: select equivalence or a validated countermodel.
+   For equivalence, start with [apply generated_equivalence_goal_intro].  A
+   safe proof may establish [generated_safe_query_program_equiv] and use
+   [bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv].
+   Statements with local bindings must prove materialization safety because
+   PostgreSQL may skip an undemanded CTE.  Unbound statements retain their
+   exact successful and error outcomes without an extra safety premise. *)"
+        }
+        VerificationMode::Conditional => {
+            "(* LOGOS_PROOF_HOLE: define [generated_precondition] and
+   [generated_precondition_source], prove [generated_precondition_valid], and
+   prove [generated_queries_equivalent : generated_equivalence_goal
+   generated_precondition].  Finish both statements with [Qed]. *)"
+        }
+    };
+    let trusted_imports = emit_trusted_proof_import_block();
+    let rocq_module = format!(
+        "\
+{trusted_imports}
+Open Scope string_scope.
+Open Scope Z_scope.
+
+Definition generated_safe_query_program_equiv
+    (db : db_state) (left right : BoundQueryProgram) : Prop :=
+  bound_query_program_possible_equiv
+    db generated_local_query_schemas nil left right.
+
+Definition generated_query_program_equiv
+    (db : db_state) (left right : BoundQueryProgram) : Prop :=
+  {selected_equivalence}
+    db generated_local_query_schemas nil left right.
+
+Definition generated_query_program_outcome_equiv
+    (db : db_state) (left right : BoundQueryProgram) : Prop :=
+  bound_query_program_possible_outcome_equiv
+    db generated_local_query_schemas nil left right.
+
+Definition generated_query_program_materialization_safe
+    (db : db_state) (program : BoundQueryProgram) : Prop :=
+  bound_query_program_materialization_safe
+    db generated_local_query_schemas nil program.
+
+Definition generated_query_program_admissible
+    (db : db_state) (program : BoundQueryProgram) : Prop :=
+  bound_query_program_admissible db generated_local_query_schemas program.
+
+Definition generated_equivalence_input
+    (generated_numeric_exp_model : NumericExpModel) :=
+  (Schema.generated_schema,
+   Schema.generated_schema_constraints,
+   generated_local_query_schemas,
+   source_bound_query_program generated_numeric_exp_model,
+   target_bound_query_program generated_numeric_exp_model).
 
 {equivalence_goal}
 
@@ -955,7 +2312,10 @@ fn rocq_focused_subproofs(tactic: &str, subproofs: &[String]) -> String {
     let mut proof = tactic.to_owned();
     for subproof in subproofs {
         proof.push_str("\n{\n");
-        proof.push_str(&indent_rocq_expr(subproof, 2));
+        // Rocq focus braces do not depend on indentation. Keeping each nested
+        // subproof at a fixed column prevents deep canonical scalar/query
+        // trees from expanding quadratically in generated source whitespace.
+        proof.push_str(subproof);
         proof.push_str("\n}");
     }
     proof
@@ -968,7 +2328,7 @@ fn rocq_metadata_proof() -> String {
     "solve_generated_query_metadata.".to_owned()
 }
 
-fn rocq_closed_attribute_nonmembership_proof() -> String {
+fn rocq_closed_nonmembership_proof() -> String {
     "cbn.\n\
      unfold not.\n\
      intros.\n\
@@ -1002,8 +2362,26 @@ fn rocq_forall_list_proof(elements: &[String]) -> String {
     }
 }
 
-fn rocq_cbn_only_proof(definition: &str, proof: String) -> String {
-    format!("cbn [{definition}].\n{proof}")
+fn rocq_append_chain(items: &[String]) -> String {
+    match items {
+        [] => "nil".to_owned(),
+        [item] => item.clone(),
+        [first, rest @ ..] => format!("{first} ++ ({})", rocq_append_chain(rest)),
+    }
+}
+
+fn rocq_nodup_list_proof(element_count: usize) -> String {
+    if element_count == 0 {
+        "constructor.".to_owned()
+    } else {
+        rocq_focused_subproofs(
+            "constructor.",
+            &[
+                rocq_closed_nonmembership_proof(),
+                rocq_nodup_list_proof(element_count - 1),
+            ],
+        )
+    }
 }
 
 fn rocq_window_outputs_all_diff_proof(item_count: usize) -> String {
@@ -1014,7 +2392,7 @@ fn rocq_window_outputs_all_diff_proof(item_count: usize) -> String {
     rocq_focused_subproofs(
         "cbn [ListFacts.all_diff].\nsplit.",
         &[
-            rocq_closed_attribute_nonmembership_proof(),
+            rocq_closed_nonmembership_proof(),
             rocq_window_outputs_all_diff_proof(item_count - 1),
         ],
     )
@@ -1035,7 +2413,7 @@ fn emit_query_expr_schema_admissibility_certificate(
         ""
     };
     format!(
-        "Lemma {query_name}_admissible{model_binder} (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  @query_expr_admissible TNull relname (@_basesort TNull db)\n    ({query_name}{model_argument}).\nProof.\n  intro Hschema.\n  apply (query_expr_admissible_database_schema_transport\n    Schema.generated_schema Schema.generated_schema_constraints db).\n  {{ exact Hschema. }}\n  {{ apply {query_name}_admissible_generated_schema. }}\nQed."
+        "Lemma {query_name}_admissible{model_binder} (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  TNullQueryExprAdmissible (@_basesort TNull db)\n    ({query_name}{model_argument}).\nProof.\n  intro Hschema.\n  apply (query_expr_admissible_database_schema_transport\n    Schema.generated_schema Schema.generated_schema_constraints db).\n  {{ exact Hschema. }}\n  {{ exact (proj1 ({query_name}_admissible_with_outputs_generated_schema{model_argument})). }}\nQed."
     )
 }
 
@@ -1051,7 +2429,9 @@ fn emit_query_program_admissibility_certificates(
             } else {
                 ""
             };
-            format!("apply ({lemma}_generated_schema{model_argument}).")
+            format!(
+                "exact (proj1 ({lemma}_admissible_with_outputs_generated_schema{model_argument}))."
+            )
         })
         .collect::<Vec<_>>();
     let schema_steps = statements
@@ -1062,22 +2442,22 @@ fn emit_query_program_admissibility_certificates(
             } else {
                 ""
             };
-            format!("apply ({lemma}{model_argument} db Hschema).")
+            format!("apply ({lemma}_admissible{model_argument} db Hschema).")
         })
         .collect::<Vec<_>>();
     format!(
-        "Lemma {side}_query_program_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  Forall\n    (@query_expr_admissible TNull relname\n      (@_basesort TNull Schema.generated_schema))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  unfold {side}_query_program.\n{}\nQed.\n\nLemma {side}_query_program_admissible\n    (generated_numeric_exp_model : NumericExpModel) (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  Forall\n    (@query_expr_admissible TNull relname (@_basesort TNull db))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  intro Hschema.\n  unfold {side}_query_program.\n{}\nQed.",
+        "Lemma {side}_query_program_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  Forall\n    (TNullQueryExprAdmissible\n      (@_basesort TNull Schema.generated_schema))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  unfold {side}_query_program.\n{}\nQed.\n\nLemma {side}_query_program_admissible\n    (generated_numeric_exp_model : NumericExpModel) (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  Forall\n    (TNullQueryExprAdmissible (@_basesort TNull db))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  intro Hschema.\n  unfold {side}_query_program.\n{}\nQed.",
         indent_rocq_expr(&rocq_forall_list_proof(&generated_steps), 2),
         indent_rocq_expr(&rocq_forall_list_proof(&schema_steps), 2),
     )
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RocqQueryDefinitions {
-    select_lists: Vec<Vec<FormalSelectItem>>,
+    admissibility_schema: String,
+    boolean_site_names: HashMap<String, String>,
     scalar_select_lists: Vec<Vec<FormalScalarSelectItem>>,
-    formula_expr_predicates: Vec<FormalFormulaExpr>,
-    formula_expr_uses: Vec<(FormalFormulaExpr, ScalarPhase)>,
+    scalar_select_uses: Vec<(Vec<FormalScalarSelectItem>, ScalarPhase)>,
     scalar_expr_predicates: Vec<FormalScalarExpr>,
     scalar_expr_uses: Vec<(FormalScalarExpr, ScalarPhase)>,
     table_sorts: Vec<(String, Vec<FormalAttribute>)>,
@@ -1087,8 +2467,8 @@ struct RocqQueryDefinitions {
 #[derive(Clone, Copy)]
 struct QueryExprReferencePolicy {
     query_exprs: bool,
-    formula_exprs: bool,
     scalar_exprs: bool,
+    scalar_select_lists: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -1129,8 +2509,8 @@ impl QueryExprReferencePolicy {
     fn uniform(allow_refs: bool) -> Self {
         Self {
             query_exprs: allow_refs,
-            formula_exprs: allow_refs,
             scalar_exprs: allow_refs,
+            scalar_select_lists: allow_refs,
         }
     }
 }
@@ -1140,7 +2520,24 @@ impl RocqQueryDefinitions {
         source: &[&FormalQueryExpr],
         target: &[&FormalQueryExpr],
     ) -> Self {
-        let mut definitions = Self::default();
+        Self::from_query_expr_program_pair_with_schema(source, target, "Schema.generated_schema")
+    }
+
+    fn from_query_expr_program_pair_with_schema(
+        source: &[&FormalQueryExpr],
+        target: &[&FormalQueryExpr],
+        admissibility_schema: &str,
+    ) -> Self {
+        let mut definitions = Self {
+            admissibility_schema: admissibility_schema.to_owned(),
+            boolean_site_names: compact_boolean_site_names(source, target),
+            scalar_select_lists: Vec::new(),
+            scalar_select_uses: Vec::new(),
+            scalar_expr_predicates: Vec::new(),
+            scalar_expr_uses: Vec::new(),
+            table_sorts: Vec::new(),
+            shared_query_exprs: Vec::new(),
+        };
         for query in source.iter().chain(target) {
             definitions.collect_query_expr(query);
         }
@@ -1177,40 +2574,38 @@ impl RocqQueryDefinitions {
                 right,
                 ..
             } => {
-                push_unique(&mut self.formula_expr_predicates, predicate.clone());
+                push_unique(&mut self.scalar_expr_predicates, predicate.clone());
                 push_unique(
-                    &mut self.formula_expr_uses,
+                    &mut self.scalar_expr_uses,
                     (predicate.clone(), ScalarPhase::On),
                 );
-                self.collect_formula_expr_queries(predicate, ScalarPhase::On);
-                push_unique(&mut self.select_lists, matched_select.clone());
-                push_unique(&mut self.select_lists, left_select.clone());
-                push_unique(&mut self.select_lists, right_select.clone());
+                self.collect_scalar_expr_queries(predicate);
+                for select in [matched_select, left_select, right_select] {
+                    for item in select {
+                        self.collect_scalar_expr_queries(&item.expr);
+                    }
+                    push_unique(&mut self.scalar_select_lists, select.clone());
+                    push_unique(
+                        &mut self.scalar_select_uses,
+                        (select.clone(), ScalarPhase::RowSelect),
+                    );
+                }
                 self.collect_query_expr(left);
                 self.collect_query_expr(right);
             }
             FormalQueryExpr::Projection { select, input } => {
-                push_unique(&mut self.select_lists, select.clone());
-                self.collect_query_expr(input);
-            }
-            FormalQueryExpr::ScalarProjection { select, input } => {
-                push_unique(&mut self.scalar_select_lists, select.clone());
                 for item in select {
                     self.collect_scalar_expr_queries(&item.expr);
                 }
+                push_unique(&mut self.scalar_select_lists, select.clone());
+                push_unique(
+                    &mut self.scalar_select_uses,
+                    (select.clone(), ScalarPhase::RowSelect),
+                );
                 self.collect_query_expr(input);
             }
             FormalQueryExpr::RowMap { input, .. } => self.collect_query_expr(input),
             FormalQueryExpr::Selection { predicate, input } => {
-                push_unique(&mut self.formula_expr_predicates, predicate.clone());
-                push_unique(
-                    &mut self.formula_expr_uses,
-                    (predicate.clone(), ScalarPhase::Where),
-                );
-                self.collect_formula_expr_queries(predicate, ScalarPhase::Where);
-                self.collect_query_expr(input);
-            }
-            FormalQueryExpr::ScalarSelection { predicate, input } => {
                 push_unique(&mut self.scalar_expr_predicates, predicate.clone());
                 push_unique(
                     &mut self.scalar_expr_uses,
@@ -1219,16 +2614,20 @@ impl RocqQueryDefinitions {
                 self.collect_scalar_expr_queries(predicate);
                 self.collect_query_expr(input);
             }
-            FormalQueryExpr::ScalarGroup {
+            FormalQueryExpr::Group {
                 select,
                 group_by,
                 having,
                 input,
             } => {
-                push_unique(&mut self.scalar_select_lists, select.clone());
                 for item in select {
                     self.collect_scalar_expr_queries(&item.expr);
                 }
+                push_unique(&mut self.scalar_select_lists, select.clone());
+                push_unique(
+                    &mut self.scalar_select_uses,
+                    (select.clone(), ScalarPhase::Select),
+                );
                 for key in group_by {
                     self.collect_scalar_expr_queries(key);
                 }
@@ -1240,29 +2639,22 @@ impl RocqQueryDefinitions {
                 self.collect_scalar_expr_queries(having);
                 self.collect_query_expr(input);
             }
-            FormalQueryExpr::Group {
-                select,
-                having,
-                input,
-                ..
-            } => {
-                push_unique(&mut self.select_lists, select.clone());
-                if !matches!(having, FormalFormulaExpr::True) {
-                    push_unique(&mut self.formula_expr_predicates, having.clone());
-                    push_unique(
-                        &mut self.formula_expr_uses,
-                        (having.clone(), ScalarPhase::Having),
-                    );
-                }
-                self.collect_formula_expr_queries(having, ScalarPhase::Having);
-                self.collect_query_expr(input);
-            }
             FormalQueryExpr::GroupingSets {
                 grouping_sets,
                 input,
             } => {
                 for grouping_set in grouping_sets {
-                    push_unique(&mut self.select_lists, grouping_set.select.clone());
+                    for item in &grouping_set.select {
+                        self.collect_scalar_expr_queries(&item.expr);
+                    }
+                    push_unique(&mut self.scalar_select_lists, grouping_set.select.clone());
+                    push_unique(
+                        &mut self.scalar_select_uses,
+                        (grouping_set.select.clone(), ScalarPhase::Select),
+                    );
+                    for key in &grouping_set.group_by {
+                        self.collect_scalar_expr_queries(key);
+                    }
                 }
                 self.collect_query_expr(input);
             }
@@ -1275,33 +2667,26 @@ impl RocqQueryDefinitions {
         }
     }
 
-    fn collect_formula_expr_queries(&mut self, formula: &FormalFormulaExpr, phase: ScalarPhase) {
-        match formula {
-            FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-                self.collect_formula_expr_queries(left, phase);
-                self.collect_formula_expr_queries(right, phase);
-            }
-            FormalFormulaExpr::Not { formula } => {
-                self.collect_formula_expr_queries(formula, phase);
-            }
-            FormalFormulaExpr::In { query, .. }
-            | FormalFormulaExpr::QuantifiedComparison { query, .. }
-            | FormalFormulaExpr::Exists { query } => self.collect_query_expr(query),
-            FormalFormulaExpr::Scalar { expression } => {
-                push_unique(
-                    &mut self.scalar_expr_predicates,
-                    expression.as_ref().clone(),
-                );
-                push_unique(
-                    &mut self.scalar_expr_uses,
-                    (expression.as_ref().clone(), phase),
-                );
-                self.collect_scalar_expr_queries(expression);
-            }
-            FormalFormulaExpr::True
-            | FormalFormulaExpr::False
-            | FormalFormulaExpr::Predicate { .. } => {}
-        }
+    fn boolean_site_name<'a>(&'a self, site: &str) -> &'a str {
+        self.boolean_site_names
+            .get(site)
+            .map(String::as_str)
+            .expect("each emitted Boolean site has one compact module-local name")
+    }
+
+    fn emit_boolean_insertion_sites(&self, site_rows: &[Vec<String>]) -> String {
+        emit_rocq_list_expr(
+            &site_rows
+                .iter()
+                .map(|row| {
+                    emit_rocq_list_expr(
+                        &row.iter()
+                            .map(|site| rocq_string_literal(self.boolean_site_name(site)))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     fn collect_scalar_expr_queries(&mut self, expression: &FormalScalarExpr) {
@@ -1327,9 +2712,10 @@ impl RocqQueryDefinitions {
             | FormalScalarExpr::Not { expression } => {
                 self.collect_scalar_expr_queries(expression);
             }
-            FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-                self.collect_scalar_expr_queries(left);
-                self.collect_scalar_expr_queries(right);
+            FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+                for operand in operands {
+                    self.collect_scalar_expr_queries(operand);
+                }
             }
             FormalScalarExpr::QuantifiedComparison { args, query, .. }
             | FormalScalarExpr::In { args, query } => {
@@ -1346,22 +2732,45 @@ impl RocqQueryDefinitions {
 
     fn emit_definitions(&self) -> String {
         let mut definitions = Vec::new();
-        for (index, select) in self.select_lists.iter().enumerate() {
-            definitions.push(format!(
-                "Definition select_list_{index} : SelectListT :=\n{}.",
-                indent_rocq_expr(&emit_rocq_select_list(select), 2)
-            ));
-        }
+        let prefix_parents = self.scalar_select_list_prefix_parents();
         for index in self.scalar_select_list_emission_order() {
             let select = &self.scalar_select_lists[index];
-            let model_parameter = if scalar_select_requires_numeric_exp_model(select) {
+            let requires_model = scalar_select_requires_numeric_exp_model(select);
+            let model_parameter = if requires_model {
                 " (generated_numeric_exp_model : NumericExpModel)"
             } else {
                 ""
             };
+            let model_argument = if requires_model {
+                " generated_numeric_exp_model"
+            } else {
+                ""
+            };
+            let body = if self.scalar_select_list_uses_chunks(index, &prefix_parents) {
+                let chunk_symbols = select
+                    .chunks(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE)
+                    .enumerate()
+                    .map(|(chunk_index, chunk)| {
+                        let symbol = format!("scalar_select_list_{index}_chunk_{chunk_index}");
+                        definitions.push(format!(
+                            "Definition {symbol}{model_parameter} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
+                            indent_rocq_expr(&self.emit_scalar_select_list_inline(chunk), 2)
+                        ));
+                        format!("{symbol}{model_argument}")
+                    })
+                    .collect::<Vec<_>>();
+                rocq_append_chain(&chunk_symbols)
+            } else if let Some(parent) = prefix_parents[index] {
+                format!(
+                    "firstn ({}%nat) (scalar_select_list_{parent}{model_argument})",
+                    select.len()
+                )
+            } else {
+                self.emit_scalar_select_list_inline(select)
+            };
             definitions.push(format!(
                 "Definition scalar_select_list_{index}{model_parameter} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
-                indent_rocq_expr(&self.emit_scalar_select_list_inline(select), 2)
+                indent_rocq_expr(&body, 2)
             ));
         }
         for (index, expression) in self.scalar_expr_predicates.iter().enumerate() {
@@ -1375,21 +2784,15 @@ impl RocqQueryDefinitions {
                 indent_rocq_expr(&self.emit_scalar_expr(expression, false), 2)
             ));
         }
-        for (index, predicate) in self.formula_expr_predicates.iter().enumerate() {
-            let model_parameter = if formula_expr_requires_numeric_exp_model(predicate) {
-                " (generated_numeric_exp_model : NumericExpModel)"
-            } else {
-                ""
-            };
-            definitions.push(format!(
-                "Definition formula_expr_predicate_{index}{model_parameter} : FormulaExpr :=\n{}.",
-                indent_rocq_expr(&self.emit_formula_expr(predicate, false), 2)
-            ));
-        }
         for index in self.shared_query_expr_emission_order() {
             let query = &self.shared_query_exprs[index];
             let model_parameter = if query.requires_numeric_exp_model() {
                 " (generated_numeric_exp_model : NumericExpModel)"
+            } else {
+                ""
+            };
+            let model_argument = if query.requires_numeric_exp_model() {
+                " generated_numeric_exp_model"
             } else {
                 ""
             };
@@ -1402,7 +2805,10 @@ impl RocqQueryDefinitions {
             ));
             definitions.push(format!(
                 "Definition shared_query_expr_{index}_expected_outputs :\n    list (Tuple.attribute TNull) :=\n{}.",
-                indent_rocq_expr(&self.emit_query_expr_expected_outputs(query, false), 2)
+                indent_rocq_expr(
+                    &format!("query_expr_outputs (shared_query_expr_{index}{model_argument})"),
+                    2,
+                )
             ));
         }
         definitions.join("\n\n")
@@ -1412,7 +2818,8 @@ impl RocqQueryDefinitions {
         let mut certificates = Vec::new();
         for (index, (relation, columns)) in self.table_sorts.iter().enumerate() {
             certificates.push(format!(
-                "Lemma generated_table_sort_{index} :\n  @_basesort TNull Schema.generated_schema (Rel {}) =S=\n  Fset.mk_set (Tuple.A TNull) ({}).\nProof.\n  {}\nQed.",
+                "Lemma generated_table_sort_{index} :\n  @_basesort TNull {} (Rel {}) =S=\n  Fset.mk_set (Tuple.A TNull) ({}).\nProof.\n  {}\nQed.",
+                self.admissibility_schema,
                 rocq_string_literal(relation),
                 emit_rocq_query_attribute_list(columns),
                 rocq_metadata_proof(),
@@ -1429,15 +2836,15 @@ impl RocqQueryDefinitions {
                 self.emit_scalar_expr_admissibility_certificate(&symbol, expression, *phase, false),
             );
         }
-        for (formula, phase) in &self.formula_expr_uses {
+        for use_index in self.scalar_select_use_emission_order() {
+            let (select, phase) = &self.scalar_select_uses[use_index];
             let index = self
-                .formula_expr_predicates
+                .scalar_select_lists
                 .iter()
-                .position(|candidate| candidate == formula)
-                .expect("each formula use has one emitted definition");
-            let symbol = format!("formula_expr_predicate_{index}");
+                .position(|candidate| candidate == select)
+                .expect("each scalar-select use has one emitted definition");
             certificates.push(
-                self.emit_formula_expr_admissibility_certificate(&symbol, formula, *phase, false),
+                self.emit_scalar_select_list_admissibility_certificate(index, select, *phase),
             );
         }
         for index in self.shared_query_expr_emission_order() {
@@ -1446,7 +2853,7 @@ impl RocqQueryDefinitions {
             certificates.push(self.emit_query_expr_body_admissibility_certificate(
                 &symbol,
                 query,
-                // Formula certificates are emitted immediately above, so a
+                // Scalar-expression certificates are emitted immediately above, so a
                 // shared query can reuse their opaque proofs just as it
                 // already reuses earlier shared-query certificates.  Expanding
                 // the same predicate tree again here made generated
@@ -1456,125 +2863,6 @@ impl RocqQueryDefinitions {
             ));
         }
         certificates.join("\n\n")
-    }
-
-    fn emit_formula_expr_admissibility_certificate(
-        &self,
-        symbol: &str,
-        formula: &FormalFormulaExpr,
-        phase: ScalarPhase,
-        allow_formula_refs: bool,
-    ) -> String {
-        let requires_model = formula_expr_requires_numeric_exp_model(formula);
-        let model_binder = if requires_model {
-            "\n    (generated_numeric_exp_model : NumericExpModel)"
-        } else {
-            ""
-        };
-        let model_argument = if requires_model {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
-        format!(
-            "Lemma {symbol}_admissible_{}_generated_schema{model_binder} :\n  @formula_expr_admissible_at TNull relname\n    (@_basesort TNull Schema.generated_schema) {}\n    ({symbol}{model_argument}).\nProof.\n  unfold {symbol}.\n{}\nQed.",
-            phase.slug(),
-            phase.rocq_constructor(),
-            indent_rocq_expr(
-                &self.emit_formula_expr_admissibility_proof(formula, phase, allow_formula_refs,),
-                2,
-            )
-        )
-    }
-
-    fn emit_formula_expr_admissibility_proof(
-        &self,
-        formula: &FormalFormulaExpr,
-        phase: ScalarPhase,
-        allow_formula_refs: bool,
-    ) -> String {
-        if allow_formula_refs
-            && let Some(index) = self
-                .formula_expr_predicates
-                .iter()
-                .position(|candidate| candidate == formula)
-        {
-            let model_argument = if formula_expr_requires_numeric_exp_model(formula) {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!(
-                "apply (formula_expr_predicate_{index}_admissible_{}_generated_schema{model_argument}).",
-                phase.slug()
-            );
-        }
-
-        match formula {
-            FormalFormulaExpr::True => "constructor.".to_owned(),
-            FormalFormulaExpr::False => "constructor.".to_owned(),
-            FormalFormulaExpr::Predicate { .. } => rocq_metadata_proof(),
-            FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-                rocq_conjunction_proof(vec![
-                    self.emit_formula_expr_admissibility_proof(left, phase, false),
-                    self.emit_formula_expr_admissibility_proof(right, phase, false),
-                ])
-            }
-            FormalFormulaExpr::Not { formula } => rocq_focused_subproofs(
-                &format!(
-                    "eapply formula_expr_not_admissible_at with (phase := {}).",
-                    phase.rocq_constructor()
-                ),
-                &[self.emit_formula_expr_admissibility_proof(formula, phase, false)],
-            ),
-            FormalFormulaExpr::QuantifiedComparison { query, .. } => rocq_focused_subproofs(
-                &format!(
-                    "eapply formula_expr_quant_admissible_at_from_outputs with (phase := {}).",
-                    phase.rocq_constructor()
-                ),
-                &[
-                    self.emit_query_expr_admissibility_proof(
-                        query,
-                        QueryExprReferencePolicy::uniform(false),
-                    ),
-                    rocq_metadata_proof(),
-                    rocq_metadata_proof(),
-                    rocq_metadata_proof(),
-                    rocq_metadata_proof(),
-                ],
-            ),
-            FormalFormulaExpr::In { query, .. } => rocq_focused_subproofs(
-                &format!(
-                    "eapply formula_expr_in_admissible_at_from_outputs with (phase := {}).",
-                    phase.rocq_constructor()
-                ),
-                &[
-                    self.emit_query_expr_admissibility_proof(
-                        query,
-                        QueryExprReferencePolicy::uniform(false),
-                    ),
-                    rocq_metadata_proof(),
-                    self.emit_query_in_positionally_aligned_proof(),
-                ],
-            ),
-            FormalFormulaExpr::Exists { query } => rocq_focused_subproofs(
-                &format!(
-                    "eapply formula_expr_exists_admissible_at_from_outputs with (phase := {}).",
-                    phase.rocq_constructor()
-                ),
-                &[self.emit_query_expr_admissibility_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                )],
-            ),
-            FormalFormulaExpr::Scalar { expression } => rocq_focused_subproofs(
-                &format!(
-                    "eapply formula_expr_scalar_admissible_at with (phase := {}).",
-                    phase.rocq_constructor()
-                ),
-                &[self.emit_scalar_expr_admissibility_proof(expression, phase, false)],
-            ),
-        }
     }
 
     fn emit_scalar_expr_admissibility_certificate(
@@ -1596,11 +2884,31 @@ impl RocqQueryDefinitions {
             ""
         };
         format!(
-            "Lemma {symbol}_admissible_{}_generated_schema{model_binder} :\n  @scalar_expr_admissible TNull relname\n    (@_basesort TNull Schema.generated_schema) {} ScalarResultBoolean\n    ({symbol}{model_argument}).\nProof.\n  unfold {symbol}.\n{}\nQed.",
+            "Lemma {symbol}_admissible_{}_generated_schema{model_binder} :\n  TNullScalarExprAdmissible\n    (@_basesort TNull {}) {} ({symbol}{model_argument}).\nProof.\n  unfold TNullScalarExprAdmissible, {symbol}.\n{}\nQed.",
             phase.slug(),
+            self.admissibility_schema,
             phase.rocq_constructor(),
             indent_rocq_expr(
-                &self.emit_scalar_expr_admissibility_proof(expression, phase, allow_scalar_refs,),
+                &rocq_focused_subproofs(
+                    "split.",
+                    &[
+                        self.emit_scalar_expr_admissibility_proof(
+                            expression,
+                            phase,
+                            allow_scalar_refs,
+                        ),
+                        rocq_focused_subproofs(
+                            "split.",
+                            &[
+                                "reflexivity.".to_owned(),
+                                "unfold scalar_expr_boolean_sites_well_formed.\n\
+                                 apply boolean_sites_well_formedb_sound.\n\
+                                 reflexivity."
+                                    .to_owned(),
+                            ],
+                        ),
+                    ],
+                ),
                 2,
             )
         )
@@ -1630,6 +2938,10 @@ impl RocqQueryDefinitions {
             );
         }
 
+        if !scalar_expr_contains_subquery(expression) {
+            return "solve_generated_query_free_scalar_admissibility.".to_owned();
+        }
+
         let scalar_arguments_proof = |arguments: &[FormalScalarExpr]| {
             rocq_forall_list_proof(
                 &arguments
@@ -1643,7 +2955,7 @@ impl RocqQueryDefinitions {
         let query_admissibility_proof = |query: &FormalQueryExpr| {
             rocq_focused_subproofs(
                 "eapply query_expr_admissible_of_with_outputs.",
-                &[self.emit_query_expr_admissibility_proof(
+                &[self.emit_query_expr_child_admissibility_proof(
                     query,
                     QueryExprReferencePolicy::uniform(false),
                 )],
@@ -1652,13 +2964,17 @@ impl RocqQueryDefinitions {
 
         match expression {
             FormalScalarExpr::Leaf { .. } => {
-                if matches!(phase, ScalarPhase::Select | ScalarPhase::Having) {
+                let phase_proof = if matches!(phase, ScalarPhase::Select | ScalarPhase::Having) {
                     "left; reflexivity.".to_owned()
                 } else {
                     "right; reflexivity.".to_owned()
-                }
+                };
+                rocq_conjunction_proof(vec![phase_proof, "solve_generated_scalar_type.".to_owned()])
             }
-            FormalScalarExpr::Call { args, .. } => scalar_arguments_proof(args),
+            FormalScalarExpr::Call { args, .. } => rocq_conjunction_proof(vec![
+                scalar_arguments_proof(args),
+                "solve_generated_scalar_type.".to_owned(),
+            ]),
             FormalScalarExpr::Case {
                 condition,
                 then_expr,
@@ -1675,17 +2991,31 @@ impl RocqQueryDefinitions {
                 self.emit_scalar_expr_admissibility_proof(expression, phase, false),
                 "intros truth; destruct truth; reflexivity.".to_owned(),
             ]),
-            FormalScalarExpr::ValueBoolean { expression }
-            | FormalScalarExpr::Not { expression } => {
+            FormalScalarExpr::ValueBoolean { expression } => rocq_conjunction_proof(vec![
+                self.emit_scalar_expr_admissibility_proof(expression, phase, false),
+                "reflexivity.".to_owned(),
+            ]),
+            FormalScalarExpr::Not { expression } => {
                 self.emit_scalar_expr_admissibility_proof(expression, phase, false)
             }
-            FormalScalarExpr::Predicate { args, .. } => {
-                rocq_conjunction_proof(vec![scalar_arguments_proof(args), rocq_metadata_proof()])
-            }
-            FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
+            FormalScalarExpr::Predicate { args, .. } => rocq_conjunction_proof(vec![
+                scalar_arguments_proof(args),
+                rocq_metadata_proof(),
+                "solve_generated_scalar_type.".to_owned(),
+            ]),
+            FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
                 rocq_conjunction_proof(vec![
-                    self.emit_scalar_expr_admissibility_proof(left, phase, false),
-                    self.emit_scalar_expr_admissibility_proof(right, phase, false),
+                    rocq_metadata_proof(),
+                    rocq_metadata_proof(),
+                    rocq_metadata_proof(),
+                    rocq_forall_list_proof(
+                        &operands
+                            .iter()
+                            .map(|operand| {
+                                self.emit_scalar_expr_admissibility_proof(operand, phase, false)
+                            })
+                            .collect::<Vec<_>>(),
+                    ),
                 ])
             }
             FormalScalarExpr::True => "constructor.".to_owned(),
@@ -1695,6 +3025,9 @@ impl RocqQueryDefinitions {
                     scalar_arguments_proof(args),
                     query_admissibility_proof(query),
                     rocq_metadata_proof(),
+                    rocq_metadata_proof(),
+                    rocq_metadata_proof(),
+                    "solve_generated_scalar_type.".to_owned(),
                 ])
             }
             FormalScalarExpr::In { args, query } => rocq_conjunction_proof(vec![
@@ -1714,6 +3047,7 @@ impl RocqQueryDefinitions {
                 query_admissibility_proof(query),
                 rocq_metadata_proof(),
                 rocq_metadata_proof(),
+                rocq_metadata_proof(),
             ]),
         }
     }
@@ -1722,22 +3056,221 @@ impl RocqQueryDefinitions {
         &self,
         select: &[FormalScalarSelectItem],
         phase: ScalarPhase,
+        allow_refs: bool,
     ) -> String {
-        let item_proofs = select
-            .iter()
-            .map(|item| {
-                rocq_conjunction_proof(vec![
-                    self.emit_scalar_expr_admissibility_proof(&item.expr, phase, false),
-                    rocq_metadata_proof(),
-                ])
-            })
-            .collect::<Vec<_>>();
-        let proof = rocq_forall_list_proof(&item_proofs);
+        if allow_refs
+            && let Some(index) = self
+                .scalar_select_lists
+                .iter()
+                .position(|candidate| candidate == select)
+        {
+            let model_argument = if scalar_select_requires_numeric_exp_model(select) {
+                " generated_numeric_exp_model"
+            } else {
+                ""
+            };
+            return format!(
+                "apply (scalar_select_list_{index}_admissible_{}_generated_schema{model_argument}).",
+                phase.slug()
+            );
+        }
+
+        self.emit_scalar_select_list_admissibility_inline_proof(select, phase)
+    }
+
+    fn emit_scalar_select_list_admissibility_inline_proof(
+        &self,
+        select: &[FormalScalarSelectItem],
+        phase: ScalarPhase,
+    ) -> String {
+        let proof = self.emit_scalar_select_list_admissibility_items_proof(select, phase);
         self.scalar_select_lists
             .iter()
             .position(|candidate| candidate == select)
-            .map(|index| format!("unfold scalar_select_list_{index}.\n{proof}"))
+            .map(|index| format!("{}\n{proof}", self.scalar_select_list_unfold(index)))
             .unwrap_or(proof)
+    }
+
+    fn emit_scalar_select_list_admissibility_items_proof(
+        &self,
+        select: &[FormalScalarSelectItem],
+        phase: ScalarPhase,
+    ) -> String {
+        if select
+            .iter()
+            .all(|item| !scalar_expr_contains_subquery(&item.expr))
+        {
+            return "solve_generated_query_free_select_list_admissibility.".to_owned();
+        }
+
+        rocq_forall_list_proof(
+            &select
+                .iter()
+                .map(|item| {
+                    rocq_conjunction_proof(vec![
+                        self.emit_scalar_expr_admissibility_proof(&item.expr, phase, false),
+                        rocq_metadata_proof(),
+                    ])
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn emit_named_scalar_select_list_admissibility_certificate(
+        &self,
+        lemma_symbol: &str,
+        list_symbol: &str,
+        phase: ScalarPhase,
+        requires_model: bool,
+        proof: &str,
+    ) -> String {
+        let model_binder = if requires_model {
+            "\n    (generated_numeric_exp_model : NumericExpModel)"
+        } else {
+            ""
+        };
+        let model_argument = if requires_model {
+            " generated_numeric_exp_model"
+        } else {
+            ""
+        };
+        format!(
+            "Lemma {lemma_symbol}{model_binder} :\n  prop_forall\n    (fun item =>\n      @scalar_expr_admissible TNull relname\n        (@_basesort TNull {})\n        TNullLeafHasType TNullCallHasType TNullPredicateHasTypes\n        type_int64 type_bool NullValues.is_null_value\n        {} ScalarResultValue (fst item) /\\\n      scalar_expr_type (fst item) =\n        Tuple.type_of_attribute TNull (snd item))\n    ({list_symbol}{model_argument}).\nProof.\n{}\nQed.",
+            self.admissibility_schema,
+            phase.rocq_constructor(),
+            indent_rocq_expr(proof, 2),
+        )
+    }
+
+    fn emit_scalar_select_list_chunk_assembly_proof(
+        &self,
+        index: usize,
+        chunk_count: usize,
+        phase: ScalarPhase,
+        model_argument: &str,
+    ) -> String {
+        fn assemble(
+            index: usize,
+            chunk_index: usize,
+            chunk_count: usize,
+            phase: ScalarPhase,
+            model_argument: &str,
+        ) -> String {
+            let symbol = format!("scalar_select_list_{index}_chunk_{chunk_index}");
+            let certificate = format!(
+                "{symbol}_admissible_{}_generated_schema{model_argument}",
+                phase.slug()
+            );
+            if chunk_index + 1 == chunk_count {
+                return format!("exact ({certificate}).");
+            }
+            rocq_focused_subproofs(
+                &format!("eapply (@prop_forall_app _ _ ({symbol}{model_argument}) _)."),
+                &[
+                    format!("exact ({certificate})."),
+                    assemble(index, chunk_index + 1, chunk_count, phase, model_argument),
+                ],
+            )
+        }
+
+        format!(
+            "unfold scalar_select_list_{index}.\n{}",
+            assemble(index, 0, chunk_count, phase, model_argument)
+        )
+    }
+
+    fn emit_scalar_select_list_admissibility_certificate(
+        &self,
+        index: usize,
+        select: &[FormalScalarSelectItem],
+        phase: ScalarPhase,
+    ) -> String {
+        let requires_model = scalar_select_requires_numeric_exp_model(select);
+        let model_argument = if requires_model {
+            " generated_numeric_exp_model"
+        } else {
+            ""
+        };
+        let prefix_parents = self.scalar_select_list_prefix_parents();
+        let mut certificates = Vec::new();
+        let proof = if self.scalar_select_list_uses_chunks(index, &prefix_parents) {
+            for (chunk_index, chunk) in select
+                .chunks(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE)
+                .enumerate()
+            {
+                let symbol = format!("scalar_select_list_{index}_chunk_{chunk_index}");
+                let lemma = format!("{symbol}_admissible_{}_generated_schema", phase.slug());
+                let chunk_proof = format!(
+                    "unfold {symbol}.\n{}",
+                    self.emit_scalar_select_list_admissibility_items_proof(chunk, phase)
+                );
+                certificates.push(
+                    self.emit_named_scalar_select_list_admissibility_certificate(
+                        &lemma,
+                        &symbol,
+                        phase,
+                        requires_model,
+                        &chunk_proof,
+                    ),
+                );
+            }
+            self.emit_scalar_select_list_chunk_assembly_proof(
+                index,
+                select.len().div_ceil(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE),
+                phase,
+                model_argument,
+            )
+        } else if let Some(parent) = prefix_parents[index].filter(|parent| {
+            let parent_select = &self.scalar_select_lists[*parent];
+            self.scalar_select_uses
+                .iter()
+                .any(|(candidate, candidate_phase)| {
+                    candidate == parent_select && *candidate_phase == phase
+                })
+        }) {
+            format!(
+                "unfold scalar_select_list_{index}.\neapply (@prop_forall_firstn\n  _ _ {}%nat (scalar_select_list_{parent}{model_argument})).\nexact (scalar_select_list_{parent}_admissible_{}_generated_schema{model_argument}).",
+                select.len(),
+                phase.slug()
+            )
+        } else {
+            self.emit_scalar_select_list_admissibility_inline_proof(select, phase)
+        };
+        let lemma = format!(
+            "scalar_select_list_{index}_admissible_{}_generated_schema",
+            phase.slug()
+        );
+        certificates.push(
+            self.emit_named_scalar_select_list_admissibility_certificate(
+                &lemma,
+                &format!("scalar_select_list_{index}"),
+                phase,
+                requires_model,
+                &proof,
+            ),
+        );
+        certificates.join("\n\n")
+    }
+
+    fn emit_scalar_expr_list_admissibility_proof(
+        &self,
+        expressions: &[FormalScalarExpr],
+        phase: ScalarPhase,
+    ) -> String {
+        if expressions
+            .iter()
+            .all(|expression| !scalar_expr_contains_subquery(expression))
+        {
+            return "solve_generated_query_free_scalar_list_admissibility.".to_owned();
+        }
+        rocq_forall_list_proof(
+            &expressions
+                .iter()
+                .map(|expression| {
+                    self.emit_scalar_expr_admissibility_proof(expression, phase, false)
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     fn emit_query_expr_admissibility_certificate(
@@ -1746,12 +3279,10 @@ impl RocqQueryDefinitions {
         query: &FormalQueryExpr,
         reference_policy: QueryExprReferencePolicy,
     ) -> String {
-        self.emit_query_expr_typed_admissibility_certificate(
+        self.emit_query_expr_canonical_admissibility_certificate(
             symbol,
             query,
             self.emit_query_expr_admissibility_proof(query, reference_policy),
-            self.emit_query_expr_scalar_witnesses_proof(query, reference_policy),
-            self.emit_query_expr_scalar_types_proof(query, reference_policy),
         )
     }
 
@@ -1761,22 +3292,18 @@ impl RocqQueryDefinitions {
         query: &FormalQueryExpr,
         reference_policy: QueryExprReferencePolicy,
     ) -> String {
-        self.emit_query_expr_typed_admissibility_certificate(
+        self.emit_query_expr_canonical_admissibility_certificate(
             symbol,
             query,
             self.emit_query_expr_body_admissibility_proof(query, reference_policy),
-            self.emit_query_expr_body_scalar_witnesses_proof(query, reference_policy),
-            self.emit_query_expr_body_scalar_types_proof(query, reference_policy),
         )
     }
 
-    fn emit_query_expr_typed_admissibility_certificate(
+    fn emit_query_expr_canonical_admissibility_certificate(
         &self,
         symbol: &str,
         query: &FormalQueryExpr,
-        structural_proof: String,
-        scalar_witnesses_proof: String,
-        scalar_types_proof: String,
+        admissibility_proof: String,
     ) -> String {
         let requires_model = query.requires_numeric_exp_model();
         let model_binder = if requires_model {
@@ -1789,446 +3316,30 @@ impl RocqQueryDefinitions {
         } else {
             ""
         };
-        let certificate = format!(
-            "Lemma {symbol}_native_scalar_witnesses_valid_generated_schema{model_binder} :\n  @query_expr_scalar_witnesses_valid TNull relname\n    NullValues.is_null_value ({symbol}{model_argument}).\nProof.\n  unfold {symbol}.\n{}\nQed.\n\nLemma {symbol}_native_scalar_types_valid_generated_schema{model_binder} :\n  @query_expr_scalar_types_valid TNull relname\n    TNullLeafHasType TNullCallHasType TNullPredicateHasTypes type_int64 type_bool\n    ({symbol}{model_argument}).\nProof.\n  unfold {symbol}.\n{}\nQed.\n\nLemma {symbol}_typed_native_scalar_admissible_with_outputs_generated_schema{model_binder} :\n  TNullQueryExprTypedNativeScalarAdmissibleWithOutputs\n    (@_basesort TNull Schema.generated_schema)\n    ({symbol}{model_argument}) {symbol}_expected_outputs.\nProof.\n  assert (Hstructural :\n    @query_expr_admissible_with_outputs TNull relname\n      (@_basesort TNull Schema.generated_schema)\n      ({symbol}{model_argument}) {symbol}_expected_outputs).\n  {{\n    unfold {symbol}, {symbol}_expected_outputs.\n{}\n  }}\n  unfold TNullQueryExprTypedNativeScalarAdmissibleWithOutputs,\n    TNullQueryExprTypedNativeScalarAdmissible,\n    query_expr_typed_native_scalar_admissible,\n    query_expr_native_scalar_admissible.\n  split.\n  {{\n    split.\n    {{\n      split.\n      {{ exact (proj1 Hstructural). }}\n      {{ apply {symbol}_native_scalar_witnesses_valid_generated_schema. }}\n    }}\n    {{ apply {symbol}_native_scalar_types_valid_generated_schema. }}\n  }}\n  {{ exact (proj2 Hstructural). }}\nQed.\n\nLemma {symbol}_admissible_with_outputs_generated_schema{model_binder} :\n  @query_expr_admissible_with_outputs TNull relname\n    (@_basesort TNull Schema.generated_schema)\n    ({symbol}{model_argument}) {symbol}_expected_outputs.\nProof.\n  apply TNullQueryExprTypedNativeScalarAdmissibleWithOutputs_is_admissible.\n  exact ({symbol}_typed_native_scalar_admissible_with_outputs_generated_schema{model_argument}).\nQed.\n\nLemma {symbol}_admissible_generated_schema{model_binder} :\n  @query_expr_admissible TNull relname\n    (@_basesort TNull Schema.generated_schema)\n    ({symbol}{model_argument}).\nProof.\n  exact (proj1 ({symbol}_admissible_with_outputs_generated_schema{model_argument})).\nQed.\n\nLemma {symbol}_outputs_generated_schema{model_binder} :\n  query_expr_outputs ({symbol}{model_argument}) = {symbol}_expected_outputs.\nProof.\n  exact (proj2 ({symbol}_admissible_with_outputs_generated_schema{model_argument})).\nQed.",
-            indent_rocq_expr(&scalar_witnesses_proof, 2),
-            indent_rocq_expr(&scalar_types_proof, 2),
-            indent_rocq_expr(&structural_proof, 4),
-        );
-        certificate.replace(
-            &format!(
-                "      {{ apply {symbol}_native_scalar_witnesses_valid_generated_schema. }}"
-            ),
-            &format!(
-                "      {{\n        split.\n        {{ apply {symbol}_native_scalar_witnesses_valid_generated_schema. }}\n        {{ reflexivity. }}\n      }}"
-            ),
-        )
-    }
-
-    fn emit_query_expr_scalar_witnesses_proof(
-        &self,
-        query: &FormalQueryExpr,
-        reference_policy: QueryExprReferencePolicy,
-    ) -> String {
-        if reference_policy.query_exprs
-            && let Some(index) = self
-                .shared_query_exprs
-                .iter()
-                .position(|candidate| candidate == query)
-        {
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!(
-                "apply (shared_query_expr_{index}_native_scalar_witnesses_valid_generated_schema{model_argument})."
-            );
-        }
-        self.emit_query_expr_body_scalar_witnesses_proof(query, reference_policy)
-    }
-
-    fn emit_query_expr_body_scalar_witnesses_proof(
-        &self,
-        query: &FormalQueryExpr,
-        reference_policy: QueryExprReferencePolicy,
-    ) -> String {
-        let proof = match query {
-            FormalQueryExpr::Error { .. }
-            | FormalQueryExpr::Empty { .. }
-            | FormalQueryExpr::EmptyTuple
-            | FormalQueryExpr::Table { .. } => "constructor.".to_owned(),
-            FormalQueryExpr::Set { left, right, .. }
-            | FormalQueryExpr::CrossJoin { left, right } => rocq_conjunction_proof(vec![
-                self.emit_query_expr_scalar_witnesses_proof(left, reference_policy),
-                self.emit_query_expr_scalar_witnesses_proof(right, reference_policy),
-            ]),
-            FormalQueryExpr::Join {
-                predicate,
-                left,
-                right,
-                ..
-            } => rocq_conjunction_proof(vec![
-                self.emit_formula_expr_scalar_witnesses_proof(
-                    predicate,
-                    reference_policy.formula_exprs,
-                ),
-                self.emit_query_expr_scalar_witnesses_proof(left, reference_policy),
-                self.emit_query_expr_scalar_witnesses_proof(right, reference_policy),
-            ]),
-            FormalQueryExpr::Projection { input, .. }
-            | FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::GroupingSets { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
-            | FormalQueryExpr::Window { input, .. }
-            | FormalQueryExpr::Distinct { input }
-            | FormalQueryExpr::OrderBy { input, .. }
-            | FormalQueryExpr::Offset { input, .. }
-            | FormalQueryExpr::Fetch { input, .. } => {
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy)
-            }
-            FormalQueryExpr::ScalarProjection { select, input } => rocq_conjunction_proof(vec![
-                self.emit_scalar_select_list_witnesses_proof(select),
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Selection { predicate, input } => rocq_conjunction_proof(vec![
-                self.emit_formula_expr_scalar_witnesses_proof(
-                    predicate,
-                    reference_policy.formula_exprs,
-                ),
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::ScalarSelection { predicate, input } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_witnesses_proof(predicate, reference_policy.scalar_exprs),
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Group { having, input, .. } => rocq_conjunction_proof(vec![
-                self.emit_formula_expr_scalar_witnesses_proof(
-                    having,
-                    reference_policy.formula_exprs,
-                ),
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::ScalarGroup {
-                select,
-                group_by,
-                having,
-                input,
-            } => rocq_conjunction_proof(vec![
-                self.emit_scalar_select_list_witnesses_proof(select),
-                rocq_forall_list_proof(
-                    &group_by
-                        .iter()
-                        .map(|key| self.emit_scalar_expr_witnesses_proof(key, false))
-                        .collect::<Vec<_>>(),
-                ),
-                self.emit_scalar_expr_witnesses_proof(having, reference_policy.scalar_exprs),
-                self.emit_query_expr_scalar_witnesses_proof(input, reference_policy),
-            ]),
-        };
-        rocq_cbn_only_proof("query_expr_scalar_witnesses_valid", proof)
-    }
-
-    fn emit_formula_expr_scalar_witnesses_proof(
-        &self,
-        formula: &FormalFormulaExpr,
-        allow_formula_refs: bool,
-    ) -> String {
-        if allow_formula_refs
-            && let Some(index) = self
-                .formula_expr_predicates
-                .iter()
-                .position(|candidate| candidate == formula)
-        {
-            return format!(
-                "unfold formula_expr_predicate_{index}.\n{}",
-                self.emit_formula_expr_scalar_witnesses_proof(formula, false)
-            );
-        }
-        let proof = match formula {
-            FormalFormulaExpr::True
-            | FormalFormulaExpr::False
-            | FormalFormulaExpr::Predicate { .. } => "constructor.".to_owned(),
-            FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-                rocq_conjunction_proof(vec![
-                    self.emit_formula_expr_scalar_witnesses_proof(left, false),
-                    self.emit_formula_expr_scalar_witnesses_proof(right, false),
-                ])
-            }
-            FormalFormulaExpr::Not { formula } => {
-                self.emit_formula_expr_scalar_witnesses_proof(formula, false)
-            }
-            FormalFormulaExpr::In { query, .. }
-            | FormalFormulaExpr::QuantifiedComparison { query, .. }
-            | FormalFormulaExpr::Exists { query } => self.emit_query_expr_scalar_witnesses_proof(
-                query,
-                QueryExprReferencePolicy::uniform(false),
-            ),
-            FormalFormulaExpr::Scalar { expression } => {
-                self.emit_scalar_expr_witnesses_proof(expression, false)
-            }
-        };
-        rocq_cbn_only_proof("formula_expr_scalar_witnesses_valid", proof)
-    }
-
-    fn emit_scalar_expr_witnesses_proof(
-        &self,
-        expression: &FormalScalarExpr,
-        allow_scalar_refs: bool,
-    ) -> String {
-        if allow_scalar_refs
-            && expression.result_kind() == FormalScalarResultKind::Boolean
-            && let Some(index) = self
-                .scalar_expr_predicates
-                .iter()
-                .position(|candidate| candidate == expression)
-        {
-            return format!(
-                "unfold scalar_expr_predicate_{index}.\n{}",
-                self.emit_scalar_expr_witnesses_proof(expression, false)
-            );
-        }
-        let argument_proof = |arguments: &[FormalScalarExpr]| {
-            rocq_forall_list_proof(
-                &arguments
-                    .iter()
-                    .map(|argument| self.emit_scalar_expr_witnesses_proof(argument, false))
-                    .collect::<Vec<_>>(),
-            )
-        };
-        let proof = match expression {
-            FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => "constructor.".to_owned(),
-            FormalScalarExpr::Call { args, .. } | FormalScalarExpr::Predicate { args, .. } => {
-                argument_proof(args)
-            }
-            FormalScalarExpr::Case {
-                condition,
-                then_expr,
-                else_expr,
-                ..
-            } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_witnesses_proof(condition, false),
-                self.emit_scalar_expr_witnesses_proof(then_expr, false),
-                self.emit_scalar_expr_witnesses_proof(else_expr, false),
-            ]),
-            FormalScalarExpr::BooleanValue { expression }
-            | FormalScalarExpr::ValueBoolean { expression }
-            | FormalScalarExpr::Not { expression } => {
-                self.emit_scalar_expr_witnesses_proof(expression, false)
-            }
-            FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-                rocq_conjunction_proof(vec![
-                    self.emit_scalar_expr_witnesses_proof(left, false),
-                    self.emit_scalar_expr_witnesses_proof(right, false),
-                ])
-            }
-            FormalScalarExpr::QuantifiedComparison { args, query, .. }
-            | FormalScalarExpr::In { args, query } => rocq_conjunction_proof(vec![
-                argument_proof(args),
-                self.emit_query_expr_scalar_witnesses_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                ),
-            ]),
-            FormalScalarExpr::Exists { query } => self.emit_query_expr_scalar_witnesses_proof(
-                query,
-                QueryExprReferencePolicy::uniform(false),
-            ),
-            FormalScalarExpr::Subquery { query, .. } => rocq_conjunction_proof(vec![
-                "reflexivity.".to_owned(),
-                self.emit_query_expr_scalar_witnesses_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                ),
-            ]),
-        };
-        rocq_cbn_only_proof("scalar_expr_witnesses_valid", proof)
-    }
-
-    fn emit_scalar_select_list_witnesses_proof(&self, select: &[FormalScalarSelectItem]) -> String {
-        let proof = rocq_forall_list_proof(
-            &select
-                .iter()
-                .map(|item| self.emit_scalar_expr_witnesses_proof(&item.expr, false))
-                .collect::<Vec<_>>(),
-        );
-        self.scalar_select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| format!("unfold scalar_select_list_{index}.\n{proof}"))
-            .unwrap_or(proof)
-    }
-
-    fn emit_query_expr_scalar_types_proof(
-        &self,
-        query: &FormalQueryExpr,
-        reference_policy: QueryExprReferencePolicy,
-    ) -> String {
-        if reference_policy.query_exprs
-            && let Some(index) = self
-                .shared_query_exprs
-                .iter()
-                .position(|candidate| candidate == query)
-        {
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!(
-                "apply (shared_query_expr_{index}_native_scalar_types_valid_generated_schema{model_argument})."
-            );
-        }
-        self.emit_query_expr_body_scalar_types_proof(query, reference_policy)
-    }
-
-    fn emit_query_expr_body_scalar_types_proof(
-        &self,
-        query: &FormalQueryExpr,
-        reference_policy: QueryExprReferencePolicy,
-    ) -> String {
-        let proof = match query {
-            FormalQueryExpr::Error { .. }
-            | FormalQueryExpr::Empty { .. }
-            | FormalQueryExpr::EmptyTuple
-            | FormalQueryExpr::Table { .. } => "constructor.".to_owned(),
-            FormalQueryExpr::Set { left, right, .. }
-            | FormalQueryExpr::CrossJoin { left, right } => rocq_conjunction_proof(vec![
-                self.emit_query_expr_scalar_types_proof(left, reference_policy),
-                self.emit_query_expr_scalar_types_proof(right, reference_policy),
-            ]),
-            FormalQueryExpr::Join {
-                join_kind,
-                predicate,
-                matched_select,
-                left_select,
-                right_select,
-                left,
-                right,
-                ..
-            } => rocq_conjunction_proof(vec![
-                self.emit_formula_expr_scalar_types_proof(
-                    predicate,
-                    reference_policy.formula_exprs,
-                ),
-                self.emit_join_select_lists_types_proof(
-                    *join_kind,
-                    matched_select,
-                    left_select,
-                    right_select,
-                ),
-                self.emit_query_expr_scalar_types_proof(left, reference_policy),
-                self.emit_query_expr_scalar_types_proof(right, reference_policy),
-            ]),
-            FormalQueryExpr::Projection { select, input } => rocq_conjunction_proof(vec![
-                self.emit_select_list_types_proof(select),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::Distinct { input }
-            | FormalQueryExpr::OrderBy { input, .. }
-            | FormalQueryExpr::Offset { input, .. }
-            | FormalQueryExpr::Fetch { input, .. } => {
-                self.emit_query_expr_scalar_types_proof(input, reference_policy)
-            }
-            FormalQueryExpr::ScalarProjection { select, input } => rocq_conjunction_proof(vec![
-                self.emit_scalar_select_list_types_proof(select),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Selection { predicate, input } => rocq_conjunction_proof(vec![
-                self.emit_formula_expr_scalar_types_proof(
-                    predicate,
-                    reference_policy.formula_exprs,
-                ),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::ScalarSelection { predicate, input } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_types_proof(predicate, reference_policy.scalar_exprs),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Group {
-                select,
-                group_by,
-                having,
-                input,
-            } => rocq_conjunction_proof(vec![
-                self.emit_select_list_types_proof(select),
-                self.emit_aggregate_terms_existential_types_proof(group_by),
-                self.emit_formula_expr_scalar_types_proof(having, reference_policy.formula_exprs),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::GroupingSets {
-                grouping_sets,
-                input,
-            } => rocq_conjunction_proof(vec![
-                self.emit_grouping_sets_scalar_types_proof(grouping_sets),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Rank { input, .. } => rocq_conjunction_proof(vec![
-                "reflexivity.".to_owned(),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::Window { items, input, .. } => rocq_conjunction_proof(vec![
-                self.emit_window_items_scalar_types_proof(items),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-            FormalQueryExpr::ScalarGroup {
-                select,
-                group_by,
-                having,
-                input,
-            } => rocq_conjunction_proof(vec![
-                self.emit_scalar_select_list_types_proof(select),
-                rocq_forall_list_proof(
-                    &group_by
-                        .iter()
-                        .map(|key| self.emit_scalar_expr_types_proof(key, false))
-                        .collect::<Vec<_>>(),
-                ),
-                self.emit_scalar_expr_types_proof(having, reference_policy.scalar_exprs),
-                self.emit_query_expr_scalar_types_proof(input, reference_policy),
-            ]),
-        };
-        rocq_cbn_only_proof("query_expr_scalar_types_valid", proof)
-    }
-
-    fn emit_select_list_types_proof(&self, select: &[FormalSelectItem]) -> String {
-        let proof = rocq_cbn_only_proof(
-            "query_select_list_scalar_types_valid",
-            rocq_forall_list_proof(
-                &select
-                    .iter()
-                    .map(|_| "solve_generated_scalar_type.".to_owned())
-                    .collect::<Vec<_>>(),
-            ),
-        );
-        self.select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| format!("unfold select_list_{index}.\n{proof}"))
-            .unwrap_or(proof)
-    }
-
-    fn emit_select_list_phase_admissibility_proof(
-        &self,
-        select: &[FormalSelectItem],
-        phase: ScalarPhase,
-    ) -> String {
-        let item_proof = if matches!(phase, ScalarPhase::Select | ScalarPhase::Having) {
-            "left; reflexivity."
+        let schema = &self.admissibility_schema;
+        let analysis_error_proof = if matches!(query, FormalQueryExpr::Error { .. }) {
+            "constructor."
         } else {
-            "right; reflexivity."
+            "reflexivity."
         };
-        let proof = rocq_forall_list_proof(
-            &select
-                .iter()
-                .map(|_| item_proof.to_owned())
-                .collect::<Vec<_>>(),
-        );
-        self.select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| {
-                format!(
-                    "unfold select_list_{index}, SelectList, \
-                     select_list_phase_admissible.\n{proof}"
-                )
-            })
-            .unwrap_or_else(|| format!("unfold SelectList, select_list_phase_admissible.\n{proof}"))
+        format!(
+            "Lemma {symbol}_admissible_with_outputs_generated_schema{model_binder} :\n  TNullQueryExprAdmissibleWithOutputs\n    (@_basesort TNull {schema})\n    ({symbol}{model_argument}) {symbol}_expected_outputs.\nProof.\n  unfold {symbol}, {symbol}_expected_outputs.\n  eapply TNullQueryExprAdmissibleWithOutputs_intro.\n  - {}\n  - {}\n  - unfold query_expr_boolean_sites_well_formed.\n    apply boolean_sites_well_formedb_sound.\n    reflexivity.\nQed.",
+            admissibility_proof, analysis_error_proof,
+        )
     }
 
     fn emit_join_projection_closed_metadata_proof(
         &self,
         property: &str,
-        select_lists: &[&Vec<FormalSelectItem>],
+        select_lists: &[&Vec<FormalScalarSelectItem>],
     ) -> String {
         let mut definitions = select_lists
             .iter()
             .filter_map(|select| {
-                self.select_lists
+                self.scalar_select_lists
                     .iter()
                     .position(|candidate| candidate == *select)
-                    .map(|index| format!("select_list_{index}"))
+                    .map(|index| format!("scalar_select_list_{index}"))
             })
             .collect::<Vec<_>>();
         definitions.sort();
@@ -2249,9 +3360,10 @@ impl RocqQueryDefinitions {
     fn emit_join_projection_phase_admissibility_proof(
         &self,
         join_kind: FormalQueryJoinKind,
-        matched_select: &[FormalSelectItem],
-        left_select: &[FormalSelectItem],
-        right_select: &[FormalSelectItem],
+        matched_select: &[FormalScalarSelectItem],
+        left_select: &[FormalScalarSelectItem],
+        right_select: &[FormalScalarSelectItem],
+        allow_select_refs: bool,
     ) -> String {
         let selected = match join_kind {
             FormalQueryJoinKind::Left => vec![matched_select, left_select],
@@ -2263,288 +3375,36 @@ impl RocqQueryDefinitions {
             selected
                 .into_iter()
                 .map(|select| {
-                    self.emit_select_list_phase_admissibility_proof(select, ScalarPhase::RowSelect)
+                    self.emit_scalar_select_list_admissibility_proof(
+                        select,
+                        ScalarPhase::RowSelect,
+                        allow_select_refs,
+                    )
                 })
                 .collect(),
         );
-        format!("unfold query_join_projections_phase_admissible.\n{proof}")
+        proof
     }
 
-    fn emit_aggregate_terms_phase_admissibility_proof(
-        &self,
-        terms: &[FormalAggregateTerm],
-        phase: ScalarPhase,
-    ) -> String {
-        let term_proof = if matches!(phase, ScalarPhase::Select | ScalarPhase::Having) {
-            "left; reflexivity."
-        } else {
-            "right; reflexivity."
-        };
-        rocq_forall_list_proof(
-            &terms
-                .iter()
-                .map(|_| term_proof.to_owned())
-                .collect::<Vec<_>>(),
-        )
-    }
-
-    fn emit_aggregate_terms_existential_types_proof(
-        &self,
-        terms: &[FormalAggregateTerm],
-    ) -> String {
-        rocq_cbn_only_proof(
-            "query_aggterms_scalar_types_valid",
-            rocq_forall_list_proof(
-                &terms
-                    .iter()
-                    .map(|_| "eexists; solve_generated_scalar_type.".to_owned())
-                    .collect::<Vec<_>>(),
-            ),
-        )
-    }
-
-    fn emit_join_select_lists_types_proof(
-        &self,
-        join_kind: FormalQueryJoinKind,
-        matched_select: &[FormalSelectItem],
-        left_select: &[FormalSelectItem],
-        right_select: &[FormalSelectItem],
-    ) -> String {
-        let proof = match join_kind {
-            FormalQueryJoinKind::Left => rocq_conjunction_proof(vec![
-                self.emit_select_list_types_proof(matched_select),
-                self.emit_select_list_types_proof(left_select),
-            ]),
-            FormalQueryJoinKind::Right => rocq_conjunction_proof(vec![
-                self.emit_select_list_types_proof(matched_select),
-                self.emit_select_list_types_proof(right_select),
-            ]),
-            FormalQueryJoinKind::Full => rocq_conjunction_proof(vec![
-                self.emit_select_list_types_proof(matched_select),
-                self.emit_select_list_types_proof(left_select),
-                self.emit_select_list_types_proof(right_select),
-            ]),
-            FormalQueryJoinKind::Semi | FormalQueryJoinKind::Anti => {
-                self.emit_select_list_types_proof(left_select)
-            }
-        };
-        rocq_cbn_only_proof("query_join_scalar_types_valid", proof)
-    }
-
-    fn emit_grouping_sets_scalar_types_proof(&self, grouping_sets: &[FormalGroupingSet]) -> String {
-        rocq_cbn_only_proof(
-            "query_grouping_sets_scalar_types_valid",
-            rocq_forall_list_proof(
-                &grouping_sets
-                    .iter()
-                    .map(|grouping_set| {
-                        rocq_conjunction_proof(vec![
-                            self.emit_select_list_types_proof(&grouping_set.select),
-                            self.emit_aggregate_terms_existential_types_proof(
-                                &grouping_set.group_by,
-                            ),
-                        ])
-                    })
-                    .collect::<Vec<_>>(),
-            ),
-        )
-    }
-
-    fn emit_window_items_scalar_types_proof(&self, items: &[FormalWindowItem]) -> String {
+    fn emit_window_items_admissibility_proof(&self, items: &[FormalWindowItem]) -> String {
         rocq_forall_list_proof(
             &items
                 .iter()
-                .map(|item| {
-                    rocq_cbn_only_proof(
-                        "query_window_item_scalar_types_valid",
-                        match &item.function {
-                            FormalWindowFunction::RowNumber => "reflexivity.".to_owned(),
-                            FormalWindowFunction::Aggregate { .. }
-                            | FormalWindowFunction::FullPartitionAggregate { .. } => {
-                                "solve_generated_scalar_type.".to_owned()
-                            }
-                        },
-                    )
+                .map(|item| match &item.function {
+                    FormalWindowFunction::RowNumber => rocq_metadata_proof(),
+                    FormalWindowFunction::Aggregate { .. } => {
+                        "unfold WindowAggregateItem, TNullLeafHasType; \
+                         split; reflexivity."
+                            .to_owned()
+                    }
+                    FormalWindowFunction::FullPartitionAggregate { .. } => {
+                        "unfold WindowFullPartitionAggregateItem, TNullLeafHasType; \
+                         split; reflexivity."
+                            .to_owned()
+                    }
                 })
                 .collect::<Vec<_>>(),
         )
-    }
-
-    fn emit_formula_expr_scalar_types_proof(
-        &self,
-        formula: &FormalFormulaExpr,
-        allow_formula_refs: bool,
-    ) -> String {
-        if allow_formula_refs
-            && let Some(index) = self
-                .formula_expr_predicates
-                .iter()
-                .position(|candidate| candidate == formula)
-        {
-            return format!(
-                "unfold formula_expr_predicate_{index}.\n{}",
-                self.emit_formula_expr_scalar_types_proof(formula, false)
-            );
-        }
-        let existential_predicate_proof = |arguments: &[FormalAggregateTerm]| {
-            rocq_focused_subproofs(
-                "eexists.\nsplit.",
-                &[
-                    rocq_forall_list_proof(
-                        &arguments
-                            .iter()
-                            .map(|_| "solve_generated_scalar_type.".to_owned())
-                            .collect::<Vec<_>>(),
-                    ),
-                    "solve_generated_scalar_type.".to_owned(),
-                ],
-            )
-        };
-        let proof = match formula {
-            FormalFormulaExpr::True | FormalFormulaExpr::False => "constructor.".to_owned(),
-            FormalFormulaExpr::Predicate { args, .. } => existential_predicate_proof(args),
-            FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-                rocq_conjunction_proof(vec![
-                    self.emit_formula_expr_scalar_types_proof(left, false),
-                    self.emit_formula_expr_scalar_types_proof(right, false),
-                ])
-            }
-            FormalFormulaExpr::Not { formula } => {
-                self.emit_formula_expr_scalar_types_proof(formula, false)
-            }
-            FormalFormulaExpr::QuantifiedComparison { args, query, .. } => {
-                rocq_conjunction_proof(vec![
-                    existential_predicate_proof(args),
-                    self.emit_query_expr_scalar_types_proof(
-                        query,
-                        QueryExprReferencePolicy::uniform(false),
-                    ),
-                ])
-            }
-            FormalFormulaExpr::In { select, query } => rocq_conjunction_proof(vec![
-                rocq_forall_list_proof(
-                    &select
-                        .iter()
-                        .map(|_| "solve_generated_scalar_type.".to_owned())
-                        .collect::<Vec<_>>(),
-                ),
-                self.emit_query_expr_scalar_types_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                ),
-            ]),
-            FormalFormulaExpr::Exists { query } => self.emit_query_expr_scalar_types_proof(
-                query,
-                QueryExprReferencePolicy::uniform(false),
-            ),
-            FormalFormulaExpr::Scalar { expression } => {
-                self.emit_scalar_expr_types_proof(expression, false)
-            }
-        };
-        rocq_cbn_only_proof("formula_expr_scalar_types_valid", proof)
-    }
-
-    fn emit_scalar_expr_types_proof(
-        &self,
-        expression: &FormalScalarExpr,
-        allow_scalar_refs: bool,
-    ) -> String {
-        if allow_scalar_refs
-            && expression.result_kind() == FormalScalarResultKind::Boolean
-            && let Some(index) = self
-                .scalar_expr_predicates
-                .iter()
-                .position(|candidate| candidate == expression)
-        {
-            return format!(
-                "unfold scalar_expr_predicate_{index}.\n{}",
-                self.emit_scalar_expr_types_proof(expression, false)
-            );
-        }
-        let argument_proof = |arguments: &[FormalScalarExpr]| {
-            rocq_forall_list_proof(
-                &arguments
-                    .iter()
-                    .map(|argument| self.emit_scalar_expr_types_proof(argument, false))
-                    .collect::<Vec<_>>(),
-            )
-        };
-        let proof = match expression {
-            FormalScalarExpr::Leaf { .. } => "solve_generated_scalar_type.".to_owned(),
-            FormalScalarExpr::Call { args, .. } => rocq_conjunction_proof(vec![
-                argument_proof(args),
-                "solve_generated_scalar_type.".to_owned(),
-            ]),
-            FormalScalarExpr::Case {
-                condition,
-                then_expr,
-                else_expr,
-                ..
-            } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_types_proof(condition, false),
-                self.emit_scalar_expr_types_proof(then_expr, false),
-                self.emit_scalar_expr_types_proof(else_expr, false),
-            ]),
-            FormalScalarExpr::BooleanValue { expression } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_types_proof(expression, false),
-                "intros truth; destruct truth; reflexivity.".to_owned(),
-            ]),
-            FormalScalarExpr::ValueBoolean { expression } => rocq_conjunction_proof(vec![
-                self.emit_scalar_expr_types_proof(expression, false),
-                "reflexivity.".to_owned(),
-            ]),
-            FormalScalarExpr::Predicate { args, .. } => rocq_conjunction_proof(vec![
-                argument_proof(args),
-                "solve_generated_scalar_type.".to_owned(),
-            ]),
-            FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-                rocq_conjunction_proof(vec![
-                    self.emit_scalar_expr_types_proof(left, false),
-                    self.emit_scalar_expr_types_proof(right, false),
-                ])
-            }
-            FormalScalarExpr::Not { expression } => {
-                self.emit_scalar_expr_types_proof(expression, false)
-            }
-            FormalScalarExpr::True => "constructor.".to_owned(),
-            FormalScalarExpr::QuantifiedComparison { args, query, .. } => {
-                rocq_conjunction_proof(vec![
-                    argument_proof(args),
-                    "solve_generated_scalar_type.".to_owned(),
-                    self.emit_query_expr_scalar_types_proof(
-                        query,
-                        QueryExprReferencePolicy::uniform(false),
-                    ),
-                ])
-            }
-            FormalScalarExpr::In { args, query } => rocq_conjunction_proof(vec![
-                argument_proof(args),
-                self.emit_query_expr_scalar_types_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                ),
-            ]),
-            FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => self
-                .emit_query_expr_scalar_types_proof(
-                    query,
-                    QueryExprReferencePolicy::uniform(false),
-                ),
-        };
-        rocq_cbn_only_proof("scalar_expr_types_valid", proof)
-    }
-
-    fn emit_scalar_select_list_types_proof(&self, select: &[FormalScalarSelectItem]) -> String {
-        let proof = rocq_forall_list_proof(
-            &select
-                .iter()
-                .map(|item| self.emit_scalar_expr_types_proof(&item.expr, false))
-                .collect::<Vec<_>>(),
-        );
-        self.scalar_select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| format!("unfold scalar_select_list_{index}.\n{proof}"))
-            .unwrap_or(proof)
     }
 
     fn emit_query_expr_admissibility_proof(
@@ -2563,14 +3423,66 @@ impl RocqQueryDefinitions {
             } else {
                 ""
             };
-            return format!(
-                "apply (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument})."
+            return rocq_focused_subproofs(
+                "split.",
+                &[
+                    format!(
+                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument})))."
+                    ),
+                    format!(
+                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument}))."
+                    ),
+                ],
             );
         }
         self.emit_query_expr_body_admissibility_proof(query, reference_policy)
     }
 
     fn emit_query_expr_body_admissibility_proof(
+        &self,
+        query: &FormalQueryExpr,
+        reference_policy: QueryExprReferencePolicy,
+    ) -> String {
+        let structural =
+            self.emit_query_expr_structural_admissibility_proof(query, reference_policy);
+        rocq_focused_subproofs(
+            "eapply query_expr_admissible_with_outputs_change.",
+            &[structural, rocq_metadata_proof()],
+        )
+    }
+
+    fn emit_query_expr_child_admissibility_proof(
+        &self,
+        query: &FormalQueryExpr,
+        reference_policy: QueryExprReferencePolicy,
+    ) -> String {
+        if reference_policy.query_exprs
+            && let Some(index) = self
+                .shared_query_exprs
+                .iter()
+                .position(|candidate| candidate == query)
+        {
+            let model_argument = if query.requires_numeric_exp_model() {
+                " generated_numeric_exp_model"
+            } else {
+                ""
+            };
+            return rocq_focused_subproofs(
+                "split.",
+                &[
+                    format!(
+                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument})))."
+                    ),
+                    format!(
+                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument}))."
+                    ),
+                ],
+            );
+        }
+        self.emit_query_expr_structural_admissibility_proof(query, reference_policy)
+    }
+
+    fn emit_query_expr_structural_admissibility_proof(
         &self,
         query: &FormalQueryExpr,
         reference_policy: QueryExprReferencePolicy,
@@ -2600,16 +3512,16 @@ impl RocqQueryDefinitions {
             FormalQueryExpr::Set { left, right, .. } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_set.",
                 &[
-                    self.emit_query_expr_admissibility_proof(left, reference_policy),
-                    self.emit_query_expr_admissibility_proof(right, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(left, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(right, reference_policy),
                     rocq_metadata_proof(),
                 ],
             ),
             FormalQueryExpr::CrossJoin { left, right } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_cross_join.",
                 &[
-                    self.emit_query_expr_admissibility_proof(left, reference_policy),
-                    self.emit_query_expr_admissibility_proof(right, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(left, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(right, reference_policy),
                     rocq_metadata_proof(),
                 ],
             ),
@@ -2625,13 +3537,13 @@ impl RocqQueryDefinitions {
             } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_join.",
                 &[
-                    self.emit_formula_expr_admissibility_proof(
+                    self.emit_scalar_expr_admissibility_proof(
                         predicate,
                         ScalarPhase::On,
-                        reference_policy.formula_exprs,
+                        reference_policy.scalar_exprs,
                     ),
-                    self.emit_query_expr_admissibility_proof(left, reference_policy),
-                    self.emit_query_expr_admissibility_proof(right, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(left, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(right, reference_policy),
                     self.emit_join_projection_closed_metadata_proof(
                         "query_join_projection_sorts_compatible",
                         &[matched_select, left_select, right_select],
@@ -2645,25 +3557,19 @@ impl RocqQueryDefinitions {
                         matched_select,
                         left_select,
                         right_select,
+                        reference_policy.scalar_select_lists,
                     ),
                 ],
             ),
             FormalQueryExpr::Projection { select, input } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_project.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
-                    rocq_metadata_proof(),
-                    self.emit_select_list_phase_admissibility_proof(select, ScalarPhase::RowSelect),
-                ],
-            ),
-            FormalQueryExpr::ScalarProjection { select, input } => rocq_focused_subproofs(
-                "eapply query_expr_admissible_with_outputs_scalar_project.",
-                &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     rocq_metadata_proof(),
                     self.emit_scalar_select_list_admissibility_proof(
                         select,
                         ScalarPhase::RowSelect,
+                        reference_policy.scalar_select_lists,
                     ),
                 ],
             ),
@@ -2671,7 +3577,7 @@ impl RocqQueryDefinitions {
                 "unfold NumericExpRowMapExpr, RowMapExpr.\n\
                  eapply query_expr_admissible_with_outputs_row_map.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     rocq_metadata_proof(),
                     "apply NumericExpRowAdapter_well_sorted.".to_owned(),
                 ],
@@ -2679,54 +3585,12 @@ impl RocqQueryDefinitions {
             FormalQueryExpr::Selection { predicate, input } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_filter.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
-                    self.emit_formula_expr_admissibility_proof(
-                        predicate,
-                        ScalarPhase::Where,
-                        reference_policy.formula_exprs,
-                    ),
-                ],
-            ),
-            FormalQueryExpr::ScalarSelection { predicate, input } => rocq_focused_subproofs(
-                "eapply query_expr_admissible_with_outputs_scalar_filter.",
-                &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     self.emit_scalar_expr_admissibility_proof(
                         predicate,
                         ScalarPhase::Where,
                         reference_policy.scalar_exprs,
                     ),
-                ],
-            ),
-            FormalQueryExpr::ScalarGroup {
-                select,
-                group_by,
-                having,
-                input,
-            } => rocq_focused_subproofs(
-                "eapply query_expr_admissible_with_outputs_scalar_group.",
-                &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
-                    rocq_metadata_proof(),
-                    self.emit_scalar_select_list_admissibility_proof(select, ScalarPhase::Select),
-                    self.emit_scalar_expr_admissibility_proof(
-                        having,
-                        ScalarPhase::Having,
-                        reference_policy.scalar_exprs,
-                    ),
-                    rocq_forall_list_proof(
-                        &group_by
-                            .iter()
-                            .map(|key| {
-                                self.emit_scalar_expr_admissibility_proof(
-                                    key,
-                                    ScalarPhase::GroupBy,
-                                    false,
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    ),
-                    rocq_metadata_proof(),
                 ],
             ),
             FormalQueryExpr::Group {
@@ -2737,18 +3601,20 @@ impl RocqQueryDefinitions {
             } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_group.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
-                    self.emit_formula_expr_admissibility_proof(
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
+                    rocq_metadata_proof(),
+                    self.emit_scalar_select_list_admissibility_proof(
+                        select,
+                        ScalarPhase::Select,
+                        reference_policy.scalar_select_lists,
+                    ),
+                    self.emit_scalar_expr_admissibility_proof(
                         having,
                         ScalarPhase::Having,
-                        reference_policy.formula_exprs,
+                        reference_policy.scalar_exprs,
                     ),
+                    self.emit_scalar_expr_list_admissibility_proof(group_by, ScalarPhase::GroupBy),
                     rocq_metadata_proof(),
-                    self.emit_select_list_phase_admissibility_proof(select, ScalarPhase::Select),
-                    self.emit_aggregate_terms_phase_admissibility_proof(
-                        group_by,
-                        ScalarPhase::GroupBy,
-                    ),
                 ],
             ),
             FormalQueryExpr::GroupingSets {
@@ -2757,9 +3623,12 @@ impl RocqQueryDefinitions {
             } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_grouping_sets.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     self.emit_grouping_sets_well_formed_proof(grouping_sets),
-                    self.emit_grouping_sets_phase_admissibility_proof(grouping_sets),
+                    self.emit_grouping_sets_admissibility_proof(
+                        grouping_sets,
+                        reference_policy.scalar_select_lists,
+                    ),
                 ],
             ),
             FormalQueryExpr::Rank {
@@ -2771,12 +3640,13 @@ impl RocqQueryDefinitions {
                 "unfold RankExpr.\n\
                  eapply query_expr_admissible_with_outputs_rank.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
+                    rocq_metadata_proof(),
                     self.emit_sort_keys_in_outputs_proof(partition_keys),
                     self.emit_sort_keys_in_outputs_proof(order_keys),
                     rocq_focused_subproofs(
                         "eapply query_attribute_not_in_outputs.",
-                        &[rocq_closed_attribute_nonmembership_proof()],
+                        &[rocq_closed_nonmembership_proof()],
                     ),
                 ],
             ),
@@ -2789,10 +3659,11 @@ impl RocqQueryDefinitions {
                 "unfold WindowExpr.\n\
                  eapply query_expr_admissible_with_outputs_window.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     self.emit_sort_keys_in_outputs_proof(partition_keys),
                     self.emit_sort_keys_in_outputs_proof(order_keys),
                     self.emit_window_items_fresh_proof(items),
+                    self.emit_window_items_admissibility_proof(items),
                     rocq_focused_subproofs(
                         "eapply query_output_attributes_unique_from_all_diff.",
                         &[rocq_window_outputs_all_diff_proof(items.len())],
@@ -2801,28 +3672,25 @@ impl RocqQueryDefinitions {
             ),
             FormalQueryExpr::Distinct { input } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_distinct.",
-                &[self.emit_query_expr_admissibility_proof(input, reference_policy)],
+                &[self.emit_query_expr_child_admissibility_proof(input, reference_policy)],
             ),
             FormalQueryExpr::OrderBy { keys, input } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_order_by.",
                 &[
-                    self.emit_query_expr_admissibility_proof(input, reference_policy),
+                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
                     self.emit_sort_keys_in_outputs_proof(keys),
                 ],
             ),
             FormalQueryExpr::Offset { input, .. } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_offset.",
-                &[self.emit_query_expr_admissibility_proof(input, reference_policy)],
+                &[self.emit_query_expr_child_admissibility_proof(input, reference_policy)],
             ),
             FormalQueryExpr::Fetch { input, .. } => rocq_focused_subproofs(
                 "eapply query_expr_admissible_with_outputs_fetch.",
-                &[self.emit_query_expr_admissibility_proof(input, reference_policy)],
+                &[self.emit_query_expr_child_admissibility_proof(input, reference_policy)],
             ),
         };
-        rocq_focused_subproofs(
-            "eapply query_expr_admissible_with_outputs_change.",
-            &[structural, rocq_metadata_proof()],
-        )
+        structural
     }
 
     fn shape_definitions(&self) -> Vec<FormalQueryShapeDefinition> {
@@ -2832,13 +3700,6 @@ impl RocqQueryDefinitions {
                 symbol: format!("scalar_expr_predicate_{index}"),
                 kind: FormalQueryShapeKind::ScalarExpr,
                 tree: self.shape_scalar_expr(expression, false),
-            });
-        }
-        for (index, predicate) in self.formula_expr_predicates.iter().enumerate() {
-            definitions.push(FormalQueryShapeDefinition {
-                symbol: format!("formula_expr_predicate_{index}"),
-                kind: FormalQueryShapeKind::FormulaExpr,
-                tree: self.shape_formula_expr(predicate, false),
             });
         }
         for index in self.shared_query_expr_emission_order() {
@@ -2898,15 +3759,15 @@ impl RocqQueryDefinitions {
         order
     }
 
-    /// Scalar select-list definitions may contain native subqueries whose
+    /// Scalar select-list definitions may contain subqueries whose
     /// projections use another emitted scalar select list. Preserve stable
-    /// first-occurrence symbol indices, but place those nested list
-    /// definitions before their containers so Rocq never sees a forward
+    /// first-occurrence symbol indices, but place nested lists and exact
+    /// prefix parents before their users so Rocq never sees a forward
     /// reference.
     fn scalar_select_list_emission_order(&self) -> Vec<usize> {
         fn visit(
             index: usize,
-            lists: &[Vec<FormalScalarSelectItem>],
+            dependencies: &[Vec<usize>],
             states: &mut [u8],
             order: &mut Vec<usize>,
         ) {
@@ -2916,21 +3777,181 @@ impl RocqQueryDefinitions {
                 _ => {}
             }
             states[index] = 1;
-            for dependency in 0..lists.len() {
-                if dependency != index
-                    && scalar_select_list_contains_list(&lists[index], &lists[dependency])
-                {
-                    visit(dependency, lists, states, order);
-                }
+            for &dependency in &dependencies[index] {
+                visit(dependency, dependencies, states, order);
             }
             states[index] = 2;
             order.push(index);
         }
 
+        let mut dependencies = self.scalar_select_list_nested_dependencies();
+        for (index, parent) in self
+            .scalar_select_list_prefix_parents()
+            .into_iter()
+            .enumerate()
+        {
+            if let Some(parent) = parent {
+                dependencies[index].push(parent);
+            }
+        }
         let mut states = vec![0; self.scalar_select_lists.len()];
         let mut order = Vec::with_capacity(self.scalar_select_lists.len());
         for index in 0..self.scalar_select_lists.len() {
-            visit(index, &self.scalar_select_lists, &mut states, &mut order);
+            visit(index, &dependencies, &mut states, &mut order);
+        }
+        order
+    }
+
+    fn scalar_select_list_nested_dependencies(&self) -> Vec<Vec<usize>> {
+        self.scalar_select_lists
+            .iter()
+            .enumerate()
+            .map(|(index, select)| {
+                self.scalar_select_lists
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(dependency, candidate)| {
+                        (dependency != index && scalar_select_list_contains_list(select, candidate))
+                            .then_some(dependency)
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Reuse only exact AST prefixes. Candidate edges are added to the
+    /// authoritative nested-subquery dependency graph one at a time and are
+    /// rejected if they would create a definition cycle.
+    fn scalar_select_list_prefix_parents(&self) -> Vec<Option<usize>> {
+        fn reaches(
+            start: usize,
+            target: usize,
+            dependencies: &[Vec<usize>],
+            visited: &mut [bool],
+        ) -> bool {
+            if start == target {
+                return true;
+            }
+            if visited[start] {
+                return false;
+            }
+            visited[start] = true;
+            dependencies[start]
+                .iter()
+                .any(|dependency| reaches(*dependency, target, dependencies, visited))
+        }
+
+        let mut dependencies = self.scalar_select_list_nested_dependencies();
+        let mut parents = vec![None; self.scalar_select_lists.len()];
+        for (index, select) in self.scalar_select_lists.iter().enumerate() {
+            if select.is_empty() {
+                continue;
+            }
+            let requires_model = scalar_select_requires_numeric_exp_model(select);
+            let mut candidates = self
+                .scalar_select_lists
+                .iter()
+                .enumerate()
+                .filter(|(parent, candidate)| {
+                    *parent != index
+                        && candidate.len() > select.len()
+                        && scalar_select_requires_numeric_exp_model(candidate) == requires_model
+                        && candidate.starts_with(select)
+                })
+                .map(|(parent, candidate)| (candidate.len(), parent))
+                .collect::<Vec<_>>();
+            candidates.sort_unstable();
+            if let Some((_, parent)) = candidates.into_iter().find(|(_, parent)| {
+                !reaches(
+                    *parent,
+                    index,
+                    &dependencies,
+                    &mut vec![false; dependencies.len()],
+                )
+            }) {
+                parents[index] = Some(parent);
+                dependencies[index].push(parent);
+            }
+        }
+        parents
+    }
+
+    fn scalar_select_list_uses_chunks(
+        &self,
+        index: usize,
+        prefix_parents: &[Option<usize>],
+    ) -> bool {
+        prefix_parents[index].is_none()
+            && self.scalar_select_lists[index].len() > SCALAR_SELECT_CERTIFICATE_CHUNK_THRESHOLD
+    }
+
+    fn scalar_select_list_unfold(&self, index: usize) -> String {
+        let prefix_parents = self.scalar_select_list_prefix_parents();
+        let mut symbols = Vec::new();
+        let mut current = Some(index);
+        while let Some(list_index) = current {
+            symbols.push(format!("scalar_select_list_{list_index}"));
+            if self.scalar_select_list_uses_chunks(list_index, &prefix_parents) {
+                symbols.extend(
+                    self.scalar_select_lists[list_index]
+                        .chunks(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE)
+                        .enumerate()
+                        .map(|(chunk_index, _)| {
+                            format!("scalar_select_list_{list_index}_chunk_{chunk_index}")
+                        }),
+                );
+            }
+            current = prefix_parents[list_index];
+        }
+        format!("unfold {}.", symbols.join(", "))
+    }
+
+    /// A prefix certificate may reuse a parent certificate only at the same
+    /// scalar phase. Emit that parent first while retaining stable order for
+    /// unrelated uses.
+    fn scalar_select_use_emission_order(&self) -> Vec<usize> {
+        fn visit(
+            use_index: usize,
+            uses: &[(Vec<FormalScalarSelectItem>, ScalarPhase)],
+            lists: &[Vec<FormalScalarSelectItem>],
+            prefix_parents: &[Option<usize>],
+            states: &mut [u8],
+            order: &mut Vec<usize>,
+        ) {
+            match states[use_index] {
+                2 => return,
+                1 => unreachable!("scalar select-list prefix certificate dependency cycle"),
+                _ => {}
+            }
+            states[use_index] = 1;
+            let (select, phase) = &uses[use_index];
+            let list_index = lists
+                .iter()
+                .position(|candidate| candidate == select)
+                .expect("each scalar-select use has one emitted definition");
+            if let Some(parent) = prefix_parents[list_index]
+                && let Some(parent_use) = uses.iter().position(|(candidate, candidate_phase)| {
+                    candidate == &lists[parent] && candidate_phase == phase
+                })
+            {
+                visit(parent_use, uses, lists, prefix_parents, states, order);
+            }
+            states[use_index] = 2;
+            order.push(use_index);
+        }
+
+        let prefix_parents = self.scalar_select_list_prefix_parents();
+        let mut states = vec![0; self.scalar_select_uses.len()];
+        let mut order = Vec::with_capacity(self.scalar_select_uses.len());
+        for use_index in 0..self.scalar_select_uses.len() {
+            visit(
+                use_index,
+                &self.scalar_select_uses,
+                &self.scalar_select_lists,
+                &prefix_parents,
+                &mut states,
+                &mut order,
+            );
         }
         order
     }
@@ -3010,23 +4031,16 @@ impl RocqQueryDefinitions {
                 "QExpr_Join",
                 &[
                     emit_rocq_query_join_kind(*join_kind).to_owned(),
-                    self.shape_formula_expr(predicate, reference_policy.formula_exprs),
-                    self.shape_select_list(matched_select),
-                    self.shape_select_list(left_select),
-                    self.shape_select_list(right_select),
+                    self.shape_scalar_expr(predicate, reference_policy.scalar_exprs),
+                    self.shape_scalar_select_list(matched_select),
+                    self.shape_scalar_select_list(left_select),
+                    self.shape_scalar_select_list(right_select),
                     self.shape_query_expr_with_policy(left, reference_policy),
                     self.shape_query_expr_with_policy(right, reference_policy),
                 ],
             ),
             FormalQueryExpr::Projection { select, input } => shape_node(
                 "QExpr_Project",
-                &[
-                    self.shape_select_list(select),
-                    self.shape_query_expr_with_policy(input, reference_policy),
-                ],
-            ),
-            FormalQueryExpr::ScalarProjection { select, input } => shape_node(
-                "QExpr_ScalarProject",
                 &[
                     self.shape_scalar_select_list(select),
                     self.shape_query_expr_with_policy(input, reference_policy),
@@ -3042,18 +4056,11 @@ impl RocqQueryDefinitions {
             FormalQueryExpr::Selection { predicate, input } => shape_node(
                 "QExpr_Filter",
                 &[
-                    self.shape_formula_expr(predicate, reference_policy.formula_exprs),
-                    self.shape_query_expr_with_policy(input, reference_policy),
-                ],
-            ),
-            FormalQueryExpr::ScalarSelection { predicate, input } => shape_node(
-                "QExpr_ScalarFilter",
-                &[
                     self.shape_scalar_expr(predicate, reference_policy.scalar_exprs),
                     self.shape_query_expr_with_policy(input, reference_policy),
                 ],
             ),
-            FormalQueryExpr::ScalarGroup {
+            FormalQueryExpr::Group {
                 select,
                 group_by,
                 having,
@@ -3068,33 +4075,25 @@ impl RocqQueryDefinitions {
                 children.push(self.shape_scalar_expr(having, reference_policy.scalar_exprs));
                 children.push(self.shape_query_expr_with_policy(input, reference_policy));
                 shape_node_with_fields(
-                    "QExpr_ScalarGroup",
+                    "QExpr_Group",
                     &[format!("keys={}", group_by.len())],
                     &children,
                 )
             }
-            FormalQueryExpr::Group {
-                select,
-                group_by,
-                having,
-                input,
-            } => shape_node_with_fields(
-                "QExpr_Group",
-                &[format!("keys={}", group_by.len())],
-                &[
-                    self.shape_select_list(select),
-                    self.shape_formula_expr(having, reference_policy.formula_exprs),
-                    self.shape_query_expr_with_policy(input, reference_policy),
-                ],
-            ),
             FormalQueryExpr::GroupingSets {
                 grouping_sets,
                 input,
             } => {
-                let mut children = grouping_sets
-                    .iter()
-                    .map(|grouping_set| self.shape_select_list(&grouping_set.select))
-                    .collect::<Vec<_>>();
+                let mut children = Vec::new();
+                for grouping_set in grouping_sets {
+                    children.push(self.shape_scalar_select_list(&grouping_set.select));
+                    children.extend(
+                        grouping_set
+                            .group_by
+                            .iter()
+                            .map(|key| self.shape_scalar_expr(key, false)),
+                    );
+                }
                 children.push(self.shape_query_expr_with_policy(input, reference_policy));
                 shape_node_with_fields(
                     "QExpr_GroupingSets",
@@ -3151,71 +4150,6 @@ impl RocqQueryDefinitions {
         }
     }
 
-    fn shape_formula_expr(&self, formula: &FormalFormulaExpr, allow_formula_refs: bool) -> String {
-        if allow_formula_refs
-            && let Some(index) = self
-                .formula_expr_predicates
-                .iter()
-                .position(|candidate| candidate == formula)
-        {
-            return shape_reference(&format!("formula_expr_predicate_{index}"));
-        }
-
-        match formula {
-            FormalFormulaExpr::True => "FExpr_True".to_owned(),
-            FormalFormulaExpr::False => shape_node("FExpr_Not", &["FExpr_True".to_owned()]),
-            FormalFormulaExpr::Predicate { predicate, args } => shape_node_with_fields(
-                "FExpr_Pred",
-                &[format!("args={}", args.len())],
-                &[predicate.rocq_constructor().to_owned()],
-            ),
-            FormalFormulaExpr::And { left, right } => shape_node(
-                "FExpr_Conj",
-                &[
-                    "And_F".to_owned(),
-                    self.shape_formula_expr(left, false),
-                    self.shape_formula_expr(right, false),
-                ],
-            ),
-            FormalFormulaExpr::Or { left, right } => shape_node(
-                "FExpr_Conj",
-                &[
-                    "Or_F".to_owned(),
-                    self.shape_formula_expr(left, false),
-                    self.shape_formula_expr(right, false),
-                ],
-            ),
-            FormalFormulaExpr::Not { formula } => {
-                shape_node("FExpr_Not", &[self.shape_formula_expr(formula, false)])
-            }
-            FormalFormulaExpr::In { select, query } => shape_node_with_fields(
-                "FExpr_In",
-                &[format!("select={}", select.len())],
-                &[self.shape_query_expr(query, false)],
-            ),
-            FormalFormulaExpr::QuantifiedComparison {
-                predicate,
-                args,
-                query,
-            } => shape_node_with_fields(
-                "FExpr_Quant",
-                &[format!("args={}", args.len())],
-                &[
-                    "Exists_F".to_owned(),
-                    predicate.rocq_constructor().to_owned(),
-                    self.shape_query_expr(query, false),
-                ],
-            ),
-            FormalFormulaExpr::Exists { query } => {
-                shape_node("FExpr_Exists", &[self.shape_query_expr(query, false)])
-            }
-            FormalFormulaExpr::Scalar { expression } => shape_node(
-                "FExpr_Scalar",
-                &[self.shape_scalar_expr(expression, allow_formula_refs)],
-            ),
-        }
-    }
-
     fn shape_scalar_expr(&self, expression: &FormalScalarExpr, allow_scalar_refs: bool) -> String {
         if allow_scalar_refs
             && expression.result_kind() == FormalScalarResultKind::Boolean
@@ -3241,7 +4175,10 @@ impl RocqQueryDefinitions {
                 "SExpr_Call",
                 &[
                     format!("type={}", emit_rocq_value_type(*result_ty)),
-                    format!("operator={operator:?}"),
+                    format!(
+                        "operator={}",
+                        compact_skeleton_atom(&format!("{operator:?}"))
+                    ),
                 ],
                 &args
                     .iter()
@@ -3278,22 +4215,39 @@ impl RocqQueryDefinitions {
                     .map(|arg| self.shape_scalar_expr(arg, false))
                     .collect::<Vec<_>>(),
             ),
-            FormalScalarExpr::And { left, right } => shape_node(
-                "SExpr_Conj",
-                &[
-                    "And_F".to_owned(),
-                    self.shape_scalar_expr(left, false),
-                    self.shape_scalar_expr(right, false),
-                ],
-            ),
-            FormalScalarExpr::Or { left, right } => shape_node(
-                "SExpr_Conj",
-                &[
-                    "Or_F".to_owned(),
-                    self.shape_scalar_expr(left, false),
-                    self.shape_scalar_expr(right, false),
-                ],
-            ),
+            FormalScalarExpr::And {
+                insertion_sites,
+                operands,
+            }
+            | FormalScalarExpr::Or {
+                insertion_sites,
+                operands,
+            } => {
+                let operation = if matches!(expression, FormalScalarExpr::And { .. }) {
+                    "And_F"
+                } else {
+                    "Or_F"
+                };
+                let mut children = vec![operation.to_owned()];
+                children.extend(
+                    operands
+                        .iter()
+                        .map(|operand| self.shape_scalar_expr(operand, false)),
+                );
+                let compact_sites = insertion_sites
+                    .iter()
+                    .map(|row| {
+                        row.iter()
+                            .map(|site| self.boolean_site_name(site))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                shape_node_with_fields(
+                    "SExpr_ConjList",
+                    &[format!("sites={compact_sites:?}")],
+                    &children,
+                )
+            }
             FormalScalarExpr::Not { expression } => {
                 shape_node("SExpr_Not", &[self.shape_scalar_expr(expression, false)])
             }
@@ -3337,14 +4291,6 @@ impl RocqQueryDefinitions {
                 &[self.shape_query_expr(query, false)],
             ),
         }
-    }
-
-    fn shape_select_list(&self, select: &[FormalSelectItem]) -> String {
-        self.select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| shape_reference(&format!("select_list_{index}")))
-            .unwrap_or_else(|| format!("#select{{items={}}}", select.len()))
     }
 
     fn shape_scalar_select_list(&self, select: &[FormalScalarSelectItem]) -> String {
@@ -3440,20 +4386,15 @@ impl RocqQueryDefinitions {
             } => format!(
                 "QExpr_Join {} ({}) ({}) ({}) ({}) ({}) ({})",
                 emit_rocq_query_join_kind(*join_kind),
-                self.emit_formula_expr(predicate, reference_policy.formula_exprs),
-                self.emit_select_list(matched_select),
-                self.emit_select_list(left_select),
-                self.emit_select_list(right_select),
+                self.emit_scalar_expr(predicate, reference_policy.scalar_exprs),
+                self.emit_scalar_select_list(matched_select),
+                self.emit_scalar_select_list(left_select),
+                self.emit_scalar_select_list(right_select),
                 self.emit_query_expr_with_policy(left, reference_policy),
                 self.emit_query_expr_with_policy(right, reference_policy)
             ),
             FormalQueryExpr::Projection { select, input } => format!(
                 "QExpr_Project ({}) ({})",
-                self.emit_select_list(select),
-                self.emit_query_expr_with_policy(input, reference_policy)
-            ),
-            FormalQueryExpr::ScalarProjection { select, input } => format!(
-                "QExpr_ScalarProject ({}) ({})",
                 self.emit_scalar_select_list(select),
                 self.emit_query_expr_with_policy(input, reference_policy)
             ),
@@ -3462,24 +4403,7 @@ impl RocqQueryDefinitions {
             }
             FormalQueryExpr::Selection { predicate, input } => format!(
                 "QExpr_Filter ({}) ({})",
-                self.emit_formula_expr(predicate, reference_policy.formula_exprs),
-                self.emit_query_expr_with_policy(input, reference_policy)
-            ),
-            FormalQueryExpr::ScalarSelection { predicate, input } => format!(
-                "QExpr_ScalarFilter ({}) ({})",
                 self.emit_scalar_expr(predicate, reference_policy.scalar_exprs),
-                self.emit_query_expr_with_policy(input, reference_policy)
-            ),
-            FormalQueryExpr::ScalarGroup {
-                select,
-                group_by,
-                having,
-                input,
-            } => format!(
-                "QExpr_ScalarGroup ({}) ({}) ({}) ({})",
-                self.emit_scalar_select_list(select),
-                self.emit_scalar_expr_list(group_by),
-                self.emit_scalar_expr(having, reference_policy.scalar_exprs),
                 self.emit_query_expr_with_policy(input, reference_policy)
             ),
             FormalQueryExpr::Group {
@@ -3489,9 +4413,9 @@ impl RocqQueryDefinitions {
                 input,
             } => format!(
                 "QExpr_Group ({}) ({}) ({}) ({})",
-                self.emit_select_list(select),
-                emit_rocq_list(group_by, emit_rocq_aggregate_term),
-                self.emit_formula_expr(having, reference_policy.formula_exprs),
+                self.emit_scalar_select_list(select),
+                self.emit_scalar_expr_list(group_by),
+                self.emit_scalar_expr(having, reference_policy.scalar_exprs),
                 self.emit_query_expr_with_policy(input, reference_policy)
             ),
             FormalQueryExpr::GroupingSets {
@@ -3585,8 +4509,8 @@ impl RocqQueryDefinitions {
             .map(|grouping_set| {
                 format!(
                     "({}, {})",
-                    self.emit_select_list(&grouping_set.select),
-                    emit_rocq_list(&grouping_set.group_by, emit_rocq_aggregate_term)
+                    self.emit_scalar_select_list(&grouping_set.select),
+                    self.emit_scalar_expr_list(&grouping_set.group_by)
                 )
             })
             .collect::<Vec<_>>();
@@ -3607,29 +4531,29 @@ impl RocqQueryDefinitions {
         )
     }
 
-    fn emit_grouping_sets_phase_admissibility_proof(
+    fn emit_grouping_sets_admissibility_proof(
         &self,
         grouping_sets: &[FormalGroupingSet],
+        allow_select_refs: bool,
     ) -> String {
         let grouping_set_proofs = grouping_sets
             .iter()
             .map(|grouping_set| {
                 rocq_conjunction_proof(vec![
-                    self.emit_select_list_phase_admissibility_proof(
+                    self.emit_scalar_select_list_admissibility_proof(
                         &grouping_set.select,
                         ScalarPhase::Select,
+                        allow_select_refs,
                     ),
-                    self.emit_aggregate_terms_phase_admissibility_proof(
+                    self.emit_scalar_expr_list_admissibility_proof(
                         &grouping_set.group_by,
                         ScalarPhase::GroupBy,
                     ),
+                    rocq_metadata_proof(),
                 ])
             })
             .collect::<Vec<_>>();
-        format!(
-            "unfold query_grouping_sets_phase_admissible.\n{}",
-            rocq_forall_list_proof(&grouping_set_proofs)
-        )
+        rocq_forall_list_proof(&grouping_set_proofs)
     }
 
     fn emit_sort_keys_in_outputs_proof(&self, keys: &[FormalSortKey]) -> String {
@@ -3649,82 +4573,11 @@ impl RocqQueryDefinitions {
             .map(|_| {
                 rocq_focused_subproofs(
                     "eapply query_attribute_not_in_outputs.",
-                    &[rocq_closed_attribute_nonmembership_proof()],
+                    &[rocq_closed_nonmembership_proof()],
                 )
             })
             .collect::<Vec<_>>();
         rocq_forall_list_proof(&item_proofs)
-    }
-
-    fn emit_query_in_positionally_aligned_proof(&self) -> String {
-        rocq_focused_subproofs(
-            "cbn [query_in_positionally_aligned].\nsplit.",
-            &[
-                rocq_metadata_proof(),
-                rocq_conjunction_proof(vec![rocq_metadata_proof(), rocq_metadata_proof()]),
-            ],
-        )
-    }
-
-    fn emit_formula_expr(&self, formula: &FormalFormulaExpr, allow_formula_refs: bool) -> String {
-        if allow_formula_refs
-            && let Some(index) = self
-                .formula_expr_predicates
-                .iter()
-                .position(|candidate| candidate == formula)
-        {
-            let model_argument = if formula_expr_requires_numeric_exp_model(formula) {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!("formula_expr_predicate_{index}{model_argument}");
-        }
-
-        match formula {
-            FormalFormulaExpr::True => "FExpr_True".to_owned(),
-            FormalFormulaExpr::False => "FExpr_Not FExpr_True".to_owned(),
-            FormalFormulaExpr::Predicate { predicate, args } => format!(
-                "FExpr_Pred ({} : FTuples.Tuple.predicate TNull) ({})",
-                predicate.rocq_constructor(),
-                emit_rocq_list(args, emit_rocq_aggregate_term)
-            ),
-            FormalFormulaExpr::And { left, right } => format!(
-                "FExpr_Conj And_F ({}) ({})",
-                self.emit_formula_expr(left, false),
-                self.emit_formula_expr(right, false)
-            ),
-            FormalFormulaExpr::Or { left, right } => format!(
-                "FExpr_Conj Or_F ({}) ({})",
-                self.emit_formula_expr(left, false),
-                self.emit_formula_expr(right, false)
-            ),
-            FormalFormulaExpr::Not { formula } => {
-                format!("FExpr_Not ({})", self.emit_formula_expr(formula, false))
-            }
-            FormalFormulaExpr::In { select, query } => format!(
-                "FExpr_In ({}) ({})",
-                emit_rocq_list(select, emit_rocq_select_item),
-                self.emit_query_expr(query, false)
-            ),
-            FormalFormulaExpr::QuantifiedComparison {
-                predicate,
-                args,
-                query,
-            } => format!(
-                "FExpr_Quant Exists_F ({} : FTuples.Tuple.predicate TNull) ({}) ({})",
-                predicate.rocq_constructor(),
-                emit_rocq_list(args, emit_rocq_aggregate_term),
-                self.emit_query_expr(query, false)
-            ),
-            FormalFormulaExpr::Exists { query } => {
-                format!("FExpr_Exists ({})", self.emit_query_expr(query, false))
-            }
-            FormalFormulaExpr::Scalar { expression } => format!(
-                "FExpr_Scalar ({})",
-                self.emit_scalar_expr(expression, allow_formula_refs)
-            ),
-        }
     }
 
     fn emit_scalar_expr(&self, expression: &FormalScalarExpr, allow_scalar_refs: bool) -> String {
@@ -3784,15 +4637,21 @@ impl RocqQueryDefinitions {
                 predicate.rocq_constructor(),
                 self.emit_scalar_expr_list(args)
             ),
-            FormalScalarExpr::And { left, right } => format!(
-                "@SExpr_Conj TNull relname And_F ({}) ({})",
-                self.emit_scalar_expr(left, false),
-                self.emit_scalar_expr(right, false)
+            FormalScalarExpr::And {
+                insertion_sites,
+                operands,
+            } => format!(
+                "@SExpr_ConjList TNull relname ({}) And_F ({})",
+                self.emit_boolean_insertion_sites(insertion_sites),
+                self.emit_scalar_expr_list(operands)
             ),
-            FormalScalarExpr::Or { left, right } => format!(
-                "@SExpr_Conj TNull relname Or_F ({}) ({})",
-                self.emit_scalar_expr(left, false),
-                self.emit_scalar_expr(right, false)
+            FormalScalarExpr::Or {
+                insertion_sites,
+                operands,
+            } => format!(
+                "@SExpr_ConjList TNull relname ({}) Or_F ({})",
+                self.emit_boolean_insertion_sites(insertion_sites),
+                self.emit_scalar_expr_list(operands)
             ),
             FormalScalarExpr::Not { expression } => {
                 format!(
@@ -3842,25 +4701,6 @@ impl RocqQueryDefinitions {
         )
     }
 
-    fn emit_query_expr_expected_outputs(
-        &self,
-        query: &FormalQueryExpr,
-        allow_query_expr_refs: bool,
-    ) -> String {
-        if allow_query_expr_refs
-            && let Some(index) = self
-                .shared_query_exprs
-                .iter()
-                .position(|candidate| candidate == query)
-        {
-            return format!("shared_query_expr_{index}_expected_outputs");
-        }
-
-        let outputs = query_expr_output_signature(query)
-            .expect("validated Rocq emission has a complete exact-query output signature");
-        emit_rocq_query_attribute_list(&outputs)
-    }
-
     fn table_sort_certificate_name(&self, relation: &str, columns: &[FormalAttribute]) -> String {
         let index = self
             .table_sorts
@@ -3870,14 +4710,6 @@ impl RocqQueryDefinitions {
             })
             .expect("every emitted table has one deterministic sort witness");
         format!("generated_table_sort_{index}")
-    }
-
-    fn emit_select_list(&self, select: &[FormalSelectItem]) -> String {
-        self.select_lists
-            .iter()
-            .position(|candidate| candidate == select)
-            .map(|index| format!("select_list_{index}"))
-            .unwrap_or_else(|| emit_rocq_select_list(select))
     }
 
     fn emit_scalar_select_list(&self, select: &[FormalScalarSelectItem]) -> String {
@@ -3909,6 +4741,23 @@ impl RocqQueryDefinitions {
                 .collect::<Vec<_>>(),
         )
     }
+}
+
+/// Compact skeleton fields cannot contain structural delimiters because the
+/// proof-stage parser must distinguish them from child nodes. Preserve every
+/// debug-variant token while replacing punctuation used by nested Rust enum
+/// formatting (for example `Multiply(Numeric)`) with an inert separator.
+fn compact_skeleton_atom(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | ' ') {
+                character
+            } else {
+                ':'
+            }
+        })
+        .collect()
 }
 
 fn shape_reference(symbol: &str) -> String {
@@ -3958,31 +4807,31 @@ fn collect_query_expr_counts(
         }
         FormalQueryExpr::Join {
             predicate,
+            matched_select,
+            left_select,
+            right_select,
             left,
             right,
             ..
         } => {
-            collect_formula_expr_query_counts(predicate, counts, order);
+            collect_scalar_expr_query_counts(predicate, counts, order);
+            for item in matched_select.iter().chain(left_select).chain(right_select) {
+                collect_scalar_expr_query_counts(&item.expr, counts, order);
+            }
             collect_query_expr_counts(left, counts, order);
             collect_query_expr_counts(right, counts, order);
         }
-        FormalQueryExpr::Selection {
-            predicate, input, ..
-        } => {
-            collect_formula_expr_query_counts(predicate, counts, order);
-            collect_query_expr_counts(input, counts, order);
-        }
-        FormalQueryExpr::ScalarProjection { select, input } => {
+        FormalQueryExpr::Projection { select, input } => {
             for item in select {
                 collect_scalar_expr_query_counts(&item.expr, counts, order);
             }
             collect_query_expr_counts(input, counts, order);
         }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
+        FormalQueryExpr::Selection { predicate, input } => {
             collect_scalar_expr_query_counts(predicate, counts, order);
             collect_query_expr_counts(input, counts, order);
         }
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having,
@@ -3997,15 +4846,24 @@ fn collect_query_expr_counts(
             collect_scalar_expr_query_counts(having, counts, order);
             collect_query_expr_counts(input, counts, order);
         }
-        FormalQueryExpr::Group { having, input, .. } => {
-            collect_formula_expr_query_counts(having, counts, order);
+        FormalQueryExpr::GroupingSets {
+            grouping_sets,
+            input,
+        } => {
+            for grouping_set in grouping_sets {
+                for item in &grouping_set.select {
+                    collect_scalar_expr_query_counts(&item.expr, counts, order);
+                }
+                for key in &grouping_set.group_by {
+                    collect_scalar_expr_query_counts(key, counts, order);
+                }
+            }
             collect_query_expr_counts(input, counts, order);
         }
-        FormalQueryExpr::GroupingSets { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
-        | FormalQueryExpr::Window { input, .. } => collect_query_expr_counts(input, counts, order),
-        FormalQueryExpr::Projection { input, .. }
-        | FormalQueryExpr::RowMap { input, .. }
+        FormalQueryExpr::Rank { input, .. } | FormalQueryExpr::Window { input, .. } => {
+            collect_query_expr_counts(input, counts, order)
+        }
+        FormalQueryExpr::RowMap { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
         | FormalQueryExpr::Offset { input, .. }
@@ -4014,31 +4872,6 @@ fn collect_query_expr_counts(
         | FormalQueryExpr::Empty { .. }
         | FormalQueryExpr::EmptyTuple
         | FormalQueryExpr::Table { .. } => {}
-    }
-}
-
-fn collect_formula_expr_query_counts(
-    formula: &FormalFormulaExpr,
-    counts: &mut HashMap<FormalQueryExpr, usize>,
-    order: &mut Vec<FormalQueryExpr>,
-) {
-    match formula {
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            collect_formula_expr_query_counts(left, counts, order);
-            collect_formula_expr_query_counts(right, counts, order);
-        }
-        FormalFormulaExpr::Not { formula } => {
-            collect_formula_expr_query_counts(formula, counts, order)
-        }
-        FormalFormulaExpr::In { query, .. }
-        | FormalFormulaExpr::QuantifiedComparison { query, .. }
-        | FormalFormulaExpr::Exists { query } => collect_query_expr_counts(query, counts, order),
-        FormalFormulaExpr::Scalar { expression } => {
-            collect_scalar_expr_query_counts(expression, counts, order)
-        }
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => {}
     }
 }
 
@@ -4069,9 +4902,10 @@ fn collect_scalar_expr_query_counts(
         | FormalScalarExpr::Not { expression } => {
             collect_scalar_expr_query_counts(expression, counts, order)
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            collect_scalar_expr_query_counts(left, counts, order);
-            collect_scalar_expr_query_counts(right, counts, order);
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+            for operand in operands {
+                collect_scalar_expr_query_counts(operand, counts, order);
+            }
         }
         FormalScalarExpr::QuantifiedComparison { args, query, .. }
         | FormalScalarExpr::In { args, query } => {
@@ -4119,10 +4953,9 @@ fn scalar_expr_contains_scalar_select_list(
         | FormalScalarExpr::Not { expression } => {
             scalar_expr_contains_scalar_select_list(expression, needle)
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_contains_scalar_select_list(left, needle)
-                || scalar_expr_contains_scalar_select_list(right, needle)
-        }
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => operands
+            .iter()
+            .any(|operand| scalar_expr_contains_scalar_select_list(operand, needle)),
         FormalScalarExpr::QuantifiedComparison { args, query, .. }
         | FormalScalarExpr::In { args, query } => {
             args.iter()
@@ -4131,32 +4964,6 @@ fn scalar_expr_contains_scalar_select_list(
         }
         FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
             query_expr_contains_scalar_select_list(query, needle)
-        }
-    }
-}
-
-fn formula_expr_contains_scalar_select_list(
-    formula: &FormalFormulaExpr,
-    needle: &[FormalScalarSelectItem],
-) -> bool {
-    match formula {
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => false,
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            formula_expr_contains_scalar_select_list(left, needle)
-                || formula_expr_contains_scalar_select_list(right, needle)
-        }
-        FormalFormulaExpr::Not { formula } => {
-            formula_expr_contains_scalar_select_list(formula, needle)
-        }
-        FormalFormulaExpr::In { query, .. }
-        | FormalFormulaExpr::QuantifiedComparison { query, .. }
-        | FormalFormulaExpr::Exists { query } => {
-            query_expr_contains_scalar_select_list(query, needle)
-        }
-        FormalFormulaExpr::Scalar { expression } => {
-            scalar_expr_contains_scalar_select_list(expression, needle)
         }
     }
 }
@@ -4176,43 +4983,32 @@ fn query_expr_contains_scalar_select_list(
         }
         FormalQueryExpr::Join {
             predicate,
+            matched_select,
+            left_select,
+            right_select,
             left,
             right,
             ..
         } => {
-            formula_expr_contains_scalar_select_list(predicate, needle)
+            scalar_expr_contains_scalar_select_list(predicate, needle)
+                || [matched_select, left_select, right_select]
+                    .into_iter()
+                    .any(|select| {
+                        select == needle || scalar_select_list_contains_list(select, needle)
+                    })
                 || query_expr_contains_scalar_select_list(left, needle)
                 || query_expr_contains_scalar_select_list(right, needle)
         }
-        FormalQueryExpr::Projection { input, .. }
-        | FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::GroupingSets { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
-        | FormalQueryExpr::Window { input, .. }
-        | FormalQueryExpr::Distinct { input }
-        | FormalQueryExpr::OrderBy { input, .. }
-        | FormalQueryExpr::Offset { input, .. }
-        | FormalQueryExpr::Fetch { input, .. } => {
-            query_expr_contains_scalar_select_list(input, needle)
-        }
-        FormalQueryExpr::ScalarProjection { select, input } => {
+        FormalQueryExpr::Projection { select, input } => {
             select == needle
                 || scalar_select_list_contains_list(select, needle)
                 || query_expr_contains_scalar_select_list(input, needle)
         }
         FormalQueryExpr::Selection { predicate, input } => {
-            formula_expr_contains_scalar_select_list(predicate, needle)
-                || query_expr_contains_scalar_select_list(input, needle)
-        }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
             scalar_expr_contains_scalar_select_list(predicate, needle)
                 || query_expr_contains_scalar_select_list(input, needle)
         }
-        FormalQueryExpr::Group { having, input, .. } => {
-            formula_expr_contains_scalar_select_list(having, needle)
-                || query_expr_contains_scalar_select_list(input, needle)
-        }
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having,
@@ -4225,6 +5021,28 @@ fn query_expr_contains_scalar_select_list(
                     .any(|key| scalar_expr_contains_scalar_select_list(key, needle))
                 || scalar_expr_contains_scalar_select_list(having, needle)
                 || query_expr_contains_scalar_select_list(input, needle)
+        }
+        FormalQueryExpr::GroupingSets {
+            grouping_sets,
+            input,
+        } => {
+            grouping_sets.iter().any(|grouping_set| {
+                grouping_set.select == needle
+                    || scalar_select_list_contains_list(&grouping_set.select, needle)
+                    || grouping_set
+                        .group_by
+                        .iter()
+                        .any(|key| scalar_expr_contains_scalar_select_list(key, needle))
+            }) || query_expr_contains_scalar_select_list(input, needle)
+        }
+        FormalQueryExpr::RowMap { input, .. }
+        | FormalQueryExpr::Rank { input, .. }
+        | FormalQueryExpr::Window { input, .. }
+        | FormalQueryExpr::Distinct { input }
+        | FormalQueryExpr::OrderBy { input, .. }
+        | FormalQueryExpr::Offset { input, .. }
+        | FormalQueryExpr::Fetch { input, .. } => {
+            query_expr_contains_scalar_select_list(input, needle)
         }
     }
 }
@@ -4275,31 +5093,34 @@ fn proper_query_expr_subquery_occurrences(
         }
         FormalQueryExpr::Join {
             predicate,
+            matched_select,
+            left_select,
+            right_select,
             left,
             right,
             ..
         } => {
             query_expr_occurrences(left, needle)
                 + query_expr_occurrences(right, needle)
-                + formula_expr_query_occurrences(predicate, needle)
+                + scalar_expr_query_occurrences(predicate, needle)
+                + matched_select
+                    .iter()
+                    .chain(left_select)
+                    .chain(right_select)
+                    .map(|item| scalar_expr_query_occurrences(&item.expr, needle))
+                    .sum::<usize>()
         }
-        FormalQueryExpr::Selection {
-            predicate, input, ..
-        } => {
-            query_expr_occurrences(input, needle)
-                + formula_expr_query_occurrences(predicate, needle)
-        }
-        FormalQueryExpr::ScalarProjection { select, input } => {
+        FormalQueryExpr::Projection { select, input } => {
             query_expr_occurrences(input, needle)
                 + select
                     .iter()
                     .map(|item| scalar_expr_query_occurrences(&item.expr, needle))
                     .sum::<usize>()
         }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
+        FormalQueryExpr::Selection { predicate, input } => {
             query_expr_occurrences(input, needle) + scalar_expr_query_occurrences(predicate, needle)
         }
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having,
@@ -4316,14 +5137,31 @@ fn proper_query_expr_subquery_occurrences(
                     .map(|item| scalar_expr_query_occurrences(&item.expr, needle))
                     .sum::<usize>()
         }
-        FormalQueryExpr::Group { having, input, .. } => {
-            query_expr_occurrences(input, needle) + formula_expr_query_occurrences(having, needle)
+        FormalQueryExpr::GroupingSets {
+            grouping_sets,
+            input,
+        } => {
+            query_expr_occurrences(input, needle)
+                + grouping_sets
+                    .iter()
+                    .map(|grouping_set| {
+                        grouping_set
+                            .select
+                            .iter()
+                            .map(|item| scalar_expr_query_occurrences(&item.expr, needle))
+                            .sum::<usize>()
+                            + grouping_set
+                                .group_by
+                                .iter()
+                                .map(|key| scalar_expr_query_occurrences(key, needle))
+                                .sum::<usize>()
+                    })
+                    .sum::<usize>()
         }
-        FormalQueryExpr::GroupingSets { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
-        | FormalQueryExpr::Window { input, .. } => query_expr_occurrences(input, needle),
-        FormalQueryExpr::Projection { input, .. }
-        | FormalQueryExpr::RowMap { input, .. }
+        FormalQueryExpr::Rank { input, .. } | FormalQueryExpr::Window { input, .. } => {
+            query_expr_occurrences(input, needle)
+        }
+        FormalQueryExpr::RowMap { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
         | FormalQueryExpr::Offset { input, .. }
@@ -4337,25 +5175,6 @@ fn proper_query_expr_subquery_occurrences(
 
 fn query_expr_occurrences(query: &FormalQueryExpr, needle: &FormalQueryExpr) -> usize {
     usize::from(query == needle) + proper_query_expr_subquery_occurrences(query, needle)
-}
-
-fn formula_expr_query_occurrences(formula: &FormalFormulaExpr, needle: &FormalQueryExpr) -> usize {
-    match formula {
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            formula_expr_query_occurrences(left, needle)
-                + formula_expr_query_occurrences(right, needle)
-        }
-        FormalFormulaExpr::Not { formula } => formula_expr_query_occurrences(formula, needle),
-        FormalFormulaExpr::In { query, .. }
-        | FormalFormulaExpr::QuantifiedComparison { query, .. }
-        | FormalFormulaExpr::Exists { query } => query_expr_occurrences(query, needle),
-        FormalFormulaExpr::Scalar { expression } => {
-            scalar_expr_query_occurrences(expression, needle)
-        }
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => 0,
-    }
 }
 
 fn scalar_expr_query_occurrences(expression: &FormalScalarExpr, needle: &FormalQueryExpr) -> usize {
@@ -4378,10 +5197,10 @@ fn scalar_expr_query_occurrences(expression: &FormalScalarExpr, needle: &FormalQ
         FormalScalarExpr::BooleanValue { expression }
         | FormalScalarExpr::ValueBoolean { expression }
         | FormalScalarExpr::Not { expression } => scalar_expr_query_occurrences(expression, needle),
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_query_occurrences(left, needle)
-                + scalar_expr_query_occurrences(right, needle)
-        }
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => operands
+            .iter()
+            .map(|operand| scalar_expr_query_occurrences(operand, needle))
+            .sum(),
         FormalScalarExpr::QuantifiedComparison { args, query, .. }
         | FormalScalarExpr::In { args, query } => {
             query_expr_occurrences(query, needle)
@@ -4486,55 +5305,6 @@ fn emit_rocq_sort_key_constructor(
         (FormalSortDirection::Desc, FormalNullDirection::First) => "SortDescNullsFirst",
         (FormalSortDirection::Desc, FormalNullDirection::Last) => "SortDescNullsLast",
     }
-}
-
-fn column_ref_constructor(attribute_ty: FormalAttributeType) -> &'static str {
-    match attribute_ty {
-        FormalAttributeType::Z => "ZColumn",
-        FormalAttributeType::Int32 => "Int32Column",
-        FormalAttributeType::Int64 => "Int64Column",
-        FormalAttributeType::String { .. } => "StringColumn",
-        FormalAttributeType::Bool => "BoolColumn",
-        FormalAttributeType::Float => "FloatColumn",
-        FormalAttributeType::Double => "DoubleColumn",
-        FormalAttributeType::Numeric => "NumericColumn",
-        FormalAttributeType::Decimal { .. } => "DecimalColumn",
-        FormalAttributeType::Date => "DateColumn",
-        FormalAttributeType::Time => "TimeColumn",
-        FormalAttributeType::Timestamp { .. } => "TimestampColumn",
-        FormalAttributeType::Timestamptz { .. } => "TimestamptzColumn",
-    }
-}
-
-fn emit_rocq_select_list(select: &[FormalSelectItem]) -> String {
-    let columns = select
-        .iter()
-        .map(identity_select_column)
-        .collect::<Option<Vec<_>>>();
-    if let Some(columns) = columns {
-        return format!("SelectColumns {}", emit_rocq_list_expr(&columns));
-    }
-    format!(
-        "SelectList {}",
-        emit_rocq_list(select, emit_rocq_select_item)
-    )
-}
-
-fn emit_rocq_select_item(item: &FormalSelectItem) -> String {
-    if let FormalAggregateTerm::Expr {
-        term: FormalFunctionTerm::Attribute { name, ty },
-    } = &item.expr
-        && name == &item.alias
-        && attribute_types_emit_equivalent(*ty, item.alias_ty)
-        && let Some(select_constructor) = identity_select_constructor(*ty)
-    {
-        return emit_rocq_named_helper(select_constructor, name, *ty);
-    }
-    format!(
-        "SelectAs ({}) ({})",
-        emit_rocq_aggregate_term(&item.expr),
-        emit_rocq_attribute(item.alias_ty, &item.alias)
-    )
 }
 
 fn emit_rocq_aggregate_term(term: &FormalAggregateTerm) -> String {
@@ -4927,55 +5697,6 @@ fn emit_rocq_named_helper(helper: &str, name: &str, ty: FormalAttributeType) -> 
         }
         _ => format!("{helper} {}", rocq_string_literal(name)),
     }
-}
-
-fn identity_select_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
-    match attribute_ty {
-        FormalAttributeType::Z => Some("SelectZ"),
-        FormalAttributeType::Int32 => Some("SelectInt32"),
-        FormalAttributeType::Int64 => Some("SelectInt64"),
-        FormalAttributeType::String { .. } => Some("SelectString"),
-        FormalAttributeType::Bool => Some("SelectBool"),
-        FormalAttributeType::Float => Some("SelectFloat"),
-        FormalAttributeType::Double => Some("SelectDouble"),
-        FormalAttributeType::Numeric => Some("SelectNumeric"),
-        FormalAttributeType::Decimal { .. } => Some("SelectDecimal"),
-        FormalAttributeType::Date => Some("SelectDate"),
-        FormalAttributeType::Time => Some("SelectTime"),
-        FormalAttributeType::Timestamp { .. } => Some("SelectTimestamp"),
-        FormalAttributeType::Timestamptz { .. } => Some("SelectTimestamptz"),
-    }
-}
-
-fn attribute_types_emit_equivalent(left: FormalAttributeType, right: FormalAttributeType) -> bool {
-    match (left, right) {
-        (
-            FormalAttributeType::Timestamp { precision: left },
-            FormalAttributeType::Timestamp { precision: right },
-        ) => timestamp_precision(left) == timestamp_precision(right),
-        (
-            FormalAttributeType::Timestamptz { precision: left },
-            FormalAttributeType::Timestamptz { precision: right },
-        ) => timestamp_precision(left) == timestamp_precision(right),
-        _ => left == right,
-    }
-}
-
-fn identity_select_column(item: &FormalSelectItem) -> Option<String> {
-    let FormalAggregateTerm::Expr {
-        term: FormalFunctionTerm::Attribute { name, ty },
-    } = &item.expr
-    else {
-        return None;
-    };
-    if name != &item.alias || !attribute_types_emit_equivalent(*ty, item.alias_ty) {
-        return None;
-    }
-    Some(emit_rocq_named_helper(
-        column_ref_constructor(*ty),
-        name,
-        *ty,
-    ))
 }
 
 fn dot_constructor(attribute_ty: FormalAttributeType) -> Option<&'static str> {
@@ -5380,8 +6101,7 @@ fn emit_rocq_list_expr(items: &[String]) -> String {
         return "[]".to_owned();
     }
     let single_line = format!("[{}]", items.join("; "));
-    if items.len() <= 3 && single_line.len() <= 88 && !items.iter().any(|item| item.contains('\n'))
-    {
+    if !items.iter().any(|item| item.contains('\n')) {
         return single_line;
     }
 
@@ -5389,7 +6109,6 @@ fn emit_rocq_list_expr(items: &[String]) -> String {
     lines.push("[".to_owned());
     for (index, item) in items.iter().enumerate() {
         let suffix = if index + 1 == items.len() { "" } else { ";" };
-        let item = indent_rocq_expr(item, 2);
         lines.push(format!("{item}{suffix}"));
     }
     lines.push("]".to_owned());

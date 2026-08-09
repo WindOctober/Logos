@@ -3,8 +3,8 @@ use sha2::{Digest, Sha256};
 
 use super::syntax::{FormalAggregateTerm, FormalFunctionTerm, FormalSchema, LoweringStatus};
 use super::{
-    FormalAttribute, FormalFormulaExpr, FormalQueryExpr, FormalScalarExpr, FormalScalarSelectItem,
-    FormalSelectItem, ProofLoweringReport, query_expr_output_signature,
+    FormalAttribute, FormalQueryExpr, FormalScalarExpr, FormalScalarSelectItem,
+    ProofLoweringReport, query_expr_output_signature,
 };
 
 const OBSERVATION_CERTIFICATE_SCHEMA_VERSION: u32 = 1;
@@ -181,6 +181,12 @@ fn analyze_program(
                 )
                 .report(index + 1);
             }
+            if !statement.bindings.is_empty() {
+                return Facts::unknown(
+                    "query-local bindings require BoundQuery-aware observation analysis",
+                )
+                .report(index + 1);
+            }
             statement.query_expr.as_ref().map_or_else(
                 || {
                     Facts::unknown(
@@ -244,33 +250,6 @@ fn analyze_query(schema: Option<&FormalSchema>, query: &FormalQueryExpr) -> Fact
             }
         }
         FormalQueryExpr::Projection { select, input } => {
-            let child = analyze_query(schema, input);
-            let keys = project_keys(&child.keys, select);
-            Facts {
-                permutation_closed: child.permutation_closed,
-                bag_functional: child.bag_functional,
-                bag_rule: if child.bag_functional {
-                    "deterministic row projection preserves a functional success bag".to_owned()
-                } else {
-                    format!(
-                        "projection still needs child bag uniqueness: {}",
-                        child.bag_rule
-                    )
-                },
-                observation_functional: child.observation_functional,
-                observation_rule: if child.observation_functional {
-                    "order-preserving projection preserves a functional observation".to_owned()
-                } else {
-                    format!(
-                        "projection preserves rather than resolves child order choices: {}",
-                        child.observation_rule
-                    )
-                },
-                max_rows: child.max_rows,
-                keys,
-            }
-        }
-        FormalQueryExpr::ScalarProjection { select, input } => {
             let child = analyze_query(schema, input);
             if !select
                 .iter()
@@ -351,46 +330,6 @@ fn analyze_query(schema: Option<&FormalSchema>, query: &FormalQueryExpr) -> Fact
             }
         }
         FormalQueryExpr::Selection { predicate, input } => {
-            let child = analyze_query(schema, input);
-            if !formula_is_row_local(predicate) {
-                return Facts {
-                    permutation_closed: child.permutation_closed,
-                    bag_functional: false,
-                    bag_rule: "a subquery-bearing predicate needs a FormalSQL functionality proof"
-                        .to_owned(),
-                    observation_functional: false,
-                    observation_rule:
-                        "a subquery-bearing predicate may expose several legal acceptances"
-                            .to_owned(),
-                    max_rows: child.max_rows,
-                    keys: child.keys,
-                };
-            }
-            Facts {
-                permutation_closed: child.permutation_closed,
-                bag_functional: child.bag_functional,
-                bag_rule: if child.bag_functional {
-                    "a row-local deterministic filter preserves a functional success bag".to_owned()
-                } else {
-                    format!(
-                        "filter still needs child bag uniqueness: {}",
-                        child.bag_rule
-                    )
-                },
-                observation_functional: child.observation_functional,
-                observation_rule: if child.observation_functional {
-                    "order-preserving filtering preserves a functional observation".to_owned()
-                } else {
-                    format!(
-                        "filtering preserves rather than resolves child order choices: {}",
-                        child.observation_rule
-                    )
-                },
-                max_rows: child.max_rows,
-                keys: child.keys,
-            }
-        }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
             let child = analyze_query(schema, input);
             if !scalar_expr_is_row_local(predicate) {
                 return Facts {
@@ -672,7 +611,7 @@ fn analyze_query(schema: Option<&FormalSchema>, query: &FormalQueryExpr) -> Fact
                 "JOIN success-bag functionality needs predicate/select and child functionality contracts",
             )
         },
-        FormalQueryExpr::Group { .. } | FormalQueryExpr::ScalarGroup { .. } => Facts {
+        FormalQueryExpr::Group { .. } => Facts {
             permutation_closed: true,
             ..Facts::unknown(
                 "GROUP may retain several successful bags through correlated predicates or representation-sensitive runtime checks",
@@ -720,32 +659,6 @@ fn table_keys(table: &super::syntax::FormalTable) -> Vec<ObservationKey> {
     keys
 }
 
-fn project_keys(keys: &[ObservationKey], select: &[FormalSelectItem]) -> Vec<ObservationKey> {
-    keys.iter()
-        .filter_map(|key| {
-            let mut outputs = Vec::with_capacity(key.attributes.len());
-            for attribute in &key.attributes {
-                let item = select.iter().find(|item| {
-                    matches!(
-                        &item.expr,
-                        FormalAggregateTerm::Expr {
-                            term: FormalFunctionTerm::Attribute { name, ty }
-                        } if name == &attribute.name && ty == &attribute.ty
-                    )
-                })?;
-                outputs.push(FormalAttribute {
-                    name: item.alias.clone(),
-                    ty: item.alias_ty,
-                });
-            }
-            attributes_are_distinct(&outputs).then(|| ObservationKey {
-                attributes: outputs,
-                basis: format!("direct projection of {}", key.basis),
-            })
-        })
-        .collect()
-}
-
 fn project_scalar_keys(
     keys: &[ObservationKey],
     select: &[FormalScalarSelectItem],
@@ -785,22 +698,6 @@ fn attributes_are_distinct(attributes: &[FormalAttribute]) -> bool {
         .all(|(index, attribute)| !attributes[..index].contains(attribute))
 }
 
-fn formula_is_row_local(formula: &FormalFormulaExpr) -> bool {
-    match formula {
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => true,
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            formula_is_row_local(left) && formula_is_row_local(right)
-        }
-        FormalFormulaExpr::Not { formula } => formula_is_row_local(formula),
-        FormalFormulaExpr::Scalar { expression } => scalar_expr_is_row_local(expression),
-        FormalFormulaExpr::In { .. }
-        | FormalFormulaExpr::QuantifiedComparison { .. }
-        | FormalFormulaExpr::Exists { .. } => false,
-    }
-}
-
 fn scalar_expr_is_row_local(expression: &FormalScalarExpr) -> bool {
     match expression {
         FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => true,
@@ -820,8 +717,8 @@ fn scalar_expr_is_row_local(expression: &FormalScalarExpr) -> bool {
         FormalScalarExpr::BooleanValue { expression }
         | FormalScalarExpr::ValueBoolean { expression }
         | FormalScalarExpr::Not { expression } => scalar_expr_is_row_local(expression),
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_is_row_local(left) && scalar_expr_is_row_local(right)
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+            operands.iter().all(scalar_expr_is_row_local)
         }
         FormalScalarExpr::QuantifiedComparison { .. }
         | FormalScalarExpr::In { .. }
@@ -846,8 +743,8 @@ fn min_known(left: Option<u64>, right: Option<u64>) -> Option<u64> {
 mod tests {
     use super::*;
     use crate::core::syntax::{
-        FormalAttributeType, FormalNullDirection, FormalSortDirection, FormalSortKey, FormalTable,
-        FormalTableConstraints, FormalUniqueConstraint,
+        FormalAttributeType, FormalNullDirection, FormalQueryBinding, FormalSortDirection,
+        FormalSortKey, FormalTable, FormalTableConstraints, FormalUniqueConstraint,
     };
 
     fn attr(name: &str) -> FormalAttribute {
@@ -924,7 +821,7 @@ mod tests {
         let group = FormalQueryExpr::Group {
             select: Vec::new(),
             group_by: Vec::new(),
-            having: FormalFormulaExpr::True,
+            having: FormalScalarExpr::True,
             input: Box::new(table),
         };
         let facts = analyze_query(None, &group);
@@ -995,6 +892,7 @@ mod tests {
             status: super::super::LoweringStatus::Blocked,
             statements: vec![super::super::LoweredQuery {
                 status: super::super::LoweringStatus::Blocked,
+                bindings: Vec::new(),
                 query_expr: Some(query),
                 output_signature: None,
                 diagnostics: Vec::new(),
@@ -1004,5 +902,34 @@ mod tests {
         let facts = analyze_program(Some(&schema), &program);
         assert!(!facts[0].success_bag_is_functional());
         assert!(!facts[0].success_observation_is_functional());
+    }
+
+    #[test]
+    fn query_local_bindings_never_authorize_a_body_only_certificate() {
+        let (schema, _) = table_with_primary_key();
+        let body = FormalQueryExpr::EmptyTuple;
+        let program = super::super::LoweredProgram {
+            status: super::super::LoweringStatus::Lowered,
+            statements: vec![super::super::LoweredQuery {
+                status: super::super::LoweringStatus::Lowered,
+                bindings: vec![FormalQueryBinding {
+                    id: "binding_1".to_owned(),
+                    source_name: "local".to_owned(),
+                    relation: "__logos_local_1".to_owned(),
+                    output_signature: Vec::new(),
+                    query_expr: FormalQueryExpr::EmptyTuple,
+                }],
+                query_expr: Some(body),
+                output_signature: Some(Vec::new()),
+                diagnostics: Vec::new(),
+            }],
+            diagnostics: Vec::new(),
+        };
+
+        let facts = analyze_program(Some(&schema), &program);
+        assert!(!facts[0].success_bag_is_functional());
+        assert!(!facts[0].success_observation_is_functional());
+        assert!(facts[0].bag_residual().contains("BoundQuery-aware"));
+        assert!(facts[0].observation_residual().contains("BoundQuery-aware"));
     }
 }

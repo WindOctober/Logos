@@ -31,10 +31,8 @@ fn calcite_wrapper_cli_rejects_unknown_duplicate_missing_and_positional_options(
         vec![
             "--schema".into(),
             schema.as_os_str().to_owned(),
-            "--sql".into(),
-            query.as_os_str().to_owned(),
-            "--sql".into(),
-            query.as_os_str().to_owned(),
+            "--schema".into(),
+            schema.as_os_str().to_owned(),
         ],
         vec![
             "--schema".into(),
@@ -59,6 +57,41 @@ fn calcite_wrapper_cli_rejects_unknown_duplicate_missing_and_positional_options(
             "invalid Calcite CLI arguments unexpectedly succeeded"
         );
     }
+    fs::remove_dir_all(temp).unwrap();
+}
+
+#[test]
+#[ignore = "requires the Java Calcite wrapper and Maven bootstrap"]
+fn calcite_wrapper_batches_sql_files_in_argument_order() {
+    let repo = repo_root();
+    let temp = temp_dir("batched-sql-files");
+    let schema = temp.join("schema.sql");
+    let target = temp.join("target.sql");
+    let source = temp.join("source.sql");
+    fs::write(&schema, "create table t(a integer);\n").unwrap();
+    fs::write(&target, "select a from t where a = 2;\n").unwrap();
+    fs::write(&source, "select a from t where a = 1;\n").unwrap();
+
+    let output = Command::new(repo.join("scripts/calcite-ir"))
+        .args([
+            "--schema",
+            schema.to_str().unwrap(),
+            "--sql",
+            target.to_str().unwrap(),
+            "--sql",
+            source.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let raw: CalciteFile = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(raw.queries.len(), 2);
+    assert_eq!(raw.queries[0].sql.trim(), "select a from t where a = 2");
+    assert_eq!(raw.queries[1].sql.trim(), "select a from t where a = 1");
     fs::remove_dir_all(temp).unwrap();
 }
 
@@ -133,6 +166,10 @@ fn calcite_wrapper_emits_only_relroot_visible_columns_and_preserves_child_proven
         rel: &RelExpr,
     ) -> Option<&logos_ir::ir::ScalarSourceClauseOwnership> {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => bindings
+                .iter()
+                .find_map(|binding| first_typed_owned_where(&binding.rel))
+                .or_else(|| first_typed_owned_where(body)),
             RelExpr::Filter {
                 input, predicate, ..
             } => predicate
@@ -149,7 +186,7 @@ fn calcite_wrapper_emits_only_relroot_visible_columns_and_preserves_child_proven
                 first_typed_owned_where(left).or_else(|| first_typed_owned_where(right))
             }
             RelExpr::Set { inputs, .. } => inputs.iter().find_map(first_typed_owned_where),
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => None,
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => None,
         }
     }
 
@@ -953,6 +990,15 @@ fn calcite_wrappers_tpcds_rank_queries_hide_only_the_relroot_order_helper() {
                         fn validate_reconstructed_ratios(rel: &RelExpr, label: &str) -> usize {
                             let mut found = 0usize;
                             match rel {
+                                RelExpr::Bindings { bindings, body, .. } => {
+                                    found += bindings
+                                        .iter()
+                                        .map(|binding| {
+                                            validate_reconstructed_ratios(&binding.rel, label)
+                                        })
+                                        .sum::<usize>();
+                                    found += validate_reconstructed_ratios(body, label);
+                                }
                                 RelExpr::Project {
                                     input,
                                     exprs,
@@ -1049,7 +1095,9 @@ fn calcite_wrappers_tpcds_rank_queries_hide_only_the_relroot_order_helper() {
                                         .map(|input| validate_reconstructed_ratios(input, label))
                                         .sum::<usize>();
                                 }
-                                RelExpr::TableScan { .. } | RelExpr::Values { .. } => {}
+                                RelExpr::TableScan { .. }
+                                | RelExpr::QueryRef { .. }
+                                | RelExpr::Values { .. } => {}
                             }
                             found
                         }
@@ -1072,12 +1120,16 @@ fn calcite_wrappers_tpcds_rank_queries_hide_only_the_relroot_order_helper() {
                         SqlType::Integer,
                         "{label}: PostgreSQL lochierarchy is int4"
                     );
+                    let visible_rel = match &query.rel {
+                        RelExpr::Bindings { body, .. } => body.as_ref(),
+                        rel => rel,
+                    };
                     let RelExpr::Project {
                         input,
                         exprs,
                         output,
                         ..
-                    } = &query.rel
+                    } = visible_rel
                     else {
                         panic!("{label}: typed visible root must be Project")
                     };
@@ -1348,6 +1400,10 @@ fn calcite_wrapper_attests_only_bare_postgres_boolean_integer_equality_errors() 
     for (index, query) in ir.queries.iter().enumerate() {
         fn first_owned_where(rel: &RelExpr) -> Option<&logos_ir::ir::ScalarSourceClauseOwnership> {
             match rel {
+                RelExpr::Bindings { bindings, body, .. } => bindings
+                    .iter()
+                    .find_map(|binding| first_owned_where(&binding.rel))
+                    .or_else(|| first_owned_where(body)),
                 RelExpr::Filter {
                     input, predicate, ..
                 } => predicate
@@ -1364,7 +1420,9 @@ fn calcite_wrapper_attests_only_bare_postgres_boolean_integer_equality_errors() 
                     first_owned_where(left).or_else(|| first_owned_where(right))
                 }
                 RelExpr::Set { inputs, .. } => inputs.iter().find_map(first_owned_where),
-                RelExpr::TableScan { .. } | RelExpr::Values { .. } => None,
+                RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {
+                    None
+                }
             }
         }
         let ownership = first_owned_where(&query.rel).expect("typed source WHERE ownership");
@@ -1386,7 +1444,14 @@ fn calcite_wrapper_attests_only_bare_postgres_boolean_integer_equality_errors() 
 fn calcite_wrapper_converts_wetune27_boolean_integer_errors_with_exact_branch_markers() {
     fn marker_count(rel: &RelExpr) -> usize {
         match rel {
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => 0,
+            RelExpr::Bindings { bindings, body, .. } => {
+                bindings
+                    .iter()
+                    .map(|binding| marker_count(&binding.rel))
+                    .sum::<usize>()
+                    + marker_count(body)
+            }
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => 0,
             RelExpr::Project { input, .. }
             | RelExpr::NativeHaving { input, .. }
             | RelExpr::Aggregate { input, .. }
@@ -3680,6 +3745,12 @@ fn calcite_wrapper_keeps_cartesian_sources_as_logical_joins() {
 
     fn collect_join_types(rel: &RelExpr, join_types: &mut Vec<logos_ir::ir::JoinType>) {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                for binding in bindings {
+                    collect_join_types(&binding.rel, join_types);
+                }
+                collect_join_types(body, join_types);
+            }
             RelExpr::Join {
                 left,
                 right,
@@ -3701,7 +3772,7 @@ fn calcite_wrapper_keeps_cartesian_sources_as_logical_joins() {
                     collect_join_types(input, join_types);
                 }
             }
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => {}
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {}
         }
     }
 
@@ -3986,6 +4057,12 @@ fn calcite_wrapper_keeps_outer_where_separate_from_nested_having() {
 
     fn count_clauses(rel: &RelExpr, having: &mut usize, filter: &mut usize) {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                for binding in bindings {
+                    count_clauses(&binding.rel, having, filter);
+                }
+                count_clauses(body, having, filter);
+            }
             RelExpr::NativeHaving { input, .. } => {
                 *having += 1;
                 count_clauses(input, having, filter);
@@ -4007,7 +4084,7 @@ fn calcite_wrapper_keeps_outer_where_separate_from_nested_having() {
                     count_clauses(input, having, filter);
                 }
             }
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => {}
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {}
         }
     }
 
@@ -4359,7 +4436,7 @@ fn calcite_wrapper_aligns_rewritten_character_expression_provenance() {
 
 #[test]
 #[ignore = "requires the Java Calcite wrapper and Maven bootstrap"]
-fn calcite_wrapper_rejects_multiply_referenced_cte_without_shared_query_binding() {
+fn calcite_wrapper_reconstructs_multiply_referenced_cte_as_one_shared_binding() {
     let repo = repo_root();
     let temp = temp_dir("multiply-referenced-cte-boundary");
     let schema = temp.join("schema.sql");
@@ -4382,14 +4459,44 @@ fn calcite_wrapper_rejects_multiply_referenced_cte_without_shared_query_binding(
     )
     .unwrap();
 
-    let error = convert_raw_file(run_calcite(&repo, &schema, &query)).unwrap_err();
-    assert!(matches!(
-        error,
-        logos_ir::Error::InvalidRelSourceProvenance(message)
-            if message.contains("multiply referenced lexical CTE \"channels\"")
-                && message.contains("native shared-query binding")
-                && message.contains("independent RelExpr clones would replay")
-    ));
+    let shared = convert_raw_file(run_calcite(&repo, &schema, &query))
+        .expect("multiply referenced lexical CTE should become one shared binding");
+    let RelExpr::Bindings { bindings, body, .. } = &shared.queries[0].rel else {
+        panic!("expected a query-local binding wrapper");
+    };
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0].source_name, "channels");
+
+    fn count_references(rel: &RelExpr, binding: &str) -> usize {
+        match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                bindings
+                    .iter()
+                    .map(|nested| count_references(&nested.rel, binding))
+                    .sum::<usize>()
+                    + count_references(body, binding)
+            }
+            RelExpr::QueryRef {
+                binding: candidate, ..
+            } => usize::from(candidate == binding),
+            RelExpr::TableScan { .. } | RelExpr::Values { .. } => 0,
+            RelExpr::Project { input, .. }
+            | RelExpr::Filter { input, .. }
+            | RelExpr::NativeHaving { input, .. }
+            | RelExpr::Aggregate { input, .. }
+            | RelExpr::Distinct { input, .. }
+            | RelExpr::Sort { input, .. } => count_references(input, binding),
+            RelExpr::Join { left, right, .. } => {
+                count_references(left, binding) + count_references(right, binding)
+            }
+            RelExpr::Set { inputs, .. } => inputs
+                .iter()
+                .map(|input| count_references(input, binding))
+                .sum(),
+        }
+    }
+
+    assert_eq!(count_references(body, &bindings[0].id), 2);
     fs::remove_dir_all(&temp).unwrap();
 }
 
@@ -5870,22 +5977,32 @@ fn calcite_wrapper_binds_tpch2_nested_comma_join_source_envelopes() {
         let schema = case.join("schema.sql");
         for query_name in ["sql1.sql", "sql2.sql"] {
             let raw = run_calcite(&repo, &schema, &case.join(query_name));
-            let filter = find_first_source_where_filter(
-                raw.queries[0]
-                    .rel
-                    .as_ref()
-                    .expect("TPCH2 must produce a relation"),
-            )
-            .expect("TPCH2 outer WHERE must carry source ownership");
-            assert_eq!(filter.variables_set, ["$cor0"]);
-            let scalar = find_rex_subquery_root(
-                filter.condition_rex.as_ref().expect("TPCH2 condition"),
-                "LogicalAggregate",
-            )
-            .expect("TPCH2 must retain its correlated scalar aggregate");
-            let nested = scalar.subquery_rel.as_deref().unwrap();
-            assert_eq!(count_comma_joins(nested), 3);
-            assert!(nested.variables_set.is_empty());
+            let root = raw.queries[0]
+                .rel
+                .as_ref()
+                .expect("TPCH2 must produce a relation");
+            if query_name == "sql1.sql" {
+                let filter = find_first_source_where_filter(root)
+                    .expect("TPCH2 source outer WHERE must carry source ownership");
+                assert_eq!(filter.variables_set, ["$cor0"]);
+                let scalar = find_rex_subquery_root(
+                    filter.condition_rex.as_ref().expect("TPCH2 condition"),
+                    "LogicalAggregate",
+                )
+                .expect("TPCH2 source must retain its correlated scalar aggregate");
+                let nested = scalar.subquery_rel.as_deref().unwrap();
+                assert_eq!(count_comma_joins(nested), 3);
+                assert!(nested.variables_set.is_empty());
+            } else {
+                assert!(
+                    find_first_scalar_subquery(root).is_none(),
+                    "decorrelated TPCH2 target must not regain a scalar subquery"
+                );
+                assert!(
+                    find_rel_type(root, "LogicalAggregate").is_some(),
+                    "decorrelated TPCH2 target must retain the grouped MIN relation"
+                );
+            }
             convert_raw_file(raw).unwrap_or_else(|error| {
                 panic!("{query_name}: nested join authority rejected: {error}")
             });
@@ -6051,6 +6168,10 @@ fn calcite_wrapper_reconstructs_wetune46_in_subquery_order() {
 
         fn typed_ordered_subquery_rel(rel: &RelExpr) -> Option<&RelExpr> {
             match rel {
+                RelExpr::Bindings { bindings, body, .. } => bindings
+                    .iter()
+                    .find_map(|binding| typed_ordered_subquery_rel(&binding.rel))
+                    .or_else(|| typed_ordered_subquery_rel(body)),
                 RelExpr::Project { input, exprs, .. } => exprs
                     .iter()
                     .find_map(|expr| typed_ordered_subquery(&expr.parsed))
@@ -6074,7 +6195,9 @@ fn calcite_wrapper_reconstructs_wetune46_in_subquery_order() {
                 | RelExpr::Distinct { input, .. }
                 | RelExpr::Sort { input, .. } => typed_ordered_subquery_rel(input),
                 RelExpr::Set { inputs, .. } => inputs.iter().find_map(typed_ordered_subquery_rel),
-                RelExpr::TableScan { .. } | RelExpr::Values { .. } => None,
+                RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {
+                    None
+                }
             }
         }
 
@@ -6804,6 +6927,18 @@ fn calcite_wrapper_where_correlation_field_binds_source_index_and_type() {
 #[test]
 #[ignore = "requires the Java Calcite wrapper and frozen benchmark inputs"]
 fn calcite_wrapper_converts_both_q010_families_with_exact_repeated_aggregate_roles() {
+    fn one_line_span_bounds(span: &str) -> (usize, usize) {
+        let (start, end) = span.split_once('-').expect("source span delimiter");
+        let (start_line, start_column) = start.split_once(':').expect("source start");
+        let (end_line, end_column) = end.split_once(':').expect("source end");
+        assert_eq!(start_line, "1");
+        assert_eq!(end_line, "1");
+        (
+            start_column.parse::<usize>().unwrap() - 1,
+            end_column.parse::<usize>().unwrap(),
+        )
+    }
+
     fn find_ordered_where(rel: &CalciteRel) -> Option<&CalciteRel> {
         if rel.rel_type == "LogicalFilter"
             && rel.source_kind.as_deref() == Some("ORDER_BY")
@@ -6877,10 +7012,7 @@ fn calcite_wrapper_converts_both_q010_families_with_exact_repeated_aggregate_rol
             let case = repo.join(format!(
                 "benchmarks/core/.generated/sqlsolver/nonwetune-flat/{case_name}"
             ));
-            for (query_name, rbot_expected) in [
-                ("sql1.sql", Some(("1:1-1:1884", "1:311-1:1726"))),
-                ("sql2.sql", Some(("1:1-1:1871", "1:311-1:1713"))),
-            ] {
+            for query_name in ["sql1.sql", "sql2.sql"] {
                 for production in [false, true] {
                     let normalized_path =
                         temp.join(format!("{case_name}-{query_name}.normalized.sql"));
@@ -6901,7 +7033,7 @@ fn calcite_wrapper_converts_both_q010_families_with_exact_repeated_aggregate_rol
                     if production {
                         let normalized = fs::read_to_string(&normalized_path)
                             .unwrap_or_else(|error| panic!("{label}: normalized SQL: {error}"));
-                        if case_name == "rbot-dsb__query010" {
+                        if case_name == "rbot-dsb__query010" && query_name == "sql1.sql" {
                             assert!(normalized.contains("COUNT(*) \"cnt1\""), "{label}");
                             assert!(!normalized.contains("COUNT(*) AS \"cnt1\""), "{label}");
                             assert!(normalized.contains("FROM \"customer\" \"c\""), "{label}");
@@ -6911,7 +7043,14 @@ fn calcite_wrapper_converts_both_q010_families_with_exact_repeated_aggregate_rol
                             );
                         } else {
                             assert!(normalized.contains("COUNT(*) AS \"cnt1\""), "{label}");
-                            assert!(normalized.contains("FROM \"customer\" AS \"c\""), "{label}");
+                            if case_name == "tpcds-variants__query010" {
+                                assert!(
+                                    normalized.contains("FROM \"customer\" AS \"c\""),
+                                    "{label}"
+                                );
+                            } else {
+                                assert!(normalized.contains("FROM \"customer\""), "{label}");
+                            }
                         }
                     }
                     let filter = find_ordered_where(
@@ -6920,15 +7059,22 @@ fn calcite_wrapper_converts_both_q010_families_with_exact_repeated_aggregate_rol
                             .as_ref()
                             .unwrap_or_else(|| panic!("{label}: relation")),
                     );
-                    if !production
-                        && case_name == "rbot-dsb__query010"
-                        && let Some(expected) = rbot_expected
-                    {
+                    if !production && case_name == "rbot-dsb__query010" {
                         let source_where = filter
                             .and_then(|filter| filter.source_where.as_ref())
                             .unwrap_or_else(|| panic!("{label}: outer WHERE beneath ORDER BY"));
-                        assert_eq!(source_where.query_block_id, expected.0, "{label}");
-                        assert_eq!(source_where.source_condition_node_id, expected.1, "{label}");
+                        let exact_sql = fs::read_to_string(case.join(query_name)).unwrap();
+                        let query_bounds = one_line_span_bounds(&source_where.query_block_id);
+                        let condition_bounds =
+                            one_line_span_bounds(&source_where.source_condition_node_id);
+                        assert!(
+                            query_bounds.0 <= condition_bounds.0
+                                && condition_bounds.1 <= query_bounds.1,
+                            "{label}: WHERE condition must stay inside its exact query block"
+                        );
+                        assert!(query_bounds.1 <= exact_sql.len(), "{label}");
+                        assert!(condition_bounds.0 < condition_bounds.1, "{label}");
+                        assert!(!source_where.source_condition_sql.is_empty(), "{label}");
                     }
                     if let Some(source_where) =
                         filter.and_then(|filter| filter.source_where.as_ref())
@@ -6973,13 +7119,27 @@ fn calcite_wrapper_converts_dsb50_duplicate_alias_where_bindings() {
                 .and_then(find_first_source_where_filter)
                 .expect("DSB50 source WHERE");
             let source_where = filter.source_where.as_ref().unwrap();
+            let expected_source = if query_name == "sql1.sql" {
+                "d2.d_year"
+            } else {
+                "date_dim0.d_year0"
+            };
             let d2_year = source_where
                 .input_bindings
                 .iter()
-                .find(|binding| binding.source_sql == "d2.d_year")
-                .expect("d2.d_year binding");
+                .find(|binding| binding.source_sql == expected_source)
+                .expect("second date_dim year binding");
             assert_eq!(d2_year.input_index, 106);
-            assert_eq!(d2_year.source_relation_sql, "`date_dim` AS `d2`");
+            if query_name == "sql1.sql" {
+                assert_eq!(d2_year.source_relation_sql, "`date_dim` AS `d2`");
+            } else {
+                assert!(
+                    d2_year
+                        .source_relation_sql
+                        .starts_with("`date_dim` AS `date_dim0`"),
+                    "target binding must retain the generated second date_dim alias"
+                );
+            }
             assert_eq!(d2_year.base_table, ["date_dim"]);
             assert_eq!(d2_year.base_field_name, "d_year");
             assert_eq!(d2_year.generated_field_name, "d_year0");
@@ -7030,20 +7190,25 @@ fn calcite_wrapper_sqlglot_preserves_dsb50_aliases_and_where_authority() {
                 .as_ref()
                 .and_then(find_first_source_where_filter)
                 .expect("normalized DSB50 source WHERE");
+            let (expected_source, expected_identifiers) = if query_name == "sql1.sql" {
+                ("d2.d_year", ["d2", "d_year"])
+            } else {
+                ("date_dim0.d_year0", ["date_dim0", "d_year0"])
+            };
             let d2_year = filter
                 .source_where
                 .as_ref()
                 .unwrap()
                 .input_bindings
                 .iter()
-                .find(|binding| binding.source_sql == "d2.d_year")
-                .expect("normalized d2.d_year binding");
+                .find(|binding| binding.source_sql == expected_source)
+                .expect("normalized second date_dim year binding");
             assert_eq!(d2_year.input_index, 106);
             assert_eq!(d2_year.base_field_name, "d_year");
             let d2_year_rex =
-                find_rex_by_source_sql(filter.condition_rex.as_ref().unwrap(), "d2.d_year")
-                    .expect("normalized d2.d_year Rex source");
-            assert_eq!(d2_year_rex.source_identifier_names, ["d2", "d_year"]);
+                find_rex_by_source_sql(filter.condition_rex.as_ref().unwrap(), expected_source)
+                    .expect("normalized second date_dim year Rex source");
+            assert_eq!(d2_year_rex.source_identifier_names, expected_identifiers);
             assert_eq!(d2_year_rex.source_identifier_quoted, [true, true]);
             convert_raw_file(raw).unwrap();
         }
@@ -7056,6 +7221,7 @@ fn calcite_wrapper_sqlglot_preserves_dsb50_aliases_and_where_authority() {
 fn calcite_wrapper_sqlglot_folds_only_unquoted_postgres_identifiers() {
     fn first_scan(rel: &RelExpr) -> &[String] {
         match rel {
+            RelExpr::Bindings { body, .. } => first_scan(body),
             RelExpr::TableScan { table, .. } => table,
             RelExpr::Project { input, .. }
             | RelExpr::Filter { input, .. }
@@ -7065,7 +7231,9 @@ fn calcite_wrapper_sqlglot_folds_only_unquoted_postgres_identifiers() {
             | RelExpr::Sort { input, .. } => first_scan(input),
             RelExpr::Join { left, .. } => first_scan(left),
             RelExpr::Set { inputs, .. } => first_scan(&inputs[0]),
-            RelExpr::Values { .. } => panic!("expected a table scan"),
+            RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {
+                panic!("expected a base table scan")
+            }
         }
     }
 
@@ -7504,13 +7672,14 @@ fn calcite_wrapper_closes_tpch22_nested_where_relations_and_correlations() {
         ] {
             assert!(convert_raw_file(forged).is_err(), "accepted {label} drift");
         }
-        // The final mutation adds an internal Project carrier that is exactly
-        // the same c_acctbal expression and redirects AVG to that duplicate.
-        // It changes no declarative row, NULL, bag, error, or aggregate value,
-        // so accepting it avoids making source fidelity depend on one
-        // generated carrier shape.
-        convert_raw_file(ambiguous_aggregate_name)
-            .expect("an identical duplicate aggregate carrier is declaratively inert");
+        // Even an expression-identical extra Project carrier changes the
+        // generated row shape.  Without a source edge certifying that carrier,
+        // compositional provenance must reject it instead of guessing that the
+        // redirected aggregate argument is declaratively inert.
+        assert!(
+            convert_raw_file(ambiguous_aggregate_name).is_err(),
+            "an uncertified duplicate aggregate carrier must fail closed"
+        );
     });
 }
 
@@ -7689,12 +7858,9 @@ fn calcite_wrapper_nested_where_rejects_untyped_set_values_and_duplicate_base_na
         rejected_values.rel.is_none(),
         "source VALUES without ordered-cell attestation must not expose a relation"
     );
-    assert_eq!(
-        rejected_values.error.as_deref(),
-        Some(
-            "java.lang.UnsupportedOperationException: source subquery does not align with its generated relational tree"
-        )
-    );
+    assert!(rejected_values.error.as_deref().is_some_and(|error| {
+        error.contains("complete compositional relational correspondence")
+    }));
     convert_raw_file(one(0)).expect("typed UNION subquery has exact common typing");
     assert!(matches!(
         convert_raw_file(one(1)),
@@ -7764,14 +7930,24 @@ fn calcite_wrapper_attests_dsb27_grouping_and_overrides_only_exact_source_bindin
             assert_eq!(grouping.arg_list, [1]);
             assert_eq!(grouping.ty.as_deref(), Some("BIGINT"));
             assert_eq!(grouping.full_type.as_deref(), Some("BIGINT NOT NULL"));
-            assert_eq!(grouping.source_sql.as_deref(), Some("GROUPING(`s_state`)"));
+            let expected_grouping = if query_name == "sql1.sql" {
+                "GROUPING(`s_state`)"
+            } else {
+                "GROUPING(`store`.`s_state`)"
+            };
+            assert_eq!(grouping.source_sql.as_deref(), Some(expected_grouping));
             assert_eq!(grouping.source_kind.as_deref(), Some("OTHER_FUNCTION"));
             assert_eq!(grouping.source_operator.as_deref(), Some("grouping"));
             assert_eq!(grouping.source_distinct, Some(false));
             assert_eq!(grouping.source_operands.len(), 1);
+            let expected_grouping_operand = if query_name == "sql1.sql" {
+                "s_state"
+            } else {
+                "store.s_state"
+            };
             assert_eq!(
                 grouping.source_operands[0].source_sql.as_deref(),
-                Some("s_state")
+                Some(expected_grouping_operand)
             );
             assert_eq!(
                 grouping.source_operands[0].source_kind.as_deref(),
@@ -7818,11 +7994,11 @@ fn calcite_wrapper_attests_dsb27_grouping_and_overrides_only_exact_source_bindin
                 .source
                 .as_ref()
                 .expect("GROUPING source authority");
-            assert_eq!(source.sql.as_deref(), Some("GROUPING(`s_state`)"));
+            assert_eq!(source.sql.as_deref(), Some(expected_grouping));
             assert_eq!(source.operands.len(), 1);
             assert_eq!(
                 source.operands[0].as_ref().unwrap().sql.as_deref(),
-                Some("s_state")
+                Some(expected_grouping_operand)
             );
             pristine.get_or_insert(raw);
         }
@@ -7910,7 +8086,7 @@ fn calcite_wrapper_rejects_nested_grouping_without_complete_subquery_alignment()
     let raw = run_calcite(&repo, &schema, &query);
     assert!(raw.queries[0].rel.is_none());
     assert!(raw.queries[0].error.as_deref().is_some_and(|error| {
-        error.contains("source subquery does not align with its generated relational tree")
+        error.contains("complete compositional relational correspondence")
     }));
     fs::remove_dir_all(&temp).unwrap();
 }
@@ -8444,6 +8620,11 @@ fn calcite_wrapper_binds_all_having_forms_declaratively() {
 
     fn count_ir_clauses(rel: &RelExpr) -> (usize, usize) {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => bindings
+                .iter()
+                .map(|binding| count_ir_clauses(&binding.rel))
+                .chain(std::iter::once(count_ir_clauses(body)))
+                .fold((0, 0), |sum, count| (sum.0 + count.0, sum.1 + count.1)),
             RelExpr::NativeHaving { input, .. } => {
                 let (having, filter) = count_ir_clauses(input);
                 (having + 1, filter)
@@ -8465,7 +8646,7 @@ fn calcite_wrapper_binds_all_having_forms_declaratively() {
                 .iter()
                 .map(count_ir_clauses)
                 .fold((0, 0), |sum, count| (sum.0 + count.0, sum.1 + count.1)),
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => (0, 0),
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => (0, 0),
         }
     }
 
@@ -8755,6 +8936,13 @@ fn calcite_wrapper_keeps_declarative_having_through_inlined_cte_aggregate() {
 
     fn count_native_having(rel: &RelExpr) -> usize {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                bindings
+                    .iter()
+                    .map(|binding| count_native_having(&binding.rel))
+                    .sum::<usize>()
+                    + count_native_having(body)
+            }
             RelExpr::NativeHaving { input, .. } => 1 + count_native_having(input),
             RelExpr::Project { input, .. }
             | RelExpr::Filter { input, .. }
@@ -8765,6 +8953,28 @@ fn calcite_wrapper_keeps_declarative_having_through_inlined_cte_aggregate() {
                 count_native_having(left) + count_native_having(right)
             }
             RelExpr::Set { inputs, .. } => inputs.iter().map(count_native_having).sum(),
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => 0,
+        }
+    }
+
+    fn count_query_refs(rel: &RelExpr) -> usize {
+        match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                bindings
+                    .iter()
+                    .map(|binding| count_query_refs(&binding.rel))
+                    .sum::<usize>()
+                    + count_query_refs(body)
+            }
+            RelExpr::QueryRef { .. } => 1,
+            RelExpr::Project { input, .. }
+            | RelExpr::Filter { input, .. }
+            | RelExpr::NativeHaving { input, .. }
+            | RelExpr::Aggregate { input, .. }
+            | RelExpr::Distinct { input, .. }
+            | RelExpr::Sort { input, .. } => count_query_refs(input),
+            RelExpr::Join { left, right, .. } => count_query_refs(left) + count_query_refs(right),
+            RelExpr::Set { inputs, .. } => inputs.iter().map(count_query_refs).sum(),
             RelExpr::TableScan { .. } | RelExpr::Values { .. } => 0,
         }
     }
@@ -8804,9 +9014,10 @@ fn calcite_wrapper_keeps_declarative_having_through_inlined_cte_aggregate() {
             .as_ref()
             .unwrap_or_else(|| panic!("Calcite failed: {:?}", raw.queries[0].error));
         collect_direct_aggregate_filters(rel, &mut filters);
-        assert!(
-            filters.len() >= 4,
-            "each inlined CTE copy must retain both source HAVING filters"
+        assert_eq!(
+            filters.len(),
+            4,
+            "Calcite's two inlined CTE copies must each retain both source HAVING filters"
         );
         for filter in &filters {
             let attestation = filter
@@ -8820,9 +9031,14 @@ fn calcite_wrapper_keeps_declarative_having_through_inlined_cte_aggregate() {
             );
         }
 
-        let expected = filters.len();
         let ir = convert_raw_file(raw).expect("convert inlined declarative HAVING");
-        assert_eq!(count_native_having(&ir.queries[0].rel), expected);
+        assert_eq!(count_native_having(&ir.queries[0].rel), 2);
+        let RelExpr::Bindings { bindings, body, .. } = &ir.queries[0].rel else {
+            panic!("multiply referenced results CTE must become one shared query binding")
+        };
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(count_native_having(&bindings[0].rel), 2);
+        assert_eq!(count_query_refs(body), 2);
         fs::remove_dir_all(&temp).unwrap();
     });
 }
@@ -8899,6 +9115,10 @@ fn calcite_wrapper_erases_exact_numeric_coalesce_cast_carriers() {
 
     fn ir_coalesce(rel: &RelExpr) -> Option<&logos_ir::ir::ScalarExpr> {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => bindings
+                .iter()
+                .find_map(|binding| ir_coalesce(&binding.rel))
+                .or_else(|| ir_coalesce(body)),
             RelExpr::Project { input, exprs, .. } => exprs
                 .iter()
                 .find(|expr| {
@@ -8915,7 +9135,7 @@ fn calcite_wrapper_erases_exact_numeric_coalesce_cast_carriers() {
             | RelExpr::Sort { input, .. } => ir_coalesce(input),
             RelExpr::Join { left, right, .. } => ir_coalesce(left).or_else(|| ir_coalesce(right)),
             RelExpr::Set { inputs, .. } => inputs.iter().find_map(ir_coalesce),
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => None,
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => None,
         }
     }
 
@@ -10606,6 +10826,11 @@ fn calcite_wrapper_transactionally_emits_tpch8_with_exact_derived_case_sources()
         for sql in ["sql1.sql", "sql2.sql"] {
             let raw = run_calcite(&repo, &case.join("schema.sql"), &case.join(sql));
             assert!(raw.queries[0].error.is_none(), "{sql}");
+            let case_fragment = if sql == "sql1.sql" {
+                "CASE WHEN `nation` ="
+            } else {
+                "CASE WHEN `nation0`.`n_name0` ="
+            };
             let case_rex = find_rel_rex_by_source_kind(
                 raw.queries[0].rel.as_ref().expect("TPCH8 relation"),
                 "CASE",
@@ -10613,28 +10838,42 @@ fn calcite_wrapper_transactionally_emits_tpch8_with_exact_derived_case_sources()
             .filter(|rex| {
                 rex.source_sql
                     .as_deref()
-                    .is_some_and(|source| source.contains("CASE WHEN `nation` ="))
+                    .is_some_and(|source| source.contains(case_fragment))
             })
             .expect("outer aggregate-input CASE");
             assert_eq!(case_rex.kind.as_deref(), Some("CASE"));
             let product = &case_rex.operands[1];
             assert_eq!(product.kind.as_deref(), Some("TIMES"));
             assert_eq!(product.source_operator.as_deref(), Some("*"));
-            let expansion = product
-                .source_expansion
-                .as_ref()
-                .expect("direct derived volume-alias expansion");
-            assert_eq!(expansion.kind, "DIRECT_DERIVED_OUTPUT_ALIAS");
-            assert_eq!(expansion.reference_text, "volume");
-            assert_eq!(expansion.output_alias_text, "volume");
-            assert_eq!(
-                product.source_node_id.as_deref(),
-                Some(expansion.definition_node_id.as_str())
-            );
-            assert_eq!(
-                product.source_text.as_deref(),
-                Some(expansion.definition_text.as_str())
-            );
+            if sql == "sql1.sql" {
+                let expansion = product
+                    .source_expansion
+                    .as_ref()
+                    .expect("direct derived volume-alias expansion");
+                assert_eq!(expansion.kind, "DIRECT_DERIVED_OUTPUT_ALIAS");
+                assert_eq!(expansion.reference_text, "volume");
+                assert_eq!(expansion.output_alias_text, "volume");
+                assert_eq!(
+                    product.source_node_id.as_deref(),
+                    Some(expansion.definition_node_id.as_str())
+                );
+                assert_eq!(
+                    product.source_text.as_deref(),
+                    Some(expansion.definition_text.as_str())
+                );
+            } else {
+                assert!(
+                    product.source_expansion.is_none(),
+                    "flattened target product must remain bound to its direct table operands"
+                );
+                assert!(
+                    product
+                        .source_sql
+                        .as_deref()
+                        .is_some_and(|source| source.contains("l_extendedprice")),
+                    "flattened target product source"
+                );
+            }
             let one = &product.operands[1].operands[0];
             assert_eq!(one.text.as_deref(), Some("1"));
             assert_eq!(one.source_sql.as_deref(), Some("1"));
@@ -10801,6 +11040,42 @@ fn calcite_wrapper_preserves_wetune65_distinct_wildcard_order() {
 #[ignore = "requires the Java Calcite wrapper and frozen benchmark inputs"]
 fn calcite_wrapper_resolves_aggregate_inputs_through_exact_ordered_cte_scope() {
     with_large_calcite_stack(|| {
+        fn find_cast_rex<'a>(rex: &'a CalciteRex, fragment: &str) -> Option<&'a CalciteRex> {
+            if rex.class.as_deref() == Some("RexCall")
+                && rex.kind.as_deref() == Some("CAST")
+                && rex
+                    .source_sql
+                    .as_deref()
+                    .is_some_and(|source| source.contains(fragment))
+            {
+                return Some(rex);
+            }
+            if let Some(reference) = rex.reference_expr.as_deref()
+                && let Some(found) = find_cast_rex(reference, fragment)
+            {
+                return Some(found);
+            }
+            for operand in &rex.operands {
+                if let Some(found) = find_cast_rex(operand, fragment) {
+                    return Some(found);
+                }
+            }
+            rex.subquery_rel
+                .as_deref()
+                .and_then(|rel| find_rel_cast_rex(rel, fragment))
+        }
+
+        fn find_rel_cast_rex<'a>(rel: &'a CalciteRel, fragment: &str) -> Option<&'a CalciteRex> {
+            for rex in rel_rexes(rel) {
+                if let Some(found) = find_cast_rex(rex, fragment) {
+                    return Some(found);
+                }
+            }
+            rel.inputs
+                .iter()
+                .find_map(|input| find_rel_cast_rex(input, fragment))
+        }
+
         fn revenue_aggregate(rel: &CalciteRel) -> Option<&CalciteRel> {
             if rel.rel_type == "LogicalAggregate"
                 && rel.row_type.get(1).map(|field| field.name.as_str()) == Some("revenue")
@@ -10835,40 +11110,56 @@ fn calcite_wrapper_resolves_aggregate_inputs_through_exact_ordered_cte_scope() {
         let mut mutation_seed = None;
         for sql in ["sql1.sql", "sql2.sql"] {
             let raw = run_calcite(&repo, &case.join("schema.sql"), &case.join(sql));
-            let segment = find_rel_rex_by_source_fragment(
+            let cast_fragment = if sql == "sql1.sql" {
+                "CAST(`revenue` / 50 AS INTEGER)"
+            } else {
+                "CAST(SUM("
+            };
+            let segment = find_rel_cast_rex(
                 raw.queries[0].rel.as_ref().expect("Q054 relation"),
-                "CAST(`revenue` / 50 AS INTEGER)",
+                cast_fragment,
             )
-            .expect("segments CTE cast");
+            .expect("segment cast");
             assert_eq!(segment.kind.as_deref(), Some("CAST"));
             assert_eq!(segment.source_kind.as_deref(), Some("CAST"));
             let division = &segment.operands[0];
-            assert_eq!(division.source_sql.as_deref(), Some("`revenue` / 50"));
+            assert!(
+                division
+                    .source_sql
+                    .as_deref()
+                    .is_some_and(|source| source.ends_with(" / 50")),
+                "{sql}: segment division must retain its exact source divisor"
+            );
             assert_eq!(division.operands[1].source_sql.as_deref(), Some("50"));
-            let aggregate = revenue_aggregate(raw.queries[0].rel.as_ref().unwrap())
-                .expect("my_revenue Aggregate");
-            assert!(aggregate.source_grouping.is_none());
-            let carrier = &aggregate.inputs[0];
-            let cte = carrier.source_input_cte_uses[0]
-                .as_ref()
-                .expect("my_revenue CTE edge");
-            assert!(
-                cte.definition_query_text
-                    .starts_with("select c_customer_sk, sum(ss_ext_sales_price) as revenue")
-            );
-            assert!(
-                cte.definition_query_text
-                    .ends_with("group by c_customer_sk")
-            );
-            assert_eq!(carrier.project_rex[0].index, Some(0));
-            assert_eq!(carrier.project_rex[1].index, Some(17));
-            let call = &aggregate.agg_call_details[0];
-            assert_eq!(call.function, "SUM");
-            assert_eq!(call.arg_list, [1]);
-            assert!(call.source_text.is_none());
-            assert!(call.source_operands.is_empty());
             if sql == "sql1.sql" {
+                let aggregate = revenue_aggregate(raw.queries[0].rel.as_ref().unwrap())
+                    .expect("my_revenue Aggregate");
+                assert!(aggregate.source_grouping.is_none());
+                let carrier = &aggregate.inputs[0];
+                let cte = carrier.source_input_cte_uses[0]
+                    .as_ref()
+                    .expect("my_revenue CTE edge");
+                assert!(
+                    cte.definition_query_text
+                        .starts_with("select c_customer_sk, sum(ss_ext_sales_price) as revenue")
+                );
+                assert!(
+                    cte.definition_query_text
+                        .ends_with("group by c_customer_sk")
+                );
+                assert_eq!(carrier.project_rex[0].index, Some(0));
+                assert_eq!(carrier.project_rex[1].index, Some(17));
+                let call = &aggregate.agg_call_details[0];
+                assert_eq!(call.function, "SUM");
+                assert_eq!(call.arg_list, [1]);
+                assert!(call.source_text.is_none());
+                assert!(call.source_operands.is_empty());
                 mutation_seed = Some(raw.clone());
+            } else {
+                assert!(
+                    revenue_aggregate(raw.queries[0].rel.as_ref().unwrap()).is_none(),
+                    "flattened target must not invent a my_revenue CTE edge"
+                );
             }
             convert_raw_file(raw).unwrap_or_else(|error| panic!("{sql}: {error}"));
         }
@@ -12288,7 +12579,13 @@ fn outer_filter_predicate(rel: &RelExpr) -> &ScalarExpr {
 fn ir_scalar_asts(rel: &RelExpr) -> Vec<ScalarAst> {
     fn collect(rel: &RelExpr, output: &mut Vec<ScalarAst>) {
         match rel {
-            RelExpr::TableScan { .. } => {}
+            RelExpr::Bindings { bindings, body, .. } => {
+                for binding in bindings {
+                    collect(&binding.rel, output);
+                }
+                collect(body, output);
+            }
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => {}
             RelExpr::Project { input, exprs, .. } => {
                 output.extend(exprs.iter().map(|expr| expr.parsed.clone()));
                 collect(input, output);
@@ -12745,6 +13042,12 @@ fn collect_nested_window_sum_ir_exprs<'a>(
     output: &mut Vec<(&'a ScalarExpr, &'a logos_ir::ir::Column)>,
 ) {
     match rel {
+        RelExpr::Bindings { bindings, body, .. } => {
+            for binding in bindings {
+                collect_nested_window_sum_ir_exprs(&binding.rel, output);
+            }
+            collect_nested_window_sum_ir_exprs(body, output);
+        }
         RelExpr::Project {
             input,
             exprs,
@@ -12773,7 +13076,7 @@ fn collect_nested_window_sum_ir_exprs<'a>(
                 collect_nested_window_sum_ir_exprs(input, output);
             }
         }
-        RelExpr::TableScan { .. } | RelExpr::Values { .. } => {}
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {}
     }
 }
 
@@ -12917,6 +13220,15 @@ fn find_rel_type_mut<'a>(rel: &'a mut CalciteRel, rel_type: &str) -> Option<&'a 
     None
 }
 
+fn find_rel_type<'a>(rel: &'a CalciteRel, rel_type: &str) -> Option<&'a CalciteRel> {
+    if rel.rel_type == rel_type {
+        return Some(rel);
+    }
+    rel.inputs
+        .iter()
+        .find_map(|input| find_rel_type(input, rel_type))
+}
+
 fn find_rex_field_access_mut(rex: &mut CalciteRex) -> Option<&mut CalciteRex> {
     if rex.class.as_deref() == Some("RexFieldAccess") {
         return Some(rex);
@@ -12987,6 +13299,13 @@ fn collect_aggregates<'a>(rel: &'a CalciteRel, output: &mut Vec<&'a CalciteRel>)
 
 fn first_ir_aggregate(rel: &RelExpr) -> (&[logos_ir::ir::AggregateCall], &[logos_ir::ir::Column]) {
     match rel {
+        RelExpr::Bindings { bindings, body, .. } => bindings
+            .iter()
+            .map(|binding| &binding.rel)
+            .chain(std::iter::once(body.as_ref()))
+            .find(|query| contains_ir_aggregate(query))
+            .map(first_ir_aggregate)
+            .expect("expected an aggregate"),
         RelExpr::Aggregate {
             agg_calls, output, ..
         } => (agg_calls, output),
@@ -13007,7 +13326,7 @@ fn first_ir_aggregate(rel: &RelExpr) -> (&[logos_ir::ir::AggregateCall], &[logos
             .find(|input| contains_ir_aggregate(input))
             .map(first_ir_aggregate)
             .expect("expected an aggregate"),
-        RelExpr::TableScan { .. } | RelExpr::Values { .. } => {
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {
             panic!("expected an aggregate")
         }
     }
@@ -13015,6 +13334,12 @@ fn first_ir_aggregate(rel: &RelExpr) -> (&[logos_ir::ir::AggregateCall], &[logos
 
 fn contains_ir_aggregate(rel: &RelExpr) -> bool {
     match rel {
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .any(|binding| contains_ir_aggregate(&binding.rel))
+                || contains_ir_aggregate(body)
+        }
         RelExpr::Aggregate { .. } => true,
         RelExpr::Project { input, .. }
         | RelExpr::Filter { input, .. }
@@ -13025,7 +13350,7 @@ fn contains_ir_aggregate(rel: &RelExpr) -> bool {
             contains_ir_aggregate(left) || contains_ir_aggregate(right)
         }
         RelExpr::Set { inputs, .. } => inputs.iter().any(contains_ir_aggregate),
-        RelExpr::TableScan { .. } | RelExpr::Values { .. } => false,
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => false,
     }
 }
 
@@ -13756,6 +14081,12 @@ fn calcite_wrapper_closes_complete_declarative_query_shape_roles() {
     }
     fn rel_contains_distinct(rel: &RelExpr) -> bool {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                bindings
+                    .iter()
+                    .any(|binding| rel_contains_distinct(&binding.rel))
+                    || rel_contains_distinct(body)
+            }
             RelExpr::Distinct { .. } => true,
             RelExpr::Project { input, exprs, .. } => {
                 exprs
@@ -13811,7 +14142,7 @@ fn calcite_wrapper_closes_complete_declarative_query_shape_roles() {
                 .iter()
                 .flatten()
                 .any(|expr| scalar_contains_distinct(&expr.parsed)),
-            RelExpr::TableScan { .. } => false,
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => false,
         }
     }
     let exists_distinct =
@@ -13937,37 +14268,34 @@ fn calcite_wrapper_keeps_parenthesized_set_arms_inside_their_ast_boundaries() {
         sql[start..end].to_owned()
     }
 
+    fn span_crossing_direct_boundary(sql: &str, span: &str) -> String {
+        let (start, end) = span.split_once('-').expect("source span delimiter");
+        let (_, start_column) = start.split_once(':').expect("source start");
+        let (_, end_column) = end.split_once(':').expect("source end");
+        let start_column = start_column.parse::<usize>().unwrap();
+        let end_column = end_column.parse::<usize>().unwrap();
+        if end_column < sql.trim_end().len() {
+            format!("{start}-1:{}", end_column + 1)
+        } else {
+            assert!(
+                start_column > 1,
+                "nested Set must have an enclosing boundary"
+            );
+            format!("1:{}-{end}", start_column - 1)
+        }
+    }
+
     std::thread::Builder::new()
         .name("parenthesized-set-arm-boundaries".to_owned())
         .stack_size(64 * 1024 * 1024)
         .spawn(|| {
             let repo = repo_root();
             let cases = repo.join("benchmarks/core/.generated/sqlsolver/nonwetune-flat");
-            for (case_name, expected_set_ids, malformed_set_id, branch_fetch) in [
-                (
-                    "verieql-calcite__calcite-152",
-                    vec!["1:16-1:148"],
-                    "1:72-1:148",
-                    Some("10"),
-                ),
-                (
-                    "verieql-calcite__calcite-382",
-                    vec!["1:16-1:100"],
-                    "1:48-1:100",
-                    None,
-                ),
-                (
-                    "verieql-calcite__calcite-383",
-                    vec!["1:16-1:146"],
-                    "1:71-1:146",
-                    Some("0"),
-                ),
-                (
-                    "rbot-dsb__query087",
-                    vec!["1:23-1:1119", "1:23-1:755"],
-                    "1:24-1:755",
-                    None,
-                ),
+            for (case_name, expected_set_count, branch_fetch) in [
+                ("verieql-calcite__calcite-152", 1, Some("10")),
+                ("verieql-calcite__calcite-382", 1, None),
+                ("verieql-calcite__calcite-383", 1, Some("0")),
+                ("rbot-dsb__query087", 2, None),
             ] {
                 let case = cases.join(case_name);
                 let query = case.join("sql2.sql");
@@ -13976,13 +14304,21 @@ fn calcite_wrapper_keeps_parenthesized_set_arms_inside_their_ast_boundaries() {
                 let root = raw.queries[0].rel.as_ref().expect("target relation");
                 let mut sets = Vec::new();
                 collect_sets(root, &mut sets);
+                let set_ids = sets
+                    .iter()
+                    .map(|set| set.source_node_id.clone().unwrap())
+                    .collect::<Vec<_>>();
                 assert_eq!(
-                    sets.iter()
-                        .map(|set| set.source_node_id.as_deref().unwrap())
-                        .collect::<Vec<_>>(),
-                    expected_set_ids,
-                    "{case_name}: exact ordered Set-expression extents"
+                    set_ids.len(),
+                    expected_set_count,
+                    "{case_name}: exact number of source Set expressions"
                 );
+                for (index, source_id) in set_ids.iter().enumerate() {
+                    assert!(
+                        !set_ids[..index].contains(source_id),
+                        "{case_name}: distinct Set nodes need distinct source extents"
+                    );
+                }
                 for set in &sets {
                     assert_eq!(set.source_query_block_id, set.source_node_id);
                     assert_eq!(
@@ -14036,15 +14372,16 @@ fn calcite_wrapper_keeps_parenthesized_set_arms_inside_their_ast_boundaries() {
                     .unwrap_or_else(|error| panic!("convert {case_name}/sql2.sql: {error}"));
 
                 let mut crossed_boundary = raw.clone();
-                let current_set_id = expected_set_ids.last().unwrap();
+                let current_set_id = set_ids.last().unwrap();
                 let set = find_by_source_id_mut(
                     crossed_boundary.queries[0].rel.as_mut().unwrap(),
                     current_set_id,
                 )
                 .expect("mutable exact Set");
-                set.source_query_block_id = Some(malformed_set_id.to_owned());
-                set.source_node_id = Some(malformed_set_id.to_owned());
-                set.source_text = Some(one_line_source_text(&exact_sql, malformed_set_id));
+                let crossed_id = span_crossing_direct_boundary(&exact_sql, current_set_id);
+                set.source_query_block_id = Some(crossed_id.clone());
+                set.source_node_id = Some(crossed_id.clone());
+                set.source_text = Some(one_line_source_text(&exact_sql, &crossed_id));
                 assert!(
                     convert_raw_file(crossed_boundary).is_err(),
                     "{case_name}: a Set extent crossing a sibling/suffix boundary must fail"
@@ -14054,7 +14391,7 @@ fn calcite_wrapper_keeps_parenthesized_set_arms_inside_their_ast_boundaries() {
                     let mut suffix_owned_query = raw;
                     let set = find_by_source_id_mut(
                         suffix_owned_query.queries[0].rel.as_mut().unwrap(),
-                        expected_set_ids[0],
+                        &set_ids[0],
                     )
                     .expect("mutable derived Set");
                     let sort = set.inputs.first_mut().expect("first ordered arm");

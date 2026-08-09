@@ -2,11 +2,13 @@
 
 Route here for: row-count bounds, functional joins, filters, groups, finite images.
 
-This focused catalog contains 137 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 136 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `bag_map_cardinal`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:15`](../CardinalityCombinators.v#L15)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -31,6 +33,8 @@ Lemma bag_map_cardinal :
 ## `bag_filter_cardinal_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:30`](../CardinalityCombinators.v#L30)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -59,6 +63,8 @@ Lemma bag_filter_cardinal_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:58`](../CardinalityCombinators.v#L58)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes commutativity for the declared row cardinality and compositional bounds operator.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -79,6 +85,8 @@ Lemma filter_filter_commute :
 ## `flat_map_uniform_length_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:71`](../CardinalityCombinators.v#L71)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -104,6 +112,8 @@ Lemma flat_map_uniform_length_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:90`](../CardinalityCombinators.v#L90)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -124,6 +134,8 @@ Lemma nonempty_groups_count_le_total_length :
 ## `NoDupA_pairwise_filter_length_le_one`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:107`](../CardinalityCombinators.v#L107)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -153,6 +165,8 @@ Lemma NoDupA_pairwise_filter_length_le_one :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:149`](../CardinalityCombinators.v#L149)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -174,6 +188,8 @@ Lemma filter_singleton_of_nonempty_length_le_one :
 ## `map_theta_join_total_functional`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:172`](../CardinalityCombinators.v#L172)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Identifies the exact projected join list with the pointwise mapped left input under total and at-most-one matching.
 
@@ -205,6 +221,8 @@ Lemma map_theta_join_total_functional :
 ## `map_theta_join_functional_permut_filter_exists`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:209`](../CardinalityCombinators.v#L209)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the map theta join functional permut filter exists law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -241,6 +259,8 @@ Lemma map_theta_join_functional_permut_filter_exists :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:282`](../CardinalityCombinators.v#L282)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -265,6 +285,8 @@ Lemma anti_filter_empty_of_total_match :
 ## `map_left_join_total_functional`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:304`](../CardinalityCombinators.v#L304)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Identifies the exact projected join list with the pointwise mapped left input under total and at-most-one matching.
 
@@ -304,6 +326,8 @@ Lemma map_left_join_total_functional :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:340`](../CardinalityCombinators.v#L340)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Identifies a projected at-most-one LEFT JOIN with the mapped left input up to semantic permutation, retaining unmatched and duplicate left occurrences without a total-match premise.
 
 Applicability: Use when each left occurrence has zero or one accepted right occurrence and matched and padded rows project to the same direct left result; semantic permutation preserves duplicate left rows.
@@ -340,6 +364,8 @@ Lemma map_left_join_functional_permut :
 ## `map_left_join_functional_branch_permut`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:422`](../CardinalityCombinators.v#L422)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the map left join functional branch permut law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -388,6 +414,8 @@ Lemma map_left_join_functional_branch_permut :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:524`](../CardinalityCombinators.v#L524)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -410,6 +438,8 @@ Lemma NoDupA_map_preimage :
 ## `NoDupA_map_of_reflection`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:550`](../CardinalityCombinators.v#L550)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -437,6 +467,8 @@ Lemma NoDupA_map_of_reflection :
 ## `NoDupA_flat_map_filter_map_functional_reflection`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:584`](../CardinalityCombinators.v#L584)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -478,6 +510,8 @@ Lemma NoDupA_flat_map_filter_map_functional_reflection :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:651`](../CardinalityCombinators.v#L651)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for row cardinality and compositional bounds.
 
 Applicability: Use in either direction to invert or construct a goal about row cardinality and compositional bounds.
@@ -502,6 +536,8 @@ Lemma NoDupA_map_iff_NoDup_on :
 ## `NoDupA_finite_image_length_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:699`](../CardinalityCombinators.v#L699)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -529,6 +565,8 @@ Theorem NoDupA_finite_image_length_le :
 ## `NoDupA_finite_product_code_length_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:725`](../CardinalityCombinators.v#L725)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -562,6 +600,8 @@ Corollary NoDupA_finite_product_code_length_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:758`](../CardinalityCombinators.v#L758)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -594,6 +634,8 @@ Corollary NoDupA_finite_option_code_length_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:795`](../CardinalityCombinators.v#L795)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -614,6 +656,8 @@ Lemma oeset_nb_occ_le_length :
 ## `instance_row_multiplicity_le_length`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:820`](../CardinalityCombinators.v#L820)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -638,6 +682,8 @@ Corollary instance_row_multiplicity_le_length :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:833`](../CardinalityCombinators.v#L833)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -660,6 +706,8 @@ Corollary instance_row_positive_multiplicity_nonempty :
 ## `theta_join_list_degree_length_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:852`](../CardinalityCombinators.v#L852)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -686,6 +734,8 @@ Lemma theta_join_list_degree_length_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:871`](../CardinalityCombinators.v#L871)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join cardinality.
@@ -707,6 +757,8 @@ Corollary theta_join_list_length_le_product :
 ## `filter_theta_join_list_degree_length_le`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:885`](../CardinalityCombinators.v#L885)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -735,6 +787,8 @@ Corollary filter_theta_join_list_degree_length_le :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:925`](../CardinalityCombinators.v#L925)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -756,6 +810,8 @@ Theorem expansion_pipeline_length_le :
 ## `partition_flatten_length`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:949`](../CardinalityCombinators.v#L949)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -780,6 +836,8 @@ Lemma partition_flatten_length :
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:964`](../CardinalityCombinators.v#L964)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the partition group count upper-bound law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -801,6 +859,8 @@ Theorem partition_group_count_le :
 ## `theta_join_list_functional_length_le`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:28`](../QueryCardinality.v#L28)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -827,6 +887,8 @@ Lemma theta_join_list_functional_length_le :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:51`](../QueryCardinality.v#L51)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates join cardinality to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join cardinality.
@@ -847,6 +909,8 @@ Lemma brute_left_join_list_length_mul :
 ## `filter_brute_left_join_list_as_theta`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:68`](../QueryCardinality.v#L68)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of join cardinality.
 
@@ -872,6 +936,8 @@ Lemma filter_brute_left_join_list_as_theta :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:95`](../QueryCardinality.v#L95)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the theta join list guard left law for join cardinality, in the exact direction displayed by the declaration.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join cardinality.
@@ -896,6 +962,8 @@ Lemma theta_join_list_guard_left :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:137`](../QueryCardinality.v#L137)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the tnull predicate keep proper law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use to orient, transport, or compose a semantic relation about row cardinality and compositional bounds.
@@ -917,6 +985,8 @@ Lemma tnull_predicate_keep_proper :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:158`](../QueryCardinality.v#L158)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the row attribute present conforms proper law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use to orient, transport, or compose a semantic relation about row cardinality and compositional bounds.
@@ -936,6 +1006,8 @@ Lemma row_attribute_present_conforms_proper :
 ## `row_attribute_absent_proper`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:172`](../QueryCardinality.v#L172)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the row attribute absent proper law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -957,6 +1029,8 @@ Lemma row_attribute_absent_proper :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:190`](../QueryCardinality.v#L190)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the row attribute present nonnull conforms proper law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use to orient, transport, or compose a semantic relation about row cardinality and compositional bounds.
@@ -977,6 +1051,8 @@ Lemma row_attribute_present_nonnull_conforms_proper :
 ## `related_permut_Forall_transport`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:212`](../QueryCardinality.v#L212)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for row cardinality and compositional bounds.
 
@@ -1002,6 +1078,8 @@ Lemma related_permut_Forall_transport :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:238`](../QueryCardinality.v#L238)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the related permut permutation a law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1024,6 +1102,8 @@ Lemma related_permut_PermutationA :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:254`](../QueryCardinality.v#L254)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the oeset compare equivalence law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1044,6 +1124,8 @@ Lemma oeset_compare_Equivalence :
 ## `oeset_sorted_NoDupA`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:266`](../QueryCardinality.v#L266)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -1066,6 +1148,8 @@ Lemma oeset_sorted_NoDupA :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:292`](../QueryCardinality.v#L292)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1087,6 +1171,8 @@ Lemma NoDupA_app_left :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:309`](../QueryCardinality.v#L309)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1107,6 +1193,8 @@ Lemma NoDupA_app_right :
 ## `NoDupA_map_injective_on`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:321`](../QueryCardinality.v#L321)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Recovers source equality from the declared row cardinality and compositional bounds representation.
 
@@ -1135,6 +1223,8 @@ Lemma NoDupA_map_injective_on :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:348`](../QueryCardinality.v#L348)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1157,6 +1247,8 @@ Lemma query_same_rows_as_bag_permut_elements :
 ## `query_distinct_bag_rows_NoDupA`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:368`](../QueryCardinality.v#L368)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -1182,6 +1274,8 @@ Lemma query_distinct_bag_rows_NoDupA :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:424`](../QueryCardinality.v#L424)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1205,6 +1299,8 @@ Lemma query_same_rows_as_bag_Forall_between :
 ## `query_same_rows_as_table_absent_attribute`
 
 Source: [`theories/FormalSQL/QueryCardinality.v:455`](../QueryCardinality.v#L455)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
@@ -1230,6 +1326,8 @@ Theorem query_same_rows_as_table_absent_attribute :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:479`](../QueryCardinality.v#L479)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1254,6 +1352,8 @@ Theorem query_same_rows_as_conforming_table_absent_attribute :
 
 Source: [`theories/FormalSQL/QueryCardinality.v:503`](../QueryCardinality.v#L503)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
@@ -1267,7 +1367,8 @@ Search aliases: `cardinality composition`, `schema conformance`, `typing`, `card
 ```rocq
 Theorem query_expr_table_success_rows_absent_attribute :
   forall expected constraints actual relation attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     (attribute inS? @_basesort TNull expected relation) = false ->
     @query_outputs_sort TNull outputs =S=
@@ -1275,7 +1376,7 @@ Theorem query_expr_table_success_rows_absent_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     Forall (row_attribute_absent attribute) rows.
@@ -1283,7 +1384,9 @@ Theorem query_expr_table_success_rows_absent_attribute :
 
 ## `query_same_rows_as_conforming_table_present_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:532`](../QueryCardinality.v#L532)
+Source: [`theories/FormalSQL/QueryCardinality.v:534`](../QueryCardinality.v#L534)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
@@ -1307,7 +1410,9 @@ Theorem query_same_rows_as_conforming_table_present_attribute :
 
 ## `query_expr_table_success_rows_present_conform_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:556`](../QueryCardinality.v#L556)
+Source: [`theories/FormalSQL/QueryCardinality.v:558`](../QueryCardinality.v#L558)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -1322,7 +1427,8 @@ Search aliases: `cardinality composition`, `schema conformance`, `typing`, `card
 ```rocq
 Theorem query_expr_table_success_rows_present_conform_attribute :
   forall expected constraints actual relation attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @query_outputs_sort TNull outputs =S=
@@ -1330,7 +1436,7 @@ Theorem query_expr_table_success_rows_present_conform_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     Forall (row_attribute_present_conforms attribute) rows.
@@ -1338,7 +1444,9 @@ Theorem query_expr_table_success_rows_present_conform_attribute :
 
 ## `query_expr_table_success_row_present_conform_attribute_generated_sort`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:585`](../QueryCardinality.v#L585)
+Source: [`theories/FormalSQL/QueryCardinality.v:589`](../QueryCardinality.v#L589)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -1353,7 +1461,8 @@ Search aliases: `cardinality composition`, `schema conformance`, `typing`, `card
 ```rocq
 Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
   forall expected constraints actual relation attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @_basesort TNull expected relation =S=
@@ -1361,7 +1470,7 @@ Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     In row rows ->
@@ -1370,7 +1479,9 @@ Theorem query_expr_table_success_row_present_conform_attribute_generated_sort :
 
 ## `query_same_rows_as_conforming_table_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:628`](../QueryCardinality.v#L628)
+Source: [`theories/FormalSQL/QueryCardinality.v:635`](../QueryCardinality.v#L635)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of row cardinality and compositional bounds.
 
@@ -1397,7 +1508,9 @@ Theorem query_same_rows_as_conforming_table_attribute :
 
 ## `query_expr_table_success_rows_conform_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:676`](../QueryCardinality.v#L676)
+Source: [`theories/FormalSQL/QueryCardinality.v:683`](../QueryCardinality.v#L683)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -1412,7 +1525,8 @@ Search aliases: `cardinality composition`, `schema conformance`, `typing`, `card
 ```rocq
 Theorem query_expr_table_success_rows_conform_attribute :
   forall expected constraints actual constraint attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
@@ -1423,7 +1537,7 @@ Theorem query_expr_table_success_rows_conform_attribute :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs
         (constraint_relation constraint))
       (SqlSuccess rows) ->
@@ -1432,7 +1546,9 @@ Theorem query_expr_table_success_rows_conform_attribute :
 
 ## `query_expr_table_success_row_conform_attribute_generated_sort`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:710`](../QueryCardinality.v#L710)
+Source: [`theories/FormalSQL/QueryCardinality.v:719`](../QueryCardinality.v#L719)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -1447,7 +1563,8 @@ Search aliases: `cardinality composition`, `schema conformance`, `typing`, `card
 ```rocq
 Theorem query_expr_table_success_row_conform_attribute_generated_sort :
   forall expected constraints actual constraint attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
@@ -1458,7 +1575,7 @@ Theorem query_expr_table_success_row_conform_attribute_generated_sort :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs
         (constraint_relation constraint))
       (SqlSuccess rows) ->
@@ -1468,7 +1585,9 @@ Theorem query_expr_table_success_row_conform_attribute_generated_sort :
 
 ## `query_canonical_rows_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:755`](../QueryCardinality.v#L755)
+Source: [`theories/FormalSQL/QueryCardinality.v:767`](../QueryCardinality.v#L767)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query canonical rows forall law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1490,7 +1609,9 @@ Corollary query_canonical_rows_Forall :
 
 ## `query_same_rows_as_bag_filter_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:770`](../QueryCardinality.v#L770)
+Source: [`theories/FormalSQL/QueryCardinality.v:782`](../QueryCardinality.v#L782)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1515,7 +1636,9 @@ Lemma query_same_rows_as_bag_filter_length :
 
 ## `query_same_rows_as_bag_filter_length_between`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:793`](../QueryCardinality.v#L793)
+Source: [`theories/FormalSQL/QueryCardinality.v:805`](../QueryCardinality.v#L805)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1538,7 +1661,9 @@ Lemma query_same_rows_as_bag_filter_length_between :
 
 ## `query_canonical_rows_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:807`](../QueryCardinality.v#L807)
+Source: [`theories/FormalSQL/QueryCardinality.v:819`](../QueryCardinality.v#L819)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -1558,7 +1683,9 @@ Lemma query_canonical_rows_length :
 
 ## `row_attribute_present_conforms_join_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:834`](../QueryCardinality.v#L834)
+Source: [`theories/FormalSQL/QueryCardinality.v:846`](../QueryCardinality.v#L846)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the row attribute present conforms join left law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1579,7 +1706,9 @@ Lemma row_attribute_present_conforms_join_left :
 
 ## `row_attribute_present_conforms_join_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:847`](../QueryCardinality.v#L847)
+Source: [`theories/FormalSQL/QueryCardinality.v:859`](../QueryCardinality.v#L859)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the row attribute present conforms join right law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1601,7 +1730,9 @@ Lemma row_attribute_present_conforms_join_right :
 
 ## `brute_left_join_list_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:861`](../QueryCardinality.v#L861)
+Source: [`theories/FormalSQL/QueryCardinality.v:873`](../QueryCardinality.v#L873)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the brute left join list forall law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1629,7 +1760,9 @@ Lemma brute_left_join_list_Forall :
 
 ## `brute_left_join_list_Forall_left_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:888`](../QueryCardinality.v#L888)
+Source: [`theories/FormalSQL/QueryCardinality.v:900`](../QueryCardinality.v#L900)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the brute left join list forall left attribute law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1651,7 +1784,9 @@ Corollary brute_left_join_list_Forall_left_attribute :
 
 ## `brute_left_join_list_Forall_right_attribute`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:904`](../QueryCardinality.v#L904)
+Source: [`theories/FormalSQL/QueryCardinality.v:916`](../QueryCardinality.v#L916)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the brute left join list forall right attribute law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1672,33 +1807,11 @@ Corollary brute_left_join_list_Forall_right_attribute :
       (brute_left_join_list (tuple TNull) (join_tuple TNull) left right).
 ```
 
-## `direct_projection_preserves_present_conformance`
-
-Source: [`theories/FormalSQL/QueryCardinality.v:918`](../QueryCardinality.v#L918)
-
-Purpose/direction: Shows that the indicated operator preserves the displayed row cardinality and compositional bounds property.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `projection`, `cardinality`
-
-Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
-
-```rocq
-Lemma direct_projection_preserves_present_conformance :
-  forall env select_list attribute row,
-    select_list_directly_selects_attr select_list attribute ->
-    select_list_has_unique_outputs select_list ->
-    row_attribute_present_conforms attribute row ->
-    row_attribute_present_conforms attribute
-      (projected_tuple env select_list row).
-```
-
 ## `raw_cross_same_rows_as_bag`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:945`](../QueryCardinality.v#L945)
+Source: [`theories/FormalSQL/QueryCardinality.v:932`](../QueryCardinality.v#L932)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of join cardinality.
 
@@ -1721,7 +1834,9 @@ Lemma raw_cross_same_rows_as_bag :
 
 ## `raw_cross_filter_count_for_any_representative`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:969`](../QueryCardinality.v#L969)
+Source: [`theories/FormalSQL/QueryCardinality.v:956`](../QueryCardinality.v#L956)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the raw cross filter count for any representative law for join cardinality, in the exact direction displayed by the declaration.
 
@@ -1748,7 +1863,9 @@ Corollary raw_cross_filter_count_for_any_representative :
 
 ## `interp_predicate_int32_nonnull_equal`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:986`](../QueryCardinality.v#L986)
+Source: [`theories/FormalSQL/QueryCardinality.v:973`](../QueryCardinality.v#L973)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate int32 nonnull equal law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1774,7 +1891,9 @@ Lemma interp_predicate_int32_nonnull_equal :
 
 ## `interp_predicate_int32_null_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:999`](../QueryCardinality.v#L999)
+Source: [`theories/FormalSQL/QueryCardinality.v:986`](../QueryCardinality.v#L986)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1795,7 +1914,9 @@ Lemma interp_predicate_int32_null_left :
 
 ## `interp_predicate_int32_null_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1007`](../QueryCardinality.v#L1007)
+Source: [`theories/FormalSQL/QueryCardinality.v:994`](../QueryCardinality.v#L994)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1817,7 +1938,9 @@ Lemma interp_predicate_int32_null_right :
 
 ## `postgres_int32_equal_true_eq`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1021`](../QueryCardinality.v#L1021)
+Source: [`theories/FormalSQL/QueryCardinality.v:1008`](../QueryCardinality.v#L1008)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the postgres int32 equal true equality law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1840,7 +1963,9 @@ Lemma postgres_int32_equal_true_eq :
 
 ## `NoDup_map_constant_filter_length_le_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1054`](../QueryCardinality.v#L1054)
+Source: [`theories/FormalSQL/QueryCardinality.v:1041`](../QueryCardinality.v#L1041)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1864,7 +1989,9 @@ Lemma NoDup_map_constant_filter_length_le_one :
 
 ## `int32_primary_key_true_matches_at_most_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1092`](../QueryCardinality.v#L1092)
+Source: [`theories/FormalSQL/QueryCardinality.v:1079`](../QueryCardinality.v#L1079)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the int32 primary key true matches at most one law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -1891,7 +2018,9 @@ Lemma int32_primary_key_true_matches_at_most_one :
 
 ## `null_int32_primary_key_matches_none`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1124`](../QueryCardinality.v#L1124)
+Source: [`theories/FormalSQL/QueryCardinality.v:1111`](../QueryCardinality.v#L1111)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for row cardinality and compositional bounds.
 
@@ -1915,7 +2044,9 @@ Lemma null_int32_primary_key_matches_none :
 
 ## `partition_member_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1143`](../QueryCardinality.v#L1143)
+Source: [`theories/FormalSQL/QueryCardinality.v:1130`](../QueryCardinality.v#L1130)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1937,7 +2068,9 @@ Lemma partition_member_length_le :
 
 ## `query_make_groups_member_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1157`](../QueryCardinality.v#L1157)
+Source: [`theories/FormalSQL/QueryCardinality.v:1144`](../QueryCardinality.v#L1144)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -1958,7 +2091,9 @@ Theorem query_make_groups_member_length_le :
 
 ## `query_make_groups_member_in`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1175`](../QueryCardinality.v#L1175)
+Source: [`theories/FormalSQL/QueryCardinality.v:1162`](../QueryCardinality.v#L1162)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -1980,7 +2115,9 @@ Lemma query_make_groups_member_in :
 
 ## `query_make_groups_member_nonempty`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1193`](../QueryCardinality.v#L1193)
+Source: [`theories/FormalSQL/QueryCardinality.v:1180`](../QueryCardinality.v#L1180)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for row cardinality and compositional bounds.
 
@@ -2002,7 +2139,9 @@ Lemma query_make_groups_member_nonempty :
 
 ## `partition_member_NoDupA`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1209`](../QueryCardinality.v#L1209)
+Source: [`theories/FormalSQL/QueryCardinality.v:1196`](../QueryCardinality.v#L1196)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -2030,7 +2169,9 @@ Lemma partition_member_NoDupA :
 
 ## `query_make_groups_member_NoDupA`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1262`](../QueryCardinality.v#L1262)
+Source: [`theories/FormalSQL/QueryCardinality.v:1249`](../QueryCardinality.v#L1249)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -2056,7 +2197,9 @@ Lemma query_make_groups_member_NoDupA :
 
 ## `query_make_groups_member_homogeneous`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1290`](../QueryCardinality.v#L1290)
+Source: [`theories/FormalSQL/QueryCardinality.v:1277`](../QueryCardinality.v#L1277)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -2084,7 +2227,9 @@ Lemma query_make_groups_member_homogeneous :
 
 ## `query_group_env_grouping_expression_member`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1334`](../QueryCardinality.v#L1334)
+Source: [`theories/FormalSQL/QueryCardinality.v:1321`](../QueryCardinality.v#L1321)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates membership or occurrence evidence to row cardinality and compositional bounds.
 
@@ -2111,7 +2256,9 @@ Lemma query_group_env_grouping_expression_member :
 
 ## `query_distinct_group_finite_code_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1390`](../QueryCardinality.v#L1390)
+Source: [`theories/FormalSQL/QueryCardinality.v:1377`](../QueryCardinality.v#L1377)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2141,7 +2288,9 @@ Theorem query_distinct_group_finite_code_length_le :
 
 ## `query_distinct_group_finite_Z_code_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1428`](../QueryCardinality.v#L1428)
+Source: [`theories/FormalSQL/QueryCardinality.v:1415`](../QueryCardinality.v#L1415)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2174,7 +2323,9 @@ Theorem query_distinct_group_finite_Z_code_length_le :
 
 ## `project_rows_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1491`](../QueryCardinality.v#L1491)
+Source: [`theories/FormalSQL/QueryCardinality.v:1484`](../QueryCardinality.v#L1484)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2189,14 +2340,17 @@ Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardina
 ```rocq
 Lemma project_rows_success_length :
   forall env select_list rows output,
-    @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-      env select_list rows = SqlSuccess output ->
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list rows (SqlSuccess output) ->
     List.length output = List.length rows.
 ```
 
 ## `project_rows_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1510`](../QueryCardinality.v#L1510)
+Source: [`theories/FormalSQL/QueryCardinality.v:1497`](../QueryCardinality.v#L1497)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2213,18 +2367,23 @@ Lemma project_rows_success_Forall :
   forall env select_list rows output
          (input_property output_property : tuple T -> Prop),
     Forall input_property rows ->
-    (forall row,
-      input_property row ->
-      output_property
-        (projection T (env_t T env row) (@Select_List T select_list))) ->
-    @project_rows_outcome T symbol_runtime_error aggregate_runtime_error
-      env select_list rows = SqlSuccess output ->
+    (forall input_row output_row,
+      input_property input_row ->
+      @project_row_success T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list input_row output_row ->
+      output_property output_row) ->
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list rows (SqlSuccess output) ->
     Forall output_property output.
 ```
 
 ## `query_same_rows_as_bag_length_N`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1561`](../QueryCardinality.v#L1561)
+Source: [`theories/FormalSQL/QueryCardinality.v:1541`](../QueryCardinality.v#L1541)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2246,7 +2405,9 @@ Lemma query_same_rows_as_bag_length_N :
 
 ## `query_same_rows_as_bag_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1577`](../QueryCardinality.v#L1577)
+Source: [`theories/FormalSQL/QueryCardinality.v:1557`](../QueryCardinality.v#L1557)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2269,7 +2430,9 @@ Lemma query_same_rows_as_bag_length_le :
 
 ## `query_success_length_le_error`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1594`](../QueryCardinality.v#L1594)
+Source: [`theories/FormalSQL/QueryCardinality.v:1574`](../QueryCardinality.v#L1574)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2289,7 +2452,9 @@ Lemma query_success_length_le_error :
 
 ## `query_success_length_le_values`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1603`](../QueryCardinality.v#L1603)
+Source: [`theories/FormalSQL/QueryCardinality.v:1583`](../QueryCardinality.v#L1583)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2311,7 +2476,9 @@ Lemma query_success_length_le_values :
 
 ## `query_success_length_le_table`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1618`](../QueryCardinality.v#L1618)
+Source: [`theories/FormalSQL/QueryCardinality.v:1598`](../QueryCardinality.v#L1598)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2334,7 +2501,9 @@ Lemma query_success_length_le_table :
 
 ## `query_success_length_le_project`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1650`](../QueryCardinality.v#L1650)
+Source: [`theories/FormalSQL/QueryCardinality.v:1630`](../QueryCardinality.v#L1630)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2355,7 +2524,9 @@ Lemma query_success_length_le_project :
 
 ## `query_success_length_le_row_map`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1667`](../QueryCardinality.v#L1667)
+Source: [`theories/FormalSQL/QueryCardinality.v:1647`](../QueryCardinality.v#L1647)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2377,7 +2548,9 @@ Lemma query_success_length_le_row_map :
 
 ## `query_success_length_le_offset`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1683`](../QueryCardinality.v#L1683)
+Source: [`theories/FormalSQL/QueryCardinality.v:1663`](../QueryCardinality.v#L1663)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2399,7 +2572,9 @@ Lemma query_success_length_le_offset :
 
 ## `query_offset_success_nil_of_input_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1702`](../QueryCardinality.v#L1702)
+Source: [`theories/FormalSQL/QueryCardinality.v:1682`](../QueryCardinality.v#L1682)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2418,13 +2593,15 @@ Lemma query_offset_success_nil_of_input_length_le :
     forall output,
       @eval_query_expr_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env (QExpr_Offset offset input) (SqlSuccess output) ->
+        boolean_schedule env (QExpr_Offset offset input) (SqlSuccess output) ->
       output = nil.
 ```
 
 ## `query_success_length_le_fetch`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1721`](../QueryCardinality.v#L1721)
+Source: [`theories/FormalSQL/QueryCardinality.v:1701`](../QueryCardinality.v#L1701)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2446,7 +2623,9 @@ Lemma query_success_length_le_fetch :
 
 ## `query_success_length_le_fetch_count`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1738`](../QueryCardinality.v#L1738)
+Source: [`theories/FormalSQL/QueryCardinality.v:1718`](../QueryCardinality.v#L1718)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2466,7 +2645,9 @@ Lemma query_success_length_le_fetch_count :
 
 ## `query_success_length_le_order_by`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1752`](../QueryCardinality.v#L1752)
+Source: [`theories/FormalSQL/QueryCardinality.v:1732`](../QueryCardinality.v#L1732)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2487,7 +2668,9 @@ Lemma query_success_length_le_order_by :
 
 ## `tuple_mk_set_cardinal_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1772`](../QueryCardinality.v#L1772)
+Source: [`theories/FormalSQL/QueryCardinality.v:1752`](../QueryCardinality.v#L1752)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2509,7 +2692,9 @@ Lemma tuple_mk_set_cardinal_le :
 
 ## `query_distinct_bag_cardinal_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1820`](../QueryCardinality.v#L1820)
+Source: [`theories/FormalSQL/QueryCardinality.v:1800`](../QueryCardinality.v#L1800)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2531,7 +2716,9 @@ Lemma query_distinct_bag_cardinal_le :
 
 ## `query_success_length_le_distinct`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1837`](../QueryCardinality.v#L1837)
+Source: [`theories/FormalSQL/QueryCardinality.v:1817`](../QueryCardinality.v#L1817)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2552,7 +2739,9 @@ Lemma query_success_length_le_distinct :
 
 ## `oeset_pointwise_nb_occ_le_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1873`](../QueryCardinality.v#L1873)
+Source: [`theories/FormalSQL/QueryCardinality.v:1853`](../QueryCardinality.v#L1853)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2575,7 +2764,9 @@ Lemma oeset_pointwise_nb_occ_le_length :
 
 ## `febag_cardinal_le_of_nb_occ_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1910`](../QueryCardinality.v#L1910)
+Source: [`theories/FormalSQL/QueryCardinality.v:1890`](../QueryCardinality.v#L1890)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2599,7 +2790,9 @@ Lemma febag_cardinal_le_of_nb_occ_le :
 
 ## `febag_cardinal_union`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1927`](../QueryCardinality.v#L1927)
+Source: [`theories/FormalSQL/QueryCardinality.v:1907`](../QueryCardinality.v#L1907)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2621,7 +2814,9 @@ Lemma febag_cardinal_union :
 
 ## `febag_cardinal_union_max_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1945`](../QueryCardinality.v#L1945)
+Source: [`theories/FormalSQL/QueryCardinality.v:1925`](../QueryCardinality.v#L1925)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2643,7 +2838,9 @@ Lemma febag_cardinal_union_max_le :
 
 ## `febag_cardinal_inter_le_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1958`](../QueryCardinality.v#L1958)
+Source: [`theories/FormalSQL/QueryCardinality.v:1938`](../QueryCardinality.v#L1938)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2665,7 +2862,9 @@ Lemma febag_cardinal_inter_le_left :
 
 ## `febag_cardinal_inter_le_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1969`](../QueryCardinality.v#L1969)
+Source: [`theories/FormalSQL/QueryCardinality.v:1949`](../QueryCardinality.v#L1949)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2687,7 +2886,9 @@ Lemma febag_cardinal_inter_le_right :
 
 ## `febag_cardinal_diff_le_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1980`](../QueryCardinality.v#L1980)
+Source: [`theories/FormalSQL/QueryCardinality.v:1960`](../QueryCardinality.v#L1960)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2709,7 +2910,9 @@ Lemma febag_cardinal_diff_le_left :
 
 ## `query_set_cardinality_bound_union`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1994`](../QueryCardinality.v#L1994)
+Source: [`theories/FormalSQL/QueryCardinality.v:1974`](../QueryCardinality.v#L1974)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
 
@@ -2730,7 +2933,9 @@ Lemma query_set_cardinality_bound_union :
 
 ## `query_set_cardinality_bound_union_max`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2007`](../QueryCardinality.v#L2007)
+Source: [`theories/FormalSQL/QueryCardinality.v:1987`](../QueryCardinality.v#L1987)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
 
@@ -2751,7 +2956,9 @@ Lemma query_set_cardinality_bound_union_max :
 
 ## `query_set_cardinality_bound_inter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2021`](../QueryCardinality.v#L2021)
+Source: [`theories/FormalSQL/QueryCardinality.v:2001`](../QueryCardinality.v#L2001)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates SQL bag/set operations to the exact list length or bag cardinality shown below.
 
@@ -2772,7 +2979,9 @@ Lemma query_set_cardinality_bound_inter :
 
 ## `query_set_cardinality_bound_diff`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2037`](../QueryCardinality.v#L2037)
+Source: [`theories/FormalSQL/QueryCardinality.v:2017`](../QueryCardinality.v#L2017)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL bag/set operations.
 
@@ -2793,7 +3002,9 @@ Lemma query_set_cardinality_bound_diff :
 
 ## `query_success_length_le_set`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2050`](../QueryCardinality.v#L2050)
+Source: [`theories/FormalSQL/QueryCardinality.v:2030`](../QueryCardinality.v#L2030)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for SQL bag/set operations.
 
@@ -2817,7 +3028,9 @@ Lemma query_success_length_le_set :
 
 ## `query_rank_rows_outcome_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2074`](../QueryCardinality.v#L2074)
+Source: [`theories/FormalSQL/QueryCardinality.v:2054`](../QueryCardinality.v#L2054)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2840,7 +3053,9 @@ Lemma query_rank_rows_outcome_success_length :
 
 ## `query_rank_bag_rows_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2092`](../QueryCardinality.v#L2092)
+Source: [`theories/FormalSQL/QueryCardinality.v:2072`](../QueryCardinality.v#L2072)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2860,7 +3075,9 @@ Lemma query_rank_bag_rows_length :
 
 ## `query_window_rows_outcome_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2107`](../QueryCardinality.v#L2107)
+Source: [`theories/FormalSQL/QueryCardinality.v:2087`](../QueryCardinality.v#L2087)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -2883,7 +3100,9 @@ Lemma query_window_rows_outcome_success_length :
 
 ## `query_success_length_le_rank`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2142`](../QueryCardinality.v#L2142)
+Source: [`theories/FormalSQL/QueryCardinality.v:2122`](../QueryCardinality.v#L2122)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2906,7 +3125,9 @@ Lemma query_success_length_le_rank :
 
 ## `query_success_length_le_window`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2172`](../QueryCardinality.v#L2172)
+Source: [`theories/FormalSQL/QueryCardinality.v:2152`](../QueryCardinality.v#L2152)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2928,7 +3149,9 @@ Lemma query_success_length_le_window :
 
 ## `if_tuple_rows_success_true`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2212`](../QueryCardinality.v#L2212)
+Source: [`theories/FormalSQL/QueryCardinality.v:2192`](../QueryCardinality.v#L2192)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2953,7 +3176,9 @@ Lemma if_tuple_rows_success_true :
 
 ## `if_tuple_rows_success_false`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2225`](../QueryCardinality.v#L2225)
+Source: [`theories/FormalSQL/QueryCardinality.v:2205`](../QueryCardinality.v#L2205)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -2978,7 +3203,9 @@ Lemma if_tuple_rows_success_false :
 
 ## `filter_rows_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2238`](../QueryCardinality.v#L2238)
+Source: [`theories/FormalSQL/QueryCardinality.v:2218`](../QueryCardinality.v#L2218)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -2995,13 +3222,15 @@ Lemma filter_rows_success_length_le :
   forall env formula rows output,
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     (List.length output <= List.length rows)%nat.
 ```
 
 ## `query_success_length_le_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2270`](../QueryCardinality.v#L2270)
+Source: [`theories/FormalSQL/QueryCardinality.v:2250`](../QueryCardinality.v#L2250)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -3022,7 +3251,9 @@ Lemma query_success_length_le_filter :
 
 ## `filter_cons_outcome_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2283`](../QueryCardinality.v#L2283)
+Source: [`theories/FormalSQL/QueryCardinality.v:2263`](../QueryCardinality.v#L2263)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -3045,7 +3276,9 @@ Lemma filter_cons_outcome_success_Forall :
 
 ## `filter_rows_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2297`](../QueryCardinality.v#L2297)
+Source: [`theories/FormalSQL/QueryCardinality.v:2277`](../QueryCardinality.v#L2277)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -3062,14 +3295,16 @@ Lemma filter_rows_success_Forall :
   forall env formula rows output (property : tuple T -> Prop),
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     Forall property rows ->
     Forall property output.
 ```
 
 ## `filter_rows_success_Forall_accepted`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2328`](../QueryCardinality.v#L2328)
+Source: [`theories/FormalSQL/QueryCardinality.v:2308`](../QueryCardinality.v#L2308)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -3086,19 +3321,21 @@ Lemma filter_rows_success_Forall_accepted :
   forall env formula rows output (property : tuple T -> Prop),
     (forall row truth,
       In row rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null boolean_schedule (env_t T env row) formula (SqlSuccess truth) ->
       Bool.is_true (B T) truth = true ->
       property row) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     Forall property output.
 ```
 
 ## `filter_rows_success_exact_count`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2365`](../QueryCardinality.v#L2365)
+Source: [`theories/FormalSQL/QueryCardinality.v:2345`](../QueryCardinality.v#L2345)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for row cardinality and compositional bounds.
 
@@ -3115,18 +3352,20 @@ Lemma filter_rows_success_exact_count :
   forall env formula rows output keep,
     (forall row truth,
       In row rows ->
-      @eval_formula_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null (env_t T env row) formula (SqlSuccess truth) ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null boolean_schedule (env_t T env row) formula (SqlSuccess truth) ->
       Bool.is_true (B T) truth = keep row) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula rows (SqlSuccess output) ->
+      boolean_schedule env formula rows (SqlSuccess output) ->
     List.length output = List.length (filter keep rows).
 ```
 
 ## `filter_rows_error_observable`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2406`](../QueryCardinality.v#L2406)
+Source: [`theories/FormalSQL/QueryCardinality.v:2386`](../QueryCardinality.v#L2386)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for row cardinality and compositional bounds.
 
@@ -3143,18 +3382,20 @@ Lemma filter_rows_error_observable :
   forall env formula input input_rows error,
     @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env input (SqlSuccess input_rows) ->
+      boolean_schedule env input (SqlSuccess input_rows) ->
     @eval_filter_rows_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env formula input_rows (SqlError error) ->
+      boolean_schedule env formula input_rows (SqlError error) ->
     @eval_query_expr_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env (QExpr_Filter formula input) (SqlError error).
+      boolean_schedule env (QExpr_Filter formula input) (SqlError error).
 ```
 
 ## `eval_groups_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2424`](../QueryCardinality.v#L2424)
+Source: [`theories/FormalSQL/QueryCardinality.v:2404`](../QueryCardinality.v#L2404)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for row cardinality and compositional bounds.
 
@@ -3171,13 +3412,16 @@ Lemma eval_groups_success_length_le :
   forall env select_list group_terms having groups output,
     @eval_groups_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env select_list group_terms having groups (SqlSuccess output) ->
+      boolean_schedule env select_list group_terms having groups
+      (SqlSuccess output) ->
     (List.length output <= List.length groups)%nat.
 ```
 
 ## `int32_composite_primary_key_true_matches_at_most_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2464`](../QueryCardinality.v#L2464)
+Source: [`theories/FormalSQL/QueryCardinality.v:2445`](../QueryCardinality.v#L2445)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the int32 composite primary key true matches at most one law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -3211,7 +3455,9 @@ Lemma int32_composite_primary_key_true_matches_at_most_one :
 
 ## `functional_theta_join_chain_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2526`](../QueryCardinality.v#L2526)
+Source: [`theories/FormalSQL/QueryCardinality.v:2507`](../QueryCardinality.v#L2507)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for join cardinality.
 
@@ -3233,7 +3479,9 @@ Theorem functional_theta_join_chain_length_le :
 
 ## `rows_attribute_conform_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2545`](../QueryCardinality.v#L2545)
+Source: [`theories/FormalSQL/QueryCardinality.v:2526`](../QueryCardinality.v#L2526)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows attribute conform filter law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -3254,7 +3502,9 @@ Lemma rows_attribute_conform_filter :
 
 ## `NoDup_map_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2555`](../QueryCardinality.v#L2555)
+Source: [`theories/FormalSQL/QueryCardinality.v:2536`](../QueryCardinality.v#L2536)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for row cardinality and compositional bounds.
 
@@ -3275,7 +3525,9 @@ Lemma NoDup_map_filter :
 
 ## `primary_key_conforms_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2575`](../QueryCardinality.v#L2575)
+Source: [`theories/FormalSQL/QueryCardinality.v:2556`](../QueryCardinality.v#L2556)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the primary key conforms filter law for row cardinality and compositional bounds, in the exact direction displayed by the declaration.
 
@@ -3296,7 +3548,9 @@ Lemma primary_key_conforms_filter :
 
 ## `functional_chain_fixed_first_composite_int32_group_length_2_32`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2592`](../QueryCardinality.v#L2592)
+Source: [`theories/FormalSQL/QueryCardinality.v:2573`](../QueryCardinality.v#L2573)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -3330,7 +3584,9 @@ Theorem functional_chain_fixed_first_composite_int32_group_length_2_32 :
 
 ## `functional_chain_composite_int32_occurrence_length_2_64`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2640`](../QueryCardinality.v#L2640)
+Source: [`theories/FormalSQL/QueryCardinality.v:2621`](../QueryCardinality.v#L2621)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 
@@ -3359,7 +3615,9 @@ Theorem functional_chain_composite_int32_occurrence_length_2_64 :
 
 ## `functional_chain_composite_int32_group_length_2_64`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2672`](../QueryCardinality.v#L2672)
+Source: [`theories/FormalSQL/QueryCardinality.v:2653`](../QueryCardinality.v#L2653)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
 

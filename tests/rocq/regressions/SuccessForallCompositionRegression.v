@@ -5,7 +5,8 @@
 From Stdlib Require Import List.
 From SQLFS Require Import
   Bool3 Env FiniteBag FiniteCollection FiniteSet Formula Projection SqlErrorSemantics
-  OrderedSet SqlBagAbstraction SqlOutcome SqlQuerySemantics SqlQuerySyntax.
+  OrderedSet SqlBagAbstraction SqlOutcome SqlQueryFacts SqlQuerySemantics
+  SqlQuerySyntax.
 From Logos.FormalSQL Require Import
   OrderedQueryFacts RelationalAlgebraFacts.
 
@@ -25,14 +26,17 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation success_Forall :=
   (@query_success_Forall T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Theorem representative_Forall_transport_regression :
   forall (property : tuple T -> Prop) first second bag,
@@ -64,12 +68,15 @@ exact (@query_same_rows_as_bag_map T mapping rows bag Hproper Hrows).
 Qed.
 
 Theorem project_success_Forall_regression :
-  forall env select_list input input_property output_property,
+  forall env select_list input
+      (input_property output_property : tuple T -> Prop),
     success_Forall env input input_property ->
-    (forall row,
-      input_property row ->
-      output_property
-        (projection T (env_t T env row) (@Select_List T select_list))) ->
+    (forall input_row output_row,
+      input_property input_row ->
+      @project_row_success T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list input_row output_row ->
+      output_property output_row) ->
     success_Forall env
       (QExpr_Project select_list input) output_property.
 Proof.
@@ -77,7 +84,7 @@ intros env select_list input input_property output_property Hinput Hmap.
 exact
   (@query_expr_project_success_Forall
     T relname basesort instance unknown symbol_runtime_error
-    aggregate_runtime_error value_is_null env select_list input
+    aggregate_runtime_error value_is_null boolean_schedule env select_list input
     input_property output_property Hinput Hmap).
 Qed.
 
@@ -90,7 +97,8 @@ intros env formula input property Hinput.
 exact
   (@query_expr_filter_success_Forall
     T relname basesort instance unknown symbol_runtime_error
-    aggregate_runtime_error value_is_null env formula input property Hinput).
+    aggregate_runtime_error value_is_null boolean_schedule
+    env formula input property Hinput).
 Qed.
 
 Theorem union_success_Forall_regression :
@@ -105,7 +113,7 @@ intros env left right property Hsort Hproper Hleft Hright.
 exact
   (@query_expr_union_success_Forall
     T relname basesort instance unknown symbol_runtime_error
-    aggregate_runtime_error value_is_null env left right property
+    aggregate_runtime_error value_is_null boolean_schedule env left right property
     Hsort Hproper Hleft Hright).
 Qed.
 
@@ -125,7 +133,7 @@ intros env left right property Hproper Hcross.
 exact
   (@query_expr_cross_join_success_Forall
     T relname basesort instance unknown symbol_runtime_error
-    aggregate_runtime_error value_is_null env left right property
+    aggregate_runtime_error value_is_null boolean_schedule env left right property
     Hproper Hcross).
 Qed.
 

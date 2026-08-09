@@ -37,11 +37,46 @@ host feedback.
 7. The generated goals and introduction helpers in `Problem.v`.
 
 State the SQL rewrite in one sentence and identify the smallest differing
-subtrees. Before editing `Problem.v`,
-create and maintain `scratch/proof-plan.md` with `claim`, `static`, `core`,
-`lift`, and `assembly`; record equivalence versus countermodel and revise it if
-semantic analysis disagrees. Static contains only unresolved prerequisites:
-the introduction helper already consumes emitted signatures and admissibility.
+subtrees. Before developing local helpers, write a concise top-level route in
+`scratch/proof-plan.md`. The following structure is recommended:
+
+```text
+route-revision: 1
+current-residual: initial-top-level
+# Proof plan
+## Claim
+equivalence or countermodel, with one-sentence SQL justification
+## Static
+only unresolved prerequisites not consumed by the generated introduction helper
+## Top-level route
+finite theorem/application chain from generated_verification_goal to the core
+## Current residual
+the exact current Rocq obligation and the diagnostic that exposed it
+## Core
+at most one next helper, its exact statement, existing-interface search, and consumer
+## Lift
+the operator/program theorem that consumes Core
+## Assembly
+the exact Problem.v step that consumes Lift and closes or exposes the next residual
+## Revision log
+route-revision, reason, and abandoned residuals
+```
+
+Treat the plan as a finite dependency route, not a list of potentially useful
+lemmas. Begin from the required final selector/theorem skeleton in `Problem.v`
+and apply the generated introduction helper. An early problem-mode assembly
+diagnostic is usually the fastest way to expose the first semantic residual;
+record that residual before investing in helper proofs. Static should contain
+only unresolved prerequisites because the introduction helper already consumes
+emitted signatures and admissibility.
+
+Thereafter work one residual at a time. A helper is justified only by a named
+consumer in the current top-level route. Connect checked helpers back to
+`Problem.v` regularly so diagnostics confirm that the top-level residual closes
+or becomes smaller. If the route is wrong, revise it, explain why in the
+revision log, and stop investing in speculative lemmas from the abandoned
+route.
+
 Use the two navigation JSON files to reject impossible typed boundaries before
 opening named definitions, and inspect `Schema.v` only for needed constraints.
 Signature equality is necessary, not sufficient; it proves neither
@@ -50,7 +85,8 @@ dump a complete generated module or navigation artifact.
 
 The generated `.v` files, imported FormalSQL sources, and Rocq kernel are
 authoritative; report navigation drift. Do not inspect historical proof runs or
-prior case helpers. A small general local bridge is allowed. On a continuation
+prior case helpers. A small route-local bridge is allowed only for the current
+recorded residual. On a continuation
 in the same proof-session generation, reuse the retained survey, plan, and
 source locations; reopen only changed or failed material.
 
@@ -61,6 +97,25 @@ surface over the authoritative FormalSQL definitions. Its transparent aliases
 do not change the semantics, and every theorem keeps its stated safety,
 extensionality, error, and ordering premises. No query-shaped shortlist or
 host-selected proof route is provided.
+
+Generated SQL goals use `query_expr_possible_equiv` or
+`query_expr_possible_outcome_equiv`. Search for declarations with that exact
+conclusion head first. A `query_expr_outcome_equiv` theorem from the scheduled
+foundation is pointwise only; it becomes a final certificate only through an
+all-schedules, bidirectional schedule-transport, or explicit
+schedule-independence bridge. Boolean schedules concern operand evaluation,
+not row order, so never replace an ordered/list obligation with a bag claim.
+For typed `QExpr_Project`, `QExpr_Filter`, or `QExpr_Group`, use the
+kind-indexed `scalar_expr_*_uniform_global_congr` family and the corresponding
+short-named `query_expr_{project,filter,group}_*` possible-outcome lift. Do not
+use ordinary row equivalence for `SExpr_Exists`; its premise is the distinct
+EXISTS-demand relation. Keep Group aggregate-finalization equalities explicit.
+For a safe `query_expr_possible_equiv` goal, use the public possible-success
+introduction/algebra family directly, or prove possible-outcome equivalence,
+both complete possible-schedule safety premises, and a successful outcome,
+then apply `query_expr_possible_equiv_of_possible_outcome_equiv_safe`.
+Read-only program goals decompose with the public possible program `cons` or
+`Forall2` laws; do not use the fixed-schedule program relations.
 
 The workspace contains `search-rocq-declarations.py`. It scans the exact
 read-only FormalSQL/Logos source snapshot mounted for this invocation and
@@ -91,8 +146,12 @@ helper.
 Choose the abstraction boundary from the SQL, typed query shape, goal, and
 theorem statements. Prefer a public operator or observation contract over
 unfolding recursive evaluators. If the authority snapshot lacks the necessary
-bridge, prove a small general local bridge from public definitions; do not
-encode the complete benchmark rewrite or a generated case identifier.
+bridge, prove only the smallest parameterized or concrete instance required by
+the recorded residual. Do not turn a case run into public-library development,
+generalize beyond its consumer, encode the complete benchmark rewrite, or
+rebuild a recursive evaluator. A broadly useful missing interface that needs
+several independent helper layers is a library gap and a reason to revise or
+stop the route, not permission to construct a private lemma catalog.
 
 When `Witness.generated_witness_available = true` and semantic analysis
 indicates genuine non-equivalence, use only the host-generated read-only
@@ -111,8 +170,8 @@ or extensionality premise.
 
 ## Writable and trusted files
 
-`Problem.v` remains the final entry point, but it need not contain every helper.
-Place independently useful opaque `Qed` lemmas in flat modules named
+`Problem.v` is the live proof route from the beginning, but it need not contain
+every helper. Place route-required opaque `Qed` lemmas in flat modules named
 `ProofModules/<UppercaseRocqIdentifier>.v`. Submit each module through module
 mode before importing it. The file `ProofModules/<Name>.v` has logical name
 `LogosGenerated.ProofModules.<Name>`. A successful module check atomically publishes those
@@ -125,7 +184,7 @@ From LogosGenerated.ProofModules Require Import CoreFacts.
 ```
 
 `Problem.v` may import any successfully published modules in the same form and
-should contain only the thin final instantiation and required top-level theorem.
+should contain the current thin top-level instantiation and required theorem.
 Do not remove or rewrite its generated base `Require` commands; adding these
 `LogosGenerated.ProofModules` imports is allowed. The host independently
 recompiles every published module in cache order before compiling `Problem.v`
@@ -147,15 +206,17 @@ used as an assumption. Scratch forbids assumptions, admits, aborts, `Defined`,
 unsafe commands, and untrusted imports. Every checked scratch subgoal must end
 in an opaque `Qed` result, and scratch files must not import one another.
 
-After a checked scratch theorem closes a planned semantic boundary, move its
-generalized opaque statement into a new proof module and check that module.
-Then import and instantiate the immutable module before building another layer.
-If instantiation exposes a missing interface, isolate that exact residual next
-and publish it under another module name. Short, final-use-only definitions and
-`Qed` helpers remain allowed in `Problem.v`. All generated context artifacts and
-FormalSQL trees are read-only. Scratch may copy the exact trusted imports and
-previously published proof-module imports, but scratch files may not import one
-another.
+After a checked scratch theorem closes the single planned semantic boundary,
+move its opaque statement into a new proof module and check that module. Then
+import and instantiate the immutable module in `Problem.v` soon enough to
+confirm that it reduces the intended residual. If instantiation exposes a
+missing interface, record that exact new residual. If the helper does not
+reduce the top-level residual, revise the route instead of extending the helper
+stack.
+Short, final-use-only definitions and `Qed` helpers remain allowed in
+`Problem.v`. All generated context artifacts and FormalSQL trees are read-only.
+Scratch may copy the exact trusted imports and previously published
+proof-module imports, but scratch files may not import one another.
 
 For an unconditional problem, if semantic analysis indicates genuine
 non-equivalence, first decide whether the FormalSQL countermodel claim below is
@@ -238,17 +299,31 @@ Then prove
 `apply generated_equivalence_goal_intro`. A derived condition must follow from
 the original schema. An external condition must be jointly satisfiable with it.
 
-Keep the final theorem compositional: isolate the semantic core in short named
-opaque `Qed` lemmas, test boundaries in scratch, publish stable layers as proof
-modules, lift the query result through the ordered program, and only then
-assemble the thin `Problem.v`. Reuse an operator-level
-interface rather than rebuilding evaluator recursion. A general helper must not
+Keep the final theorem compositional, but keep its assembly route live throughout
+the search. Probe `Problem.v`, isolate only its current semantic residual in a
+short opaque `Qed` lemma, test that boundary in scratch, publish it if needed,
+and immediately reconnect it to `Problem.v`. Reuse an operator-level interface
+rather than rebuilding evaluator recursion. A parameterized helper must not
 encode a case ID, generated query name, schema constant, or complete benchmark
-rewrite; keep concrete facts in its final local instantiation.
+rewrite; concrete facts may remain in the final local instantiation. A checked
+helper that has not been consumed by a new top-level diagnostic does not count
+as progress.
 
 ## Requesting a diagnostic check
 
-Rocq runs only on the trusted host. Check an isolated subgoal first:
+Rocq runs only on the trusted host. After writing the plan and top-level
+skeleton, probe the real route first:
+
+```bash
+bash run-rocq-check.sh \
+  --mode problem \
+  --candidate Problem.v \
+  --purpose assembly \
+  --timeout-seconds 90
+```
+
+This first diagnostic is allowed to fail and should expose the residual that
+drives `Core`. Once the route is established, check that isolated subgoal:
 
 ```bash
 bash run-rocq-check.sh \
@@ -276,7 +351,10 @@ A successful response means that exact module is now an immutable dependency.
 Do not modify it or resubmit the same name with different bytes. Create, check,
 and import a new successor such as `CoreBridge2.v` when extending or correcting
 the proof. This append-only discipline lets later diagnostics reuse earlier
-`.vo` files without recompiling their proofs.
+`.vo` files without recompiling their proofs. Module success closes the current
+local step, but it is not evidence that the top-level theorem progressed. Keep
+the route honest by importing useful modules into `Problem.v` and checking the
+resulting residual during proof development.
 
 After assembling coherent, previously checked pieces into the real file,
 compile it explicitly:
@@ -290,12 +368,12 @@ bash run-rocq-check.sh \
 ```
 
 Only a passing problem-mode check of the exact `Problem.v` advances the restart
-checkpoint. A module pass publishes a reusable dependency but does not advance
-the `Problem.v` checkpoint; a scratch pass does neither. Diagnostics share the invocation's overall wall-clock deadline;
-the host deliberately imposes no separate per-diagnostic ceiling or ordinary
-completed-check quota. Treat that overall deadline as the budget for many
-short feedback, repair, and proof-search steps, never as a suitable timeout for
-one Rocq compile.
+checkpoint. A module pass publishes a dependency but does not advance the
+`Problem.v` checkpoint; a scratch pass does neither. There is no framework
+quota on local diagnostics. Diagnostics share the invocation's overall
+wall-clock deadline. Use that time for iterative feedback, route revision, and
+proof search rather than treating it as the expected duration of one Rocq
+compile.
 
 Because the trusted dependency closure is precompiled and normal checks are
 incremental, explicitly request about 30--90 seconds for an ordinary scratch or
@@ -315,8 +393,9 @@ proof shape is too expensive, even if it eventually passes. On timeout, shrink
 or restate the goal behind an opaque `Qed`, remove broad reduction or an
 expensive transparent prefix, and check the smaller boundary before assembly.
 Do not retry substantially the same proof with a larger timeout.
-Problem mode is only a restart checkpoint. Once the exact final file and
-required theorem name pass, end the invocation for the host's full trusted
+Problem mode is the route probe and the only restart checkpoint; a failed probe
+guides the next residual, while only a pass advances the checkpoint. Once the
+exact final file and required theorem name pass, end the invocation for the host's full trusted
 check. If host feedback says those exact bytes are already the active
 compile-clean checkpoint, retain that authority instead of resubmitting an
 unchanged diagnostic: the broker deliberately deduplicates it, and ending the

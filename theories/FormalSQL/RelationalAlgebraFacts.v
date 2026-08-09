@@ -986,103 +986,6 @@ exists (rows ++ rejected_rows); split.
   + now rewrite app_nil_r.
 Qed.
 
-(** Two nested projection pipelines are bag-equivalent whenever their
-    composed row maps are pointwise equal under semantic tuple equality. *)
-Lemma double_projection_bag_eq :
-  forall (T : Tuple.Rcd) (env : Env.env T)
-      (outer_left inner_left outer_right inner_right : _select_list T)
-      (bag : SqlQuerySemantics.bagT T),
-    (forall row,
-      Oeset.compare (OTuple T)
-        (projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_left)))
-          (@Select_List T outer_left))
-        (projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_right)))
-          (@Select_List T outer_right)) = Eq) ->
-    bag_eq T
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row => projection T (env_t T env row) (@Select_List T outer_left))
-        (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-          (fun row => projection T (env_t T env row) (@Select_List T inner_left))
-          bag))
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun row => projection T (env_t T env row) (@Select_List T outer_right))
-        (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-          (fun row => projection T (env_t T env row) (@Select_List T inner_right))
-          bag)).
-Proof.
-intros T env outer_left inner_left outer_right inner_right bag Hrows.
-unfold bag_eq; rewrite Febag.nb_occ_equal; intro output.
-transitivity
-  (Fecol.nb_occ output
-    (Fecol.map (CTuple T)
-      (fun row => projection T
-        (env_t T env
-          (projection T (env_t T env row) (@Select_List T inner_left)))
-        (@Select_List T outer_left))
-      (Fecol.Fbag bag))).
-- assert (Hmap :
-    Fecol.nb_occ output
-      (Fecol.map (CTuple T)
-        (fun row => projection T (env_t T env row) (@Select_List T outer_left))
-        (Fecol.map (CTuple T)
-          (fun row => projection T (env_t T env row) (@Select_List T inner_left))
-          (Fecol.Fbag bag))) =
-    Fecol.nb_occ output
-      (Fecol.map (CTuple T)
-        (fun row => projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_left)))
-          (@Select_List T outer_left))
-        (Fecol.Fbag bag))).
-  {
-    apply Fecol.nb_occ_map_map.
-    intros left right _ _ Hequal.
-    apply projection_eq, env_t_eq_2; exact Hequal.
-  }
-  rewrite Fecol.nb_occ_bag.
-  rewrite 2 Fecol.nb_occ_bag in Hmap.
-  cbn [Fecol.map Fecol.to_bag] in Hmap.
-  exact Hmap.
-- transitivity
-    (Fecol.nb_occ output
-      (Fecol.map (CTuple T)
-        (fun row => projection T
-          (env_t T env
-            (projection T (env_t T env row) (@Select_List T inner_right)))
-          (@Select_List T outer_right))
-        (Fecol.Fbag bag))).
-  + apply Fecol.nb_occ_map_eq2.
-    intros row _; apply Hrows.
-  + symmetry.
-    assert (Hmap :
-      Fecol.nb_occ output
-        (Fecol.map (CTuple T)
-          (fun row => projection T (env_t T env row) (@Select_List T outer_right))
-          (Fecol.map (CTuple T)
-            (fun row => projection T (env_t T env row) (@Select_List T inner_right))
-            (Fecol.Fbag bag))) =
-      Fecol.nb_occ output
-        (Fecol.map (CTuple T)
-          (fun row => projection T
-            (env_t T env
-              (projection T (env_t T env row) (@Select_List T inner_right)))
-            (@Select_List T outer_right))
-          (Fecol.Fbag bag))).
-    {
-      apply Fecol.nb_occ_map_map.
-      intros left right _ _ Hequal.
-      apply projection_eq, env_t_eq_2; exact Hequal.
-    }
-    rewrite Fecol.nb_occ_bag.
-    rewrite 2 Fecol.nb_occ_bag in Hmap.
-    cbn [Fecol.map Fecol.to_bag] in Hmap.
-    exact Hmap.
-Qed.
-
 (** A semantic-duplicate-free list has multiplicity zero or one, determined
     entirely by support membership. *)
 Lemma oeset_nb_occ_of_NoDupA :
@@ -3278,14 +3181,17 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation success_bags :=
   (query_success_bags basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 (** Exact SQL-filter acceptance for one pair considered by a join.  The
     contract deliberately fixes only [Bool.is_true]: SQL FALSE and UNKNOWN
@@ -3293,18 +3199,18 @@ Local Abbreviation eval_formula :=
     success witness and the explicit exclusion of errors are both essential;
     neither totality nor runtime safety is inferred from the Boolean flag. *)
 Definition join_condition_acceptance_exact_at
-    (env : Env.env T) (predicate : formula_expr T relname)
+    (env : Env.env T) (predicate : scalar_expr T relname ScalarResultBoolean)
     (left right : tuple T) (accepted : bool) : Prop :=
   (exists truth,
-    eval_formula (env_t T env (join_tuple T left right)) predicate
+    eval_scalar_boolean (env_t T env (join_tuple T left right)) predicate
       (SqlSuccess truth) /\
     Bool.is_true (B T) truth = accepted) /\
   (forall truth,
-    eval_formula (env_t T env (join_tuple T left right)) predicate
+    eval_scalar_boolean (env_t T env (join_tuple T left right)) predicate
       (SqlSuccess truth) ->
     Bool.is_true (B T) truth = accepted) /\
   (forall error,
-    ~ eval_formula (env_t T env (join_tuple T left right)) predicate
+    ~ eval_scalar_boolean (env_t T env (join_tuple T left right)) predicate
         (SqlError error)).
 
 (** Pointwise exact acceptance determines the complete row-condition
@@ -3319,7 +3225,7 @@ Lemma eval_join_row_conditions_acceptance_exact :
     forall outcome,
       @eval_join_row_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left rights outcome <->
+        boolean_schedule env predicate left rights outcome <->
       outcome = SqlSuccess (map accepted rights).
 Proof.
 intros env predicate left rights.
@@ -3344,9 +3250,9 @@ induction rights as [|right rights IH]; intros accepted Haccepted outcome.
   + intro Heval; inversion Heval; subst.
     * exfalso; eapply Hno_error; eassumption.
     * match goal with
-      | Hformula : eval_formula _ predicate (SqlSuccess ?actual_truth),
+      | Hpredicate : eval_scalar_boolean _ predicate (SqlSuccess ?actual_truth),
         Hrest : context [eval_join_row_conditions_outcome] |- _ =>
-          pose proof (Hsuccess_accepted actual_truth Hformula)
+          pose proof (Hsuccess_accepted actual_truth Hpredicate)
             as Hactual_accepted;
           apply (proj1 (IH accepted Htail _)) in Hrest;
           inversion Hrest; subst
@@ -3374,7 +3280,7 @@ Lemma eval_join_conditions_acceptance_exact :
     forall outcome,
       @eval_join_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate lefts rights outcome <->
+        boolean_schedule env predicate lefts rights outcome <->
       outcome =
         SqlSuccess
           (map (fun left => map (accepted left) rights) lefts).
@@ -3428,39 +3334,88 @@ induction lefts as [|left lefts IH];
     * apply (proj2 (IH rights accepted Htail _)); reflexivity.
 Qed.
 
-(** Exact per-source projection lifts to the complete source list without
-    reopening the recursive [project_join_sources_outcome] implementation.
-    The premise is intentionally restricted to sources that occur in the
-    input list, so callers need not prove facts about unreachable branches. *)
-Lemma project_join_sources_outcome_exact_map :
+(** Exact projection of one reached join source is stated directly over the
+    typed scalar-value relation.  It records one success, uniqueness of the
+    projected row, and exclusion of every runtime error without introducing
+    a second deterministic SELECT evaluator. *)
+Definition join_source_projection_exact_at
+    (env : Env.env T)
+    (matched_select left_select right_select : query_select_list T relname)
+    (source : query_join_source T) (expected : tuple T) : Prop :=
+  let select_list :=
+    query_join_source_select matched_select left_select right_select source in
+  let source_env := env_t T env (query_join_source_row source) in
+  (exists values,
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule source_env (map fst select_list) (SqlSuccess values) /\
+    expected = project_row select_list values) /\
+  (forall values,
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule source_env (map fst select_list) (SqlSuccess values) ->
+    project_row select_list values = expected) /\
+  (forall error,
+    ~ @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule source_env (map fst select_list) (SqlError error)).
+
+Lemma eval_project_join_sources_exact_map :
   forall env matched_select left_select right_select sources
       (emit : query_join_source T -> tuple T),
     (forall source,
       In source sources ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
-    @project_join_sources_outcome T symbol_runtime_error
-      aggregate_runtime_error env
-      matched_select left_select right_select sources =
-    SqlSuccess (map emit sources).
+      join_source_projection_exact_at env
+        matched_select left_select right_select source (emit source)) ->
+    forall outcome,
+      @eval_project_join_sources_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select
+        sources outcome <->
+      outcome = SqlSuccess (map emit sources).
 Proof.
 intros env matched_select left_select right_select sources.
-induction sources as [|source sources IH]; intros emit Hexact.
-- reflexivity.
-- cbn [project_join_sources_outcome].
-  rewrite (Hexact source (or_introl eq_refl)).
-  rewrite (IH emit (fun tail Htail => Hexact tail (or_intror Htail))).
+induction sources as [|source sources IH]; intros emit Hexact outcome.
+- split; intro Heval; [inversion Heval|subst outcome; constructor].
   reflexivity.
+- pose proof (Hexact source (or_introl eq_refl)) as Hhead.
+  destruct Hhead as [[values [Hvalues Hemit]] [Hsuccess Herror]].
+  assert (Htail : forall tail,
+    In tail sources ->
+    join_source_projection_exact_at env matched_select left_select
+      right_select tail (emit tail)).
+  { intros tail Htail; apply Hexact; now right. }
+  split; intro Heval.
+  + inversion Heval; subst.
+    * exfalso; eapply Herror; eassumption.
+    * match goal with
+      | Hrest : context [eval_project_join_sources_outcome]
+          |- _ =>
+          apply (proj1 (IH emit Htail _)) in Hrest;
+          subst
+      end.
+      cbn [map project_cons_outcome].
+      rewrite (Hsuccess values0 H4); reflexivity.
+  + subst outcome; cbn [map].
+    rewrite Hemit.
+    assert (Htail_eval :
+      @eval_project_join_sources_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select sources
+        (SqlSuccess (map emit sources))).
+    { apply (proj2 (IH emit Htail _)); reflexivity. }
+    pose proof
+      (@EProjectJoinSources_Cons T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select
+        source sources values (SqlSuccess (map emit sources))
+        Hvalues Htail_eval) as Hcons.
+    cbn [project_cons_outcome] in Hcons.
+    exact Hcons.
 Qed.
 
-(** A join whose reached condition evaluations and branch projections are
-    exact is operationally safe: it has a successful bag outcome and cannot
-    derive any SQL runtime error.  The theorem is independent of join kind
-    and of the shape of either SELECT list.  All semantic safety is explicit
-    in [Hconditions] and [Hprojection]; in particular, the theorem does not
-    infer safety from schema membership, NULL behavior, or a Boolean model. *)
+(** Exact conditions and exact typed branch projections give one successful
+    join bag and rule out every local runtime-error category. *)
 Theorem eval_join_bag_safe_of_acceptance_projection_exact :
   forall env kind predicate matched_select left_select right_select
       (accepted : tuple T -> tuple T -> bool)
@@ -3470,31 +3425,25 @@ Theorem eval_join_bag_safe_of_acceptance_projection_exact :
       join_condition_acceptance_exact_at
         env predicate left right (accepted left right)) ->
     (forall source,
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
+      join_source_projection_exact_at env
+        matched_select left_select right_select source (emit source)) ->
     (exists output_bag,
       @eval_join_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env kind predicate matched_select left_select right_select
+        boolean_schedule env kind predicate matched_select left_select right_select
         left_bag right_bag (SqlSuccess output_bag)) /\
     (forall error,
       ~ @eval_join_bag_outcome T relname basesort instance unknown
           symbol_runtime_error aggregate_runtime_error value_is_null
-          env kind predicate matched_select left_select right_select
+          boolean_schedule env kind predicate matched_select left_select right_select
           left_bag right_bag (SqlError error)).
 Proof.
 intros env kind predicate matched_select left_select right_select
   accepted emit left_bag right_bag Hconditions Hprojection.
-set (left_rows :=
-  Febag.elements (Fecol.CBag (CTuple T)) left_bag).
-set (right_rows :=
-  Febag.elements (Fecol.CBag (CTuple T)) right_bag).
-set (matrix :=
-  map (fun left => map (accepted left) right_rows) left_rows).
-set (sources :=
-  query_join_sources T kind left_rows right_rows matrix).
+set (left_rows := Febag.elements (Fecol.CBag (CTuple T)) left_bag).
+set (right_rows := Febag.elements (Fecol.CBag (CTuple T)) right_bag).
+set (matrix := map (fun left => map (accepted left) right_rows) left_rows).
+set (sources := query_join_sources T kind left_rows right_rows matrix).
 set (projected := map emit sources).
 assert (Hleft_rows : query_same_rows_as_bag left_rows left_bag).
 { unfold left_rows; apply query_elements_same_rows_as_bag. }
@@ -3503,60 +3452,58 @@ assert (Hright_rows : query_same_rows_as_bag right_rows right_bag).
 assert (Hcondition_success :
   @eval_join_conditions_outcome T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null
-    env predicate left_rows right_rows (SqlSuccess matrix)).
+    boolean_schedule env predicate left_rows right_rows (SqlSuccess matrix)).
 {
   unfold matrix.
-  apply (proj2
-    (eval_join_conditions_acceptance_exact
-      (env := env) (predicate := predicate)
-      left_rows right_rows accepted
-      (fun left right _ _ => Hconditions left right)
-      (SqlSuccess
-        (map (fun left => map (accepted left) right_rows) left_rows)))).
-  reflexivity.
+  apply (proj2 (eval_join_conditions_acceptance_exact
+    (env := env) (predicate := predicate) left_rows right_rows accepted
+    (fun left right _ _ => Hconditions left right) _)); reflexivity.
 }
 assert (Hprojection_success :
-  @project_join_sources_outcome T symbol_runtime_error
-    aggregate_runtime_error env
-    matched_select left_select right_select sources =
-  SqlSuccess projected).
+  @eval_project_join_sources_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule env matched_select left_select right_select sources
+    (SqlSuccess projected)).
 {
-  unfold projected.
-  apply project_join_sources_outcome_exact_map.
-  intros source Hsource; apply Hprojection.
+  apply (proj2 (eval_project_join_sources_exact_map
+    (env := env) (matched_select := matched_select)
+    (left_select := left_select) (right_select := right_select) sources emit
+    (fun source _ => Hprojection source) _)).
+  unfold projected; reflexivity.
 }
 split.
 - exists (rows_bag T projected).
   eapply EJoinBag_Success with
     (left_rows := left_rows) (right_rows := right_rows)
-    (matrix := matrix) (projected := projected).
-  + exact Hleft_rows.
-  + exact Hright_rows.
-  + exact Hcondition_success.
-  + exact Hprojection_success.
-  + apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl.
+    (matrix := matrix) (projected := projected);
+    try eassumption.
+  apply query_same_rows_as_bag_iff_bag_eq, bag_eq_refl.
 - intros error Heval.
+  clear Hcondition_success Hprojection_success.
   inversion Heval; subst.
-  + apply (proj1
-      (eval_join_conditions_acceptance_exact
-        (env := env) (predicate := predicate)
-        left_rows0 right_rows0 accepted
-        (fun left right _ _ => Hconditions left right)
-        (SqlError error))) in H9.
-    discriminate.
-  + pose proof
-      (project_join_sources_outcome_exact_map
-        env matched_select left_select right_select
-        (query_join_sources T kind left_rows0 right_rows0 matrix0)
-        emit (fun source _ => Hprojection source))
-      as Hexact.
-    rewrite Hexact in H10; discriminate.
+  + match goal with
+    | Hconditions_error : context [eval_join_conditions_outcome] |- _ =>
+        apply (proj1 (eval_join_conditions_acceptance_exact
+          (env := env) (predicate := predicate) _ _ accepted
+          (fun left right _ _ => Hconditions left right) _))
+          in Hconditions_error;
+        discriminate
+    end.
+  + match goal with
+    | Hprojection_error : context [eval_project_join_sources_outcome] |- _ =>
+        apply (proj1 (eval_project_join_sources_exact_map
+          (env := env) (matched_select := matched_select)
+          (left_select := left_select) (right_select := right_select) _ emit
+          (fun source _ => Hprojection source) _)) in Hprojection_error;
+        discriminate
+    end.
 Qed.
 
 Lemma eval_join_row_conditions_success_length :
   forall env predicate left rights flags,
     @eval_join_row_conditions_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env predicate left rights (SqlSuccess flags) ->
+      value_is_null boolean_schedule env predicate left rights
+      (SqlSuccess flags) ->
     length flags = length rights.
 Proof.
 intros env predicate left rights.
@@ -3569,7 +3516,8 @@ Qed.
 Lemma eval_join_conditions_success_dimensions :
   forall env predicate lefts rights matrix,
     @eval_join_conditions_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env predicate lefts rights (SqlSuccess matrix) ->
+      value_is_null boolean_schedule env predicate lefts rights
+      (SqlSuccess matrix) ->
     length matrix = length lefts /\
     Forall (fun flags => length flags = length rights) matrix.
 Proof.
@@ -3738,24 +3686,28 @@ Local Lemma query_join_left_functional_projected_rows_permut :
       (fun flags =>
         (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
       matrix ->
-    (forall left right output,
+    (forall left right values,
       In left lefts ->
       In right rights ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceMatched T (join_tuple T left right)) =
-      SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
-    (forall left output,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env (join_tuple T left right))
+        (map fst matched_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row matched_select values)) (emit left) = Eq) ->
+    (forall left values,
       In left lefts ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceLeft T left) = SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
-    @project_join_sources_outcome T symbol_runtime_error
-      aggregate_runtime_error env matched_select left_select right_select
-      (query_join_sources T QueryJoinLeft lefts rights matrix) =
-      SqlSuccess projected ->
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env left)
+        (map fst left_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row left_select values)) (emit left) = Eq) ->
+    @eval_project_join_sources_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env matched_select left_select right_select
+      (query_join_sources T QueryJoinLeft lefts rights matrix)
+      (SqlSuccess projected) ->
     Oeset.permut (OTuple T) (map project projected) (map emit lefts).
 Proof.
 intros env matched_select left_select right_select project emit lefts.
@@ -3763,34 +3715,31 @@ induction lefts as [|left lefts IH];
   intros rights matrix projected Hlength Hdimensions Hfunctional
     Hmatched Hleft Hprojected.
 - destruct matrix as [|flags matrix]; cbn in Hlength; [|discriminate].
-  cbn [query_join_sources query_join_left_sources
-    project_join_sources_outcome] in Hprojected.
+  cbn [query_join_sources query_join_left_sources] in Hprojected.
   inversion Hprojected; subst projected; apply Oeset.permut_refl.
 - destruct matrix as [|flags matrix]; cbn in Hlength; [discriminate|].
   apply Nat.succ_inj in Hlength.
   inversion Hdimensions as [|? ? Hdimension Hdimensions_tail]; subst.
   inversion Hfunctional as [|? ? Hfunctional_head Hfunctional_tail]; subst.
-  assert (Hmatched_tail :
-    forall tail_left right output,
-      In tail_left lefts ->
-      In right rights ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceMatched T (join_tuple T tail_left right)) =
-      SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit tail_left) = Eq).
-  { intros tail_left right output Htail Hright Hsource.
-    exact (Hmatched tail_left right output
-      (or_intror Htail) Hright Hsource). }
-  assert (Hleft_tail :
-    forall tail_left output,
-      In tail_left lefts ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceLeft T tail_left) = SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit tail_left) = Eq).
-  { intros tail_left output Htail Hsource.
-    exact (Hleft tail_left output (or_intror Htail) Hsource). }
+  assert (Hmatched_tail : forall tail_left right values,
+    In tail_left lefts ->
+    In right rights ->
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule (env_t T env (join_tuple T tail_left right))
+      (map fst matched_select) (SqlSuccess values) ->
+    Oeset.compare (OTuple T)
+      (project (project_row matched_select values)) (emit tail_left) = Eq).
+  { intros; eapply Hmatched; [now right|eassumption|eassumption]. }
+  assert (Hleft_tail : forall tail_left values,
+    In tail_left lefts ->
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule (env_t T env tail_left)
+      (map fst left_select) (SqlSuccess values) ->
+    Oeset.compare (OTuple T)
+      (project (project_row left_select values)) (emit tail_left) = Eq).
+  { intros; eapply Hleft; [now right|eassumption]. }
   destruct
     (query_join_left_row_sources_functional_singleton
       left rights flags Hdimension Hfunctional_head)
@@ -3802,34 +3751,41 @@ induction lefts as [|left lefts IH];
   { unfold query_join_sources.
     cbn [query_join_left_sources] in Hrow_sources |- *.
     rewrite app_nil_r in Hrow_sources.
-    rewrite Hrow_sources; reflexivity. }
+    now rewrite Hrow_sources. }
   rewrite Hsources in Hprojected.
-  cbn [project_join_sources_outcome] in Hprojected.
-  destruct (@project_join_source_outcome T symbol_runtime_error
-    aggregate_runtime_error env matched_select left_select right_select
-    source) as [output|error] eqn:Hsource; [|discriminate].
-  destruct (@project_join_sources_outcome T symbol_runtime_error
-    aggregate_runtime_error env matched_select left_select right_select
-    (query_join_sources T QueryJoinLeft lefts rights matrix))
-    as [outputs|error] eqn:Htail; [|discriminate].
-  inversion Hprojected; subst projected.
+  inversion Hprojected; subst.
+  try clear Hprojected.
+  cbn [project_cons_outcome] in *; try discriminate.
+  try match goal with
+  | Heq : SqlSuccess _ = SqlSuccess _ |- _ => inversion Heq; subst
+  end.
   assert (Hhead :
-    Oeset.compare (OTuple T) (project output) (emit left) = Eq).
-  { destruct Hshape as [Hshape|[right [Hright Hshape]]]; subst source.
-    - exact (Hleft left output (or_introl eq_refl) Hsource).
-    - exact (Hmatched left right output
-        (or_introl eq_refl) Hright Hsource). }
+    Oeset.compare (OTuple T)
+      (project
+        (project_row
+          (query_join_source_select
+            matched_select left_select right_select source) values))
+      (emit left) = Eq).
+  {
+    destruct Hshape as [Hshape | [right [Hright Hshape]]]; subst source;
+      cbn [query_join_source_select query_join_source_row] in *.
+    - eapply Hleft; [now left|eassumption].
+    - eapply Hmatched; [now left|exact Hright|eassumption].
+  }
+  destruct tail as [outputs|tail_error];
+    cbn [project_cons_outcome] in H4; try discriminate.
+  inversion H4; subst projected.
   apply (proj1
     (Oeset.permut_cons (OTuple T)
-      (project output) (emit left)
-      (map project outputs) (map emit lefts) Hhead)).
-  eapply IH; eassumption.
+      (project
+        (project_row
+          (query_join_source_select
+            matched_select left_select right_select source) values))
+      (emit left) (map project outputs) (map emit lefts) Hhead)).
+  eapply IH; [exact Hlength|exact Hdimensions_tail|exact Hfunctional_tail|
+    exact Hmatched_tail|exact Hleft_tail|exact H6].
 Qed.
 
-(** Mapping a concrete representative and mapping its finite bag agree up to
-    FormalSQL's semantic tuple equality, including duplicate counts.  This is
-    the reusable boundary for deterministic row maps; it does not assert
-    structural equality or choose a particular output order. *)
 Lemma query_same_rows_as_bag_map :
   forall (mapping : tuple T -> tuple T) rows bag,
     (forall first second,
@@ -3879,31 +3835,36 @@ Theorem query_join_left_functional_projection_bag_on_representatives :
       query_same_rows_as_bag right_rows right_bag ->
       @eval_join_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_rows right_rows (SqlSuccess matrix) ->
+        boolean_schedule env predicate left_rows right_rows
+        (SqlSuccess matrix) ->
       Forall
         (fun flags =>
           (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
         matrix) ->
-    (forall left_rows right_rows left right output,
+    (forall left_rows right_rows left right values,
       query_same_rows_as_bag left_rows left_bag ->
       query_same_rows_as_bag right_rows right_bag ->
       In left left_rows ->
       In right right_rows ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceMatched T (join_tuple T left right)) =
-      SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
-    (forall left_rows left output,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env (join_tuple T left right))
+        (map fst matched_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row matched_select values)) (emit left) = Eq) ->
+    (forall left_rows left values,
       query_same_rows_as_bag left_rows left_bag ->
       In left left_rows ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceLeft T left) = SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env left)
+        (map fst left_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row left_select values)) (emit left) = Eq) ->
     @eval_join_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env QueryJoinLeft predicate matched_select left_select right_select
+      boolean_schedule env QueryJoinLeft predicate matched_select left_select
+      right_select
       left_bag right_bag (SqlSuccess joined_bag) ->
     bag_eq T
       (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
@@ -3920,28 +3881,32 @@ pose proof (eval_join_conditions_success_dimensions H2)
 pose proof (Hfunctional left_rows right_rows matrix H0 H1 H2)
   as Hmatrix_functional.
 assert (Hmatched_rows :
-  forall left right output,
+  forall left right values,
     In left left_rows ->
     In right right_rows ->
-    @project_join_source_outcome T symbol_runtime_error
-      aggregate_runtime_error env matched_select left_select right_select
-      (JoinSourceMatched T (join_tuple T left right)) =
-    SqlSuccess output ->
-    Oeset.compare (OTuple T) (project output) (emit left) = Eq).
-{ intros left right output Hleft_in Hright_in Hsource.
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule (env_t T env (join_tuple T left right))
+      (map fst matched_select) (SqlSuccess values) ->
+    Oeset.compare (OTuple T)
+      (project (project_row matched_select values)) (emit left) = Eq).
+{ intros left right values Hleft_in Hright_in Hsource.
   eapply Hmatched; eassumption. }
 assert (Hleft_rows :
-  forall left output,
+  forall left values,
     In left left_rows ->
-    @project_join_source_outcome T symbol_runtime_error
-      aggregate_runtime_error env matched_select left_select right_select
-      (JoinSourceLeft T left) = SqlSuccess output ->
-    Oeset.compare (OTuple T) (project output) (emit left) = Eq).
-{ intros left output Hleft_in Hsource.
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule (env_t T env left) (map fst left_select)
+      (SqlSuccess values) ->
+    Oeset.compare (OTuple T)
+      (project (project_row left_select values)) (emit left) = Eq).
+{ intros left values Hleft_in Hsource.
   eapply Hleft; eassumption. }
 pose proof
   (query_join_left_functional_projected_rows_permut
-    env matched_select left_select right_select project emit
+    (env := env) (matched_select := matched_select)
+    (left_select := left_select) (right_select := right_select) project emit
     left_rows right_rows (matrix := matrix) (projected := projected)
     Hmatrix_length
     Hmatrix_dimensions Hmatrix_functional Hmatched_rows Hleft_rows H3)
@@ -3969,29 +3934,39 @@ Qed.
 
 Lemma project_join_sources_success_length :
   forall env matched_select left_select right_select sources output,
-    @project_join_sources_outcome T symbol_runtime_error
-      aggregate_runtime_error env matched_select left_select right_select
-      sources = SqlSuccess output ->
+    @eval_project_join_sources_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env matched_select left_select right_select sources
+      (SqlSuccess output) ->
     length output = length sources.
 Proof.
-intros env matched_select left_select right_select sources.
-induction sources as [|source sources IH]; intro output; cbn.
-- inversion 1; reflexivity.
-- destruct (@project_join_source_outcome T symbol_runtime_error
-    aggregate_runtime_error env matched_select left_select right_select
-    source); [|discriminate].
-  destruct (@project_join_sources_outcome T symbol_runtime_error
-    aggregate_runtime_error env matched_select left_select right_select
-    sources) eqn:Htail; [|discriminate].
-  inversion 1; subst output; cbn; f_equal.
-  now apply IH with (output := l).
+intros env matched_select left_select right_select sources output Heval.
+assert (Hlength : forall current_sources outcome,
+  @eval_project_join_sources_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule env matched_select left_select right_select
+    current_sources outcome ->
+  match outcome with
+  | SqlSuccess rows => length rows = length current_sources
+  | SqlError _ => True
+  end).
+{
+  intros current_sources outcome Hevaluation.
+  induction Hevaluation; cbn [project_cons_outcome].
+  - reflexivity.
+  - exact I.
+  - destruct tail; cbn [project_cons_outcome] in *;
+      [exact (f_equal S (IHHevaluation Heval))|exact I].
+}
+exact (Hlength sources (SqlSuccess output) Heval).
 Qed.
 
 Theorem eval_join_bag_success_cardinal_le :
   forall env kind predicate matched_select left_select right_select
          left_bag right_bag output_bag,
     @eval_join_bag_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null env kind
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env kind
       predicate matched_select left_select right_select left_bag right_bag
       (SqlSuccess output_bag) ->
     (Febag.cardinal (Fecol.CBag (CTuple T)) output_bag <=
@@ -4021,8 +3996,11 @@ pose proof (query_same_rows_as_bag_cardinal H0) as Hleft_cardinal.
 pose proof (query_same_rows_as_bag_cardinal H1) as Hright_cardinal.
 pose proof (query_same_rows_as_bag_cardinal H11) as Houtput_cardinal.
 pose proof
-  (project_join_sources_success_length env matched_select left_select right_select
-    (query_join_sources T kind left_rows right_rows matrix) H3)
+  (project_join_sources_success_length
+    (env := env) (matched_select := matched_select)
+    (left_select := left_select) (right_select := right_select)
+    (sources := query_join_sources T kind left_rows right_rows matrix)
+    (output := projected) H3)
   as Hproject_length.
 pose proof
   (query_join_sources_length_le kind left_rows right_rows matrix)
@@ -4068,7 +4046,8 @@ Theorem eval_join_bag_right_single_left_success_cardinal :
          left_bag right_bag output_bag,
     Febag.cardinal (Fecol.CBag (CTuple T)) left_bag = 1%N ->
     @eval_join_bag_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null env
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
       QueryJoinRight predicate matched_select left_select right_select
       left_bag right_bag (SqlSuccess output_bag) ->
     Febag.cardinal (Fecol.CBag (CTuple T)) output_bag =
@@ -4101,9 +4080,10 @@ pose proof
     left right_rows flags Hflags_length) as Hsources_length.
 pose proof
   (project_join_sources_success_length
-    env matched_select left_select right_select
-    (query_join_sources T QueryJoinRight (left :: nil) right_rows
-      (flags :: nil)) H3) as Hprojected_length.
+    (env := env) (matched_select := matched_select)
+    (left_select := left_select) (right_select := right_select)
+    (sources := query_join_sources T QueryJoinRight (left :: nil) right_rows
+      (flags :: nil)) (output := projected) H3) as Hprojected_length.
 transitivity (N.of_nat (length projected)); [exact Houtput_cardinal|].
 transitivity (N.of_nat (length right_rows)).
 - f_equal; exact (eq_trans Hprojected_length Hsources_length).
@@ -4121,15 +4101,18 @@ intros env grouping_sets left right Hinputs output_bag.
 pose proof
   (query_grouping_sets_success_bags basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule
     env grouping_sets left output_bag) as Hleft.
 pose proof
   (query_grouping_sets_success_bags basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule
     env grouping_sets right output_bag) as Hright.
 pose proof
   (lift_possible_bag_unary_congr
     (query_grouping_sets_bag_relation basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule
       env grouping_sets) Hinputs output_bag) as Hlift.
 split; intro Hresult.
 - apply (proj2 Hright), (proj1 Hlift), (proj1 Hleft), Hresult.
@@ -4140,7 +4123,7 @@ Lemma query_expr_equiv_implies_success_bags :
   forall env left right,
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left right ->
+      boolean_schedule env left right ->
     rel_equiv (success_bags env left) (success_bags env right).
 Proof.
 intros env left right [_ Hobservations].
@@ -4157,7 +4140,7 @@ Lemma query_expr_outcome_equiv_implies_success_bags :
   forall env left right,
     @query_expr_outcome_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left right ->
+      boolean_schedule env left right ->
     rel_equiv (success_bags env left) (success_bags env right).
 Proof.
 intros env left right [_ Hobservations].
@@ -4170,10 +4153,10 @@ Lemma query_set_success_bags_congr_of_query_expr_equiv :
   forall env operation left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_Set operation left right))
       (success_bags env (QExpr_Set operation left' right')).
@@ -4194,10 +4177,10 @@ Lemma query_natural_join_success_bags_congr_of_query_expr_equiv :
   forall env left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_NaturalJoin left right))
       (success_bags env (QExpr_NaturalJoin left' right')).
@@ -4212,10 +4195,10 @@ Lemma query_cross_join_success_bags_congr_of_query_expr_equiv :
   forall env left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env (QExpr_CrossJoin left right))
       (success_bags env (QExpr_CrossJoin left' right')).
@@ -4231,10 +4214,10 @@ Lemma query_join_success_bags_congr_of_query_expr_equiv :
          left left' right right',
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left left' ->
+      boolean_schedule env left left' ->
     @query_expr_equiv T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env right right' ->
+      boolean_schedule env right right' ->
     rel_equiv
       (success_bags env
         (QExpr_Join kind predicate matched_select left_select right_select
@@ -4275,12 +4258,13 @@ split; intro Houtput.
 - apply (proj1
     (query_cross_join_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left (QExpr_Set Union first second) output)) in Houtput.
+      boolean_schedule env left (QExpr_Set Union first second) output))
+    in Houtput.
   destruct Houtput as [left_bag [union_bag [Hleft [Hunion Hcross]]]].
   apply (proj1
     (query_set_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env Union first second union_bag)) in Hunion.
+      boolean_schedule env Union first second union_bag)) in Hunion.
   destruct Hunion as [first_bag [second_bag
     [Hfirst [Hsecond Hunion]]]].
   unfold query_set_bag_relation, binary_bag_graph,
@@ -4289,7 +4273,7 @@ split; intro Houtput.
   apply (proj2
     (query_set_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env Union (QExpr_CrossJoin left first)
+      boolean_schedule env Union (QExpr_CrossJoin left first)
       (QExpr_CrossJoin left second) output)).
   exists (query_cross_join_bag left_bag first_bag).
   exists (query_cross_join_bag left_bag second_bag).
@@ -4297,7 +4281,8 @@ split; intro Houtput.
   + apply (proj2
       (query_cross_join_success_bags basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env left first (query_cross_join_bag left_bag first_bag))).
+        boolean_schedule env left first
+        (query_cross_join_bag left_bag first_bag))).
     exists left_bag, first_bag; split; [exact Hleft |].
     split; [exact Hfirst |].
     unfold query_cross_join_bag_relation, binary_bag_graph.
@@ -4306,7 +4291,8 @@ split; intro Houtput.
     * apply (proj2
         (query_cross_join_success_bags basesort instance unknown
           symbol_runtime_error aggregate_runtime_error value_is_null
-          env left second (query_cross_join_bag left_bag second_bag))).
+          boolean_schedule env left second
+          (query_cross_join_bag left_bag second_bag))).
       exists left_bag, second_bag; split; [exact Hleft |].
       split; [exact Hsecond |].
       unfold query_cross_join_bag_relation, binary_bag_graph.
@@ -4323,18 +4309,18 @@ split; intro Houtput.
 - apply (proj1
     (query_set_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env Union (QExpr_CrossJoin left first)
+      boolean_schedule env Union (QExpr_CrossJoin left first)
       (QExpr_CrossJoin left second) output)) in Houtput.
   destruct Houtput as [first_cross [second_cross
     [Hfirst_cross [Hsecond_cross Houter]]]].
   apply (proj1
     (query_cross_join_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left first first_cross)) in Hfirst_cross.
+      boolean_schedule env left first first_cross)) in Hfirst_cross.
   apply (proj1
     (query_cross_join_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left second second_cross)) in Hsecond_cross.
+      boolean_schedule env left second second_cross)) in Hsecond_cross.
   destruct Hfirst_cross as [left_bag [first_bag
     [Hleft [Hfirst Hfirst_cross]]]].
   destruct Hsecond_cross as [left_bag' [second_bag
@@ -4343,14 +4329,14 @@ split; intro Houtput.
   apply (proj2
     (query_cross_join_success_bags basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env left (QExpr_Set Union first second) output)).
+      boolean_schedule env left (QExpr_Set Union first second) output)).
   exists left_bag, (query_set_bag Union first_bag second_bag).
   split; [exact Hleft |].
   split.
   + apply (proj2
       (query_set_success_bags basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env Union first second
+        boolean_schedule env Union first second
         (query_set_bag Union first_bag second_bag))).
     exists first_bag, second_bag; split; [exact Hfirst |].
     split; [exact Hsecond |].

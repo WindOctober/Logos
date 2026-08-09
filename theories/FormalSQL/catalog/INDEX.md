@@ -2,6 +2,8 @@
 
 This is a compact, unranked navigation index. The Rocq source is authoritative; `manifest.json` contains each exact declaration statement plus deterministic source, primary-domain, cross-route, and topic metadata.
 
+For a generated SQL equivalence goal, search the `possible` route first. Entries on the `scheduled` route are pointwise foundations only: a theorem for one fixed Boolean schedule is never a final possible-outcome certificate. Boolean schedules are unrelated to SQL row order; ordered operators continue to use exact list observations.
+
 Routes and topics are neutral filters, not proof plans. No declaration receives a relevance score or preferred position. Search results below are ordered only by source path, source line, and declaration name; use the reported total and explicit pages to inspect every match.
 
 The catalog is not an admissibility prover: use the generated `Queries.v` admissibility certificates for the concrete instance.
@@ -10,6 +12,8 @@ The catalog is not an admissibility prover: use the generated `Queries.v` admiss
 
 | Route | Scope |
 |---|---|
+| `possible` | Public relations, equivalences, errors, and transports over every legal boolean schedule. |
+| `scheduled` | Internal pointwise evaluator and transport lemmas, not final sql certificates. |
 | `renaming` | Collision-safe tuple, row, outcome, and nested query alpha-renaming. |
 | `facade` | Compositional wrappers over generated tnull query terms. |
 | `outcome` | Error-preserving query-outcome bridges and congruences. |
@@ -29,19 +33,19 @@ The catalog is not an admissibility prover: use the generated `Queries.v` admiss
 | Goal shape / SQL feature | Focused catalog | Declarations |
 |---|---|---:|
 | UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE | [null-predicates.md](null-predicates.md) | 99 |
-| query-level nullable syntax adapters, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 60 |
+| query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 55 |
 | collision-safe tuple, row, outcome, and compositional query alpha-renaming | [renaming-transport.md](renaming-transport.md) | 126 |
 | NUMERIC representation, precision/scale, division, rounding, AVG states | [numeric-primitives.md](numeric-primitives.md) | 122 |
-| INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow | [numeric-derived.md](numeric-derived.md) | 127 |
+| INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow | [numeric-derived.md](numeric-derived.md) | 126 |
 | integer bit operations, shifts, BIT_AND/BIT_OR aggregate laws | [bitwise.md](bitwise.md) | 43 |
 | CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ | [string-temporal.md](string-temporal.md) | 76 |
-| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 265 |
-| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 94 |
-| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 220 |
-| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/formula goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 86 |
+| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 279 |
+| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 102 |
+| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 192 |
+| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 96 |
 | typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 99 |
-| row-count bounds, functional joins, filters, groups, finite images | [cardinality-composition.md](cardinality-composition.md) | 137 |
-| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 146 |
+| row-count bounds, functional joins, filters, groups, finite images | [cardinality-composition.md](cardinality-composition.md) | 136 |
+| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 291 |
 
 ## Stable paged search
 
@@ -58,7 +62,7 @@ jq --arg route "$route" --argjson offset "$offset" --argjson page_size "$page_si
   | sort_by([.source, .line, .name])
   | {total: length, offset: $offset, pageSize: $page_size,
      entries: .[$offset:($offset + $page_size)]
-       | map({name, routes, catalog, source, line, summary})}
+       | map({name, interfaceLayer, replacement, routes, catalog, source, line, summary})}
 ' "$catalog/manifest.json"
 
 pattern="${PATTERN:?set PATTERN to a declaration-name or topic regex}"
@@ -67,7 +71,7 @@ jq --arg re "$pattern" --argjson offset "$offset" --argjson page_size "$page_siz
   | sort_by([.source, .line, .name])
   | {total: length, offset: $offset, pageSize: $page_size,
      entries: .[$offset:($offset + $page_size)]
-       | map({name, routes, catalog, source, line})}
+       | map({name, interfaceLayer, replacement, routes, catalog, source, line})}
 ' "$catalog/manifest.json"
 
 name="${DECLARATION:?set DECLARATION to an exact declaration name}"

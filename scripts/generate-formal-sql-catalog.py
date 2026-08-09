@@ -2,10 +2,11 @@
 """Generate the single indexed catalog for public Logos FormalSQL declarations.
 
 The Rocq sources are authoritative.  This script extracts each complete public
-``Lemma``, ``Theorem``, or ``Corollary`` sentence, assigns it to a semantic
-domain at declaration granularity, and emits both the machine-readable
-cross-index and focused Markdown documents.  ``--check`` fails when committed
-catalog data has drifted.
+``Lemma``, ``Theorem``, or ``Corollary`` sentence plus a tightly inventoried set
+of public ``Definition`` sentences, assigns each to a semantic domain at
+declaration granularity, and emits both the machine-readable cross-index and
+focused Markdown documents.  ``--check`` fails when committed catalog data has
+drifted.
 """
 
 from __future__ import annotations
@@ -33,21 +34,289 @@ GENERIC_QUERY_CONTEXT_SOURCES = (
 GENERIC_QUERY_CONTEXT_MODULES = frozenset(
     path.name for path in GENERIC_QUERY_CONTEXT_SOURCES
 )
+# Pure relation/list helpers happen to live beside the fixed-schedule query
+# context proofs, but they do not mention query evaluation or a Boolean
+# schedule.  Keep them in the general layer so the ``scheduled`` route remains
+# an accurate inventory of pointwise SQL proof machinery.
+GENERAL_QUERY_CONTEXT_DECLARATIONS = frozenset(
+    {
+        "plug_possible_bag_context_extensional",
+        "possible_bag_context_congr",
+        "outcome_alpha_congr",
+        "successful_relation_equiv_possible_bags_rel_equiv",
+        "successful_possible_bags_extensional",
+        "possible_bag_context_successful_plug_extensional",
+        "list_outcome_equiv_successful_possible_bags",
+        "list_outcome_equiv_possible_bag_context_congr",
+        "list_outcome_equiv_possible_bag_query_boundary_congr",
+    }
+)
+
+# Constructor families are named once and expanded mechanically into the
+# schedule-local and public declaration inventories.  A later unary family can
+# use the same pattern without adding query-shaped search aliases or ranking.
+POSSIBLE_BAG_BINARY_CONSTRUCTOR_STEMS = (
+    "set",
+    "natural_join",
+    "cross_join",
+    "join",
+)
+POSSIBLE_BAG_WRAPPER_SCHEDULE_TRANSPORT_DECLARATIONS = frozenset(
+    {
+        "query_expr_possible_bag_unary_wrapper_schedule_transport",
+        "query_expr_possible_bag_binary_wrapper_schedule_transport",
+    }
+)
+PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS = frozenset(
+    declaration
+    for stem in POSSIBLE_BAG_BINARY_CONSTRUCTOR_STEMS
+    for declaration in (
+        f"query_expr_{stem}_possible_bag_schedule_transport",
+        f"query_expr_{stem}_possible_bag_outcome_equiv",
+    )
+)
+BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS = frozenset(
+    {
+        "query_error_singleton_outcome_relation_equiv",
+        "query_eager_left_binary_outcome_relation_cross_compatible",
+        "query_scheduled_binary_parent_bag_outcomes_characterization",
+        "query_success_only_binary_bag_operation_extensional",
+        "query_success_only_binary_bag_operations_compatible",
+        "query_set_outcome_operations_compatible",
+        "query_natural_join_outcome_operations_compatible",
+        "query_cross_join_outcome_operations_compatible",
+        "query_join_outcome_operation_extensional",
+        "eval_adapter_query_set_error_iff",
+        "eval_adapter_query_natural_join_error_iff",
+        "eval_adapter_query_cross_join_error_iff",
+        *(
+            f"query_{stem}_scheduled_bag_outcomes_{suffix}"
+            for stem in POSSIBLE_BAG_BINARY_CONSTRUCTOR_STEMS
+            for suffix in ("characterization", "congr")
+        ),
+    }
+)
+BINARY_LOCAL_CONTRACT_MARKERS = frozenset(
+    {
+        "query_binary_bag_outcome_operation",
+        "query_success_only_binary_bag_operation",
+        "query_binary_bag_outcome_operation_extensional",
+        "query_binary_bag_outcome_operations_compatible",
+        "binary_bag_outcome_relations_cross_compatible",
+        "query_eager_left_binary_outcome_relation",
+    }
+)
+
+POSSIBLE_BAG_UNARY_CONSTRUCTOR_STEMS = (
+    "project",
+    "row_map",
+    "filter",
+    "group",
+    "grouping_sets",
+    "window",
+)
+PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS = frozenset(
+    declaration
+    for stem in POSSIBLE_BAG_UNARY_CONSTRUCTOR_STEMS
+    for declaration in (
+        f"query_expr_{stem}_possible_bag_schedule_transport",
+        f"query_expr_{stem}_possible_bag_outcome_equiv",
+    )
+)
+UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS = frozenset(
+    {
+        "outcome_alpha_success_match_left_rows",
+        "outcome_alpha_success_match_right_rows",
+        "outcome_alpha_error_iff",
+        "query_actual_rows_bag_outcome_bind_congr",
+        "eval_unary_project_error_iff",
+        "eval_unary_row_map_error_iff",
+        "eval_unary_filter_error_iff",
+        "eval_unary_window_error_iff",
+        *(
+            f"query_{stem}_scheduled_bag_outcomes_{suffix}"
+            for stem in POSSIBLE_BAG_UNARY_CONSTRUCTOR_STEMS
+            for suffix in ("characterization", "congr")
+        ),
+    }
+)
+SCHEDULED_UNARY_CONTEXT_DEFINITIONS = frozenset(
+    {
+        "query_rows_to_bag_outcome_relation",
+        "query_actual_rows_bag_outcome_bind",
+        "scheduled_local_rows_to_bag_contract",
+        *(
+            f"query_{stem}_rows_bag_outcomes"
+            for stem in POSSIBLE_BAG_UNARY_CONSTRUCTOR_STEMS
+        ),
+    }
+)
+SCHEDULED_BINARY_CONTEXT_DEFINITIONS = frozenset(
+    {
+        "query_binary_bag_outcome_operation",
+        "query_success_only_binary_bag_operation",
+        "query_eager_left_binary_outcome_relation",
+        "query_binary_bag_outcome_operation_extensional",
+        "query_binary_bag_outcome_operations_compatible",
+        "binary_bag_outcome_relations_cross_compatible",
+    }
+)
+SCHEDULED_POSSIBLE_BAG_CONTEXT_DEFINITIONS = frozenset(
+    {"query_scheduled_bag_outcomes"}
+) | SCHEDULED_UNARY_CONTEXT_DEFINITIONS | SCHEDULED_BINARY_CONTEXT_DEFINITIONS
+PUBLIC_POSSIBLE_BAG_CONTEXT_DEFINITIONS = frozenset(
+    {
+        "query_possible_bag_outcomes",
+        "query_expr_possible_bag_outcome_equiv",
+        "query_expr_possible_bag_schedule_transport",
+        "query_expr_possible_bag_joint_schedule_transport",
+    }
+)
+CATALOGED_QUERY_CONTEXT_DEFINITIONS = (
+    SCHEDULED_POSSIBLE_BAG_CONTEXT_DEFINITIONS
+    | PUBLIC_POSSIBLE_BAG_CONTEXT_DEFINITIONS
+)
+ALL_UNARY_CONSTRUCTOR_CATALOG_DECLARATIONS = (
+    PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS
+    | UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
+    | SCHEDULED_UNARY_CONTEXT_DEFINITIONS
+)
+
+# Public theorem inventory for the outcome-aware possible-bag context layer.
+# Keeping this list declaration-shaped (rather than query- or benchmark-shaped)
+# makes catalog validation fail if an interface is renamed or silently drops
+# out of extraction.
+PUBLIC_POSSIBLE_BAG_CONTEXT_DECLARATIONS = frozenset(
+    {
+        "query_expr_possible_bag_outcome_equiv_intro",
+        "query_expr_possible_bag_outcome_equiv_outputs",
+        "query_expr_possible_bag_outcome_equiv_outcomes",
+        "query_expr_possible_bag_outcome_equiv_iff",
+        "outcome_relation_equiv_implies_outcome_alpha_equiv",
+        "query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv",
+        "query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv",
+        "query_expr_possible_outcome_equiv_iff_possible_bag_outcome_equiv",
+        "query_possible_bag_outcomes_iff_scheduled",
+        "query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_equiv",
+        "query_expr_possible_bag_unary_wrapper_congr",
+        "query_expr_possible_bag_binary_wrapper_congr",
+        "possible_bag_outcome_equiv_refl",
+        "possible_bag_outcome_relation_equiv_match_left",
+        "possible_bag_outcome_relation_equiv_match_right",
+        "lift_possible_bag_outcome_unary_congr",
+        "lift_possible_bag_outcome_binary_congr",
+        "lift_possible_bag_outcome_binary_cross_congr",
+        "possible_bag_outcome_context_congr",
+        "outcome_relation_equiv_rel_equiv_transport",
+        "query_expr_possible_bag_outcome_context_boundary_congr",
+        "query_expr_possible_bag_outcome_context_boundary_final",
+    }
+) | POSSIBLE_BAG_WRAPPER_SCHEDULE_TRANSPORT_DECLARATIONS \
+  | PUBLIC_POSSIBLE_BAG_CONTEXT_DEFINITIONS
+
+# Concrete reset/order adapters consume the public possible-bag/error
+# contract.  Keep their inventory distinct from the FormalSQL-owned abstract
+# context family so source ownership remains explicit and auditable.
+PUBLIC_POSSIBLE_BAG_ADAPTER_DECLARATIONS = frozenset(
+    {
+        "query_expr_possible_bag_outcome_equiv_success_forward",
+        "query_expr_possible_bag_outcome_equiv_success_backward",
+        "query_expr_possible_bag_outcome_equiv_error_iff",
+        "query_expr_possible_bag_outcome_equiv_inhabited",
+        "query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv",
+        "query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv",
+        "query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv",
+        "query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv",
+        "query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv",
+    }
+)
+
+# These declarations are the operator-independent composition points.  Their
+# abstract operation contracts can characterize every unary or binary query
+# family, so expose them on every relevant semantic route without preferring a
+# generated query shape.
+POSSIBLE_BAG_CONTEXT_OPERATOR_INTERFACES = frozenset(
+    {
+        "lift_possible_bag_outcome_unary_congr",
+        "lift_possible_bag_outcome_binary_congr",
+        "lift_possible_bag_outcome_binary_cross_congr",
+        "possible_bag_outcome_context_congr",
+        "query_expr_possible_bag_unary_wrapper_congr",
+        "query_expr_possible_bag_binary_wrapper_congr",
+        "query_expr_possible_bag_outcome_context_boundary_congr",
+        "query_expr_possible_bag_outcome_context_boundary_final",
+    }
+) | POSSIBLE_BAG_WRAPPER_SCHEDULE_TRANSPORT_DECLARATIONS
+
+# These theorem families close over a section-local Boolean schedule or an
+# explicitly scheduled outcome relation even when the extracted declaration
+# omits that hidden section parameter.  They are compositional proof support,
+# not public possible-outcome certificates.
+SCHEDULED_INTERNAL_DECLARATIONS = frozenset(
+    {
+        "query_unary_success_bags_congr_from_characterizations",
+        "query_binary_success_bags_congr_from_characterizations",
+        "query_set_success_bags_congr_extensional",
+        "query_join_success_bags_congr_extensional",
+        "query_group_success_bags_congr_extensional",
+        "query_grouping_sets_success_bags_congr_extensional",
+        "query_rank_success_bags_congr_extensional",
+        "query_window_success_bags_congr_extensional",
+        "query_filter_success_bags_congr_extensional_exact",
+        "query_filter_success_bags_congr_exact",
+        "query_filter_success_bags_congr_of_contract",
+        "query_order_by_success_bags_congr",
+        "query_list_transform_success_bags_congr_closed",
+        "query_offset_success_bags_congr_closed",
+        "query_fetch_success_bags_congr_closed",
+        "query_row_map_success_bags_congr_extensional_total",
+        "query_row_map_success_bags_congr_total",
+        "query_row_map_success_bags_congr_of_contract",
+        "query_row_map_success_bags_congr_extensional_of_contract",
+        "query_values_success_bags_congr",
+        "query_table_success_bags_congr",
+        "scalar_expr_conj_list_env_congr",
+        "scalar_expr_not_env_congr",
+        "scalar_expr_pred_env_congr_safe",
+        "query_expr_table_env_congr",
+        "query_expr_cross_join_env_congr",
+        "eval_filter_rows_env_congr",
+        "query_expr_filter_env_congr",
+        "eval_scalar_boolean_exists_env_congr",
+        "scalar_expr_exists_env_congr",
+        "eval_scalar_boolean_in_env_congr_safe",
+        "scalar_expr_in_env_congr_safe",
+        "query_grouping_sets_actual_success_bags_congr",
+        "tnull_query_mapped_schema_outcome_equiv_mapped_schema",
+        "tnull_query_renaming_context_chain_transport",
+        "filter_scalar_observation_equiv_at_sym",
+        "eval_filter_rows_ordered_outcome_congr_forward",
+        "eval_filter_rows_ordered_outcome_congr",
+        "eval_group_bag_exact_rows_permut_equiv",
+        "query_filter_success_bags_of_stable_total_acceptance",
+        "query_filter_success_bags_exact",
+        "query_order_by_success_bags",
+        "query_row_map_success_bags_total",
+        "query_values_success_bags",
+        "query_table_success_bags",
+        "query_cross_join_union_right_success_bags",
+        "eval_scalar_boolean_context_correlated_congr",
+        "eval_scalar_boolean_exists_subquery_congr",
+    }
+) | BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS \
+  | UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
 QUERY_SYNTAX_SOURCE = ROOT / "vendor/FormalSQL/src/data/sql/SqlQuerySyntax.v"
 QUERY_LEAF_CONSTRUCTORS = frozenset({"QExpr_Error", "QExpr_Values", "QExpr_Table"})
-GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES = frozenset(
+SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES = frozenset(
     {
         "query_expr_set_global_typed_congr",
         "query_expr_natural_join_global_typed_congr",
         "query_expr_cross_join_global_typed_congr",
         "query_expr_join_global_typed_congr",
         "query_expr_project_global_typed_congr",
-        "query_expr_scalar_project_global_typed_congr",
         "query_expr_row_map_global_typed_congr",
         "query_expr_filter_global_typed_congr",
-        "query_expr_scalar_filter_global_typed_congr",
         "query_expr_group_global_typed_congr",
-        "query_expr_scalar_group_global_typed_congr",
         "query_expr_grouping_sets_global_typed_congr",
         "query_expr_rank_global_typed_congr",
         "query_expr_window_global_typed_congr",
@@ -57,6 +326,165 @@ GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES = frozenset(
         "query_expr_fetch_global_typed_congr",
     }
 )
+
+# Typed query operators live in the relational query grammar while their
+# operands live in the focused scalar source domains. Keep the one canonical
+# public possible-outcome family reachable from both routes.
+TYPED_QUERY_POSSIBLE_INTERFACES = frozenset(
+    {
+        "query_expr_filter_predicate_possible_outcome_equiv",
+        "query_expr_project_select_possible_outcome_equiv",
+        "query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes",
+        "query_expr_group_possible_outcome_equiv_of_exact_local_outcomes",
+        "query_expr_group_clauses_possible_outcome_equiv",
+    }
+)
+
+# These pointwise theorems remain proof foundations, but the named
+# replacements are the public SQL interfaces over the union of all Boolean
+# schedules.  A fixed-schedule declaration is never itself a final rewrite
+# certificate.
+SCHEDULED_REPLACEMENTS: dict[str, str] = {
+    "query_bag_closed_outcome_equiv_of_success_bags":
+        "query_possible_bag_closed_outcome_equiv_of_success_bags",
+    "query_expr_distinct_global_typed_inert_reset":
+        "query_expr_distinct_possible_outcome_equiv_inert_reset",
+    "query_expr_distinct_outcome_equiv_congr":
+        "query_expr_distinct_possible_outcome_equiv_congr",
+    "query_expr_order_by_outcome_equiv_congr":
+        "query_expr_order_by_possible_outcome_equiv_congr",
+    "query_expr_rank_outcome_equiv_congr":
+        "query_expr_rank_possible_outcome_equiv_congr",
+    "query_expr_offset_outcome_equiv_congr":
+        "query_expr_offset_possible_outcome_equiv_congr",
+    "query_expr_fetch_outcome_equiv_congr":
+        "query_expr_fetch_possible_outcome_equiv_congr",
+    "query_expr_set_outcome_equiv_congr":
+        "query_expr_set_possible_outcome_equiv_congr_uniform",
+    "query_expr_cross_join_outcome_equiv_congr":
+        "query_expr_cross_join_possible_outcome_equiv_congr_uniform",
+    "query_expr_group_outcome_equiv_of_global_having":
+        "query_expr_group_possible_outcome_equiv_of_uniform_having",
+    "query_expr_group_outcome_equiv_congr":
+        "query_expr_group_possible_outcome_equiv_congr_uniform",
+    "query_expr_window_outcome_equiv_congr":
+        "query_expr_window_possible_outcome_equiv_congr_uniform",
+    "query_expr_fetch_zero_annihilator_outcome_equiv_safe":
+        "query_expr_fetch_zero_possible_outcome_equiv_safe",
+    "query_expr_order_by_outcome_equiv_of_success_length_le_one":
+        "query_expr_order_by_possible_outcome_equiv_of_success_length_le_one",
+    "query_expr_offset_zero_global_typed_equiv":
+        "query_expr_offset_zero_possible_outcome_equiv",
+    "query_expr_offset_offset_global_typed_equiv":
+        "query_expr_offset_offset_possible_outcome_equiv",
+    "query_expr_fetch_fetch_global_typed_equiv":
+        "query_expr_fetch_fetch_possible_outcome_equiv",
+    "query_expr_offset_fetch_global_typed_equiv":
+        "query_expr_offset_fetch_possible_outcome_equiv",
+    "query_expr_fetch_offset_global_typed_equiv":
+        "query_expr_fetch_offset_possible_outcome_equiv",
+    "query_expr_order_by_order_by_global_typed_equiv":
+        "query_expr_order_by_order_by_possible_outcome_equiv",
+    "eval_filter_rows_always_true_iff":
+        "query_expr_filter_possible_outcome_equiv_of_always_true_uniform",
+    "query_expr_filter_outcome_equiv_of_always_true":
+        "query_expr_filter_possible_outcome_equiv_of_always_true_uniform",
+    "query_expr_cross_join_union_right_outcome_equiv_safe":
+        "query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform",
+    "query_expr_cross_join_union_right_equiv_safe":
+        "query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform",
+    "query_expr_filter_outcome_congr_extensional":
+        "query_expr_filter_possible_outcome_equiv_congr_stable_total",
+    "query_expr_group_outcome_equiv_of_supported_child_outcomes":
+        "query_expr_group_possible_outcome_equiv_of_supported_child_outcomes",
+    "query_expr_outcome_equiv_of_shared_exact_error":
+        "query_expr_possible_outcome_equiv_of_shared_exact_error",
+    "query_expr_context_global_congr":
+        "query_expr_context_possible_outcome_equiv",
+    "query_rename_transport_under_implies_mapped_schema_outcome_equiv":
+        "query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv",
+}
+
+# The constructor family is intentionally retained as the pointwise induction
+# engine.  Its one-hole public replacement is the uniform context theorem,
+# which covers every constructor in the context grammar (including typed
+# Project/Filter/Group) and concludes possible-outcome equivalence.
+SCHEDULED_REPLACEMENTS.update(
+    {
+        name: "query_expr_context_possible_outcome_equiv"
+        for name in SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES
+    }
+)
+
+# Public algebraic reasoning uses the possible-outcome relation.  Keep the
+# scheduled algebra available for pointwise proof construction, but direct
+# exact-name lookup to the public relation laws and bridge.
+SCHEDULED_REPLACEMENTS.update(
+    {
+        "query_expr_outcome_equiv_refl": "query_expr_possible_outcome_equiv_refl",
+        "query_expr_global_outcome_equiv_refl":
+            "query_expr_possible_outcome_equiv_refl",
+        "query_expr_global_typed_outcome_equiv_refl":
+            "query_expr_possible_outcome_equiv_refl",
+        "query_expr_outcome_equiv_sym": "query_expr_possible_outcome_equiv_sym",
+        "query_expr_outcome_equiv_trans": "query_expr_possible_outcome_equiv_trans",
+        "query_expr_global_outcome_equiv_trans":
+            "query_expr_possible_outcome_equiv_trans",
+        "query_expr_global_typed_outcome_equiv_trans":
+            "query_expr_possible_outcome_equiv_trans",
+        "query_expr_outcome_equiv_of_global_typed":
+            "query_expr_possible_outcome_equiv_of_uniform_global_typed",
+        "query_expr_context_global_equiv_chain":
+            "query_expr_context_possible_outcome_equiv",
+        "eval_query_context_correlated_congr":
+            "query_expr_context_possible_outcome_equiv",
+        "query_expr_outcome_equiv_of_eval_iff":
+            "query_expr_possible_outcome_equiv_of_exact_schedule_transport",
+        "query_bag_reset_outcome_equiv_of_success_bags":
+            "query_possible_bag_closed_outcome_equiv_of_success_bags",
+        "query_mapped_schema_outcome_equiv_mapped_schema":
+            "query_mapped_schema_possible_outcome_equiv_mapped_schema",
+        "tnull_query_mapped_schema_outcome_equiv_mapped_schema":
+            "query_mapped_schema_possible_outcome_equiv_mapped_schema",
+        "query_expr_observation_equiv_of_outcome_rel_equiv_safe":
+            "query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport",
+        "query_expr_equiv_of_outcome_rel_equiv_safe":
+            "query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport",
+        "query_expr_context_equiv_safe": "query_expr_context_possible_outcome_equiv",
+        "query_bag_closed_equiv_of_success_bags_safe":
+            "query_possible_bag_closed_outcome_equiv_of_success_bags",
+        "query_bag_reset_equiv_of_success_bags_safe":
+            "query_possible_bag_closed_outcome_equiv_of_success_bags",
+        "query_distinct_equiv_of_local_success_rel_equiv":
+            "query_expr_distinct_possible_outcome_equiv_congr",
+        "query_distinct_local_list_equiv_congr":
+            "query_expr_distinct_possible_outcome_equiv_congr",
+    }
+)
+
+# These transparent TNull/query-environment aliases are defined directly in
+# terms of the public possible-success or possible-outcome relations.  Their
+# clients must stay on the public route even though the alias hides the
+# underlying ``possible`` identifier from the extracted theorem statement.
+PUBLIC_POSSIBLE_ALIAS_MARKERS = frozenset(
+    marker.casefold()
+    for marker in {
+        "TNullQueryExprOutcome",
+        "TNullQueryPossibleBagOutcomes",
+        "TNullQueryExprPossibleBagOutcomeEq",
+        "TNullQueryProgramOutcomeEq",
+        "eval_query_expr_outcome_in_env",
+        "eval_query_expr_outcome_in_state",
+        "query_expr_equiv_in_env",
+        "query_expr_equiv_in_state",
+        "query_expr_outcome_equiv_in_env",
+        "query_expr_outcome_equiv_in_state",
+        "query_program_equiv_in_env",
+        "query_program_equiv_in_state",
+        "query_program_outcome_equiv_in_env",
+        "query_program_outcome_equiv_in_state",
+    }
+)
 RELATIONAL_QUERY_CONGRUENCES = frozenset(
     {
         "query_expr_set_global_typed_congr",
@@ -64,17 +492,13 @@ RELATIONAL_QUERY_CONGRUENCES = frozenset(
         "query_expr_cross_join_global_typed_congr",
         "query_expr_join_global_typed_congr",
         "query_expr_project_global_typed_congr",
-        "query_expr_scalar_project_global_typed_congr",
         "query_expr_row_map_global_typed_congr",
         "query_expr_filter_global_typed_congr",
-        "query_expr_scalar_filter_global_typed_congr",
-        "query_expr_filter_global_typed_acceptance_congr",
     }
 )
 GROUPING_QUERY_CONGRUENCES = frozenset(
     {
         "query_expr_group_global_typed_congr",
-        "query_expr_scalar_group_global_typed_congr",
         "query_expr_grouping_sets_global_typed_congr",
     }
 )
@@ -125,7 +549,7 @@ GENERIC_RENAMING_DIMENSION_ENTRIES = frozenset(
         "query_rows_bag_rename_rows",
         "query_bag_source_local_rename_transport",
         "rename_query_outcome_error",
-        "query_formula_outcome_rename_compatible_success_iff",
+        "query_scalar_expr_outcome_rename_compatible_success_iff",
         "query_rename_context_chain_transport",
         "tnull_query_renaming_context_chain_transport",
     }
@@ -146,7 +570,8 @@ MAPPED_SCHEMA_OBSERVATION_ENTRIES = frozenset(
 )
 
 DECLARATION = re.compile(
-    r"(?m)^[ \t]*(Lemma|Theorem|Corollary)[ \t]+([A-Za-z_][A-Za-z0-9_']*)\b"
+    r"(?m)^[ \t]*(Lemma|Theorem|Corollary|Definition)[ \t]+"
+    r"([A-Za-z_][A-Za-z0-9_']*)\b"
 )
 FORBIDDEN = re.compile(
     r"(?m)^[ \t]*(Axiom|Axioms|Parameter|Parameters|Conjecture|Admitted|admit)\b"
@@ -176,9 +601,16 @@ DOMAINS: dict[str, dict[str, object]] = {
     },
     "query-syntax-bridges.md": {
         "title": "Query syntax and projection bridges",
-        "modules": ("QueryTNullSyntax.v",),
-        "topics": ("query syntax", "projection", "tuple", "TNull", "bridge"),
-        "route": "query-level nullable syntax adapters, tuple projection, attribute lookup",
+        "modules": ("QueryTNullSyntax.v", "QueryBindingSemantics.v"),
+        "topics": (
+            "query syntax",
+            "query-local binding",
+            "projection",
+            "tuple",
+            "TNull",
+            "bridge",
+        ),
+        "route": "query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup",
     },
     "renaming-transport.md": {
         "title": "Attribute and query renaming transport",
@@ -277,7 +709,7 @@ DOMAINS: dict[str, dict[str, object]] = {
             "MembershipJoinCompositionFacts.v",
         ),
         "topics": ("subquery", "EXISTS", "IN", "quantified predicate", "correlation"),
-        "route": "EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/formula goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality",
+        "route": "EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality",
     },
     "schema-integrity.md": {
         "title": "Schema conformance and integrity constraints",
@@ -303,6 +735,7 @@ DOMAINS: dict[str, dict[str, object]] = {
         "modules": (
             "VerificationConditions.v",
             "CountermodelFacts.v",
+            "PossibleOutcomeFacts.v",
             "SqlQueryContexts.v",
         ),
         "topics": (
@@ -322,6 +755,14 @@ DOMAINS: dict[str, dict[str, object]] = {
 # statement occurs in only one primary card. Stable pagination exposes every
 # matching declaration without copying statements between cards.
 ROUTES: dict[str, dict[str, str]] = {
+    "possible": {
+        "title": "public possible-outcome SQL interfaces",
+        "description": "public relations, equivalences, errors, and transports over every legal Boolean schedule",
+    },
+    "scheduled": {
+        "title": "fixed-schedule proof foundations",
+        "description": "internal pointwise evaluator and transport lemmas, not final SQL certificates",
+    },
     "renaming": {
         "title": "attribute and query renaming transport",
         "description": "collision-safe tuple, row, outcome, and nested query alpha-renaming",
@@ -415,13 +856,6 @@ BAG_ALGEBRA_DECLARATIONS = {
     "query_expr_union_success_Forall",
     "query_set_union_disjoint_right",
     "query_set_union_duplicate_free",
-}
-
-QUERY_SYNTAX_DECLARATIONS = {
-    "direct_projection_preserves_attr",
-    "projection_preserves_attr",
-    "select_list_directly_selects_attr",
-    "select_list_has_unique_outputs",
 }
 
 GENERIC_OUTCOME_DECLARATIONS = {
@@ -522,18 +956,18 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
         "IN", "semantic tuple equality", "duplicate-insensitive support"
     ),
     "in_rows_acceptance_append": ("IN", "UNION", "filter acceptance"),
-    "formula_truth_exact_acceptance_exact": (
+    "scalar_expr_truth_exact_acceptance_exact": (
         "exact Bool3 truth", "UNKNOWN", "runtime error"
     ),
-    "formula_not_truth_exact": ("SQL NOT", "exact Bool3 truth", "UNKNOWN"),
-    "formula_not_acceptance_exact": ("SQL NOT", "UNKNOWN", "filter acceptance"),
-    "formula_in_truth_exact": ("IN", "exact Bool3 truth", "UNKNOWN"),
-    "formula_in_acceptance_exact": ("IN", "UNKNOWN", "filter acceptance"),
-    "formula_not_in_acceptance_exact_of_fixed_truth": (
+    "scalar_expr_not_truth_exact": ("SQL NOT", "exact Bool3 truth", "UNKNOWN"),
+    "scalar_expr_not_acceptance_exact": ("SQL NOT", "UNKNOWN", "filter acceptance"),
+    "scalar_expr_in_truth_exact": ("IN", "exact Bool3 truth", "UNKNOWN"),
+    "scalar_expr_in_acceptance_exact": ("IN", "UNKNOWN", "filter acceptance"),
+    "scalar_expr_not_in_acceptance_exact_of_fixed_truth": (
         "NOT IN", "exact Bool3 truth", "UNKNOWN", "runtime error"
     ),
-    "formula_exists_truth_exact": ("EXISTS", "exact Bool3 truth", "empty input"),
-    "formula_not_exists_acceptance_exact": (
+    "scalar_expr_exists_truth_exact": ("EXISTS", "exact Bool3 truth", "empty input"),
+    "scalar_expr_not_exists_acceptance_exact": (
         "NOT EXISTS", "empty input", "runtime error"
     ),
     "tnull_in_rows_unknown_iff": (
@@ -548,16 +982,16 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "tnull_not_in_rows_acceptance_iff_no_true_or_unknown": (
         "NOT IN", "anti existence", "NULL marker", "UNKNOWN"
     ),
-    "tnull_formula_not_in_accepts_exact_of_all_false": (
+    "tnull_scalar_expr_not_in_accepts_exact_of_all_false": (
         "NOT IN", "correlation", "exact acceptance", "runtime error"
     ),
-    "tnull_formula_not_in_rejects_exact_of_true_match": (
+    "tnull_scalar_expr_not_in_rejects_exact_of_true_match": (
         "NOT IN", "TRUE match", "exact rejection", "runtime error"
     ),
-    "tnull_formula_not_in_rejects_exact_of_unknown_without_match": (
+    "tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match": (
         "NOT IN", "UNKNOWN without match", "exact rejection", "runtime error"
     ),
-    "formula_in_union_all_acceptance_exact": (
+    "scalar_expr_in_union_all_acceptance_exact": (
         "IN", "UNION ALL", "correlation", "filter acceptance", "runtime error"
     ),
     "query_distinct_rows_support_rel": (
@@ -578,9 +1012,6 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "list_support_rel_filter_transport": (
         "filter", "support", "properness", "reachable representatives"
     ),
-    "eval_groups_all_rejected_outcome_exact": (
-        "HAVING", "empty result", "evaluation reachability", "runtime error"
-    ),
     "tnull_group_count_star_value_runtime_exact": (
         "COUNT star", "group cardinality", "BIGINT overflow", "runtime error"
     ),
@@ -596,23 +1027,8 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "count_star_count_all_nonnull_value_runtime_error_exact": (
         "COUNT star", "COUNT expression", "NOT NULL", "runtime error"
     ),
-    "formula_pred_outcome_equiv_of_argument_observations": (
-        "predicate", "aggregate observation", "Bool3", "runtime error"
-    ),
-    "tnull_group_count_star_projection_eq_of_equal_length": (
-        "COUNT star", "group projection", "equal cardinality", "semantic row equality"
-    ),
-    "tnull_count_star_group_observation_equiv_of_equal_length": (
-        "COUNT star", "group outcome", "HAVING", "equal cardinality"
-    ),
-    "tnull_count_star_groups_outcome_equiv_of_Forall2_observations": (
-        "COUNT star", "group scheduler", "first error", "duplicate groups"
-    ),
-    "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length": (
-        "COUNT star", "TRUE HAVING", "group cardinality", "runtime error"
-    ),
-    "formula_and_redundant_right_acceptance_exact": (
-        "SQL AND", "redundant conjunct", "eager evaluation", "runtime error"
+    "scalar_expr_conj_list_redundant_operand_acceptance_exact": (
+        "SQL AND", "flattened operands", "redundant conjunct", "Boolean schedule", "runtime error"
     ),
     "integer_stats_fold_interval_invariant": (
         "aggregate fold", "interval invariant", "integer statistics"
@@ -760,7 +1176,7 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "tnull_primary_key_self_in_rows_true": (
         "primary key", "IN", "exact TRUE", "correlation"
     ),
-    "formula_in_distinct_acceptance_exact_of_inner": (
+    "scalar_expr_in_distinct_acceptance_exact_of_inner": (
         "IN", "DISTINCT", "correlation", "runtime error"
     ),
     "query_expr_project_filter_runtime_safe_exact": (
@@ -876,20 +1292,27 @@ def extract_declarations(path: Path) -> list[dict[str, object]]:
         line = text.count("\n", 0, forbidden.start()) + 1
         raise ValueError(f"{path.name}:{line}: forbidden trust-extending command")
     declarations: list[dict[str, object]] = []
-    matches = list(DECLARATION.finditer(text))
+    matches = [
+        match
+        for match in DECLARATION.finditer(text)
+        if match.group(1) != "Definition"
+        or match.group(2) in CATALOGED_QUERY_CONTEXT_DEFINITIONS
+    ]
     for position, match in enumerate(matches):
         start = match.start(1)
         end = sentence_end(text, match.end())
         next_start = (
             matches[position + 1].start(1) if position + 1 < len(matches) else len(text)
         )
-        terminator = PROOF_TERMINATOR.search(text, end + 1, next_start)
-        if terminator is None or terminator.group(1) != "Qed":
-            line = text.count("\n", 0, start) + 1
-            observed = terminator.group(1) if terminator else "no terminator"
-            raise ValueError(
-                f"{path.name}:{line}: public declaration {match.group(2)} ends with {observed}, not Qed"
-            )
+        if match.group(1) != "Definition":
+            terminator = PROOF_TERMINATOR.search(text, end + 1, next_start)
+            if terminator is None or terminator.group(1) != "Qed":
+                line = text.count("\n", 0, start) + 1
+                observed = terminator.group(1) if terminator else "no terminator"
+                raise ValueError(
+                    f"{path.name}:{line}: public declaration {match.group(2)} "
+                    f"ends with {observed}, not Qed"
+                )
         statement = text[start : end + 1].rstrip()
         declarations.append(
             {
@@ -983,10 +1406,10 @@ def semantic_features(
             "orb3",
             "negb3",
         }
-        or has_identifier("FExpr_Pred", "interp_predicate")
+        or has_identifier("SExpr_Pred", "interp_predicate")
     ):
         features.add("predicate")
-    if name == "formula_conj_acceptance_exact":
+    if name == "scalar_expr_conj_list_acceptance_exact":
         features.add("predicate")
     if tokens & {"null", "nulls", "unknown", "unknown3"} or has_identifier("Unknown3"):
         features.add("null")
@@ -1007,7 +1430,7 @@ def semantic_features(
     if name in {
         "eval_join_row_conditions_acceptance_exact",
         "eval_join_conditions_acceptance_exact",
-        "project_join_sources_outcome_exact_map",
+        "eval_project_join_sources_exact_map",
         "eval_join_bag_safe_of_acceptance_projection_exact",
     }:
         # These are the public exact-evaluation interfaces for join predicate
@@ -1016,7 +1439,7 @@ def semantic_features(
         # through transparent helper definitions.
         features.update(("join", "outcome", "runtime"))
     if name in {
-        "project_join_sources_outcome_exact_map",
+        "eval_project_join_sources_exact_map",
         "eval_join_bag_safe_of_acceptance_projection_exact",
     }:
         features.add("projection")
@@ -1100,11 +1523,10 @@ def semantic_features(
         or has_identifier("QExpr_Filter", "eval_filter_rows_outcome")
         or name
         in {
-            "formula_conj_acceptance_exact",
-            "formula_exists_acceptance_exact",
-            "formula_pred_acceptance_exact_safe",
+            "scalar_expr_conj_list_acceptance_exact",
+            "scalar_expr_exists_acceptance_exact",
+            "scalar_expr_pred_acceptance_exact_safe",
             "interp_predicate_eq_true_is_true_acceptance",
-            "tnull_join_condition_pred_acceptance_exact_safe",
         }
     ):
         features.add("filter")
@@ -1112,14 +1534,6 @@ def semantic_features(
         "QExpr_Project", "QExpr_RowMap"
     ):
         features.add("projection")
-    if module == "ProofAgentFacade.v" and name.startswith("tnull_row_eq_"):
-        features.update(("row", "projection"))
-    if name == "tnull_project_rows_select_columns_success":
-        features.update(("projection", "runtime"))
-    if name == "tnull_select_columns_lookup_output":
-        features.add("projection")
-    if name == "tnull_query_expr_project_select_columns_error_iff":
-        features.update(("outcome", "projection", "runtime"))
     if "order_by" in normalized_name or has_identifier("QExpr_OrderBy"):
         features.add("order_by")
     if tokens & {"offset", "skipn"} or has_identifier("QExpr_Offset"):
@@ -1134,27 +1548,27 @@ def semantic_features(
 
     if domain_name == "subquery-predicates.md":
         features.add("subquery")
-    if "formula_exists" in normalized_name or has_identifier("FExpr_Exists"):
+    if "scalar_expr_exists" in normalized_name or has_identifier("SExpr_Exists"):
         features.update(("subquery", "exists_predicate"))
     if (
         domain_name == "subquery-predicates.md"
-        and ("formula_in" in normalized_name or normalized_name.startswith("in_rows_"))
-    ) or has_identifier("FExpr_In"):
+        and ("scalar_expr_in" in normalized_name or normalized_name.startswith("in_rows_"))
+    ) or has_identifier("SExpr_In"):
         features.update(("subquery", "in_predicate"))
     if (
         domain_name == "subquery-predicates.md"
         and bool(tokens & {"quant", "quantified", "forall"})
-    ) or has_identifier("FExpr_Quant"):
+    ) or has_identifier("SExpr_Quant"):
         features.update(("subquery", "quantified_predicate"))
     if tokens & {"correlated", "correlation"}:
         features.update(("subquery", "correlation"))
     if name in {
-        "eval_formula_quant_error_iff",
-        "eval_formula_quant_success_iff",
-        "eval_formula_quant_subquery_congr",
+        "eval_scalar_boolean_quant_error_iff",
+        "eval_scalar_boolean_quant_success_iff",
+        "eval_scalar_boolean_quant_subquery_congr",
     }:
         features.add("scalar_subquery_bridge")
-    if name == "eval_formula_quant_error_iff":
+    if name == "eval_scalar_boolean_quant_error_iff":
         # This inversion exposes an error from the quantified child, including
         # the INTEGER SINGLE_VALUE wrapper's CardinalityViolation.
         features.add("scalar_subquery_error_bridge")
@@ -1250,15 +1664,12 @@ def semantic_features(
         "query_expr_outcome_equiv",
         "query_expr_global_outcome_equiv",
         "query_expr_global_typed_outcome_equiv",
-        "formula_expr_global_outcome_equiv",
-        "formula_expr_global_filter_outcome_equiv",
-        "formula_expr_global_group_outcome_equiv",
+        "scalar_expr_global_outcome_equiv",
+        "scalar_expr_global_group_outcome_equiv",
         "eval_group_bag",
         "eval_group_bag_outcome",
     ):
         features.update(("outcome", "runtime"))
-    if name == "tnull_eval_group_bag_direct_columns_true_no_error":
-        features.update(("grouping", "outcome", "runtime"))
     if name == "query_expr_cross_join_union_right_equiv_safe":
         # The safe query-equivalence theorem is also a direct assembly route
         # for an error-preserving outcome goal via the standard implication.
@@ -1361,6 +1772,18 @@ def declaration_domain(
     # Route each operator beside the corresponding Logos proof layer while
     # retaining the arbitrary-context theorem on the runtime/outcome card.
     if module in GENERIC_QUERY_CONTEXT_MODULES:
+        if name in ALL_UNARY_CONSTRUCTOR_CATALOG_DECLARATIONS:
+            if "_group_" in name or "_grouping_sets_" in name:
+                return "aggregate-grouping.md"
+            if "_window_" in name:
+                return "ordered-observation.md"
+            return "relational-algebra.md"
+        if (
+            name in BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
+            or name in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS
+            or name in SCHEDULED_BINARY_CONTEXT_DEFINITIONS
+        ):
+            return "relational-algebra.md"
         if name in RELATIONAL_QUERY_CONGRUENCES or name.startswith(
             ("eval_filter_rows_", "eval_join_")
         ):
@@ -1376,9 +1799,7 @@ def declaration_domain(
     if module == "NumericRegroupFacts.v" and name.startswith(BAG_ALGEBRA_PREFIXES):
         return "relational-algebra.md"
 
-    if name in QUERY_SYNTAX_DECLARATIONS or name.startswith(
-        "query_expr_admissible_"
-    ):
+    if name.startswith("query_expr_admissible_"):
         return "query-syntax-bridges.md"
 
     if name in GENERIC_OUTCOME_DECLARATIONS:
@@ -1387,11 +1808,6 @@ def declaration_domain(
     if module == "ProofAgentFacade.v":
         if "grouping" in features or name.startswith("tnull_eval_groups_"):
             return "aggregate-grouping.md"
-        if name == "tnull_project_rows_select_columns_success":
-            # This is the exact list-map law for one locally safe projection;
-            # runtime is a useful cross-route, but the primary subject remains
-            # relational projection rather than query-level error equivalence.
-            return "relational-algebra.md"
         if features & {"outcome", "runtime"}:
             return "runtime-verification-rewrite.md"
         return "relational-algebra.md"
@@ -1404,8 +1820,6 @@ def declaration_domain(
             # ordered observation law.
             return "relational-algebra.md"
         if name in {
-            "query_project_bag_congr",
-            "query_project_success_bags_safe",
             "query_table_success_bags_functional",
         }:
             # These declarations expose multiplicity-preserving possible-bag
@@ -1423,9 +1837,9 @@ def declaration_domain(
         return "ordered-observation.md"
 
     if module == "GroupedFilterOutcomeFacts.v" and name in {
-        "formula_pred_acceptance_exact_safe",
+        "scalar_expr_pred_acceptance_exact_safe",
         "eval_filter_rows_acceptance_exact",
-        "filter_formula_observation_equiv_at_sym",
+        "filter_scalar_observation_equiv_at_sym",
         "eval_filter_rows_ordered_outcome_congr_forward",
         "eval_filter_rows_ordered_outcome_congr",
         "query_expr_filter_outcome_congr_extensional_forward",
@@ -1438,8 +1852,91 @@ def declaration_domain(
     return source_domain
 
 
+def interface_layer(module: str, name: str, statement: str) -> str:
+    """Classify final possible SQL interfaces separately from proof layers."""
+    lowered_name = name.casefold()
+    lowered_statement = statement.casefold()
+    if (
+        name in SCHEDULED_INTERNAL_DECLARATIONS
+        or name in SCHEDULED_POSSIBLE_BAG_CONTEXT_DEFINITIONS
+    ):
+        return "scheduled_foundation"
+    if (
+        name in PUBLIC_POSSIBLE_BAG_CONTEXT_DECLARATIONS
+        or name in PUBLIC_POSSIBLE_BAG_ADAPTER_DECLARATIONS
+        or name in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS
+        or name in PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS
+        or any(marker in lowered_statement for marker in PUBLIC_POSSIBLE_ALIAS_MARKERS)
+        or "possible_bag_outcome" in lowered_name
+        or "possible_bag_outcome" in lowered_statement
+        or "possible_outcome" in lowered_name
+        or "possible_outcome" in lowered_statement
+        or "query_expr_possible_equiv" in lowered_name
+        or "query_expr_possible_equiv" in lowered_statement
+        or "query_program_possible_equiv" in lowered_name
+        or "query_program_possible_equiv" in lowered_statement
+        or "bound_query_possible_equiv" in lowered_name
+        or "bound_query_possible_equiv" in lowered_statement
+    ):
+        return "public_possible_outcome"
+    if module == "PossibleOutcomeFacts.v":
+        return "schedule_transport_foundation"
+    if module == "SqlQueryContexts.v" and name in GENERAL_QUERY_CONTEXT_DECLARATIONS:
+        return "general"
+    if module in {"SqlQueryContexts.v", "SqlQueryRenameTransport.v"}:
+        return "scheduled_foundation"
+    if name in SCHEDULED_REPLACEMENTS:
+        return "scheduled_foundation"
+    if "boolean_schedule" in statement and (
+        "outcome" in name.casefold()
+        or "equiv" in name.casefold()
+        or "transport" in name.casefold()
+    ):
+        return "scheduled_foundation"
+    if module in {
+        "OrderedQueryFacts.v",
+        "GroupedFilterOutcomeFacts.v",
+        "SubqueryFacts.v",
+        "FilterFkEliminationFacts.v",
+        "RelationalAlgebraFacts.v",
+    } and (
+        "query_outcome_equiv" in statement
+        or "query_equiv" in statement
+        or "query_global_typed_outcome_equiv" in statement
+        or "eval_query " in statement
+        or "eval_query\n" in statement
+    ):
+        return "scheduled_foundation"
+    return "general"
+
+
+def interface_layer_note(layer: str, replacement: str) -> str:
+    if layer == "public_possible_outcome":
+        return (
+            "Public possible-outcome SQL interface: its statement uses the complete "
+            "possible success/error relation, or a property or transport of that "
+            "relation, over legal Boolean schedules."
+        )
+    if layer == "scheduled_foundation":
+        suffix = f" Use `{replacement}` for the public result." if replacement else ""
+        return (
+            "Scheduled foundation only: this pointwise theorem is not a final "
+            f"SQL rewrite certificate.{suffix}"
+        )
+    if layer == "schedule_transport_foundation":
+        return (
+            "Schedule-quantified transport foundation: compose it into a theorem "
+            "whose conclusion is possible-outcome equivalence."
+        )
+    return "General reusable foundation; no SQL interface layer is implied."
+
+
 def semantic_routes(
-    domain_name: str, module: str, name: str, features: frozenset[str]
+    domain_name: str,
+    module: str,
+    name: str,
+    features: frozenset[str],
+    layer: str,
 ) -> tuple[str, ...]:
     """Return deterministic cross-index routes for one declaration."""
     if "admissible" in identifier_tokens(name):
@@ -1449,20 +1946,56 @@ def semantic_routes(
         # invite needless per-case recomputation.
         return ()
     selected: set[str] = set()
+    if layer == "public_possible_outcome":
+        selected.update(("possible", "outcome", "runtime"))
+    elif layer in {"scheduled_foundation", "schedule_transport_foundation"}:
+        selected.add("scheduled")
+    if (
+        name in PUBLIC_POSSIBLE_BAG_CONTEXT_DECLARATIONS
+        or name in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS
+        or name in PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS
+    ):
+        selected.add("bag")
+    if (
+        name in BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
+        or name in SCHEDULED_BINARY_CONTEXT_DEFINITIONS
+    ):
+        selected.update(("bag", "outcome", "runtime"))
+    if name in ALL_UNARY_CONSTRUCTOR_CATALOG_DECLARATIONS:
+        selected.update(("bag", "outcome", "runtime"))
+        if "_project_" in name or "_row_map_" in name:
+            selected.add("projection")
+        if "_filter_" in name:
+            selected.add("filter")
+        if "_group_" in name or "_grouping_sets_" in name:
+            selected.add("grouping")
+        if "_window_" in name:
+            selected.add("ordered")
+    if name in SCHEDULED_POSSIBLE_BAG_CONTEXT_DEFINITIONS:
+        selected.update(("bag", "outcome", "runtime"))
     if name == "in_rows_acceptance_existsb":
         # This declaration is the deliberately small seam between SQL IN's
         # three-valued scalar semantics and a WHERE/semijoin Boolean keep
         # decision.  Make that cross-domain use explicit instead of leaving
         # it stranded in the scalar card.
         selected.update(("filter", "join"))
-    if name in {
-        "eval_group_bag_global_true_success_exists",
-        "eval_group_bag_global_true_success_bag_unique_if_stable",
-    }:
-        # Global GROUP BY is the result-producing core of a scalar aggregate
-        # subquery, so expose its representative-independent singleton theorem
-        # on the scalar route as well as the grouping and bag routes.
+    if name in TYPED_QUERY_POSSIBLE_INTERFACES:
         selected.add("scalar")
+    if name == "query_expr_context_possible_outcome_equiv":
+        # This is the public one-hole replacement for every scheduled query
+        # constructor congruence.  Its abstract context premise intentionally
+        # hides the concrete constructor names, so cross-route it explicitly
+        # to every operator family represented by [query_expr_context].
+        selected.update(
+            ("projection", "filter", "join", "grouping", "bag", "ordered", "scalar")
+        )
+    if name in POSSIBLE_BAG_CONTEXT_OPERATOR_INTERFACES:
+        # A concrete use supplies an exact operator characterization.  The
+        # generic interface itself is intentionally neutral across all unary
+        # and binary query constructors.
+        selected.update(
+            ("projection", "filter", "join", "grouping", "bag", "ordered", "scalar")
+        )
     if name == "query_canonical_rows_map_factor_permut":
         # This is the semantic boundary used by projection/alias renaming at
         # bag-reset operators, even though its generic name mentions neither
@@ -1472,11 +2005,6 @@ def semantic_routes(
         selected.add("facade")
     if "renaming" in features:
         selected.add("renaming")
-    if name.startswith("tnull_select_lookup_"):
-        # These facade declarations expose FormalSQL projection's targeted
-        # first-match cell interface even though their stable public names do
-        # not repeat the implementation word "projection".
-        selected.add("projection")
     if "outcome" in features:
         selected.add("outcome")
     if domain_name == "aggregate-grouping.md" or features & {
@@ -1629,6 +2157,124 @@ def is_non_equivalence_law(name: str) -> bool:
 def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
     subject = semantic_subject(domain_name, features)
     name_tokens = identifier_tokens(name)
+    if name == "query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv":
+        return (
+            "Abstracts exact possible ordered-row outcomes to possible bags while "
+            "preserving output schemas and every runtime-error category."
+        )
+    if name == "query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv":
+        return (
+            "Recovers exact possible ordered-row outcome equivalence from the "
+            "possible-bag contract when both success relations are BagClosed."
+        )
+    if name in POSSIBLE_BAG_WRAPPER_SCHEDULE_TRANSPORT_DECLARATIONS:
+        return (
+            "Lifts a matched unary or joint binary child schedule transport "
+            "through an explicit complete parent bag/error law, returning a "
+            "schedule-transport contract that remains compositional."
+        )
+    if name in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS:
+        result = (
+            "a compositional possible-bag schedule transport"
+            if name.endswith("_schedule_transport")
+            else "possible-bag/outcome equivalence"
+        )
+        return (
+            f"Lifts joint same-schedule transport through the named binary SQL "
+            f"constructor and returns {result}."
+        )
+    if name in PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS:
+        result = (
+            "a compositional possible-bag schedule transport"
+            if name.endswith("_schedule_transport")
+            else "possible-bag/outcome equivalence"
+        )
+        return (
+            "Lifts matched child schedule transport through the named unary SQL "
+            f"constructor's exact local row relation and returns {result}."
+        )
+    if name == "query_rows_to_bag_outcome_relation":
+        return (
+            "Names the generic relation from one actual ordered child row list to "
+            "a complete successful-bag or runtime-error outcome."
+        )
+    if name == "query_actual_rows_bag_outcome_bind":
+        return (
+            "Defines eager unary composition over actual child row lists, passing "
+            "child errors through and evaluating local work only after success."
+        )
+    if name == "scheduled_local_rows_to_bag_contract":
+        return (
+            "Requires exact local bag/error equivalence on every reachable pair of "
+            "bag-equal child lists under one matched schedule pair."
+        )
+    if (
+        name in SCHEDULED_UNARY_CONTEXT_DEFINITIONS
+        and name.endswith("_rows_bag_outcomes")
+    ):
+        return (
+            "Defines the constructor-local successful-bag and runtime-error relation "
+            "on one actual ordered child row list."
+        )
+    if name in {
+        "outcome_alpha_success_match_left_rows",
+        "outcome_alpha_success_match_right_rows",
+        "outcome_alpha_error_iff",
+    }:
+        return (
+            "Extracts a concrete successful-list match or exact error equivalence "
+            "from an outcome-alpha possible-bag relation equivalence."
+        )
+    if name == "query_actual_rows_bag_outcome_bind_congr":
+        return (
+            "Combines scheduled child bag/error equivalence with the exact local-row "
+            "contract to transport eager unary composition."
+        )
+    if name.endswith("_scheduled_bag_outcomes_characterization"):
+        arity = (
+            "unary"
+            if name in UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
+            else "binary"
+        )
+        return (
+            f"Characterizes one exact scheduled {arity} parent bag/error relation "
+            "through its actual child observations and constructor-local relation."
+        )
+    if name.endswith("_scheduled_bag_outcomes_congr"):
+        if name in UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS:
+            return (
+                "Transports one child bag/error relation under a matched schedule "
+                "pair using the exact reachable-list local contract."
+            )
+        return (
+            "Transports both child bag/error relations under one matched schedule "
+            "pair through the complete scheduled binary constructor semantics."
+        )
+    if name == "query_scheduled_binary_parent_bag_outcomes_characterization":
+        return (
+            "Builds the generic eager-left scheduled parent characterization from "
+            "exact success/error inversion laws and an extensional local operation."
+        )
+    if name in {
+        "lift_possible_bag_outcome_unary_congr",
+        "lift_possible_bag_outcome_binary_congr",
+        "lift_possible_bag_outcome_binary_cross_congr",
+        "possible_bag_outcome_context_congr",
+        "query_expr_possible_bag_unary_wrapper_congr",
+        "query_expr_possible_bag_binary_wrapper_congr",
+    }:
+        return (
+            "Lifts possible-bag/outcome equivalence compositionally through an "
+            "outcome-compatible abstract unary, binary, or nested context."
+        )
+    if name in {
+        "query_expr_possible_bag_outcome_context_boundary_congr",
+        "query_expr_possible_bag_outcome_context_boundary_final",
+    }:
+        return (
+            "Connects the abstract possible-bag/outcome context layer to actual "
+            "queries through exact two-sided parent characterizations."
+        )
     if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
         operator = name.removeprefix("QExpr_").removesuffix("_rename_transport")
         return (
@@ -1731,42 +2377,42 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Distributes SQL IN TRUE-acceptance over appended candidate lists as "
             "Boolean OR without equating the underlying FALSE and UNKNOWN truths."
         )
-    if name == "formula_truth_exact_acceptance_exact":
+    if name == "scalar_expr_truth_exact_acceptance_exact":
         return (
             "Projects an inhabited, unique exact Bool3 success with no reachable "
             "runtime error to its SQL TRUE-acceptance bit."
         )
-    if name == "formula_not_truth_exact":
+    if name == "scalar_expr_not_truth_exact":
         return (
             "Transports an inhabited, error-free exact Bool3 observation through "
             "SQL NOT; in particular, UNKNOWN remains UNKNOWN."
         )
-    if name == "formula_not_acceptance_exact":
+    if name == "scalar_expr_not_acceptance_exact":
         return (
             "Derives exact acceptance for SQL NOT from the stronger exact-truth "
             "contract, without complementing a FALSE/UNKNOWN acceptance bit."
         )
-    if name == "formula_in_truth_exact":
+    if name == "scalar_expr_in_truth_exact":
         return (
             "Builds exact tuple-valued IN truth from runtime-safe arguments, an "
             "inhabited child, fixed Bool3 truth across every child success, and no errors."
         )
-    if name == "formula_in_acceptance_exact":
+    if name == "scalar_expr_in_acceptance_exact":
         return (
             "Builds exact tuple-valued IN acceptance from pointwise SQL equality "
             "decisions while retaining empty inputs, duplicates, UNKNOWN, and errors."
         )
-    if name == "formula_not_in_acceptance_exact_of_fixed_truth":
+    if name == "scalar_expr_not_in_acceptance_exact_of_fixed_truth":
         return (
             "Builds NOT IN acceptance only from fixed exact IN truth, applying SQL "
             "negation before TRUE projection so UNKNOWN is never accepted."
         )
-    if name == "formula_exists_truth_exact":
+    if name == "scalar_expr_exists_truth_exact":
         return (
             "Builds the exact two-valued EXISTS truth from inhabited child outcomes "
             "that all agree on emptiness and from exclusion of every child error."
         )
-    if name == "formula_not_exists_acceptance_exact":
+    if name == "scalar_expr_not_exists_acceptance_exact":
         return (
             "Characterizes NOT EXISTS acceptance as child emptiness while preserving "
             "the fixed correlated environment and excluding every child runtime error."
@@ -1790,15 +2436,15 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "FALSE, equivalently by absence of both a TRUE match and an UNKNOWN comparison."
         )
     if name in {
-        "tnull_formula_not_in_accepts_exact_of_all_false",
-        "tnull_formula_not_in_rejects_exact_of_true_match",
-        "tnull_formula_not_in_rejects_exact_of_unknown_without_match",
+        "tnull_scalar_expr_not_in_accepts_exact_of_all_false",
+        "tnull_scalar_expr_not_in_rejects_exact_of_true_match",
+        "tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match",
     }:
         return (
-            "Lifts the displayed TNull NOT IN semantic case to exact formula acceptance "
+            "Lifts the displayed TNull NOT IN semantic case to exact scalar-expression acceptance "
             "at one correlated environment, retaining argument and child error premises."
         )
-    if name == "formula_in_union_all_acceptance_exact":
+    if name == "scalar_expr_in_union_all_acceptance_exact":
         return (
             "Builds exact correlated IN acceptance over UNION ALL as the Boolean OR "
             "of fixed branch decisions while retaining duplicate candidates and requiring "
@@ -1835,12 +2481,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Transports bidirectional relational support through two total filters "
             "whose decisions agree only on actually related representatives."
         )
-    if name == "eval_groups_all_rejected_outcome_exact":
-        return (
-            "Characterizes an all-rejected HAVING schedule as exact empty success "
-            "while retaining reached SELECT/HAVING aggregate finalization and "
-            "excluding HAVING runtime errors."
-        )
     if name == "tnull_group_count_star_value_runtime_exact":
         return (
             "Computes one TNull group COUNT-star value and both aggregate/full "
@@ -1862,34 +2502,11 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Relates COUNT-star to COUNT ALL over an equally long reached expression "
             "list under explicit non-NULL and, for full outcomes, child-safety premises."
         )
-    if name == "formula_pred_outcome_equiv_of_argument_observations":
+    if name == "scalar_expr_conj_list_redundant_operand_acceptance_exact":
         return (
-            "Transports full predicate-formula outcomes from equality of reached "
-            "argument values and first runtime errors, retaining FALSE versus UNKNOWN."
-        )
-    if name == "tnull_group_count_star_projection_eq_of_equal_length":
-        return (
-            "Derives semantic equality of one-column COUNT-star group projections "
-            "from equal group cardinality, independent of the output alias."
-        )
-    if name == "tnull_count_star_group_observation_equiv_of_equal_length":
-        return (
-            "Builds one exact COUNT-star group execution relation from equal cardinality "
-            "and explicit aggregate/HAVING outcome correspondence."
-        )
-    if name in {
-        "tnull_count_star_groups_outcome_equiv_of_Forall2_observations",
-        "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length",
-    }:
-        return (
-            "Lifts pointwise equal-cardinality COUNT-star observations through the "
-            "ordered group scheduler, preserving duplicate groups and the first error."
-        )
-    if name == "formula_and_redundant_right_acceptance_exact":
-        return (
-            "Eliminates an acceptance-redundant eager right conjunct only after "
-            "both sides have exact error-free acceptance and right acceptance is "
-            "proved whenever the left guard accepts."
+            "Eliminates an acceptance-redundant flattened operand only after every "
+            "legal schedule preserves exact error-free acceptance and the operand is "
+            "proved redundant whenever earlier operands do not decide the result."
         )
     if name in {
         "integer_stats_fold_interval_invariant",
@@ -2127,7 +2744,7 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Lifts pairwise exact join acceptance to the complete row-major "
             "successful condition matrix, excluding condition errors."
         )
-    if name == "project_join_sources_outcome_exact_map":
+    if name == "eval_project_join_sources_exact_map":
         return (
             "Lifts exact projection of every reached matched or padded join "
             "source to one ordered successful map over the source list."
@@ -2138,101 +2755,20 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "projection to construct a successful join bag and rule out every "
             "local join error for any modeled join kind."
         )
-    if name == "tnull_join_condition_pred_acceptance_exact_safe":
-        return (
-            "Builds the generic exact join-acceptance contract for a runtime-safe "
-            "TNull scalar predicate while preserving authoritative Bool3 semantics."
-        )
-    if name in {"tnull_row_eq_refl", "tnull_row_eq_sym", "tnull_row_eq_trans"}:
-        return (
-            "Exposes the displayed equivalence law for the facade's semantic "
-            "TNull row equality without reopening ordered-set internals."
-        )
-    if name == "tnull_select_lookup_some_iff_projected_label":
-        return (
-            "Relates successful first-match SELECT lookup exactly to membership "
-            "of the corresponding projected output label."
-        )
-    if name == "tnull_select_lookup_none_iff_projected_label_absent":
-        return (
-            "Relates failed first-match SELECT lookup exactly to Boolean absence "
-            "of the corresponding projected output label."
-        )
-    if name == "tnull_project_rows_select_columns_success":
-        return (
-            "Computes direct-column projection of a row list as an exact ordered "
-            "successful map, discharging all projection-local scalar errors."
-        )
-    if name == "tnull_query_expr_project_select_columns_error_iff":
-        return (
-            "Shows that a direct-column query projection has exactly its child's "
-            "error observations and introduces no projection-local error."
-        )
-    if name == "tnull_select_lookup_direct_compose_interp_value":
-        return (
-            "Composes two first-match direct projection lookups while retaining "
-            "the original row-extended expression value, including correlated fallback."
-        )
-    if name == "tnull_projection_rows_eq_of_output_values":
-        return (
-            "Builds semantic equality of two projected rows from equality of their "
-            "output-label sets and every observable projected cell."
-        )
-    if name == "tnull_direct_projection_fusion_row_eq":
-        return (
-            "Fuses one direct projection with two direct projections from exact "
-            "source-to-middle-to-target first-match lookup chains."
-        )
-    if name == "tnull_select_columns_lookup_output":
-        return (
-            "Computes the exact first-match lookup of every present SelectColumns "
-            "output without requiring output uniqueness."
-        )
-    if name == "tnull_select_columns_projection_fusion_row_eq":
-        return (
-            "Fuses direct-column single and double projections from final-label "
-            "set equality and coverage of every outer label by the inner projection."
-        )
-    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
-        return (
-            "Lifts a total single-versus-double projection row law to the named "
-            "reachable-child-bag fusion contract without changing multiplicities."
-        )
-    if name == "query_project_success_bags_fusion_safe":
-        return (
-            "Uses three locally safe projections and their reachable-bag fusion "
-            "contract to equate the possible successful bags of one and two Projects."
-        )
-    if name == "tnull_eval_group_bag_direct_columns_true_no_error":
-        return (
-            "Rules out every local group-bag error for direct-column GROUP BY "
-            "with TRUE HAVING, for any supplied successful child bag."
-        )
     if name.startswith("list_support_rel_"):
         return (
             "Transports bidirectional row support through the displayed relation; "
             "it does not preserve duplicate multiplicity by itself."
         )
-    if name == "formula_conj_acceptance_exact":
+    if name == "scalar_expr_conj_list_acceptance_exact":
         return (
-            "Composes exact TRUE-acceptance contracts through eager SQL AND "
-            "or OR without identifying the underlying FALSE and UNKNOWN values."
+            "Composes exact TRUE-acceptance contracts through the scheduled flattened "
+            "SQL AND/OR traversal without identifying FALSE and UNKNOWN values."
         )
-    if name == "formula_exists_acceptance_exact":
+    if name == "scalar_expr_exists_acceptance_exact":
         return (
             "Builds an exact EXISTS acceptance contract from inhabited child "
             "successes that agree on emptiness and from explicit absence of errors."
-        )
-    if name == "eval_groups_true_outcome_exact":
-        return (
-            "Characterizes all-TRUE evaluation in each `group_env` exactly as "
-            "the ordered projection map after all four per-group runtime checks, "
-            "including as the group-processing component of a regrouping proof."
-        )
-    if name == "eval_groups_global_true_outcome_exact":
-        return (
-            "Specializes exact TRUE-HAVING group execution to SQL global "
-            "aggregation, including the singleton empty-input group."
         )
     if name == "query_canonical_rows_map_factor_permut":
         return (
@@ -2240,42 +2776,15 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "selection up to semantic permutation, without exposing the bag "
             "implementation's concrete sorting algorithm."
         )
-    if name == "eval_group_bag_global_true_success_exists":
-        return (
-            "Constructs a successful global-aggregate bag outcome from explicit "
-            "aggregate-finalization and scalar-projection runtime safety."
-        )
-    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
-        return (
-            "Lifts safe global aggregation through the bag reset and proves a "
-            "representative-independent singleton result when the projection is "
-            "explicitly permutation-stable."
-        )
-    if name == "group_projection_permutation_stable":
-        return (
-            "Defines the semantic side condition under which a group projection "
-            "is invariant under permutation of its group members."
-        )
     if name == "rows_permut_implies_bag_eq":
         return (
             "Converts semantic row permutation into equality of finite row bags, "
             "the converse of the reset-boundary occurrence bridge."
         )
-    if name == "eval_groups_acceptance_outcome_exact":
-        return (
-            "Characterizes arbitrary exact HAVING acceptance in each `group_env` "
-            "as the ordered projection map over `List.filter`, retaining duplicate "
-            "groups and requiring scalar SELECT safety only for accepted groups."
-        )
     if name == "bag_filter_congr_on_support":
         return (
             "Transports finite-bag filtering across bag-equal inputs when two "
             "predicates agree on semantic tuple occurrences in the left support."
-        )
-    if name == "tnull_direct_projection_alias_value":
-        return (
-            "Reads an aliased direct SELECT output exactly as its present source "
-            "attribute under unique output aliases, preserving NULL values."
         )
     if name == "database_conforms_schema_primary_key":
         return (
@@ -2308,7 +2817,7 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Computes groups for one constant nonempty grouping key as no group "
             "on empty input or one reverse-ordered member list otherwise."
         )
-    if name == "formula_pred_acceptance_exact_safe":
+    if name == "scalar_expr_pred_acceptance_exact_safe":
         return (
             "Builds an exact SQL TRUE-acceptance contract for an interpreted "
             "scalar predicate from explicit argument runtime safety."
@@ -2343,13 +2852,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Lifts two child outcome equivalences through CROSS JOIN's bag reset "
             "while preserving appended output schema, multiplicity, and errors."
         )
-    if name == "query_project_success_bags_safe":
-        return (
-            "Characterizes the possible successful bags of a locally safe "
-            "projection as a multiplicity-preserving bag map of child bags."
-        )
-    if name == "query_project_bag_congr":
-        return "Transports input bag equality through the declared projection bag map."
     if name == "query_table_success_bags_functional":
         return "Shows that a base table has one possible successful bag modulo bag equality."
     if name == "query_cross_join_union_right_success_bags":
@@ -2364,11 +2866,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
         return (
             "Assembles the right-hand CROSS JOIN/UNION ALL distribution law into "
             "a safe exact query equivalence with explicit runtime premises."
-        )
-    if name == "query_expr_project_outcome_equiv_congr_safe":
-        return (
-            "Lifts a fixed-environment child outcome equivalence through one "
-            "locally safe projection."
         )
     if name.startswith("tnull_") and name.endswith("_eval_bag_congr"):
         return (
@@ -2430,14 +2927,14 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Establishes TNull primary-key self-IN TRUE-acceptance from an actual "
             "tuple-comparison witness, key reflection, and the complete projected NOT NULL fact."
         )
-    if name == "formula_in_distinct_acceptance_exact_of_inner":
+    if name == "scalar_expr_in_distinct_acceptance_exact_of_inner":
         return (
             "Lifts an exact correlated IN acceptance contract through DISTINCT "
             "without claiming equality of the complete FALSE/UNKNOWN Bool3 result."
         )
     if name == "query_expr_project_filter_runtime_safe_exact":
         return (
-            "Composes child, filter-formula, and reached-projection safety into exact "
+            "Composes child, filter-expression, and reached-projection safety into exact "
             "runtime safety for a Project over Filter without inferring safety from bags."
         )
     if name in {
@@ -2465,12 +2962,12 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
     if name == "query_filter_success_bags_of_stable_total_acceptance":
         return (
             "Characterizes successful filter bags by one stable total acceptance "
-            "callback only after exact per-row formula success and no-error are supplied."
+            "callback only after exact per-row Boolean-expression success and no-error are supplied."
         )
     if name == "query_filter_error_iff_of_stable_total_acceptance":
         return (
             "Characterizes filter errors under the same stable total acceptance "
-            "contract, retaining child errors and exact reached formula error categories."
+            "contract, retaining child errors and exact reached predicate error categories."
         )
     if name == "eval_filter_rows_uniform_error_of_reached_member":
         return (
@@ -2480,12 +2977,12 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
     if name == "eval_filter_rows_error_category_of_reached_categories":
         return (
             "Shows that any FILTER error has the fixed category shared by every "
-            "reached formula-error observation."
+            "reached predicate-error observation."
         )
     if name == "eval_filter_rows_success_excludes_reached_exact_error":
         return (
             "Excludes every successful FILTER traversal when one reached occurrence "
-            "has no successful formula observation."
+            "has no successful predicate observation."
         )
     if name == "eval_filter_rows_reached_uniform_error_exact":
         return (
@@ -2528,7 +3025,7 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
         )
     if name == "eval_filter_rows_always_true_iff":
         return (
-            "Characterizes successful filtering when every reached formula "
+            "Characterizes successful filtering when every reached predicate "
             "evaluation succeeds with SQL TRUE."
         )
     if name == "single_value_int32_runtime_error_none_iff":
@@ -2637,7 +3134,7 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "QExpr_RowMap_rename_transport":
                 "Use with pointwise callback conjugacy plus cross-output collision/type safety for every successful source callback run.",
             "QExpr_Filter_rename_transport":
-                "Use with exact formula outcomes in renamed row environments and the exact ordered filter scheduler; FALSE and UNKNOWN may not be exchanged.",
+                "Use with exact typed Boolean outcomes in renamed row environments and the exact ordered filter scheduler; FALSE and UNKNOWN may not be exchanged.",
             "QExpr_Group_rename_transport":
                 "Use with paired reachable group formation, exact HAVING Bool3/aggregate-error behavior, renamed keys/projection aliases, and the exact bag scheduler.",
             "QExpr_GroupingSets_rename_transport":
@@ -2747,9 +3244,9 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "to prove full Bool3 equality, NOT IN, multiplicity, or ordered outcomes."
         )
     if name in {
-        "formula_truth_exact_acceptance_exact",
-        "formula_not_truth_exact",
-        "formula_not_acceptance_exact",
+        "scalar_expr_truth_exact_acceptance_exact",
+        "scalar_expr_not_truth_exact",
+        "scalar_expr_not_acceptance_exact",
     }:
         return (
             "Use only with the displayed exact-truth contract: it includes one "
@@ -2757,23 +3254,23 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "exclusion of every runtime error at the same environment."
         )
     if name in {
-        "formula_in_truth_exact",
-        "formula_not_in_acceptance_exact_of_fixed_truth",
+        "scalar_expr_in_truth_exact",
+        "scalar_expr_not_in_acceptance_exact_of_fixed_truth",
     }:
         return (
             "Use after proving argument safety, child-success inhabitation, one "
             "fixed full Bool3 IN truth across all legal child observations, and "
             "absence of child errors; an acceptance bit alone cannot justify NOT IN."
         )
-    if name == "formula_in_acceptance_exact":
+    if name == "scalar_expr_in_acceptance_exact":
         return (
             "Use at a filter/join acceptance boundary with the pointwise tuple-IN "
             "decision and every displayed child/no-error premise; FALSE and UNKNOWN "
             "may share rejection but remain distinct semantic truths."
         )
     if name in {
-        "formula_exists_truth_exact",
-        "formula_not_exists_acceptance_exact",
+        "scalar_expr_exists_truth_exact",
+        "scalar_expr_not_exists_acceptance_exact",
     }:
         return (
             "Use at one fixed, possibly correlated environment after proving a child "
@@ -2792,16 +3289,16 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "not be collapsed into FALSE when reasoning about NOT IN."
         )
     if name in {
-        "tnull_formula_not_in_accepts_exact_of_all_false",
-        "tnull_formula_not_in_rejects_exact_of_true_match",
-        "tnull_formula_not_in_rejects_exact_of_unknown_without_match",
+        "tnull_scalar_expr_not_in_accepts_exact_of_all_false",
+        "tnull_scalar_expr_not_in_rejects_exact_of_true_match",
+        "tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match",
     }:
         return (
             "Use at one fixed correlated environment after proving argument safety, "
             "child-success inhabitation, the displayed case for every legal child "
             "success, and exclusion of every child error."
         )
-    if name == "formula_in_union_all_acceptance_exact":
+    if name == "scalar_expr_in_union_all_acceptance_exact":
         return (
             "Use only for UNION ALL at one fixed correlated environment after proving "
             "schema compatibility, argument safety, inhabited branch successes, fixed "
@@ -2847,12 +3344,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "relation.  It ignores multiplicity and does not model volatile or "
             "runtime-error-producing SQL predicate evaluation."
         )
-    if name == "eval_groups_all_rejected_outcome_exact":
-        return (
-            "Use only when SELECT and HAVING aggregate finalization succeeds for "
-            "every reached group and HAVING has one exact nontrue, error-free "
-            "decision.  Scalar SELECT projection is intentionally not a premise."
-        )
     if name in {
         "tnull_group_count_star_value_runtime_exact",
         "count_star_value_local_error_exact_of_equal_length",
@@ -2872,29 +3363,11 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "every expression value non-NULL.  The full runtime form also requires "
             "each reached child observation to be error-free; DISTINCT is excluded."
         )
-    if name == "formula_pred_outcome_equiv_of_argument_observations":
+    if name == "scalar_expr_conj_list_redundant_operand_acceptance_exact":
         return (
-            "Use after proving equality of the complete reached argument-value list and "
-            "its left-biased first runtime error.  Acceptance equality alone is insufficient "
-            "because the theorem preserves the full Bool3 outcome."
-        )
-    if name in {
-        "tnull_group_count_star_projection_eq_of_equal_length",
-        "tnull_count_star_group_observation_equiv_of_equal_length",
-        "tnull_count_star_groups_outcome_equiv_of_Forall2_observations",
-        "tnull_count_star_groups_true_outcome_equiv_of_Forall2_length",
-    }:
-        return (
-            "Use with equal cardinality for every paired reached group.  Arbitrary HAVING "
-            "requires exact aggregate and formula outcome correspondence; the TRUE-HAVING "
-            "specialization discharges only that predicate boundary.  The scheduler result "
-            "is semantic permutation, not a promoted exact ordered row list."
-        )
-    if name == "formula_and_redundant_right_acceptance_exact":
-        return (
-            "Use for guarded correlated predicates only after the inserted right "
-            "formula is exact and cannot error on every reached row.  FormalSQL is "
-            "eager, so a witness proved only on accepting guard rows is insufficient."
+            "Use for guarded correlated predicates only after the candidate operand is "
+            "exact and cannot error on every reached row. A legal schedule may evaluate it "
+            "before a decisive operand, so accepting guard rows alone are insufficient."
         )
     if name in {
         "integer_stats_fold_interval_invariant",
@@ -3104,7 +3577,7 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use after establishing exact acceptance for every reached left/right "
             "pair; the conclusion is the literal row-major matrix, not a bag."
         )
-    if name == "project_join_sources_outcome_exact_map":
+    if name == "eval_project_join_sources_exact_map":
         return (
             "Use after proving exact successful projection only for sources in "
             "the reached source list; matched and both NULL-padded source forms "
@@ -3116,109 +3589,22 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "providing total pairwise acceptance and total source-projection "
             "contracts; child-query errors are outside this bag-local theorem."
         )
-    if name == "tnull_join_condition_pred_acceptance_exact_safe":
-        return (
-            "Use for a `FExpr_Pred` join condition after proving its eager argument "
-            "runtime-error classifier is `None`; FALSE and UNKNOWN remain distinct "
-            "Bool3 results even though both reject the joined row."
-        )
-    if name in {"tnull_row_eq_refl", "tnull_row_eq_sym", "tnull_row_eq_trans"}:
-        return (
-            "Use to compose generated row correspondences through the facade's "
-            "semantic equality; this is not Leibniz tuple equality."
-        )
-    if name == "tnull_select_lookup_some_iff_projected_label":
-        return (
-            "Use in either direction between first-match lookup and projected "
-            "label presence; repeated aliases do not authorize choosing a later "
-            "SELECT item."
-        )
-    if name == "tnull_select_lookup_none_iff_projected_label_absent":
-        return (
-            "Use in either direction to prove concrete lookup failure or output "
-            "label absence without unfolding projection-label construction."
-        )
-    if name == "tnull_project_rows_select_columns_success":
-        return (
-            "Use only for `SelectColumns`; it proves projection-local safety and "
-            "the exact ordered row map, independently of any child-query outcome."
-        )
-    if name == "tnull_query_expr_project_select_columns_error_iff":
-        return (
-            "Use to move an error observation across a `SelectColumns` query "
-            "projection in either direction; no child error is discarded."
-        )
-    if name == "tnull_select_lookup_direct_compose_interp_value":
-        return (
-            "Use when both SELECT stages have the displayed first-match direct "
-            "lookups.  No source-label presence premise is needed because the "
-            "conclusion preserves the original row-extended interpretation."
-        )
-    if name == "tnull_projection_rows_eq_of_output_values":
-        return (
-            "Use after proving exact equality of the two SELECT output-label sets "
-            "and equality of each cell observable through that set."
-        )
-    if name == "tnull_direct_projection_fusion_row_eq":
-        return (
-            "Applies to composition of one direct projection with a two-stage direct "
-            "projection after supplying the exact first-match lookup chains."
-        )
-    if name == "tnull_select_columns_lookup_output":
-        return (
-            "Use for a SelectColumns member instead of proving uniqueness or "
-            "manually reducing first-match lookup over a concrete list."
-        )
-    if name == "tnull_select_columns_projection_fusion_row_eq":
-        return (
-            "Applies when the compared projection composition uses SelectColumns; "
-            "it reduces the row law to output-set equality and outer-to-inner coverage."
-        )
-    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
-        return (
-            "Applies when the projection-composition row law is valid for every row. "
-            "A law restricted to reachable rows must instead discharge the original "
-            "reachable-bag contract."
-        )
-    if name == "query_project_success_bags_fusion_safe":
-        return (
-            "Use after proving all three SELECT lists locally safe and the named "
-            "fusion contract on every reachable child bag; errors and ordered "
-            "observations are outside this success-bag theorem."
-        )
-    if name == "tnull_eval_group_bag_direct_columns_true_no_error":
-        return (
-            "Use after a child bag has been supplied to discharge only the local "
-            "direct-column grouping error branch; it does not prove child safety "
-            "or equivalence of successful group bags."
-        )
     if name.startswith("list_support_rel_"):
         return (
             "Use to connect row-existence witnesses across relational stages; "
             "do not treat the conclusion as bag equality or multiplicity preservation."
         )
-    if name == "formula_conj_acceptance_exact":
+    if name == "scalar_expr_conj_list_acceptance_exact":
         return (
-            "Use after proving exact acceptance for both eager children; the "
-            "conclusion combines only their `Bool.is_true` decisions, not their "
-            "underlying SQL FALSE/UNKNOWN values."
+            "Use after proving the displayed exact acceptance contract for every "
+            "scheduled operand; the conclusion combines only `Bool.is_true` decisions, "
+            "not the underlying SQL FALSE/UNKNOWN values."
         )
-    if name == "formula_exists_acceptance_exact":
+    if name == "scalar_expr_exists_acceptance_exact":
         return (
             "Use at one fixed, possibly correlated environment after providing "
             "a child success, agreement of every child success on emptiness, and "
             "absence of every child SQL error."
-        )
-    if name == "eval_groups_true_outcome_exact":
-        return (
-            "Use when every reached HAVING decision is exactly TRUE and each of "
-            "the four displayed per-group checks is safe; the conclusion is an "
-            "ordered map and keeps duplicate group occurrences."
-        )
-    if name == "eval_groups_global_true_outcome_exact":
-        return (
-            "Use for `GROUP BY [] HAVING TRUE` after proving aggregate finalization "
-            "and scalar projection runtime safety for the one global group."
         )
     if name == "query_canonical_rows_map_factor_permut":
         return (
@@ -3226,44 +3612,16 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "across grouping, quantified predicates, or another canonical bag "
             "representative boundary."
         )
-    if name == "eval_group_bag_global_true_success_exists":
-        return (
-            "Use to discharge an outcome-inhabitation premise for a runtime-safe "
-            "`GROUP BY [] HAVING TRUE` or scalar aggregate subquery."
-        )
-    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
-        return (
-            "Use at a successful scalar/global aggregate subquery when the child "
-            "is represented as a bag and the actual aggregate projection has a "
-            "separate permutation-stability proof."
-        )
-    if name == "group_projection_permutation_stable":
-        return (
-            "Use as the explicit contract required before treating a grouping "
-            "projection as a function of only the input bag."
-        )
     if name == "rows_permut_implies_bag_eq":
         return (
             "Use after a semantic list-permutation proof when the enclosing "
             "constructor or equivalence goal expects finite-bag equality."
-        )
-    if name == "eval_groups_acceptance_outcome_exact":
-        return (
-            "Use after choosing a Boolean `keep` for every reached group and "
-            "proving exact HAVING acceptance plus eager aggregate safety; the "
-            "result is literally `map projection (filter keep groups)`."
         )
     if name == "bag_filter_congr_on_support":
         return (
             "Use when an environment-dependent row predicate has been proved "
             "equal to another predicate only on represented input rows; input "
             "bags need be semantically bag-equal, not Leibniz-equal."
-        )
-    if name == "tnull_direct_projection_alias_value":
-        return (
-            "Use to reduce `dot` at a renamed projection output after proving "
-            "the literal direct SELECT item, unique output aliases, and source "
-            "attribute presence in the input row."
         )
     if name == "database_conforms_schema_primary_key":
         return (
@@ -3300,17 +3658,17 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "every row; retain the literal `rev rows` and prove key runtime safety "
             "separately."
         )
-    if name == "formula_pred_acceptance_exact_safe":
+    if name == "scalar_expr_pred_acceptance_exact_safe":
         return (
-            "Use for `FExpr_Pred` only after proving its authoritative "
+            "Use for `SExpr_Pred` only after proving its authoritative "
             "`first_runtime_error` classifier is `None`; the decision is "
             "`Bool.is_true`, not an equality between SQL FALSE and UNKNOWN."
         )
     if name == "eval_filter_rows_acceptance_exact":
         return (
-            "Use after proving `formula_acceptance_exact_at` for every input "
+            "Use after proving `scalar_expr_acceptance_exact_at` for every input "
             "occurrence; the result preserves list order and duplicates and "
-            "the premise excludes formula errors."
+            "the premise excludes predicate errors."
         )
     if name == "query_expr_outcome_equiv_implies_success_bags":
         return (
@@ -3338,13 +3696,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use to lift two local child outcome equivalences through CROSS JOIN; "
             "no safety or success premise is required."
         )
-    if name == "query_project_success_bags_safe":
-        return (
-            "Use after proving scalar SELECT evaluation safe for every row; this "
-            "is an exact possible-bag characterization, not an ordered-row result."
-        )
-    if name == "query_project_bag_congr":
-        return "Use to map an existing input `bag_eq` through one fixed projection."
     if name == "query_table_success_bags_functional":
         return "Use as the generic base case for possible-bag functionality of a table."
     if name == "query_cross_join_union_right_success_bags":
@@ -3361,11 +3712,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use after the two sort equalities, duplicated-left functionality, "
             "complete source/target safety, and source-success premises are all "
             "available."
-        )
-    if name == "query_expr_project_outcome_equiv_congr_safe":
-        return (
-            "Use to lift a child outcome equivalence at the same environment "
-            "through the same SELECT list after proving per-row local safety."
         )
     if name.startswith("tnull_") and name.endswith("_eval_bag_congr"):
         return (
@@ -3461,6 +3807,135 @@ def has_top_level_implication(statement: str) -> bool:
 
 
 def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
+    if name == "query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv":
+        return (
+            "Retain BagClosed for both actual possible-success list relations; one "
+            "chosen bag representative cannot justify ordered possible outcomes."
+        )
+    if name in {
+        "lift_possible_bag_outcome_unary_congr",
+        "lift_possible_bag_outcome_binary_congr",
+        "lift_possible_bag_outcome_binary_cross_congr",
+        "possible_bag_outcome_context_congr",
+    }:
+        return (
+            "Supply the displayed outcome-compatibility and well-formedness "
+            "contracts. They preserve inhabitation and exact runtime-error "
+            "categories, not only equality of successful bags."
+        )
+    if name == "query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_equiv":
+        return (
+            "Supply bidirectional per-schedule transport of the complete scheduled "
+            "bag/error relations and exact output-schema equality. Independent "
+            "existential outcomes do not establish this contract."
+        )
+    if name in POSSIBLE_BAG_WRAPPER_SCHEDULE_TRANSPORT_DECLARATIONS or name in {
+        "query_expr_possible_bag_unary_wrapper_congr",
+        "query_expr_possible_bag_binary_wrapper_congr",
+    }:
+        joint = (
+            " The binary theorem requires one target schedule that relates both "
+            "child pairs jointly; two marginal schedule transports are insufficient."
+            if "binary" in name
+            else ""
+        )
+        return (
+            "Retain exact output schemas and prove the complete parent bag/error "
+            "relation from child relations under the same matched schedule pair. "
+            "The local law must account for tuple values, multiplicity, Bool3, "
+            "ordering/group finalization, and runtime errors."
+            + joint
+        )
+    if name in PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS:
+        return (
+            "Supply bidirectional child schedule transport, exact constructor "
+            "output equality where displayed, and `scheduled_local_rows_to_bag_contract` "
+            "for every matched schedule pair. The local contract retains actual row "
+            "order, multiplicity, Bool3/aggregate behavior, and runtime errors."
+        )
+    if name in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS:
+        local = (
+            " JOIN additionally requires the displayed cross-schedule "
+            "compatibility of the two actual `eval_join_bag_outcome` relations."
+            if "_join_" in name and "natural_join" not in name
+            and "cross_join" not in name
+            else ""
+        )
+        return (
+            "Supply one joint bidirectional schedule transport relating both "
+            "child pairs; independent marginal witnesses are insufficient."
+            + local
+        )
+    if name.endswith("_scheduled_bag_outcomes_characterization"):
+        if name in UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS:
+            return (
+                "No semantic premise is hidden: this is the exact fixed-schedule "
+                "characterization of the displayed constructor-local relation."
+            )
+        return (
+            "Retain the fixed schedule, exact eager-left success/error behavior, "
+            "operator extensionality, and inhabitation of the actual right-child "
+            "scheduled outcome relation."
+        )
+    if name.endswith("_scheduled_bag_outcomes_congr"):
+        if name in UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS:
+            return (
+                "Supply complete child bag/error equivalence under the matched "
+                "schedule pair and the exact reachable-list "
+                "`scheduled_local_rows_to_bag_contract`."
+            )
+        extra = (
+            " SET also retains both child sort equalities."
+            if name.startswith("query_set_")
+            else " JOIN also retains cross-schedule compatibility of the exact "
+            "local join outcome operations."
+            if name.startswith("query_join_")
+            else ""
+        )
+        return (
+            "Supply complete bag/error equivalence for both children under the "
+            "same matched schedule pair; neither errors nor multiplicity may be "
+            "projected away."
+            + extra
+        )
+    if name == "query_scheduled_binary_parent_bag_outcomes_characterization":
+        return (
+            "Supply exact two-sided success and error inversion laws, an "
+            "extensional operator-local outcome relation, and an inhabited "
+            "right-child scheduled relation for eager-left errors."
+        )
+    if name == "query_actual_rows_bag_outcome_bind_congr":
+        return (
+            "Supply outcome-alpha equivalence for the two exact child relations and "
+            "the reachable, bag-equal actual-row local contract; successful bags and "
+            "runtime-error categories remain explicit."
+        )
+    if name in {
+        "outcome_alpha_success_match_left_rows",
+        "outcome_alpha_success_match_right_rows",
+        "outcome_alpha_error_iff",
+    }:
+        return (
+            "Supply the complete outcome-alpha bag/error equivalence and the displayed "
+            "concrete success or error observation; no representative is guessed."
+        )
+    if name in {
+        "query_expr_possible_bag_outcome_context_boundary_congr",
+        "query_expr_possible_bag_outcome_context_boundary_final",
+    }:
+        suffix = (
+            " The final theorem additionally requires BagClosed for both actual "
+            "parent success relations."
+            if name.endswith("_final")
+            else ""
+        )
+        return (
+            "Retain both exact `rel_equiv` parent characterizations, context "
+            "well-formedness, child possible-bag/outcome equivalence, and exact "
+            "output-schema equality. Concrete characterizations must account for "
+            "schedule, correlation, NULL/Bool3, order, multiplicity, and errors."
+            + suffix
+        )
     if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
         common = (
             "The displayed `query_rename_schema_compatible` premise retains ordered "
@@ -3486,7 +3961,7 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "QExpr_RowMap_rename_transport":
                 "Keep child transport, pointwise callback compatibility, and successful-output collision/type safety.",
             "QExpr_Filter_rename_transport":
-                "Keep child transport, exact Bool3/error formula compatibility, and ordered unary local compatibility.",
+                "Keep child transport, exact typed Bool3/error compatibility, and ordered unary local compatibility.",
             "QExpr_Group_rename_transport":
                 "Keep child transport, reachable group-formation pairing, exact HAVING plus aggregate-precheck compatibility, and unary local compatibility.",
             "QExpr_GroupingSets_rename_transport":
@@ -3565,7 +4040,7 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "Supply `join_condition_acceptance_exact_at` for every reached pair "
             "from both input lists; the resulting matrix remains row-major."
         )
-    if name == "project_join_sources_outcome_exact_map":
+    if name == "eval_project_join_sources_exact_map":
         return (
             "Supply exact successful projection for every source occurring in "
             "the source list; do not omit matched, left-padded, or right-padded "
@@ -3578,144 +4053,28 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "join source.  The conclusion is bag-local and does not establish "
             "child-query safety."
         )
-    if name == "tnull_join_condition_pred_acceptance_exact_safe":
+    if name == "scalar_expr_conj_list_acceptance_exact":
         return (
-            "Retain the displayed `first_runtime_error ... arguments = None` "
-            "premise at the exact joined-row environment; do not replace the "
-            "authoritative predicate interpreter or identify FALSE with UNKNOWN."
+            "Retain the complete insertion-site schedule and every displayed operand "
+            "contract; no one fixed eager order represents all legal AND/OR outcomes."
         )
-    if name == "tnull_row_eq_refl":
-        return "No premises beyond the displayed row."
-    if name == "tnull_row_eq_sym":
-        return (
-            "Supply the displayed semantic TNull row equality in the forward direction."
-        )
-    if name == "tnull_row_eq_trans":
-        return (
-            "Supply both displayed semantic TNull row equalities through the same "
-            "intermediate row; do not replace them by Leibniz equality."
-        )
-    if name in {
-        "tnull_select_lookup_some_iff_projected_label",
-        "tnull_select_lookup_none_iff_projected_label_absent",
-    }:
-        return (
-            "No alias-uniqueness premise is required: the statement follows the "
-            "authoritative first-match SELECT lookup and exact projected-label "
-            "membership test."
-        )
-    if name == "tnull_project_rows_select_columns_success":
-        return (
-            "The SELECT list must have the displayed direct-column form; the exact "
-            "ordered map conclusion does not cover arbitrary scalar expressions."
-        )
-    if name == "tnull_query_expr_project_select_columns_error_iff":
-        return (
-            "The projection must have the displayed direct-column form.  Preserve "
-            "the exact child error and fixed database/environment in both directions."
-        )
-    if name == "tnull_select_lookup_direct_compose_interp_value":
-        return (
-            "Both displayed lookup equalities are mandatory and use authoritative "
-            "first-match semantics; the theorem deliberately has no source-presence premise."
-        )
-    if name == "tnull_projection_rows_eq_of_output_values":
-        return (
-            "Retain exact output-label-set equality and cell equality for every "
-            "attribute in the left output set; neither premise follows from arity alone."
-        )
-    if name == "tnull_direct_projection_fusion_row_eq":
-        return (
-            "Retain equal final output-label sets and all three first-match lookup "
-            "equations for every observable target; repeated aliases cannot select a later item."
-        )
-    if name == "tnull_select_columns_lookup_output":
-        return (
-            "The attribute must belong to the displayed SelectColumns output set. "
-            "Repeated identical columns remain valid under first-match semantics."
-        )
-    if name == "tnull_select_columns_projection_fusion_row_eq":
-        return (
-            "Retain exact single/outer output-set equality and outer-to-inner set "
-            "coverage; coverage prevents correlated fallback for an absent inner label."
-        )
-    if name == "tnull_project_fusion_success_bag_contract_of_row_eq":
-        return (
-            "The displayed all-row semantic equality is a stronger sufficient "
-            "premise; the resulting contract still ranges only over reachable child bags."
-        )
-    if name == "query_project_success_bags_fusion_safe":
-        return (
-            "Keep all three per-row SELECT safety premises and the exact reachable-bag "
-            "fusion contract; the theorem does not establish error equivalence."
-        )
-    if name == "tnull_eval_group_bag_direct_columns_true_no_error":
-        return (
-            "Keep all three displayed restrictions: direct-column SELECT, matching "
-            "direct grouping keys, and TRUE HAVING.  The theorem starts after a "
-            "child input bag is supplied and does not erase child-query errors."
-        )
-    if name == "formula_conj_acceptance_exact":
-        return (
-            "Both displayed child exact-acceptance contracts are mandatory "
-            "because FormalSQL evaluates the right child eagerly for both AND and OR."
-        )
-    if name == "formula_exists_acceptance_exact":
+    if name == "scalar_expr_exists_acceptance_exact":
         return (
             "Retain child-success inhabitation, universal agreement on "
             "`rows_empty_decision`, the fixed environment, and exclusion of every error."
-        )
-    if name == "eval_groups_true_outcome_exact":
-        return (
-            "For every reached group retain SELECT aggregate safety, HAVING "
-            "aggregate safety, exact TRUE acceptance, and scalar SELECT safety; "
-            "do not replace the resulting list map by a bag or set."
-        )
-    if name == "eval_groups_global_true_outcome_exact":
-        return (
-            "Aggregate finalization and scalar SELECT evaluation must be safe in "
-            "the one environment formed from `rev rows`; HAVING is literally TRUE."
         )
     if name == "query_canonical_rows_map_factor_permut":
         return (
             "The representation map must respect semantic tuple equality, and "
             "the displayed pointwise factor equation must hold for every source item."
         )
-    if name == "eval_group_bag_global_true_success_exists":
-        return (
-            "Aggregate finalization and scalar SELECT evaluation must be safe for "
-            "every group list that the representative-saturated reset may choose."
-        )
-    if name == "eval_group_bag_global_true_success_bag_unique_if_stable":
-        return (
-            "Retain input-representative validity, aggregate and scalar SELECT "
-            "safety for every possible global group, explicit projection "
-            "permutation stability, and the successful reset outcome."
-        )
-    if name == "group_projection_permutation_stable":
-        return (
-            "This is a property to prove, not an unconditional theorem; floating-"
-            "point SUM/AVG generally do not satisfy it."
-        )
     if name == "rows_permut_implies_bag_eq":
         return "The two row lists must be semantically permuted under `OTuple`."
-    if name == "eval_groups_acceptance_outcome_exact":
-        return (
-            "For every reached group retain SELECT and HAVING aggregate safety "
-            "and exact acceptance/no-error evidence; scalar SELECT safety is "
-            "mandatory exactly when `keep group = true`."
-        )
     if name == "bag_filter_congr_on_support":
         return (
             "Retain input `bag_eq`, positive left multiplicity, semantic tuple "
             "equality, and cross-predicate agreement; no equality is required "
             "outside the represented left support."
-        )
-    if name == "tnull_direct_projection_alias_value":
-        return (
-            "The displayed direct `source -> target` item and output uniqueness "
-            "are mandatory; source presence prevents lookup from falling through "
-            "to the outer environment."
         )
     if name == "database_conforms_schema_primary_key":
         return (
@@ -3749,7 +4108,7 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "The grouping terms must be nonempty and every input row must have "
             "the displayed key; the nonempty result is exactly `[rev rows]`."
         )
-    if name == "formula_pred_acceptance_exact_safe":
+    if name == "scalar_expr_pred_acceptance_exact_safe":
         return (
             "The displayed `first_runtime_error ... arguments = None` premise "
             "is mandatory; retain the authoritative predicate interpreter and "
@@ -3757,7 +4116,7 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
         )
     if name == "eval_filter_rows_acceptance_exact":
         return (
-            "Supply the displayed per-row `formula_acceptance_exact_at` "
+            "Supply the displayed per-row `scalar_expr_acceptance_exact_at` "
             "contract, including its successful observation and no-error "
             "components; do not replace `List.filter` by a set abstraction."
         )
@@ -3785,13 +4144,6 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
             "Supply both displayed child outcome equivalences; no runtime-safety "
             "or successful-outcome premise may be silently added or inferred."
         )
-    if name == "query_project_success_bags_safe":
-        return (
-            "Prove the displayed SELECT-list runtime-error equation for every row; "
-            "respect `bag_eq` and duplicate multiplicity in both directions."
-        )
-    if name == "query_project_bag_congr":
-        return "Supply the displayed input `bag_eq`; the environment and SELECT list stay fixed."
     if name == "query_table_success_bags_functional":
         return "Supply two possible successful bags for the same environment, outputs, and table."
     if name == "query_cross_join_union_right_success_bags":
@@ -3807,11 +4159,6 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
         return (
             "Retain both sort equalities, duplicated-left bag functionality, "
             "source and target safety, and the source-success witness."
-        )
-    if name == "query_expr_project_outcome_equiv_congr_safe":
-        return (
-            "Supply the fixed-environment child outcome equivalence plus "
-            "SELECT-list safety for every row; ordered output and errors remain observable."
         )
     if name in {
         "map_left_join_functional_permut",
@@ -3973,49 +4320,398 @@ def validate_navigation(
         require(name, "scalar subquery", "SINGLE_VALUE", "CardinalityViolation")
         reject(name, "temporal", "TIME")
     require(
-        "eval_formula_quant_error_iff",
+        "eval_scalar_boolean_quant_error_iff",
         "scalar subquery",
         "SINGLE_VALUE",
         "CardinalityViolation",
     )
-    require("eval_formula_quant_success_iff", "scalar subquery")
-    require("eval_formula_quant_subquery_congr", "scalar subquery")
+    require("eval_scalar_boolean_quant_success_iff", "scalar subquery")
+    require("eval_scalar_boolean_quant_subquery_congr", "scalar subquery")
 
     # One generic kind-indexed join theorem must be reachable from every public
     # SQL spelling advertised in the index.
     join_route = "query_join_sources_length_le"
     require(join_route, "outer join", "semi join", "anti join")
 
-    # Declaration-level routing must expose the generic exact-outcome API
-    # without copying statements between cards. Generated-instance
-    # admissibility is intentionally not a route.
-    ordered_outcome = "query_expr_outcome_equiv_of_eval_iff"
-    if primary(ordered_outcome) != "runtime-verification-rewrite.md":
+    # Declaration-level routing exposes the public possible-outcome API first;
+    # exact-schedule transport remains an explicitly routed foundation.
+    possible_outcome = (
+        "query_expr_possible_outcome_equiv_of_exact_schedule_transport"
+    )
+    if primary(possible_outcome) != "runtime-verification-rewrite.md":
         raise ValueError(
-            f"{ordered_outcome}: generic OrderedQueryFacts outcome API is misrouted"
+            f"{possible_outcome}: public possible-outcome API is misrouted"
         )
-    if not {"outcome", "runtime"} <= routes(ordered_outcome):
-        raise ValueError(f"{ordered_outcome}: missing outcome/runtime cross-route")
+    if not {"possible", "outcome", "runtime"} <= routes(possible_outcome):
+        raise ValueError(
+            f"{possible_outcome}: missing possible/outcome/runtime routes"
+        )
+    if entry(possible_outcome)["interfaceLayer"] != "public_possible_outcome":
+        raise ValueError(f"{possible_outcome}: is not marked public")
+    public_possible_composition = {
+        "query_expr_possible_equiv_of_ordered_observations",
+        "query_expr_possible_equiv_of_observations",
+        "query_expr_possible_equiv_refl",
+        "query_expr_possible_equiv_sym",
+        "query_expr_possible_equiv_trans",
+        "query_expr_possible_equiv_of_possible_outcome_equiv_safe",
+        "query_program_possible_equiv_nil",
+        "query_program_possible_equiv_cons",
+        "query_program_possible_equiv_length",
+        "query_program_possible_equiv_iff_Forall2",
+        "query_program_possible_outcome_equiv_nil",
+        "query_program_possible_outcome_equiv_cons",
+        "query_program_possible_outcome_equiv_length",
+        "query_program_possible_outcome_equiv_iff_Forall2",
+    }
+    for public_name in public_possible_composition:
+        if public_name not in by_name:
+            raise ValueError(f"missing public possible-success API: {public_name}")
+        if entry(public_name)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(f"{public_name}: possible-success API is not public")
+        if "possible" not in routes(public_name):
+            raise ValueError(f"{public_name}: missing public possible route")
+    missing_possible_bag_context = (
+        PUBLIC_POSSIBLE_BAG_CONTEXT_DECLARATIONS - by_name.keys()
+    )
+    if missing_possible_bag_context:
+        raise ValueError(
+            "possible-bag outcome context inventory has stale names: "
+            f"{sorted(missing_possible_bag_context)}"
+        )
+    for context_interface in PUBLIC_POSSIBLE_BAG_CONTEXT_DECLARATIONS:
+        if str(entry(context_interface)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{context_interface}: possible-bag context interface is not FormalSQL-owned"
+            )
+        if entry(context_interface)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{context_interface}: possible-bag context interface is not public"
+            )
+        if not {"possible", "outcome", "runtime", "bag"} <= routes(
+            context_interface
+        ):
+            raise ValueError(
+                f"{context_interface}: possible-bag context routes regressed"
+            )
+    missing_binary_constructors = (
+        PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS - by_name.keys()
+    )
+    if missing_binary_constructors:
+        raise ValueError(
+            "possible-bag binary constructor inventory has stale names: "
+            f"{sorted(missing_binary_constructors)}"
+        )
+    for constructor_interface in PUBLIC_POSSIBLE_BAG_BINARY_CONSTRUCTOR_DECLARATIONS:
+        if str(entry(constructor_interface)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{constructor_interface}: binary constructor interface is not FormalSQL-owned"
+            )
+        if primary(constructor_interface) != "relational-algebra.md":
+            raise ValueError(
+                f"{constructor_interface}: binary constructor interface is misrouted"
+            )
+        if entry(constructor_interface)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{constructor_interface}: binary constructor interface is not public"
+            )
+        if not {"possible", "outcome", "runtime", "bag"} <= routes(
+            constructor_interface
+        ):
+            raise ValueError(
+                f"{constructor_interface}: binary constructor routes regressed"
+            )
+        if "_set_" not in constructor_interface and "join" not in routes(
+            constructor_interface
+        ):
+            raise ValueError(
+                f"{constructor_interface}: join-family constructor route regressed"
+            )
+    missing_binary_foundations = (
+        BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS - by_name.keys()
+    )
+    if missing_binary_foundations:
+        raise ValueError(
+            "scheduled binary constructor foundation inventory has stale names: "
+            f"{sorted(missing_binary_foundations)}"
+        )
+    for foundation in BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS:
+        if str(entry(foundation)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{foundation}: binary constructor foundation is not FormalSQL-owned"
+            )
+        if primary(foundation) != "relational-algebra.md":
+            raise ValueError(f"{foundation}: binary constructor foundation is misrouted")
+        if entry(foundation)["interfaceLayer"] != "scheduled_foundation":
+            raise ValueError(
+                f"{foundation}: binary constructor foundation escaped scheduled layer"
+            )
+        if not {"scheduled", "outcome", "runtime", "bag"} <= routes(foundation):
+            raise ValueError(f"{foundation}: binary foundation routes regressed")
+    for contract_marker in BINARY_LOCAL_CONTRACT_MARKERS:
+        if not any(
+            contract_marker in str(entry(foundation)["statement"])
+            for foundation in BINARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS
+        ):
+            raise ValueError(
+                f"{contract_marker}: local binary contract is not discoverable "
+                "through an inventoried theorem statement"
+            )
 
-    # Every non-leaf query constructor has an authoritative exact typed-outcome
-    # congruence in FormalSQL.  Keep the family complete and searchable so an
-    # agent never re-proves a constructor lift by unfolding the evaluator.
+    def unary_constructor_domain(name: str) -> str:
+        if "_group_" in name or "_grouping_sets_" in name:
+            return "aggregate-grouping.md"
+        if "_window_" in name:
+            return "ordered-observation.md"
+        return "relational-algebra.md"
+
+    def validate_unary_operator_route(name: str) -> None:
+        required_route = (
+            "projection"
+            if "_project_" in name or "_row_map_" in name
+            else "filter"
+            if "_filter_" in name
+            else "grouping"
+            if "_group_" in name or "_grouping_sets_" in name
+            else "ordered"
+            if "_window_" in name
+            else ""
+        )
+        if required_route and required_route not in routes(name):
+            raise ValueError(f"{name}: unary operator route regressed")
+
+    missing_unary_constructors = (
+        PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS - by_name.keys()
+    )
+    if missing_unary_constructors:
+        raise ValueError(
+            "possible-bag unary constructor inventory has stale names: "
+            f"{sorted(missing_unary_constructors)}"
+        )
+    for constructor_interface in PUBLIC_POSSIBLE_BAG_UNARY_CONSTRUCTOR_DECLARATIONS:
+        if str(entry(constructor_interface)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{constructor_interface}: unary constructor interface is not FormalSQL-owned"
+            )
+        if primary(constructor_interface) != unary_constructor_domain(
+            constructor_interface
+        ):
+            raise ValueError(
+                f"{constructor_interface}: unary constructor interface is misrouted"
+            )
+        if entry(constructor_interface)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{constructor_interface}: unary constructor interface is not public"
+            )
+        if not {"possible", "outcome", "runtime", "bag"} <= routes(
+            constructor_interface
+        ):
+            raise ValueError(
+                f"{constructor_interface}: unary constructor routes regressed"
+            )
+        validate_unary_operator_route(constructor_interface)
+
+    missing_unary_foundations = (
+        UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS - by_name.keys()
+    )
+    if missing_unary_foundations:
+        raise ValueError(
+            "scheduled unary constructor foundation inventory has stale names: "
+            f"{sorted(missing_unary_foundations)}"
+        )
+    for foundation in UNARY_CONSTRUCTOR_FOUNDATION_DECLARATIONS:
+        if str(entry(foundation)["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(
+                f"{foundation}: unary constructor foundation is not FormalSQL-owned"
+            )
+        if primary(foundation) != unary_constructor_domain(foundation):
+            raise ValueError(f"{foundation}: unary constructor foundation is misrouted")
+        if entry(foundation)["interfaceLayer"] != "scheduled_foundation":
+            raise ValueError(
+                f"{foundation}: unary constructor foundation escaped scheduled layer"
+            )
+        if not {"scheduled", "outcome", "runtime", "bag"} <= routes(foundation):
+            raise ValueError(f"{foundation}: unary foundation routes regressed")
+        validate_unary_operator_route(foundation)
+
+    missing_context_definitions = CATALOGED_QUERY_CONTEXT_DEFINITIONS - by_name.keys()
+    if missing_context_definitions:
+        raise ValueError(
+            "cataloged possible-bag definition inventory has stale names: "
+            f"{sorted(missing_context_definitions)}"
+        )
+    for definition in CATALOGED_QUERY_CONTEXT_DEFINITIONS:
+        definition_entry = entry(definition)
+        if definition_entry["kind"] != "Definition":
+            raise ValueError(f"{definition}: cataloged contract is not a Definition")
+        if str(definition_entry["source"]) != (
+            "vendor/FormalSQL/src/data/sql/SqlQueryContexts.v"
+        ):
+            raise ValueError(f"{definition}: cataloged contract has wrong owner")
+        if definition in SCHEDULED_UNARY_CONTEXT_DEFINITIONS:
+            expected_domain = unary_constructor_domain(definition)
+        elif definition in SCHEDULED_BINARY_CONTEXT_DEFINITIONS:
+            expected_domain = "relational-algebra.md"
+        else:
+            expected_domain = "runtime-verification-rewrite.md"
+        if primary(definition) != expected_domain:
+            raise ValueError(f"{definition}: cataloged contract is misrouted")
+        expected_layer = (
+            "scheduled_foundation"
+            if definition in SCHEDULED_POSSIBLE_BAG_CONTEXT_DEFINITIONS
+            else "public_possible_outcome"
+        )
+        if definition_entry["interfaceLayer"] != expected_layer:
+            raise ValueError(f"{definition}: cataloged contract layer regressed")
+        required_definition_routes = {"outcome", "runtime", "bag"}
+        required_definition_routes.add(
+            "scheduled" if expected_layer == "scheduled_foundation" else "possible"
+        )
+        if not required_definition_routes <= routes(definition):
+            raise ValueError(f"{definition}: cataloged contract routes regressed")
+        if definition in SCHEDULED_UNARY_CONTEXT_DEFINITIONS:
+            validate_unary_operator_route(definition)
+    missing_possible_bag_adapters = (
+        PUBLIC_POSSIBLE_BAG_ADAPTER_DECLARATIONS - by_name.keys()
+    )
+    if missing_possible_bag_adapters:
+        raise ValueError(
+            "possible-bag constructor adapter inventory has stale names: "
+            f"{sorted(missing_possible_bag_adapters)}"
+        )
+    for adapter in PUBLIC_POSSIBLE_BAG_ADAPTER_DECLARATIONS:
+        if str(entry(adapter)["source"]) != (
+            "theories/FormalSQL/PossibleOutcomeFacts.v"
+        ):
+            raise ValueError(
+                f"{adapter}: possible-bag constructor adapter has wrong owner"
+            )
+        if entry(adapter)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{adapter}: possible-bag constructor adapter is not public"
+            )
+        if not {"possible", "outcome", "runtime", "bag"} <= routes(adapter):
+            raise ValueError(
+                f"{adapter}: possible-bag constructor routes regressed"
+            )
+    for context_interface in POSSIBLE_BAG_CONTEXT_OPERATOR_INTERFACES:
+        required_context_routes = {
+            "projection",
+            "filter",
+            "join",
+            "grouping",
+            "ordered",
+            "scalar",
+        }
+        if not required_context_routes <= routes(context_interface):
+            raise ValueError(
+                f"{context_interface}: operator-family context routes regressed"
+            )
+    for typed_query_interface in TYPED_QUERY_POSSIBLE_INTERFACES:
+        require_route_contract(
+            typed_query_interface,
+            "runtime-verification-rewrite.md",
+            {"possible", "outcome", "runtime", "scalar"},
+        )
+    require_route_contract(
+        "query_expr_context_possible_outcome_equiv",
+        "runtime-verification-rewrite.md",
+        {
+            "possible",
+            "outcome",
+            "runtime",
+            "projection",
+            "filter",
+            "join",
+            "grouping",
+            "bag",
+            "ordered",
+            "scalar",
+        },
+    )
+    for alias_client in entries:
+        alias_statement = str(alias_client["statement"]).casefold()
+        if not any(
+            marker in alias_statement for marker in PUBLIC_POSSIBLE_ALIAS_MARKERS
+        ):
+            continue
+        alias_name = str(alias_client["name"])
+        if alias_client["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{alias_name}: possible-relation alias client is not public"
+            )
+        if "possible" not in alias_client["routes"]:  # type: ignore[operator]
+            raise ValueError(
+                f"{alias_name}: possible-relation alias client misses possible route"
+            )
+    for alias_fixture in {
+        "eval_query_expr_row_map_child_error",
+        "tnull_query_expr_outcome_separation_sound",
+        "tnull_query_program_head_separation_sound",
+        "tnull_query_program_nth_separation_sound",
+    }:
+        if entry(alias_fixture)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{alias_fixture}: possible-relation alias routing regressed"
+            )
+        if "possible" not in routes(alias_fixture):
+            raise ValueError(
+                f"{alias_fixture}: possible-relation alias misses possible route"
+            )
+    for bound_query_interface in {
+        "bound_query_body_possible_outcome_lift_sound",
+        "bound_query_program_body_possible_outcome_lift_sound",
+        "bound_query_program_body_possible_outcome_lift_demand_safe",
+        "bound_query_possible_equiv_implies_possible_outcome_equiv",
+        "bound_query_possible_equiv_runtime_safe",
+        "bound_query_program_possible_equiv_materialization_safe",
+        "bound_query_program_possible_equiv_implies_possible_outcome_equiv",
+        "bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv",
+    }:
+        if entry(bound_query_interface)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(
+                f"{bound_query_interface}: bound-query possible interface is not public"
+            )
+        if "possible" not in routes(bound_query_interface):
+            raise ValueError(
+                f"{bound_query_interface}: bound-query possible interface misses possible route"
+            )
+    ordered_outcome = "query_expr_outcome_equiv_of_eval_iff"
+    if entry(ordered_outcome)["interfaceLayer"] != "scheduled_foundation":
+        raise ValueError(f"{ordered_outcome}: is not marked scheduled foundation")
+    if "scheduled" not in routes(ordered_outcome):
+        raise ValueError(f"{ordered_outcome}: missing scheduled route")
+
+    # Every non-leaf query constructor retains an authoritative pointwise
+    # typed-outcome congruence in the scheduled foundation.  Public SQL proof
+    # search must finish through the possible-outcome interfaces validated
+    # below rather than treating this family as final certificates.
     expected_constructor_congruences = expected_query_constructor_congruences()
-    if GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES != expected_constructor_congruences:
+    if SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES != expected_constructor_congruences:
         raise ValueError(
             "query syntax and constructor congruence inventory diverged: "
-            f"missing={sorted(expected_constructor_congruences - GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES)}, "
-            f"stale={sorted(GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES - expected_constructor_congruences)}"
+            f"missing={sorted(expected_constructor_congruences - SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES)}, "
+            f"stale={sorted(SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES - expected_constructor_congruences)}"
         )
     missing_constructor_congruences = (
-        GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES - by_name.keys()
+        SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES - by_name.keys()
     )
     if missing_constructor_congruences:
         raise ValueError(
             "query constructor congruence coverage regressed: "
             f"{sorted(missing_constructor_congruences)}"
         )
-    for congruence in GENERIC_QUERY_CONSTRUCTOR_CONGRUENCES:
+    for congruence in SCHEDULED_QUERY_CONSTRUCTOR_CONGRUENCES:
         if not {"outcome", "runtime"} <= routes(congruence):
             raise ValueError(
                 f"{congruence}: missing outcome/runtime constructor routes"
@@ -4026,23 +4722,44 @@ def validate_navigation(
             raise ValueError(
                 f"{congruence}: constructor congruence is not FormalSQL-owned"
             )
+        if entry(congruence)["interfaceLayer"] != "scheduled_foundation":
+            raise ValueError(
+                f"{congruence}: fixed-schedule congruence escaped its foundation layer"
+            )
+    missing_scheduled_internal = SCHEDULED_INTERNAL_DECLARATIONS - by_name.keys()
+    if missing_scheduled_internal:
+        raise ValueError(
+            "scheduled internal declaration inventory has stale names: "
+            f"{sorted(missing_scheduled_internal)}"
+        )
+    for internal_name in SCHEDULED_INTERNAL_DECLARATIONS:
+        if entry(internal_name)["interfaceLayer"] != "scheduled_foundation":
+            raise ValueError(
+                f"{internal_name}: internal fixed-schedule law escaped its foundation layer"
+            )
+        if "scheduled" not in routes(internal_name):
+            raise ValueError(f"{internal_name}: missing scheduled route")
+    for scheduled, replacement in SCHEDULED_REPLACEMENTS.items():
+        if scheduled not in by_name:
+            raise ValueError(f"scheduled replacement map has stale key: {scheduled}")
+        if replacement not in by_name:
+            raise ValueError(
+                f"{scheduled}: missing public possible replacement {replacement}"
+            )
+        if entry(scheduled)["interfaceLayer"] != "scheduled_foundation":
+            raise ValueError(f"{scheduled}: replacement source is not scheduled")
+        if entry(scheduled)["replacement"] != replacement:
+            raise ValueError(f"{scheduled}: replacement metadata drifted")
+        if entry(replacement)["interfaceLayer"] != "public_possible_outcome":
+            raise ValueError(f"{replacement}: replacement is not public possible")
+        if "possible" not in routes(replacement):
+            raise ValueError(f"{replacement}: missing public possible route")
     require_route_contract(
         "query_expr_context_global_congr",
         "runtime-verification-rewrite.md",
         {"outcome", "runtime"},
     )
-    require_route_contract(
-        "query_context_global_congr",
-        "runtime-verification-rewrite.md",
-        {"outcome", "runtime"},
-    )
-    grouped_facade = "tnull_eval_groups_having_key_conj_filter_exact"
-    if primary(grouped_facade) != "aggregate-grouping.md" or not {
-        "facade",
-        "grouping",
-    } <= routes(grouped_facade):
-        raise ValueError(f"{grouped_facade}: grouped facade route regressed")
-    predicate_exact = "formula_pred_acceptance_exact_safe"
+    predicate_exact = "scalar_expr_pred_acceptance_exact_safe"
     if primary(predicate_exact) != "relational-algebra.md" or not {
         "runtime",
         "filter",
@@ -4069,10 +4786,6 @@ def validate_navigation(
         "null-predicates.md",
         {"filter", "scalar"},
     )
-    row_facade = "tnull_row_eq_of_labels_and_values"
-    if not {"facade", "projection"} <= routes(row_facade):
-        raise ValueError(f"{row_facade}: row-extensionality route regressed")
-
     renaming_entries = {
         "tnull_attribute_name_renaming_type_preserving",
         "tnull_attribute_name_renaming_value_conforms",
@@ -4191,7 +4904,7 @@ def validate_navigation(
             {"outcome", "runtime", "join"},
         )
     require_route_contract(
-        "project_join_sources_outcome_exact_map",
+        "eval_project_join_sources_exact_map",
         "relational-algebra.md",
         {"outcome", "runtime", "projection", "join"},
     )
@@ -4200,64 +4913,17 @@ def validate_navigation(
         "relational-algebra.md",
         {"outcome", "runtime", "projection", "join", "bag"},
     )
-    require_route_contract(
-        "tnull_join_condition_pred_acceptance_exact_safe",
-        "runtime-verification-rewrite.md",
-        {"facade", "runtime", "filter", "join", "scalar"},
-    )
-
-    for row_law in {"tnull_row_eq_refl", "tnull_row_eq_sym", "tnull_row_eq_trans"}:
-        require_route_contract(
-            row_law,
-            "relational-algebra.md",
-            {"facade", "projection"},
-        )
-    for lookup_presence in {
-        "tnull_select_lookup_some_iff_projected_label",
-        "tnull_select_lookup_none_iff_projected_label_absent",
-    }:
-        require_route_contract(
-            lookup_presence,
-            "relational-algebra.md",
-            {"facade", "projection"},
-        )
-    require_route_contract(
-        "tnull_project_rows_select_columns_success",
-        "relational-algebra.md",
-        {"facade", "runtime", "projection"},
-    )
-    require_route_contract(
-        "tnull_query_expr_project_select_columns_error_iff",
-        "runtime-verification-rewrite.md",
-        {"facade", "outcome", "runtime", "projection"},
-    )
-    require_route_contract(
-        "tnull_eval_group_bag_direct_columns_true_no_error",
-        "aggregate-grouping.md",
-        {"facade", "outcome", "grouping", "runtime", "bag"},
-    )
-
     # Exact acceptance and grouping interfaces must remain reachable through
     # the small routes used by grouped/filter/subquery query shapes.
     require_route_contract(
-        "formula_conj_acceptance_exact",
+        "scalar_expr_conj_list_acceptance_exact",
         "aggregate-grouping.md",
         {"grouping", "filter", "scalar"},
     )
     require_route_contract(
-        "formula_exists_acceptance_exact",
+        "scalar_expr_exists_acceptance_exact",
         "subquery-predicates.md",
         {"filter", "runtime", "scalar"},
-    )
-    require_route_contract(
-        "eval_groups_true_outcome_exact",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "runtime"},
-    )
-    require_route_contract(
-        "eval_groups_global_true_outcome_exact",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "runtime"},
     )
     require_route_contract(
         "query_canonical_rows_map_factor_permut",
@@ -4265,24 +4931,9 @@ def validate_navigation(
         {"grouping", "bag", "renaming", "projection"},
     )
     require_route_contract(
-        "eval_group_bag_global_true_success_exists",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "runtime", "scalar"},
-    )
-    require_route_contract(
-        "eval_group_bag_global_true_success_bag_unique_if_stable",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "bag", "scalar"},
-    )
-    require_route_contract(
         "rows_permut_implies_bag_eq",
         "aggregate-grouping.md",
         {"bag"},
-    )
-    require_route_contract(
-        "eval_groups_acceptance_outcome_exact",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "runtime"},
     )
     require_route_contract(
         "bag_filter_congr_on_support",
@@ -4299,11 +4950,6 @@ def validate_navigation(
         "query_expr_project_success_Forall",
         "relational-algebra.md",
         {"projection"},
-    )
-    require_route_contract(
-        "tnull_projection_envs_eq_of_select_items",
-        "relational-algebra.md",
-        {"facade", "projection"},
     )
     require_route_contract(
         "query_expr_union_success_Forall",
@@ -4353,31 +4999,6 @@ def validate_navigation(
         "in_rows_acceptance_existsb",
         "subquery-predicates.md",
         {"filter", "join", "scalar"},
-    )
-    require_route_contract(
-        "tnull_direct_projection_alias_value",
-        "relational-algebra.md",
-        {"facade", "projection"},
-    )
-    require_route_contract(
-        "tnull_select_columns_lookup_output",
-        "relational-algebra.md",
-        {"facade", "projection"},
-    )
-    require_route_contract(
-        "tnull_select_columns_projection_fusion_row_eq",
-        "relational-algebra.md",
-        {"facade", "projection"},
-    )
-    require_route_contract(
-        "tnull_select_lookup_direct_compose",
-        "relational-algebra.md",
-        {"facade", "projection"},
-    )
-    require_route_contract(
-        "tnull_select_lookup_constant_direct_compose",
-        "relational-algebra.md",
-        {"facade", "projection"},
     )
     require_route_contract(
         "database_conforms_schema_primary_key",
@@ -4440,29 +5061,9 @@ def validate_navigation(
         {"grouping", "bag"},
     )
     require_route_contract(
-        "tnull_direct_columns_group_projection_support_rel",
-        "aggregate-grouping.md",
-        {"facade", "grouping", "projection", "bag"},
-    )
-    require_route_contract(
-        "tnull_direct_columns_group_rows_bag_eq_of_projection_support",
-        "aggregate-grouping.md",
-        {"facade", "grouping", "projection", "bag"},
-    )
-    require_route_contract(
-        "eval_group_bag_true_projected_support_equiv",
-        "aggregate-grouping.md",
-        {"outcome", "grouping", "bag"},
-    )
-    require_route_contract(
         "query_expr_group_outcome_equiv_of_supported_child_outcomes",
         "aggregate-grouping.md",
         {"outcome", "grouping"},
-    )
-    require_route_contract(
-        "tnull_direct_columns_group_outcome_equiv_of_projected_support",
-        "aggregate-grouping.md",
-        {"facade", "outcome", "grouping", "runtime"},
     )
     require_route_contract(
         "list_support_rel_compose",
@@ -4521,16 +5122,6 @@ def validate_navigation(
     # Projection/UNION ALL interfaces expose the correct bag layer while the
     # exact safe assembly rules remain on the runtime/outcome card.
     require_route_contract(
-        "query_project_success_bags_safe",
-        "relational-algebra.md",
-        {"runtime", "projection", "bag"},
-    )
-    require_route_contract(
-        "query_expr_project_bag_closed_safe",
-        "runtime-verification-rewrite.md",
-        {"runtime", "projection", "bag"},
-    )
-    require_route_contract(
         "query_expr_filter_bag_closed_exact",
         "relational-algebra.md",
         {"filter", "bag"},
@@ -4561,11 +5152,6 @@ def validate_navigation(
         {"filter", "bag"},
     )
     require_route_contract(
-        "query_project_bag_congr",
-        "relational-algebra.md",
-        {"projection", "bag"},
-    )
-    require_route_contract(
         "query_table_success_bags_functional",
         "relational-algebra.md",
         {"bag"},
@@ -4584,11 +5170,6 @@ def validate_navigation(
             "runtime-verification-rewrite.md",
             {"outcome", "runtime", "join", "bag"},
         )
-    require_route_contract(
-        "query_expr_project_outcome_equiv_congr_safe",
-        "runtime-verification-rewrite.md",
-        {"outcome", "runtime", "projection"},
-    )
 
     expected_entry_keys = {
         "name",
@@ -4599,6 +5180,8 @@ def validate_navigation(
         "semanticDomain",
         "catalog",
         "routes",
+        "interfaceLayer",
+        "replacement",
         "summary",
         "topics",
         "statement",
@@ -4760,8 +5343,22 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                 source_domain_name, path.name, name, source_features
             )
             features = semantic_features(domain_name, path.name, name, statement)
+            layer = interface_layer(path.name, name, statement)
+            replacement = SCHEDULED_REPLACEMENTS.get(name, "")
             topics = topics_for(name, domain_name, features)
-            routes = semantic_routes(domain_name, path.name, name, features)
+            if layer == "public_possible_outcome":
+                topics = list(
+                    dict.fromkeys(
+                        ["possible outcome", "all Boolean schedules", *topics]
+                    )
+                )
+            elif layer == "scheduled_foundation":
+                topics = list(
+                    dict.fromkeys(["fixed Boolean schedule", "foundation", *topics])
+                )
+            routes = semantic_routes(
+                domain_name, path.name, name, features, layer
+            )
             entry = {
                 "name": name,
                 "kind": raw["kind"],
@@ -4771,6 +5368,8 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                 "semanticDomain": domain_name,
                 "catalog": domain_name,
                 "routes": list(routes),
+                "interfaceLayer": layer,
+                "replacement": replacement,
                 "summary": summary_for(name, domain_name, features),
                 "topics": topics,
                 "statement": statement,
@@ -4821,6 +5420,12 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
                     "",
                     f"Source: [`{source}:{line}`]({source_href}#L{line})",
                     "",
+                    "Interface layer: "
+                    + interface_layer_note(
+                        str(entry["interfaceLayer"]),
+                        str(entry["replacement"]),
+                    ),
+                    "",
                     f"Purpose/direction: {entry['summary']}",
                     "",
                     f"Applicability: {applicability_for(str(entry['name']), filename, features)}",
@@ -4843,6 +5448,8 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
         "# FormalSQL reusable lemma catalog",
         "",
         "This is a compact, unranked navigation index. The Rocq source is authoritative; `manifest.json` contains each exact declaration statement plus deterministic source, primary-domain, cross-route, and topic metadata.",
+        "",
+        "For a generated SQL equivalence goal, search the `possible` route first. Entries on the `scheduled` route are pointwise foundations only: a theorem for one fixed Boolean schedule is never a final possible-outcome certificate. Boolean schedules are unrelated to SQL row order; ordered operators continue to use exact list observations.",
         "",
         "Routes and topics are neutral filters, not proof plans. No declaration receives a relevance score or preferred position. Search results below are ordered only by source path, source line, and declaration name; use the reported total and explicit pages to inspect every match.",
         "",
@@ -4888,7 +5495,7 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
             "  | sort_by([.source, .line, .name])",
             "  | {total: length, offset: $offset, pageSize: $page_size,",
             "     entries: .[$offset:($offset + $page_size)]",
-            "       | map({name, routes, catalog, source, line, summary})}",
+            "       | map({name, interfaceLayer, replacement, routes, catalog, source, line, summary})}",
             '\' "$catalog/manifest.json"',
             "",
             'pattern="${PATTERN:?set PATTERN to a declaration-name or topic regex}"',
@@ -4897,7 +5504,7 @@ def build_catalog() -> tuple[dict[str, object], dict[str, str], str]:
             "  | sort_by([.source, .line, .name])",
             "  | {total: length, offset: $offset, pageSize: $page_size,",
             "     entries: .[$offset:($offset + $page_size)]",
-            "       | map({name, routes, catalog, source, line})}",
+            "       | map({name, interfaceLayer, replacement, routes, catalog, source, line})}",
             '\' "$catalog/manifest.json"',
             "",
             'name="${DECLARATION:?set DECLARATION to an exact declaration name}"',
@@ -4929,6 +5536,96 @@ def expected_files() -> dict[Path, str]:
     }
     files.update({CATALOG / name: text for name, text in documents.items()})
     return files
+
+
+def qualified_catalog_name(entry: dict[str, object]) -> str:
+    """Return the Rocq-qualified name used by migration inventory artifacts."""
+
+    source = str(entry["source"])
+    module = Path(source).stem
+    name = str(entry["name"])
+    if source.startswith("vendor/FormalSQL/src/data/sql/"):
+        return f"SQLFS.data.sql.{module}.{name}"
+    if source.startswith("theories/FormalSQL/"):
+        return f"Logos.FormalSQL.{module}.{name}"
+    raise ValueError(f"cannot qualify catalog source for migration inventory: {source}")
+
+
+def validate_migration_inventory(
+    catalog_entries: list[dict[str, object]], inventory_path: Path
+) -> None:
+    """Check that every scheduled catalog declaration was dispositioned.
+
+    The campaign inventory is an external completion artifact rather than a
+    generated catalog input, so this check is opt-in.  It gives audits a
+    deterministic zero-missing assertion without coupling ordinary catalog
+    generation to a particular campaign directory.
+    """
+
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise ValueError(f"missing migration inventory: {inventory_path}") from error
+    if inventory.get("schemaVersion") != 1:
+        raise ValueError("migration inventory schemaVersion must be 1")
+    if inventory.get("pending") != []:
+        raise ValueError("migration inventory still has pending entries")
+
+    inventory_entries = inventory.get("entries")
+    if not isinstance(inventory_entries, list):
+        raise ValueError("migration inventory entries must be a list")
+    by_name: dict[str, dict[str, object]] = {}
+    for item in inventory_entries:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            raise ValueError("migration inventory contains an invalid entry")
+        name = item["name"]
+        if name in by_name:
+            raise ValueError(f"duplicate migration inventory entry: {name}")
+        by_name[name] = item
+
+    scheduled_layers = {"scheduled_foundation", "schedule_transport_foundation"}
+    scheduled = [
+        entry
+        for entry in catalog_entries
+        if entry.get("interfaceLayer") in scheduled_layers
+    ]
+    missing = [
+        qualified_catalog_name(entry)
+        for entry in scheduled
+        if qualified_catalog_name(entry) not in by_name
+    ]
+    if missing:
+        raise ValueError(
+            "scheduled catalog declarations missing from migration inventory: "
+            f"{sorted(missing)}"
+        )
+    for entry in scheduled:
+        qualified_name = qualified_catalog_name(entry)
+        item = by_name[qualified_name]
+        if item.get("path") != entry.get("source"):
+            raise ValueError(f"{qualified_name}: migration inventory path drifted")
+        if not item.get("rationale"):
+            raise ValueError(f"{qualified_name}: migration rationale is empty")
+
+    alignment = inventory.get("catalogScheduledAlignment")
+    expected_counts = Counter(str(entry["interfaceLayer"]) for entry in scheduled)
+    if not isinstance(alignment, dict):
+        raise ValueError("migration inventory lacks catalogScheduledAlignment")
+    if alignment.get("missing") != []:
+        raise ValueError("migration inventory catalogScheduledAlignment is not complete")
+    if alignment.get("scheduledFoundationCount") != expected_counts[
+        "scheduled_foundation"
+    ]:
+        raise ValueError("migration inventory scheduled-foundation count drifted")
+    if alignment.get("scheduleTransportFoundationCount") != expected_counts[
+        "schedule_transport_foundation"
+    ]:
+        raise ValueError("migration inventory schedule-transport count drifted")
+
+    print(
+        "migration inventory covers all "
+        f"{len(scheduled)} scheduled catalog declarations"
+    )
 
 
 def check(files: dict[Path, str]) -> int:
@@ -4971,9 +5668,20 @@ def main() -> int:
     parser.add_argument(
         "--check", action="store_true", help="fail if generated files differ"
     )
+    parser.add_argument(
+        "--migration-inventory",
+        type=Path,
+        help="also validate complete scheduled-layer coverage in this inventory",
+    )
     args = parser.parse_args()
     try:
         files = expected_files()
+        if args.migration_inventory is not None:
+            inventory_path = args.migration_inventory
+            if not inventory_path.is_absolute():
+                inventory_path = ROOT / inventory_path
+            manifest = json.loads(files[CATALOG / "manifest.json"])
+            validate_migration_inventory(manifest["entries"], inventory_path)
     except (OSError, ValueError) as error:
         print(f"catalog generation failed: {error}", file=sys.stderr)
         return 1

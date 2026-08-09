@@ -79,10 +79,13 @@ unfold NullValues.interp_avg_double, NullValues.interp_avg_float64_values; cbn.
 intro Hequal; injection Hequal as Hequal; now apply Horder.
 Qed.
 
-(** The grouping API consequently requires stability as a premise instead of
-    exporting a universal aggregate-permutation theorem. *)
-Check group_projection_permutation_stable.
-Check eval_group_bag_global_true_success_bag_unique_if_stable.
+(** The grouping API consequently exposes only a typed relational reset
+    theorem.  Its caller must prove the exact projected row lists are
+    permutation-equivalent; there is deliberately no universal theorem saying
+    that aggregate projection is insensitive to representative order. *)
+Check eval_group_bag_exact_rows_permut_equiv.
+Check eval_groups_global_success_length_le_one.
+Check eval_groups_global_success_NoDupA.
 
 Print Assumptions float_sum_depends_on_representative_order.
 Print Assumptions float_average_depends_on_representative_order.

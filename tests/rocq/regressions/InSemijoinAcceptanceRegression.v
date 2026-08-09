@@ -25,8 +25,8 @@ Proof. reflexivity. Qed.
 
 Section InSemijoinCompositionRegression.
 
-Variable env_of : TNullRow -> TNullEnvironment.
-Variable select_items : list SelectItemT.
+Variable input_values : TNullRow -> list TNullValue.
+Variable subquery : TNullQueryExpr.
 Variables
   (join : TNullRow -> TNullRow -> TNullRow)
   (accept : TNullRow -> TNullRow -> bool)
@@ -36,9 +36,14 @@ Variables
 Hypothesis row_acceptance_exact :
   forall (left_row right_row : TNullRow),
     Bool.is_true Bool3
-      (@in_row_truth TNull unknown3 NullValues.is_null_value
-        (env_of left_row) select_items right_row) =
+      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+        (input_values left_row) subquery right_row) =
     accept left_row right_row.
+
+Hypothesis right_rows_have_subquery_outputs :
+  Forall
+    (query_row_has_outputs (query_expr_outputs subquery))
+    right.
 
 Hypothesis accepted_projection :
   forall left_row right_row,
@@ -62,25 +67,26 @@ Theorem in_acceptance_composes_with_functional_semijoin :
       (filter
         (fun left_row =>
           Bool.is_true Bool3
-            (@in_rows_truth TNull unknown3 NullValues.is_null_value
-              (env_of left_row) select_items right))
+            (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+              (input_values left_row) subquery right))
         left)).
 Proof.
   assert (Hfilter :
     filter
       (fun left_row =>
         Bool.is_true Bool3
-          (@in_rows_truth TNull unknown3 NullValues.is_null_value
-            (env_of left_row) select_items right))
+          (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+            (input_values left_row) subquery right))
       left =
     filter (fun left_row => existsb (accept left_row) right) left).
   {
     apply filter_ext_in.
     intros left_row _.
-    apply (@in_rows_acceptance_existsb TNull
+    apply (@in_rows_acceptance_existsb TNull relname
       unknown3 NullValues.is_null_value
-      (env_of left_row) select_items right (accept left_row)).
-    intro right_row; apply row_acceptance_exact.
+      (input_values left_row) subquery right (accept left_row)).
+    - exact right_rows_have_subquery_outputs.
+    - intro right_row; apply row_acceptance_exact.
   }
   rewrite Hfilter.
   eapply tnull_map_theta_join_functional_permut_filter_exists;

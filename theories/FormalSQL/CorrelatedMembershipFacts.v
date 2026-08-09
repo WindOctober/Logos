@@ -152,16 +152,19 @@ Theorem primary_key_self_filter_existsb_exact :
       In candidate rows ->
       matches candidate = true ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate)) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate)) ->
     (forall candidate,
       In candidate rows ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate) ->
       sql_key_equal_true
-        (project_row key candidate) (project_row key outer)) ->
+        (SchemaConstraints.project_row key candidate)
+        (SchemaConstraints.project_row key outer)) ->
     Forall
       (fun cell => NullValues.is_null_value cell = false)
-      (project_row key outer) /\
+      (SchemaConstraints.project_row key outer) /\
     existsb matches (filter keep rows) = keep outer.
 Proof.
 intros key rows keep matches outer Hprimary Houter Hself Hreflect Hreverse.
@@ -169,7 +172,7 @@ split.
 - now apply primary_key_projection_not_null with (rows := rows).
 - eapply key_unique_self_filter_existsb_exact
     with (key_relation := sql_key_equal_true)
-      (key_of := project_row key); try eassumption.
+      (key_of := SchemaConstraints.project_row key); try eassumption.
   exact (proj2 (proj2 Hprimary)).
 Qed.
 
@@ -190,61 +193,70 @@ Qed.
     scalar type or projection topology.  Duplicate occurrences are ruled out
     only through declared primary-key semantics. *)
 Theorem tnull_primary_key_self_in_rows_acceptance_exact :
-  forall key rows (keep : tuple TNull -> bool) outer env select_items
+  forall {relname : Type} key rows (keep : tuple TNull -> bool) outer
+      (values : list (value TNull)) (subquery : query_expr TNull relname)
       (project_candidate : tuple TNull -> tuple TNull),
     primary_key_conforms key rows ->
     In outer rows ->
+    Forall
+      (query_row_has_outputs (query_expr_outputs subquery))
+      (map project_candidate (filter keep rows)) ->
     Bool.is_true Bool3
-      (@in_row_truth TNull unknown3 NullValues.is_null_value
-        env select_items (project_candidate outer)) = true ->
+      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery (project_candidate outer)) = true ->
     (forall candidate,
       In candidate rows ->
       Bool.is_true Bool3
-        (@in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items (project_candidate candidate)) = true ->
+        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery (project_candidate candidate)) = true ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate)) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate)) ->
     (forall candidate,
       In candidate rows ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate) ->
       sql_key_equal_true
-        (project_row key candidate) (project_row key outer)) ->
+        (SchemaConstraints.project_row key candidate)
+        (SchemaConstraints.project_row key outer)) ->
     Bool.is_true Bool3
-      (@in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items
+      (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery
         (map project_candidate (filter keep rows))) = keep outer /\
     Forall
       (fun cell => NullValues.is_null_value cell = false)
-      (project_row key outer).
+      (SchemaConstraints.project_row key outer).
 Proof.
-intros key rows keep outer env select_items project_candidate Hprimary
-  Houter Hself Hreflect Hreverse.
+intros relname key rows keep outer values subquery project_candidate Hprimary
+  Houter Houtputs Hself Hreflect Hreverse.
 pose proof
-  (@in_rows_acceptance_existsb TNull unknown3 NullValues.is_null_value
-    env select_items (map project_candidate (filter keep rows))
+  (@in_rows_acceptance_existsb TNull relname
+    unknown3 NullValues.is_null_value values subquery
+    (map project_candidate (filter keep rows))
     (fun candidate =>
       Bool.is_true Bool3
-        (@in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items candidate))
+        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery candidate))
+    Houtputs
     (fun candidate => eq_refl)) as Hacceptance.
 change
   (Bool.is_true Bool3
-    (@in_rows_truth TNull unknown3 NullValues.is_null_value
-      env select_items (map project_candidate (filter keep rows))) =
+    (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+      values subquery (map project_candidate (filter keep rows))) =
    existsb
     (fun candidate =>
       Bool.is_true Bool3
-        (@in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items candidate))
+        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery candidate))
     (map project_candidate (filter keep rows))) in Hacceptance.
 pose proof
   (@primary_key_self_filter_existsb_exact
     key rows keep
     (fun candidate =>
       Bool.is_true Bool3
-        (@in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items (project_candidate candidate)))
+        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery (project_candidate candidate)))
     outer
     Hprimary Houter Hself Hreflect Hreverse) as [Hnonnull Hexact].
 split.
@@ -255,40 +267,47 @@ Qed.
 
 (** Reached-row form of the preceding theorem. *)
 Corollary tnull_primary_key_self_in_rows_true :
-  forall key rows (keep : tuple TNull -> bool) outer env select_items
+  forall {relname : Type} key rows (keep : tuple TNull -> bool) outer
+      (values : list (value TNull)) (subquery : query_expr TNull relname)
       (project_candidate : tuple TNull -> tuple TNull),
     primary_key_conforms key rows ->
     In outer rows ->
     keep outer = true ->
+    Forall
+      (query_row_has_outputs (query_expr_outputs subquery))
+      (map project_candidate (filter keep rows)) ->
     Bool.is_true Bool3
-      (@in_row_truth TNull unknown3 NullValues.is_null_value
-        env select_items (project_candidate outer)) = true ->
+      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery (project_candidate outer)) = true ->
     (forall candidate,
       In candidate rows ->
       Bool.is_true Bool3
-        (@in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items (project_candidate candidate)) = true ->
+        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery (project_candidate candidate)) = true ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate)) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate)) ->
     (forall candidate,
       In candidate rows ->
       sql_key_equal_true
-        (project_row key outer) (project_row key candidate) ->
+        (SchemaConstraints.project_row key outer)
+        (SchemaConstraints.project_row key candidate) ->
       sql_key_equal_true
-        (project_row key candidate) (project_row key outer)) ->
+        (SchemaConstraints.project_row key candidate)
+        (SchemaConstraints.project_row key outer)) ->
     Bool.is_true Bool3
-      (@in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items
+      (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery
         (map project_candidate (filter keep rows))) = true /\
     Forall
       (fun cell => NullValues.is_null_value cell = false)
-      (project_row key outer).
+      (SchemaConstraints.project_row key outer).
 Proof.
-intros key rows keep outer env select_items project_candidate Hprimary
-  Houter Hkeep Hself Hreflect Hreverse.
+intros relname key rows keep outer values subquery project_candidate Hprimary
+  Houter Hkeep Houtputs Hself Hreflect Hreverse.
 pose proof
   (@tnull_primary_key_self_in_rows_acceptance_exact
-    key rows keep outer env select_items project_candidate
-    Hprimary Houter Hself Hreflect Hreverse) as [Hexact Hnonnull].
+    relname key rows keep outer values subquery project_candidate
+    Hprimary Houter Houtputs Hself Hreflect Hreverse) as [Hexact Hnonnull].
 now rewrite Hkeep in Hexact.
 Qed.

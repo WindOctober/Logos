@@ -3,21 +3,51 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_LOGOS_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-LOGOS_REPO_ROOT="${LOGOS_TRUSTED_AUTHORITY_ROOT:-$SOURCE_LOGOS_ROOT}"
 CHECKER="$SCRIPT_DIR/run-trusted-rocq-check.sh"
 ROCQ_SWITCH="${LOGOS_ROCQ_OPAM_SWITCH:-$SOURCE_LOGOS_ROOT/.opam-rocq}"
 ROCQ_BIN="$ROCQ_SWITCH/_opam/bin/rocq"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/logos-rocq-sandbox-regression.XXXXXX")"
+LOGOS_REPO_ROOT="${LOGOS_TRUSTED_AUTHORITY_ROOT:-$TEST_ROOT/authority}"
 WORKDIR="$TEST_ROOT/workspace"
 CACHE_PARENT="$TEST_ROOT/cache-parent"
 CACHE_DIR="$CACHE_PARENT/cache"
+SHARED_PREFIX_CACHE="$TEST_ROOT/shared-prefix-cache"
+SHARED_CHECKER_RUNTIME_CACHE="$TEST_ROOT/shared-checker-runtime-cache"
 OUTSIDE_FILE="$TEST_ROOT/outside.v"
 AMBIENT_HOME="$TEST_ROOT/ambient-home"
 AMBIENT_ROCQPATH="$TEST_ROOT/ambient-rocqpath"
 CLEAN_HOME="$TEST_ROOT/clean-home"
 mkdir -p \
   "$WORKDIR" "$CACHE_PARENT" "$AMBIENT_HOME" "$AMBIENT_ROCQPATH" "$CLEAN_HOME"
-trap 'rm -rf "$TEST_ROOT"' EXIT
+cleanup_test_root() {
+  chmod -R u+w "$TEST_ROOT/authority" "$TEST_ROOT/shared-prefix-cache" \
+    "$TEST_ROOT/shared-checker-runtime-cache" \
+    2>/dev/null || true
+  rm -rf "$TEST_ROOT"
+}
+trap cleanup_test_root EXIT
+
+if [[ -z "${LOGOS_TRUSTED_AUTHORITY_ROOT:-}" ]]; then
+  mkdir -p "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" \
+    "$LOGOS_REPO_ROOT/theories/FormalSQL"
+  while IFS= read -r -d '' source; do
+    relative="${source#"$SOURCE_LOGOS_ROOT/vendor/FormalSQL/src"/}"
+    install -D -m 444 "$source" \
+      "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/$relative"
+    install -D -m 444 "${source%.v}.vo" \
+      "$LOGOS_REPO_ROOT/vendor/FormalSQL/src/${relative%.v}.vo"
+  done < <(find "$SOURCE_LOGOS_ROOT/vendor/FormalSQL/src" -type f -name '*.v' \
+    ! -path '*/Examples/*' ! -path '*/examples/*' -print0)
+  while IFS= read -r -d '' source; do
+    relative="${source#"$SOURCE_LOGOS_ROOT/theories/FormalSQL"/}"
+    install -D -m 444 "$source" \
+      "$LOGOS_REPO_ROOT/theories/FormalSQL/$relative"
+    install -D -m 444 "${source%.v}.vo" \
+      "$LOGOS_REPO_ROOT/theories/FormalSQL/${relative%.v}.vo"
+  done < <(find "$SOURCE_LOGOS_ROOT/theories/FormalSQL" -maxdepth 1 \
+    -type f -name '*.v' ! -name '*Example.v' ! -name '*Examples.v' -print0)
+  find "$LOGOS_REPO_ROOT" -type d -exec chmod 555 {} +
+fi
 
 if [[ ! -x "$ROCQ_BIN" ]]; then
   echo "Rocq binary is missing: $ROCQ_BIN" >&2
@@ -82,11 +112,53 @@ checker_environment=(
   "LOGOS_REPO_ROOT=$LOGOS_REPO_ROOT"
   "LOGOS_PROOF_WORKDIR=$WORKDIR"
   "LOGOS_TRUSTED_ROCQ_CACHE_DIR=$CACHE_DIR"
-  "LOGOS_ROCQ_OPAM_SWITCH=$ROCQ_SWITCH"
+  "LOGOS_SHARED_ROCQ_PREFIX_CACHE_DIR=$SHARED_PREFIX_CACHE"
+  "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR=$SHARED_CHECKER_RUNTIME_CACHE"
+  "LOGOS_TRUSTED_ROCQ_AUTHORITY_SHA256=$(printf 'authority-fixture' | sha256sum | awk '{print $1}')"
+  "PATH=$ROCQ_SWITCH/_opam/bin:/usr/bin:/bin"
 )
 
+if ! timeout 180 "${checker_environment[@]}" bash "$CHECKER" --preflight \
+  >"$TEST_ROOT/preflight.stdout" 2>"$TEST_ROOT/preflight.stderr"; then
+  cat "$TEST_ROOT/preflight.stderr" >&2
+  exit 1
+fi
+if [[ "$(find "$SHARED_PREFIX_CACHE" -mindepth 1 -maxdepth 1 -type d | wc -l)" != 1 ]]; then
+  echo "initial preflight did not publish exactly one shared generated prefix" >&2
+  exit 1
+fi
+
+schema_object_before="$(sha256sum "$CACHE_DIR/Schema.vo" | awk '{print $1}')"
+queries_object_before="$(sha256sum "$CACHE_DIR/Queries.vo" | awk '{print $1}')"
+cat >"$WORKDIR/Witness.v" <<'EOF'
+From LogosGenerated Require Import Schema.
+Definition sandbox_witness_marker : Prop := sandbox_schema_marker /\ True.
+EOF
+timeout 180 "${checker_environment[@]}" bash "$CHECKER" --witness-preflight \
+  >"$TEST_ROOT/witness-preflight.stdout" 2>"$TEST_ROOT/witness-preflight.stderr"
+if [[ "$(sha256sum "$CACHE_DIR/Schema.vo" | awk '{print $1}')" != "$schema_object_before" ||
+      "$(sha256sum "$CACHE_DIR/Queries.vo" | awk '{print $1}')" != "$queries_object_before" ||
+      -s "$CACHE_DIR/ProofModules/ORDER" ||
+      "$(find "$SHARED_PREFIX_CACHE" -mindepth 1 -maxdepth 1 -type d | wc -l)" != 2 ]]; then
+  echo "witness-only preflight did not preserve Schema/Queries and replace its generation" >&2
+  exit 1
+fi
+
+mv "$CACHE_DIR" "$CACHE_PARENT/cache-before-shared-hit"
 timeout 180 "${checker_environment[@]}" bash "$CHECKER" --preflight \
-  >"$TEST_ROOT/preflight.stdout" 2>"$TEST_ROOT/preflight.stderr"
+  >"$TEST_ROOT/shared-hit-preflight.stdout" \
+  2>"$TEST_ROOT/shared-hit-preflight.stderr"
+if [[ "$(sha256sum "$CACHE_DIR/Schema.vo" | awk '{print $1}')" != "$schema_object_before" ||
+      "$(sha256sum "$CACHE_DIR/Queries.vo" | awk '{print $1}')" != "$queries_object_before" ]]; then
+  echo "shared generated-prefix cache hit changed Schema/Queries objects" >&2
+  exit 1
+fi
+if ! grep -Fq 'LOGOS_TRUSTED_ROCQ_PREFIX_CACHE hit=true' \
+  "$TEST_ROOT/shared-hit-preflight.stderr"; then
+  echo "second preflight did not report a shared generated-prefix cache hit" >&2
+  exit 1
+fi
+rm -rf "$CACHE_PARENT/cache-before-shared-hit"
 
 mkdir -m 700 "$WORKDIR/ProofModules"
 cat >"$WORKDIR/ProofModules/CoreFacts.v" <<'EOF'
@@ -109,6 +181,11 @@ if ! timeout 90 "${checker_environment[@]}" \
   >"$TEST_ROOT/module-core-idempotent.stdout" \
   2>"$TEST_ROOT/module-core-idempotent.stderr"; then
   cat "$TEST_ROOT/module-core-idempotent.stderr" >&2
+  exit 1
+fi
+if ! grep -Fq 'LOGOS_TRUSTED_ROCQ_CHECKER_RUNTIME_CACHE hit=true' \
+  "$TEST_ROOT/module-core-idempotent.stderr"; then
+  echo "repeated module diagnostic did not reuse the checker runtime closure" >&2
   exit 1
 fi
 if ! grep -Fq 'already_cached=true' "$TEST_ROOT/module-core-idempotent.stderr" ||
@@ -177,6 +254,10 @@ EOF
 timeout 90 "${checker_environment[@]}" \
   bash "$CHECKER" --problem-diagnostic --timeout-seconds 30 \
   >"$TEST_ROOT/ordinary.stdout" 2>"$TEST_ROOT/ordinary.stderr"
+if [[ ! -s "$CACHE_PARENT/problem-compile-cache/Problem.vo" ]]; then
+  echo "successful Problem diagnostic did not publish its compiled-object cache" >&2
+  exit 1
+fi
 if [[ "$(sha256sum "$CACHE_DIR/ProofModules/CoreFacts.vo" | awk '{print $1}')" != \
       "$core_object_sha256" ]]; then
   echo "Problem.v diagnostic replaced a checked helper object" >&2
@@ -190,7 +271,6 @@ if grep -Fq 'AMBIENT_ROCQRC_SENTINEL_59B667D1' \
   echo "ambient Rocq rcfile leaked into the trusted checker" >&2
   exit 1
 fi
-
 cat >"$OUTSIDE_FILE" <<'EOF'
 Definition HOST_SENTINEL_PAYLOAD_7F8F65C4 : nat := 42.
 Print HOST_SENTINEL_PAYLOAD_7F8F65C4.
@@ -289,23 +369,33 @@ mv "$WORKDIR/ProofModules/MoreFacts.v" "$TEST_ROOT/MoreFacts.missing.v"
 expect_final_module_rejection final-missing-module
 mv "$TEST_ROOT/MoreFacts.missing.v" "$WORKDIR/ProofModules/MoreFacts.v"
 
-# The final verifier must derive every helper object from the bound source
-# snapshot, not trust the diagnostic cache's helper object bytes. Keep the
-# manifest internally consistent while replacing both cached helper objects
-# with nonempty garbage; final verification must still pass by recompiling.
+write_test_cache_manifest() {
+  (
+    cd "$CACHE_DIR"
+    {
+      sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo ProofModules/ORDER
+      while IFS= read -r file || [[ -n "$file" ]]; do
+        [[ -n "$file" ]] || continue
+        stem="${file%.v}"
+        sha256sum "ProofModules/$file" "ProofModules/$stem.vo"
+      done <ProofModules/ORDER
+    } >SHA256SUMS
+  )
+}
+
+# Final assembly reuses only helper objects that the host module diagnostic
+# published into the manifest-bound cache. Even an internally rehashed cache
+# must fail closed when an object no longer parses as the checked module.
+cp "$CACHE_DIR/ProofModules/CoreFacts.vo" "$TEST_ROOT/CoreFacts.good.vo"
+cp "$CACHE_DIR/ProofModules/MoreFacts.vo" "$TEST_ROOT/MoreFacts.good.vo"
 printf 'not a Rocq object: CoreFacts\n' >"$CACHE_DIR/ProofModules/CoreFacts.vo"
 printf 'not a Rocq object: MoreFacts\n' >"$CACHE_DIR/ProofModules/MoreFacts.vo"
-(
-  cd "$CACHE_DIR"
-  {
-    sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo ProofModules/ORDER
-    while IFS= read -r file || [[ -n "$file" ]]; do
-      [[ -n "$file" ]] || continue
-      stem="${file%.v}"
-      sha256sum "ProofModules/$file" "ProofModules/$stem.vo"
-    done <ProofModules/ORDER
-  } >SHA256SUMS
-)
+write_test_cache_manifest
+expect_final_module_rejection final-corrupt-cached-object
+
+cp "$TEST_ROOT/CoreFacts.good.vo" "$CACHE_DIR/ProofModules/CoreFacts.vo"
+cp "$TEST_ROOT/MoreFacts.good.vo" "$CACHE_DIR/ProofModules/MoreFacts.vo"
+write_test_cache_manifest
 timeout 180 "${checker_environment[@]}" bash "$CHECKER" \
   >"$TEST_ROOT/final.stdout" 2>"$TEST_ROOT/final.stderr"
 if grep -Fq 'AMBIENT_ROCQRC_SENTINEL_59B667D1' \
@@ -313,5 +403,15 @@ if grep -Fq 'AMBIENT_ROCQRC_SENTINEL_59B667D1' \
   echo "ambient Rocq rcfile leaked into the complete trusted check" >&2
   exit 1
 fi
+if ! grep -Fq 'LOGOS_TRUSTED_ROCQ_PROBLEM_CACHE hit=true' \
+  "$TEST_ROOT/final.stderr"; then
+  echo "final certification did not reuse the passing Problem diagnostic object" >&2
+  exit 1
+fi
+
+cp "$CACHE_PARENT/problem-compile-cache/Problem.vo" "$TEST_ROOT/Problem.cached.good.vo"
+printf 'corrupt cached Problem object\n' >"$CACHE_PARENT/problem-compile-cache/Problem.vo"
+expect_final_module_rejection final-corrupt-problem-cache
+cp "$TEST_ROOT/Problem.cached.good.vo" "$CACHE_PARENT/problem-compile-cache/Problem.vo"
 
 echo "trusted Rocq diagnostic sandbox regression passed"

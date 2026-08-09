@@ -1,8 +1,8 @@
 use super::scalar::{
     aggregate_function_for_type, aggregate_function_is_supported, annotate_function_literal_term,
-    annotate_literal_term, is_exact_numeric_type, rel_expr_may_raise_runtime,
-    scalar_ast_may_raise_runtime_for_input, string_typmod_codes, top_level_string_case_mapping,
-    z_constant_function,
+    annotate_literal_term, is_exact_numeric_type, postgres_aggregate_runtime_error_class,
+    rel_expr_may_raise_runtime, scalar_ast_may_raise_runtime_for_input, string_typmod_codes,
+    top_level_string_case_mapping, z_constant_function,
 };
 use super::*;
 use crate::core::syntax::FormalRowMapAdapter;
@@ -132,6 +132,19 @@ fn query_expr_is_typed_empty(query: &FormalQueryExpr) -> bool {
     matches!(query, FormalQueryExpr::Empty { .. })
 }
 
+fn scalar_leaf(result_ty: FormalAttributeType, term: FormalAggregateTerm) -> FormalScalarExpr {
+    FormalScalarExpr::Leaf { result_ty, term }
+}
+
+fn scalar_attribute(name: String, ty: FormalAttributeType) -> FormalScalarExpr {
+    scalar_leaf(
+        ty,
+        FormalAggregateTerm::Expr {
+            term: FormalFunctionTerm::Attribute { name, ty },
+        },
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct IntegralStddevAvgRatioPlan {
     stddev_output_index: usize,
@@ -206,7 +219,7 @@ impl LoweringContext {
 
         let mut grouped =
             self.lower_query_expr_with_streaming(&format!("{path}.input.input"), aggregate, true)?;
-        let FormalQueryExpr::ScalarGroup { select, .. } = &mut grouped else {
+        let FormalQueryExpr::Group { select, .. } = &mut grouped else {
             self.error(
                 path,
                 "integral_stddev_avg_ratio_lineage_group_drift",
@@ -324,10 +337,11 @@ impl LoweringContext {
             fresh_internal_attribute_name("__logos_integral_stddev_avg_ratio", &mut used_names);
         let ratio_index = select.len();
         select.push(FormalScalarSelectItem {
-            expr: FormalScalarExpr::Leaf {
-                result_ty: FormalAttributeType::Numeric,
-                term: ratio,
-            },
+            expr: self.canonical_scalar_value_from_aggregate_term(
+                &format!("{path}.ratio"),
+                ratio,
+                FormalAttributeType::Numeric,
+            )?,
             alias: ratio_alias,
             alias_ty: FormalAttributeType::Numeric,
             numeric_dscale: None,
@@ -342,12 +356,12 @@ impl LoweringContext {
             plan.avg_output_index,
             ratio_index,
         )?;
-        let lowered_predicate = self.lower_native_scalar_boolean_expr(
+        let lowered_predicate = self.lower_scalar_boolean_expr(
             &format!("{path}.input.predicate"),
             &ratio_predicate,
             &aggregate_scope,
         )?;
-        let filtered = FormalQueryExpr::ScalarSelection {
+        let filtered = FormalQueryExpr::Selection {
             predicate: lowered_predicate,
             input: Box::new(grouped),
         };
@@ -545,7 +559,7 @@ impl LoweringContext {
             .map(|column| column.name.clone())
             .collect::<BTreeSet<_>>();
         let avg_arg = {
-            let FormalQueryExpr::ScalarGroup {
+            let FormalQueryExpr::Group {
                 select,
                 having: FormalScalarExpr::True,
                 ..
@@ -599,7 +613,7 @@ impl LoweringContext {
         let exp_dscale_name =
             fresh_internal_attribute_name("__logos_numeric_exp_result_dscale", &mut used_names);
         let avg_dscale_index = {
-            let FormalQueryExpr::ScalarGroup { select, .. } = &mut grouped else {
+            let FormalQueryExpr::Group { select, .. } = &mut grouped else {
                 unreachable!("group shape checked above")
             };
             let index = select.len();
@@ -672,36 +686,21 @@ impl LoweringContext {
                 name: column.name.clone(),
                 ty: source.formal_ty,
             });
-            staged_select.push(FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: source.name,
-                        ty: source.formal_ty,
-                    },
-                },
+            staged_select.push(FormalScalarSelectItem {
+                expr: scalar_attribute(source.name, source.formal_ty),
                 alias: column.name.clone(),
                 alias_ty: source.formal_ty,
                 numeric_dscale: source.numeric_dscale.clone(),
             });
         }
-        staged_select.push(FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: avg_attribute.name,
-                    ty: avg_attribute.formal_ty,
-                },
-            },
+        staged_select.push(FormalScalarSelectItem {
+            expr: scalar_attribute(avg_attribute.name, avg_attribute.formal_ty),
             alias: avg_value_name.clone(),
             alias_ty: FormalAttributeType::Numeric,
             numeric_dscale: avg_attribute.numeric_dscale,
         });
-        staged_select.push(FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: avg_dscale_attribute.name,
-                    ty: avg_dscale_attribute.formal_ty,
-                },
-            },
+        staged_select.push(FormalScalarSelectItem {
+            expr: scalar_attribute(avg_dscale_attribute.name, avg_dscale_attribute.formal_ty),
             alias: avg_dscale_name.clone(),
             alias_ty: FormalAttributeType::Z,
             numeric_dscale: None,
@@ -746,13 +745,8 @@ impl LoweringContext {
             .enumerate()
             .map(|(index, position)| {
                 let attribute = mapped_scope.attribute(position)?.clone();
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: attribute.name,
-                            ty: attribute.formal_ty,
-                        },
-                    },
+                Some(FormalScalarSelectItem {
+                    expr: scalar_attribute(attribute.name, attribute.formal_ty),
                     alias: output[index].name.clone(),
                     alias_ty: attribute.formal_ty,
                     numeric_dscale: attribute.numeric_dscale.clone(),
@@ -770,13 +764,8 @@ impl LoweringContext {
             );
             return None;
         }
-        select.push(FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: dscale_attribute.name.clone(),
-                    ty: dscale_attribute.formal_ty,
-                },
-            },
+        select.push(FormalScalarSelectItem {
+            expr: scalar_attribute(dscale_attribute.name.clone(), dscale_attribute.formal_ty),
             alias: dscale_attribute.name,
             alias_ty: FormalAttributeType::Z,
             numeric_dscale: None,
@@ -944,7 +933,7 @@ impl LoweringContext {
                 if correlations.is_empty() && !isolate_subquery_owner {
                     let input_scope =
                         self.scope_from_query_expr(&format!("{path}.inputScope"), &input_query)?;
-                    let select = self.lower_native_project_select_with_input(
+                    let select = self.lower_scalar_project_select_with_input(
                         path,
                         input,
                         exprs,
@@ -956,7 +945,7 @@ impl LoweringContext {
                         return self
                             .empty_query_expr_from_output(&format!("{path}.output"), output);
                     }
-                    return Some(FormalQueryExpr::ScalarProjection {
+                    return Some(FormalQueryExpr::Projection {
                         select,
                         input: Box::new(input_query),
                     });
@@ -969,7 +958,7 @@ impl LoweringContext {
                         &scalar_roots,
                     )?;
                 let select = self.with_correlation_scopes(&correlations, |context| {
-                    context.lower_native_project_select_with_input(
+                    context.lower_scalar_project_select_with_input(
                         path,
                         input,
                         exprs,
@@ -981,7 +970,7 @@ impl LoweringContext {
                 if input_is_empty {
                     return self.empty_query_expr_from_output(&format!("{path}.output"), output);
                 }
-                Some(FormalQueryExpr::ScalarProjection {
+                Some(FormalQueryExpr::Projection {
                     select,
                     input: Box::new(input_query),
                 })
@@ -1016,7 +1005,7 @@ impl LoweringContext {
                             "The source predicate has no explicit CAST, while Calcite inserted a coercion based on stale result metadata. FormalSQL derives the comparison coercion from the independently lowered PostgreSQL input types.",
                         );
                     }
-                    let predicate = self.lower_native_scalar_boolean_expr(
+                    let predicate = self.lower_scalar_boolean_expr(
                         &format!("{path}.predicate"),
                         &predicate_ast,
                         &input_scope,
@@ -1025,7 +1014,7 @@ impl LoweringContext {
                         return self
                             .empty_query_expr_from_output(&format!("{path}.output"), output);
                     }
-                    return Some(FormalQueryExpr::ScalarSelection {
+                    return Some(FormalQueryExpr::Selection {
                         predicate,
                         input: Box::new(input_query),
                     });
@@ -1050,7 +1039,7 @@ impl LoweringContext {
                     );
                 }
                 let predicate = self.with_correlation_scopes(&correlations, |context| {
-                    context.lower_native_scalar_boolean_expr(
+                    context.lower_scalar_boolean_expr(
                         &format!("{path}.predicate"),
                         &predicate_ast,
                         &predicate_scope,
@@ -1059,7 +1048,7 @@ impl LoweringContext {
                 if input_is_empty {
                     return self.empty_query_expr_from_output(&format!("{path}.output"), output);
                 }
-                let selection = FormalQueryExpr::ScalarSelection {
+                let selection = FormalQueryExpr::Selection {
                     predicate,
                     input: Box::new(predicate_input),
                 };
@@ -1086,46 +1075,15 @@ impl LoweringContext {
                 grouping_sets,
                 agg_calls,
                 output,
-            } => {
-                let special = self.validate_special_aggregate_shape(
-                    path,
-                    input,
-                    group_keys,
-                    grouping_sets,
-                    agg_calls,
-                    output,
-                )?;
-                let input_query = self.lower_query_expr(&format!("{path}.input"), input)?;
-                let input_scope =
-                    self.scope_from_query_expr(&format!("{path}.inputScope"), &input_query)?;
-                if let Some((SpecialAggregateKind::AnyValue, argument_index)) = special {
-                    return self.lower_any_value_int32_query_expr(
-                        path,
-                        input_query,
-                        &input_scope,
-                        argument_index,
-                        output,
-                    );
-                }
-                let (input_query, input_scope, agg_calls) = self
-                    .lower_filtered_aggregate_input_expr(
-                        path,
-                        input_query,
-                        input_scope,
-                        agg_calls,
-                    )?;
-                self.lower_query_expr_grouping_sets(
-                    path,
-                    input_query,
-                    GroupingSetPlan {
-                        group_keys,
-                        grouping_sets,
-                        agg_calls: &agg_calls,
-                        output,
-                        scope: &input_scope,
-                    },
-                )
-            }
+            } => self.lower_query_expr_aggregate(
+                path,
+                input,
+                group_keys,
+                grouping_sets,
+                agg_calls,
+                output,
+                &[],
+            ),
             RelExpr::Distinct { input, output } => {
                 let input_query = self.lower_query_expr(&format!("{path}.input"), input)?;
                 self.require_distinct_output_matches_input(
@@ -1163,12 +1121,30 @@ impl LoweringContext {
                     context.lower_query_expr_join(path, left, right, *join_type, condition, output)
                 })
             }
-            RelExpr::TableScan { .. } | RelExpr::Values { .. } => self.lower_rel(path, rel),
+            RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } | RelExpr::Values { .. } => {
+                self.lower_rel(path, rel)
+            }
+            RelExpr::Bindings { .. } => {
+                self.error(
+                    path,
+                    "nested_query_bindings_not_supported",
+                    "A query-local binding wrapper reached relational lowering below the statement root.",
+                );
+                None
+            }
         }
     }
 
     pub(super) fn lower_rel(&mut self, path: &str, rel: &RelExpr) -> Option<FormalQueryExpr> {
         match rel {
+            RelExpr::Bindings { .. } => {
+                self.error(
+                    path,
+                    "nested_query_bindings_not_supported",
+                    "A query-local binding wrapper reached ordinary FormalSQL relational lowering.",
+                );
+                None
+            }
             RelExpr::TableScan { table, output } => {
                 let relation = table.join(".");
                 let scope = if self.has_authoritative_schema() {
@@ -1185,6 +1161,76 @@ impl LoweringContext {
                     })
                     .collect();
                 Some(FormalQueryExpr::Table { relation, columns })
+            }
+            RelExpr::QueryRef { binding, output } => {
+                let source = self.query_bindings.get(binding).cloned().or_else(|| {
+                    self.error(
+                        &format!("{path}.binding"),
+                        "query_binding_not_found",
+                        "A query-local relation reference has no definition in the enclosing statement binding registry.",
+                    );
+                    None
+                })?;
+                if source.output != *output {
+                    self.error(
+                        &format!("{path}.output"),
+                        "query_binding_output_mismatch",
+                        "A query-local relation reference does not have the exact converted output schema of its shared definition.",
+                    );
+                    return None;
+                }
+                let scope = source.lowered_scope.or_else(|| {
+                    self.error(
+                        &format!("{path}.binding"),
+                        "query_binding_dependency_not_lowered",
+                        "A query-local relation reference precedes its definition in the validated binding dependency order.",
+                    );
+                    None
+                })?;
+                if scope.attributes.len() != output.len()
+                    || scope
+                        .attributes
+                        .iter()
+                        .zip(output)
+                        .any(|(attribute, column)| attribute.visible_name != column.name)
+                {
+                    self.error(
+                        &format!("{path}.output"),
+                        "query_binding_lowered_scope_mismatch",
+                        "The lowered query-local definition scope does not match the converted SQL-visible reference schema.",
+                    );
+                    return None;
+                }
+                let columns = scope
+                    .attributes
+                    .iter()
+                    .map(|attribute| FormalAttribute {
+                        name: attribute.name.clone(),
+                        ty: attribute.formal_ty,
+                    })
+                    .collect::<Vec<_>>();
+                let table = FormalQueryExpr::Table {
+                    relation: source.relation,
+                    columns: columns.clone(),
+                };
+                // A table leaf carries SQL types only. Reintroduce the
+                // definition's separately proved NUMERIC display-scale
+                // provenance in an identity projection so downstream AVG and
+                // division lowering do not mistake typmodless NUMERIC for a
+                // value with unknowable scale.
+                Some(FormalQueryExpr::Projection {
+                    select: scope
+                        .attributes
+                        .into_iter()
+                        .map(|attribute| FormalScalarSelectItem {
+                            expr: scalar_attribute(attribute.name.clone(), attribute.formal_ty),
+                            alias: attribute.name,
+                            alias_ty: attribute.formal_ty,
+                            numeric_dscale: attribute.numeric_dscale,
+                        })
+                        .collect(),
+                    input: Box::new(table),
+                })
             }
             RelExpr::Project {
                 input,
@@ -1204,7 +1250,7 @@ impl LoweringContext {
                 if correlations.is_empty() && !isolate_subquery_owner {
                     let input_scope =
                         self.scope_from_lowered_query(&format!("{path}.inputScope"), &input_query)?;
-                    let select = self.lower_native_project_select_with_input(
+                    let select = self.lower_scalar_project_select_with_input(
                         path,
                         input,
                         exprs,
@@ -1215,7 +1261,7 @@ impl LoweringContext {
                     if input_is_empty {
                         return self.empty_query_from_output(&format!("{path}.output"), output);
                     }
-                    return Some(FormalQueryExpr::ScalarProjection {
+                    return Some(FormalQueryExpr::Projection {
                         select,
                         input: Box::new(input_query),
                     });
@@ -1227,7 +1273,7 @@ impl LoweringContext {
                     &scalar_roots,
                 )?;
                 let select = self.with_correlation_scopes(&correlations, |context| {
-                    context.lower_native_project_select_with_input(
+                    context.lower_scalar_project_select_with_input(
                         path,
                         input,
                         exprs,
@@ -1239,7 +1285,7 @@ impl LoweringContext {
                 if input_is_empty {
                     return self.empty_query_from_output(&format!("{path}.output"), output);
                 }
-                Some(FormalQueryExpr::ScalarProjection {
+                Some(FormalQueryExpr::Projection {
                     select,
                     input: Box::new(input_query),
                 })
@@ -1266,7 +1312,7 @@ impl LoweringContext {
                         &format!("{path}.predicateScope"),
                         &input_query,
                     )?;
-                    let predicate = self.lower_native_scalar_boolean_expr(
+                    let predicate = self.lower_scalar_boolean_expr(
                         &format!("{path}.predicate"),
                         &predicate.parsed,
                         &input_scope,
@@ -1274,7 +1320,7 @@ impl LoweringContext {
                     if input_is_empty {
                         return self.empty_query_from_output(&format!("{path}.output"), output);
                     }
-                    return Some(FormalQueryExpr::ScalarSelection {
+                    return Some(FormalQueryExpr::Selection {
                         predicate,
                         input: Box::new(input_query),
                     });
@@ -1287,7 +1333,7 @@ impl LoweringContext {
                         &[&predicate.parsed],
                     )?;
                 let predicate = self.with_correlation_scopes(&correlations, |context| {
-                    context.lower_native_scalar_boolean_expr(
+                    context.lower_scalar_boolean_expr(
                         &format!("{path}.predicate"),
                         &predicate.parsed,
                         &predicate_scope,
@@ -1296,7 +1342,7 @@ impl LoweringContext {
                 if input_is_empty {
                     return self.empty_query_from_output(&format!("{path}.output"), output);
                 }
-                let selection = FormalQueryExpr::ScalarSelection {
+                let selection = FormalQueryExpr::Selection {
                     predicate,
                     input: Box::new(predicate_input),
                 };
@@ -1410,8 +1456,11 @@ impl LoweringContext {
         output: &[Column],
     ) -> Option<FormalQueryExpr> {
         let RelExpr::Aggregate {
+            input: aggregate_input,
             group_keys,
             grouping_sets,
+            agg_calls,
+            output: aggregate_output,
             ..
         } = input
         else {
@@ -1426,15 +1475,7 @@ impl LoweringContext {
             self.error(
                 path,
                 "correlated_native_having_not_supported",
-                "Correlated native HAVING requires a group-environment correlation binding that is not represented by the current logical Group formula interface.",
-            );
-            return None;
-        }
-        if scalar_ast_contains_rel_subquery(&predicate.parsed) {
-            self.error(
-                &format!("{path}.predicate"),
-                "having_subquery_scope_barrier_not_supported",
-                "A native HAVING formula containing a relational subquery requires one capture-avoiding environment shared by aggregate terms and every generated nested-query binding. That complete transport is not modeled, so this path is conservatively unsupported.",
+                "Correlated native HAVING requires a group-environment correlation binding that is not represented by the current logical Group correlation interface.",
             );
             return None;
         }
@@ -1448,21 +1489,66 @@ impl LoweringContext {
         }
         let ordinary_group =
             matches!(grouping_sets.as_slice(), [set] if set.as_slice() == group_keys.as_slice());
+
+        let grouped = self.lower_query_expr_aggregate(
+            &format!("{path}.input"),
+            aggregate_input,
+            group_keys,
+            grouping_sets,
+            agg_calls,
+            aggregate_output,
+            &[&predicate.parsed],
+        )?;
         if !ordinary_group {
-            self.error(
+            // Calcite's Aggregate output contains only grouping keys and
+            // aggregate calls; the SQL target-expression Project remains
+            // above this NativeHaving node.  GroupingSets already computes
+            // those branch-local aggregate rows from one shared child, so a
+            // scalar selection here is exactly HAVING over that
+            // aggregate output and cannot evaluate a rejected target scalar.
+            let grouped_scope =
+                self.scope_from_query_expr(&format!("{path}.predicateScope"), &grouped)?;
+            let isolate = scalar_ast_contains_rel_subquery(&predicate.parsed);
+            let (predicate_input, predicate_scope) = if isolate {
+                self.isolate_query_scope_for_subquery_owner(
+                    &format!("{path}.predicateBarrier"),
+                    grouped,
+                    &grouped_scope,
+                    &[&predicate.parsed],
+                )?
+            } else {
+                (grouped, grouped_scope)
+            };
+            let lowered_predicate = self.lower_scalar_boolean_expr(
                 &format!("{path}.predicate"),
-                "grouping_sets_having_scalar_phase_not_supported",
-                "Native GROUPING SETS shares one child exactly, but its compatibility grouping-set records do not yet carry a pre-target scalar HAVING expression. Lowering this HAVING outside the grouping operator would evaluate rejected target expressions too early, so the boundary is fail-closed.",
-            );
-            return None;
+                &predicate.parsed,
+                &predicate_scope,
+            )?;
+            let filtered = FormalQueryExpr::Selection {
+                predicate: lowered_predicate,
+                input: Box::new(predicate_input),
+            };
+            if !isolate {
+                return Some(filtered);
+            }
+            let output_scope = self.scope_restored_to_visible_names(
+                &format!("{path}.predicateOutput"),
+                &predicate_scope,
+            )?;
+            return Some(FormalQueryExpr::Projection {
+                select: self.lower_scope_rename_select(
+                    &format!("{path}.predicateOutput"),
+                    &predicate_scope,
+                    &output_scope,
+                )?,
+                input: Box::new(filtered),
+            });
         }
 
-        let grouped =
-            self.lower_query_expr_with_streaming(&format!("{path}.input"), input, true)?;
         let aggregate_scope =
             self.scope_from_query_expr(&format!("{path}.predicateScope"), &grouped)?;
         let predicate_ast = predicate.parsed.clone();
-        let predicate = self.lower_formula_expr(
+        let predicate = self.lower_scalar_boolean_expr(
             &format!("{path}.predicate"),
             &predicate_ast,
             &aggregate_scope,
@@ -1472,10 +1558,64 @@ impl LoweringContext {
             self.error(
                 path,
                 "native_having_group_installation_not_supported",
-                "Declarative native HAVING expected one ScalarGroup and required every predicate output reference to resolve to its group-key or aggregate scalar leaf.",
+                "Declarative native HAVING expected one Group and required every predicate output reference to resolve to its group-key or aggregate scalar leaf.",
             );
             None
         })
+    }
+
+    /// Lower an Aggregate while capture-isolating its input from scalar
+    /// owners such as HAVING.  Calcite input ordinals belong to the aggregate
+    /// row, while a nested query owns a separate row scope; renaming the
+    /// aggregate child before constructing group terms prevents nominal
+    /// attribute names from accidentally coupling those two scopes.
+    fn lower_query_expr_aggregate(
+        &mut self,
+        path: &str,
+        input: &RelExpr,
+        group_keys: &[usize],
+        grouping_sets: &[Vec<usize>],
+        agg_calls: &[AggregateCall],
+        output: &[Column],
+        scalar_owners: &[&ScalarAst],
+    ) -> Option<FormalQueryExpr> {
+        let special = self.validate_special_aggregate_shape(
+            path,
+            input,
+            group_keys,
+            grouping_sets,
+            agg_calls,
+            output,
+        )?;
+        let input_query = self.lower_query_expr(&format!("{path}.input"), input)?;
+        let (input_query, input_scope, _, _) = self.prepare_correlated_query_expr_input(
+            &format!("{path}.inputOwnerScope"),
+            input_query,
+            &[],
+            scalar_owners,
+        )?;
+        if let Some((SpecialAggregateKind::AnyValue, argument_index)) = special {
+            return self.lower_any_value_int32_query_expr(
+                path,
+                input_query,
+                &input_scope,
+                argument_index,
+                output,
+            );
+        }
+        let (input_query, input_scope, agg_calls) =
+            self.lower_filtered_aggregate_input_expr(path, input_query, input_scope, agg_calls)?;
+        self.lower_query_expr_grouping_sets(
+            path,
+            input_query,
+            GroupingSetPlan {
+                group_keys,
+                grouping_sets,
+                agg_calls: &agg_calls,
+                output,
+                scope: &input_scope,
+            },
+        )
     }
 
     pub(super) fn scope_from_lowered_query(
@@ -1539,10 +1679,20 @@ impl LoweringContext {
 
     fn validate_rel_table_scans_against_schema(&mut self, path: &str, rel: &RelExpr) -> Option<()> {
         match rel {
+            RelExpr::Bindings { bindings, body, .. } => {
+                for (index, binding) in bindings.iter().enumerate() {
+                    self.validate_rel_table_scans_against_schema(
+                        &format!("{path}.bindings[{index}]"),
+                        &binding.rel,
+                    )?;
+                }
+                self.validate_rel_table_scans_against_schema(&format!("{path}.body"), body)?;
+            }
             RelExpr::TableScan { table, output } => {
                 let relation = table.join(".");
                 self.authoritative_table_scan_scope(path, &relation, output)?;
             }
+            RelExpr::QueryRef { .. } => {}
             RelExpr::Project { input, exprs, .. } => {
                 self.validate_rel_table_scans_against_schema(&format!("{path}.input"), input)?;
                 for (index, expr) in exprs.iter().enumerate() {
@@ -1857,13 +2007,6 @@ impl LoweringContext {
                         .collect(),
                 )
             }
-            FormalQueryExpr::ScalarProjection { select, .. }
-            | FormalQueryExpr::ScalarGroup { select, .. } => Some(
-                select
-                    .iter()
-                    .map(|item| item.numeric_dscale.clone())
-                    .collect(),
-            ),
             FormalQueryExpr::RowMap { adapter, input } => {
                 self.row_map_output_dscales(path, adapter, input)
             }
@@ -1959,7 +2102,6 @@ impl LoweringContext {
                 )
             }
             FormalQueryExpr::Selection { input, .. }
-            | FormalQueryExpr::ScalarSelection { input, .. }
             | FormalQueryExpr::Distinct { input }
             | FormalQueryExpr::OrderBy { input, .. }
             | FormalQueryExpr::Offset { input, .. }
@@ -2323,8 +2465,12 @@ impl LoweringContext {
                     }
                     _ => numeric_dscale_for_type(column.ty),
                 };
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr { term },
+                Some(FormalScalarSelectItem {
+                    expr: self.canonical_scalar_value_from_aggregate_term(
+                        &format!("{path}.column[{}]", column.name),
+                        FormalAggregateTerm::Expr { term },
+                        column.ty,
+                    )?,
                     alias: column.name.clone(),
                     alias_ty: column.ty,
                     numeric_dscale,
@@ -3032,13 +3178,20 @@ impl LoweringContext {
                 } else {
                     input_attribute.numeric_dscale.clone()
                 };
-                Some(FormalSelectItem {
-                    expr: self.align_set_input_expression(
-                        &format!("{path}.output[{index}]"),
-                        input_attribute,
-                        input_literal_provenance[index],
-                        output_attribute.formal_ty,
-                    )?,
+                Some(FormalScalarSelectItem {
+                    expr: {
+                        let term = self.align_set_input_expression(
+                            &format!("{path}.output[{index}]"),
+                            input_attribute,
+                            input_literal_provenance[index],
+                            output_attribute.formal_ty,
+                        )?;
+                        self.canonical_scalar_value_from_aggregate_term(
+                            &format!("{path}.output[{index}]"),
+                            term,
+                            output_attribute.formal_ty,
+                        )?
+                    },
                     alias: output_attribute.name.clone(),
                     alias_ty: output_attribute.formal_ty,
                     numeric_dscale,
@@ -3113,13 +3266,20 @@ impl LoweringContext {
                 } else {
                     input_attribute.numeric_dscale.clone()
                 };
-                Some(FormalSelectItem {
-                    expr: self.align_set_input_expression(
-                        &format!("{path}.output[{index}]"),
-                        input_attribute,
-                        input_literal_provenance[index],
-                        output_attribute.formal_ty,
-                    )?,
+                Some(FormalScalarSelectItem {
+                    expr: {
+                        let term = self.align_set_input_expression(
+                            &format!("{path}.output[{index}]"),
+                            input_attribute,
+                            input_literal_provenance[index],
+                            output_attribute.formal_ty,
+                        )?;
+                        self.canonical_scalar_value_from_aggregate_term(
+                            &format!("{path}.output[{index}]"),
+                            term,
+                            output_attribute.formal_ty,
+                        )?
+                    },
                     alias: output_attribute.name.clone(),
                     alias_ty: output_attribute.formal_ty,
                     numeric_dscale,
@@ -3203,23 +3363,13 @@ impl LoweringContext {
         let group_by = output_scope
             .attributes
             .iter()
-            .map(|attribute| FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: attribute.name.clone(),
-                    ty: attribute.formal_ty,
-                },
-            })
+            .map(|attribute| scalar_attribute(attribute.name.clone(), attribute.formal_ty))
             .collect();
         let select = output_scope
             .attributes
             .iter()
-            .map(|attribute| FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: attribute.name.clone(),
-                        ty: attribute.formal_ty,
-                    },
-                },
+            .map(|attribute| FormalScalarSelectItem {
+                expr: scalar_attribute(attribute.name.clone(), attribute.formal_ty),
                 alias: attribute.name.clone(),
                 alias_ty: attribute.formal_ty,
                 numeric_dscale: attribute.numeric_dscale.clone(),
@@ -3229,7 +3379,7 @@ impl LoweringContext {
         FormalQueryExpr::Group {
             select,
             group_by,
-            having: FormalFormulaExpr::True,
+            having: FormalScalarExpr::True,
             input: Box::new(input),
         }
     }
@@ -3300,12 +3450,12 @@ impl LoweringContext {
             } else {
                 (cross_join, scope)
             };
-            let predicate = self.lower_native_scalar_boolean_expr(
+            let predicate = self.lower_scalar_boolean_expr(
                 &format!("{path}.condition"),
                 condition,
                 &predicate_scope,
             )?;
-            let selection = FormalQueryExpr::ScalarSelection {
+            let selection = FormalQueryExpr::Selection {
                 predicate,
                 input: Box::new(predicate_input),
             };
@@ -3337,14 +3487,6 @@ impl LoweringContext {
         condition: &ScalarAst,
         output: &[Column],
     ) -> Option<FormalQueryExpr> {
-        if scalar_ast_contains_rel_subquery(condition) {
-            self.error(
-                &format!("{path}.condition"),
-                "outer_join_subquery_scope_barrier_not_supported",
-                "An outer-join condition containing a relational subquery requires capture-avoiding renaming of both child rows together with matched and null-padded output transport; this path is conservatively unsupported until that complete transport is modeled.",
-            );
-            return None;
-        }
         let left_len = left.output().len();
         if output.len() != left_len + right.output().len() {
             self.error(
@@ -3363,18 +3505,20 @@ impl LoweringContext {
             );
             return None;
         }
-        let left = self.lower_query_expr_join_input(&format!("{path}.left"), left, left_output)?;
-        let right =
+        let mut left =
+            self.lower_query_expr_join_input(&format!("{path}.left"), left, left_output)?;
+        let mut right =
             self.lower_query_expr_join_input(&format!("{path}.right"), right, right_output)?;
         // Derive the join scope from the already-lowered children.  Logical
         // joins do not re-coerce values, and Calcite can retain stale fixed
         // DECIMAL metadata for a typmodless PostgreSQL NUMERIC child.  The
         // derived scope also carries exact display-scale provenance through
         // matched and null-padded outer-join rows.
-        let left_scope = self.scope_from_query_expr(&format!("{path}.leftScope"), &left)?;
-        let right_scope = self.scope_from_query_expr(&format!("{path}.rightScope"), &right)?;
-        if left_scope.attributes.len() != left_output.len()
-            || right_scope.attributes.len() != right_output.len()
+        let visible_left_scope = self.scope_from_query_expr(&format!("{path}.leftScope"), &left)?;
+        let visible_right_scope =
+            self.scope_from_query_expr(&format!("{path}.rightScope"), &right)?;
+        if visible_left_scope.attributes.len() != left_output.len()
+            || visible_right_scope.attributes.len() != right_output.len()
         {
             self.error(
                 path,
@@ -3383,9 +3527,11 @@ impl LoweringContext {
             );
             return None;
         }
-        let mut scope = left_scope.clone();
-        scope.attributes.extend(right_scope.attributes.clone());
-        if !has_unique_scope_names(&scope) {
+        let mut visible_scope = visible_left_scope.clone();
+        visible_scope
+            .attributes
+            .extend(visible_right_scope.attributes.clone());
+        if !has_unique_scope_names(&visible_scope) {
             self.error(
                 path,
                 "outer_join_column_overlap",
@@ -3393,7 +3539,48 @@ impl LoweringContext {
             );
             return None;
         }
-        let predicate = self.lower_formula_expr(&format!("{path}.condition"), condition, &scope)?;
+        let (left_scope, right_scope) = if scalar_ast_contains_rel_subquery(condition) {
+            let names = self.allocate_scope_barrier_names(&visible_scope, &[condition]);
+            let (left_names, right_names) = names.split_at(visible_left_scope.attributes.len());
+            let isolated_left = self.rename_scope_attributes(
+                &format!("{path}.conditionBarrier.left"),
+                &visible_left_scope,
+                left_names.to_vec(),
+            )?;
+            let isolated_right = self.rename_scope_attributes(
+                &format!("{path}.conditionBarrier.right"),
+                &visible_right_scope,
+                right_names.to_vec(),
+            )?;
+            left = FormalQueryExpr::Projection {
+                select: self.lower_scope_rename_select(
+                    &format!("{path}.conditionBarrier.left"),
+                    &visible_left_scope,
+                    &isolated_left,
+                )?,
+                input: Box::new(left),
+            };
+            right = FormalQueryExpr::Projection {
+                select: self.lower_scope_rename_select(
+                    &format!("{path}.conditionBarrier.right"),
+                    &visible_right_scope,
+                    &isolated_right,
+                )?,
+                input: Box::new(right),
+            };
+            (isolated_left, isolated_right)
+        } else {
+            (visible_left_scope.clone(), visible_right_scope.clone())
+        };
+        let mut predicate_scope = left_scope.clone();
+        predicate_scope
+            .attributes
+            .extend(right_scope.attributes.clone());
+        let predicate = self.lower_scalar_boolean_expr(
+            &format!("{path}.condition"),
+            condition,
+            &predicate_scope,
+        )?;
         let join_kind = match join_type {
             JoinType::Left => FormalQueryJoinKind::Left,
             JoinType::Right => FormalQueryJoinKind::Right,
@@ -3405,11 +3592,25 @@ impl LoweringContext {
             predicate,
             matched_select: self.lower_scope_rename_select(
                 &format!("{path}.matchedOutput"),
-                &scope,
-                &scope,
+                &predicate_scope,
+                &visible_scope,
             )?,
-            left_select: self.outer_join_padding_scope_select(&left_scope, &right_scope, true),
-            right_select: self.outer_join_padding_scope_select(&left_scope, &right_scope, false),
+            left_select: self.outer_join_padding_scope_select(
+                &format!("{path}.leftPadding"),
+                &left_scope,
+                &right_scope,
+                &visible_left_scope,
+                &visible_right_scope,
+                true,
+            )?,
+            right_select: self.outer_join_padding_scope_select(
+                &format!("{path}.rightPadding"),
+                &left_scope,
+                &right_scope,
+                &visible_left_scope,
+                &visible_right_scope,
+                false,
+            )?,
             left: Box::new(left),
             right: Box::new(right),
         })
@@ -3474,7 +3675,8 @@ impl LoweringContext {
             );
             return None;
         }
-        let predicate = self.lower_formula_expr(&format!("{path}.condition"), condition, &scope)?;
+        let predicate =
+            self.lower_scalar_boolean_expr(&format!("{path}.condition"), condition, &scope)?;
         let join_kind = match join_type {
             JoinType::Semi => FormalQueryJoinKind::Semi,
             JoinType::Anti => FormalQueryJoinKind::Anti,
@@ -3550,13 +3752,8 @@ impl LoweringContext {
             .chain(&left_scope.attributes[left_output.len()..])
             .chain(&right_scope.attributes[right_output.len()..]);
         let select = ordered
-            .map(|attribute| FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: attribute.name.clone(),
-                        ty: attribute.formal_ty,
-                    },
-                },
+            .map(|attribute| FormalScalarSelectItem {
+                expr: scalar_attribute(attribute.name.clone(), attribute.formal_ty),
                 alias: attribute.name.clone(),
                 alias_ty: attribute.formal_ty,
                 numeric_dscale: attribute.numeric_dscale.clone(),
@@ -3630,13 +3827,8 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.formal_ty,
-                        },
-                    },
+                Some(FormalScalarSelectItem {
+                    expr: scalar_attribute(source.name.clone(), source.formal_ty),
                     alias: target.name.clone(),
                     alias_ty: target_ty,
                     numeric_dscale: source.numeric_dscale.clone(),
@@ -3648,13 +3840,8 @@ impl LoweringContext {
                 .attributes
                 .iter()
                 .skip(input_output.len())
-                .map(|attribute| FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: attribute.name.clone(),
-                            ty: attribute.formal_ty,
-                        },
-                    },
+                .map(|attribute| FormalScalarSelectItem {
+                    expr: scalar_attribute(attribute.name.clone(), attribute.formal_ty),
                     alias: attribute.name.clone(),
                     alias_ty: attribute.formal_ty,
                     numeric_dscale: attribute.numeric_dscale.clone(),
@@ -3718,12 +3905,12 @@ impl LoweringContext {
             } else {
                 (cross_join, scope)
             };
-            let predicate = self.lower_native_scalar_boolean_expr(
+            let predicate = self.lower_scalar_boolean_expr(
                 &format!("{path}.condition"),
                 condition,
                 &predicate_scope,
             )?;
-            let selection = FormalQueryExpr::ScalarSelection {
+            let selection = FormalQueryExpr::Selection {
                 predicate,
                 input: Box::new(predicate_input),
             };
@@ -3747,40 +3934,69 @@ impl LoweringContext {
     }
 
     fn outer_join_padding_scope_select(
-        &self,
+        &mut self,
+        path: &str,
         left: &Scope,
         right: &Scope,
+        output_left: &Scope,
+        output_right: &Scope,
         keep_left: bool,
-    ) -> Vec<FormalSelectItem> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
+        if left.attributes.len() != output_left.attributes.len()
+            || right.attributes.len() != output_right.attributes.len()
+        {
+            self.error(
+                path,
+                "outer_join_padding_scope_mismatch",
+                "Outer-join null padding requires source and visible output scopes with identical arity.",
+            );
+            return None;
+        }
         left.attributes
             .iter()
-            .map(|attribute| (attribute, keep_left))
+            .zip(&output_left.attributes)
+            .map(|(source, target)| (source, target, keep_left))
             .chain(
                 right
                     .attributes
                     .iter()
-                    .map(|attribute| (attribute, !keep_left)),
+                    .zip(&output_right.attributes)
+                    .map(|(source, target)| (source, target, !keep_left)),
             )
-            .map(|(attribute, keep)| FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: if keep {
-                        FormalFunctionTerm::Attribute {
-                            name: attribute.name.clone(),
-                            ty: attribute.formal_ty,
-                        }
-                    } else {
-                        FormalFunctionTerm::Constant {
-                            raw: "NULL".to_owned(),
-                            ty: Some(attribute.formal_ty),
-                        }
-                    },
-                },
-                alias: attribute.name.clone(),
-                alias_ty: attribute.formal_ty,
-                // A NULL-only arm contributes no conflicting value scale; the
-                // join output's possible non-NULL values retain the child's
-                // exact provenance.
-                numeric_dscale: attribute.numeric_dscale.clone(),
+            .enumerate()
+            .map(|(index, (source, target, keep))| {
+                if source.formal_ty != target.formal_ty {
+                    self.error(
+                        &format!("{path}[{index}]"),
+                        "outer_join_padding_type_mismatch",
+                        "Outer-join null padding cannot change a column's formal SQL type.",
+                    );
+                    return None;
+                }
+                Some(FormalScalarSelectItem {
+                    expr: scalar_leaf(
+                        target.formal_ty,
+                        FormalAggregateTerm::Expr {
+                            term: if keep {
+                                FormalFunctionTerm::Attribute {
+                                    name: source.name.clone(),
+                                    ty: source.formal_ty,
+                                }
+                            } else {
+                                FormalFunctionTerm::Constant {
+                                    raw: "NULL".to_owned(),
+                                    ty: Some(target.formal_ty),
+                                }
+                            },
+                        },
+                    ),
+                    alias: target.name.clone(),
+                    alias_ty: target.formal_ty,
+                    // A NULL-only arm contributes no conflicting value scale; the
+                    // join output's possible non-NULL values retain the child's
+                    // exact provenance.
+                    numeric_dscale: target.numeric_dscale.clone(),
+                })
             })
             .collect()
     }
@@ -3855,13 +4071,8 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.formal_ty,
-                        },
-                    },
+                Some(FormalScalarSelectItem {
+                    expr: scalar_attribute(source.name.clone(), source.formal_ty),
                     alias: target.name.clone(),
                     alias_ty: target_ty,
                     numeric_dscale: source.numeric_dscale.clone(),
@@ -4216,7 +4427,7 @@ impl LoweringContext {
         path: &str,
         input: &Scope,
         output: &Scope,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
         if input.attributes.len() != output.attributes.len() {
             self.error(
                 path,
@@ -4256,13 +4467,8 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.formal_ty,
-                        },
-                    },
+                Some(FormalScalarSelectItem {
+                    expr: scalar_attribute(source.name.clone(), source.formal_ty),
                     alias: target.name.clone(),
                     alias_ty: target.formal_ty,
                     numeric_dscale: expected_target.numeric_dscale.clone(),
@@ -4272,10 +4478,11 @@ impl LoweringContext {
     }
 
     /// Lower a structured PostgreSQL RANK window into the logical FormalSQL
-    /// rank reset. Partition/order expressions and ordinary target
-    /// expressions are staged once before ranking. This transformation is
-    /// derived from the declarative window specification and never from a
-    /// physical WindowAgg, Sort, or frozen benchmark plan.
+    /// rank reset. Partition/order expressions are staged before ranking;
+    /// ordinary target expressions remain in the final scalar projection so
+    /// their runtime errors are not moved across the SQL window phase. This
+    /// transformation is derived from the declarative window specification
+    /// and never from a physical WindowAgg, Sort, or frozen benchmark plan.
     fn lower_declarative_rank_window_projection(
         &mut self,
         path: &str,
@@ -4341,24 +4548,35 @@ impl LoweringContext {
             );
             return None;
         }
-        if exprs.iter().enumerate().any(|(index, expr)| {
-            index != *window_index
-                && (scalar_ast_contains_window(&expr.parsed)
-                    || scalar_ast_contains_rel_subquery(&expr.parsed)
-                    || scalar_ast_may_raise_runtime_for_input(&expr.parsed, input))
-        }) || parsed.partition_by.iter().any(|expr| {
-            scalar_ast_contains_window(expr)
-                || scalar_ast_contains_rel_subquery(expr)
-                || scalar_ast_may_raise_runtime_for_input(expr, input)
-        }) || parsed.order_by.iter().any(|key| {
-            scalar_ast_contains_window(&key.expr)
-                || scalar_ast_contains_rel_subquery(&key.expr)
-                || scalar_ast_may_raise_runtime_for_input(&key.expr, input)
-        }) {
+        let key_expressions = parsed
+            .partition_by
+            .iter()
+            .chain(parsed.order_by.iter().map(|key| &key.expr))
+            .collect::<Vec<_>>();
+        let unsupported_runtime_keys = key_expressions
+            .iter()
+            .filter(|expression| {
+                scalar_ast_may_raise_runtime_for_input(expression, input)
+                    && rank_grouping_integer_bounds(expression, input).is_none()
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        if exprs
+            .iter()
+            .enumerate()
+            .any(|(index, expr)| index != *window_index && scalar_ast_contains_window(&expr.parsed))
+            || key_expressions.iter().any(|expr| {
+                scalar_ast_contains_window(expr) || scalar_ast_contains_rel_subquery(expr)
+            })
+            || unsupported_runtime_keys.len() > 1
+            || unsupported_runtime_keys
+                .first()
+                .is_some_and(|expr| !rank_single_error_key_is_supported(expr, input))
+        {
             self.error(
                 path,
                 "rank_window_expression_runtime_not_supported",
-                "Declarative RANK may stage only total, uncorrelated partition, ordering, and ordinary target expressions before the logical rank reset.",
+                "Declarative RANK accepts total, uncorrelated keys or one direct division with total operands; multiple or nested key error sites are not yet modeled. Ordinary target expressions remain after the logical rank reset.",
             );
             return None;
         }
@@ -4390,8 +4608,11 @@ impl LoweringContext {
             .filter(|(index, _)| index != window_index)
             .map(|(_, column)| column.clone())
             .collect::<Vec<_>>();
-        let mut key_projection =
-            self.lower_project_select(path, &ordinary_exprs, &ordinary_output, &input_scope)?;
+        let mut key_projection = self.lower_scope_rename_select(
+            &format!("{path}.rankInputCarry"),
+            &input_scope,
+            &input_scope,
+        )?;
         let mut used_names = input_scope
             .attributes
             .iter()
@@ -4462,26 +4683,10 @@ impl LoweringContext {
         }
 
         let rank_attribute = FormalAttribute {
-            name: output[*window_index].name.clone(),
+            name: fresh_internal_attribute_name("__logos_rank_value", &mut used_names),
             ty: FormalAttributeType::Int64,
         };
-        let mut ranked_scope = Scope {
-            attributes: key_projection
-                .iter()
-                .map(|item| ScopeAttribute {
-                    name: item.alias.clone(),
-                    visible_name: item.alias.clone(),
-                    formal_ty: item.alias_ty,
-                    numeric_dscale: item.numeric_dscale.clone(),
-                })
-                .collect(),
-        };
-        ranked_scope.attributes.push(ScopeAttribute {
-            name: rank_attribute.name.clone(),
-            visible_name: rank_attribute.name.clone(),
-            formal_ty: rank_attribute.ty,
-            numeric_dscale: numeric_dscale_for_type(rank_attribute.ty),
-        });
+        let rank_output_index = key_projection.len();
         let ranked = FormalQueryExpr::Rank {
             partition_keys,
             order_keys,
@@ -4491,32 +4696,53 @@ impl LoweringContext {
                 input: Box::new(input_query),
             }),
         };
+        let ordinary_roots = ordinary_exprs
+            .iter()
+            .map(|expression| &expression.parsed)
+            .collect::<Vec<_>>();
+        let (ranked, final_scope, _, _) = self.prepare_correlated_query_expr_input(
+            &format!("{path}.targetScope"),
+            ranked,
+            &[],
+            &ordinary_roots,
+        )?;
+        let ordinary_select = self.lower_scalar_project_select_with_input(
+            path,
+            input,
+            &ordinary_exprs,
+            &ordinary_output,
+            &final_scope,
+            true,
+        )?;
+        let rank_source = final_scope.attribute(rank_output_index).or_else(|| {
+            self.error(
+                &format!("{path}.output[{window_index}]"),
+                "rank_output_binding_missing",
+                "The declarative RANK result is absent from the staged output scope.",
+            );
+            None
+        })?;
+        let mut ordinary_select = ordinary_select.into_iter();
         let final_select = output
             .iter()
             .enumerate()
             .map(|(index, column)| {
-                let Some(source) = ranked_scope
-                    .attributes
-                    .iter()
-                    .find(|attribute| attribute.visible_name == column.name)
-                else {
-                    self.error(
-                        &format!("{path}.output[{index}]"),
-                        "rank_output_binding_missing",
-                        "The declarative RANK projection output did not bind to its staged ordinary expression or rank attribute.",
-                    );
-                    return None;
-                };
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.formal_ty,
+                if index != *window_index {
+                    return ordinary_select.next();
+                }
+                Some(FormalScalarSelectItem {
+                    expr: FormalScalarExpr::Leaf {
+                        result_ty: rank_source.formal_ty,
+                        term: FormalAggregateTerm::Expr {
+                            term: FormalFunctionTerm::Attribute {
+                                name: rank_source.name.clone(),
+                                ty: rank_source.formal_ty,
+                            },
                         },
                     },
                     alias: column.name.clone(),
-                    alias_ty: source.formal_ty,
-                    numeric_dscale: source.numeric_dscale.clone(),
+                    alias_ty: rank_source.formal_ty,
+                    numeric_dscale: rank_source.numeric_dscale.clone(),
                 })
             })
             .collect::<Option<Vec<_>>>()?;
@@ -4534,7 +4760,7 @@ impl LoweringContext {
         alias: String,
         direction: FormalSortDirection,
         null_direction: FormalNullDirection,
-    ) -> Option<(FormalSelectItem, FormalSortKey)> {
+    ) -> Option<(FormalScalarSelectItem, FormalSortKey)> {
         let Some(ty) = self.direct_function_type(&format!("{path}.type"), expr, scope) else {
             self.error(
                 path,
@@ -4558,8 +4784,8 @@ impl LoweringContext {
         }
         let term = annotate_literal_term(self.lower_aggregate_term(path, expr, scope)?, ty);
         let numeric_dscale = self.infer_numeric_dscale(expr, scope);
-        let select = FormalSelectItem {
-            expr: term,
+        let select = FormalScalarSelectItem {
+            expr: self.canonical_scalar_value_from_aggregate_term(path, term, ty)?,
             alias: alias.clone(),
             alias_ty: ty,
             numeric_dscale,
@@ -4918,13 +5144,8 @@ impl LoweringContext {
                         );
                         None
                     })?;
-                Some(FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.formal_ty,
-                        },
-                    },
+                Some(FormalScalarSelectItem {
+                    expr: scalar_attribute(source.name.clone(), source.formal_ty),
                     alias: column.name.clone(),
                     alias_ty: source.formal_ty,
                     numeric_dscale: source.numeric_dscale.clone(),
@@ -5124,30 +5345,15 @@ impl LoweringContext {
         exprs: &[logos_ir::ir::ScalarExpr],
         output: &[Column],
         scope: &Scope,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
         self.lower_project_select_with_input(path, exprs, output, scope, None)
     }
 
-    fn scalar_select_from_legacy(select: Vec<FormalSelectItem>) -> Vec<FormalScalarSelectItem> {
-        select
-            .into_iter()
-            .map(|item| FormalScalarSelectItem {
-                expr: FormalScalarExpr::Leaf {
-                    result_ty: item.alias_ty,
-                    term: item.expr,
-                },
-                alias: item.alias,
-                alias_ty: item.alias_ty,
-                numeric_dscale: item.numeric_dscale,
-            })
-            .collect()
-    }
-
-    /// Lower an ordinary SQL SELECT list through the one native scalar AST.
+    /// Lower an ordinary SQL SELECT list through the one canonical scalar AST.
     /// Mature query-free scalar and aggregate terms remain value leaves;
     /// query-valued expressions are lowered directly and therefore evaluate
     /// each nested query exactly once per containing scalar evaluation.
-    fn lower_native_project_select_with_input(
+    fn lower_scalar_project_select_with_input(
         &mut self,
         path: &str,
         input: &RelExpr,
@@ -5156,16 +5362,16 @@ impl LoweringContext {
         scope: &Scope,
         preserve_runtime_numeric_dscale: bool,
     ) -> Option<Vec<FormalScalarSelectItem>> {
-        let contains_subquery = exprs
+        let requires_direct_scalar_lowering = exprs
             .iter()
-            .any(|expr| scalar_ast_contains_rel_subquery(&expr.parsed));
-        if !contains_subquery {
-            let legacy = if preserve_runtime_numeric_dscale {
+            .any(|expr| scalar_ast_requires_direct_scalar_lowering(&expr.parsed));
+        if !requires_direct_scalar_lowering {
+            let query_free = if preserve_runtime_numeric_dscale {
                 self.lower_query_projection_select(path, input, exprs, output, scope)?
             } else {
                 self.lower_project_select_with_input(path, exprs, output, scope, Some(input))?
             };
-            return Some(Self::scalar_select_from_legacy(legacy));
+            return Some(query_free);
         }
         if !has_unique_column_names(output) {
             self.error(
@@ -5187,22 +5393,18 @@ impl LoweringContext {
         let mut select = Vec::with_capacity(exprs.len());
         for (index, (expr, column)) in exprs.iter().zip(output).enumerate() {
             let item_path = format!("{path}.exprs[{index}]");
-            if scalar_ast_contains_rel_subquery(&expr.parsed) {
+            if scalar_ast_requires_direct_scalar_lowering(&expr.parsed) {
                 let output_ty = self.lower_attribute_type(
                     &format!("{path}.output[{index}]"),
                     column,
                     AttributeTypeContext::QueryOutput,
                 )?;
-                let lowered = self.lower_native_scalar_value_expr(
-                    &item_path,
-                    &expr.parsed,
-                    scope,
-                    output_ty,
-                )?;
+                let lowered =
+                    self.lower_scalar_value_expr(&item_path, &expr.parsed, scope, output_ty)?;
                 if lowered.value_type() != Some(output_ty) {
                     self.error(
                         &item_path,
-                        "native_scalar_projection_kind_mismatch",
+                        "scalar_projection_kind_mismatch",
                         "Every SELECT item must lower to a typed SQL value; Boolean search conditions must cross the nullable BOOLEAN value bridge.",
                     );
                     return None;
@@ -5217,33 +5419,25 @@ impl LoweringContext {
             } else {
                 let singleton_expr = std::slice::from_ref(expr);
                 let singleton_output = std::slice::from_ref(column);
-                let mut legacy = self.lower_project_select_with_input(
+                let mut query_free = self.lower_project_select_with_input(
                     &format!("{item_path}.leaf"),
                     singleton_expr,
                     singleton_output,
                     scope,
                     Some(input),
                 )?;
-                let item = legacy.pop().expect("singleton projection lowering");
-                select.push(FormalScalarSelectItem {
-                    expr: FormalScalarExpr::Leaf {
-                        result_ty: item.alias_ty,
-                        term: item.expr,
-                    },
-                    alias: item.alias,
-                    alias_ty: item.alias_ty,
-                    numeric_dscale: item.numeric_dscale,
-                });
+                let item = query_free.pop().expect("singleton projection lowering");
+                select.push(item);
             }
         }
 
         if preserve_runtime_numeric_dscale {
-            self.attach_native_projection_numeric_dscales(path, scope, &mut select)?;
+            self.attach_projection_numeric_dscales(path, scope, &mut select)?;
         }
         Some(select)
     }
 
-    fn attach_native_projection_numeric_dscales(
+    fn attach_projection_numeric_dscales(
         &mut self,
         path: &str,
         input_scope: &Scope,
@@ -5315,7 +5509,7 @@ impl LoweringContext {
         output: &[Column],
         scope: &Scope,
         input: Option<&RelExpr>,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
         if !has_unique_column_names(output) {
             self.error(
                 path,
@@ -5478,6 +5672,25 @@ impl LoweringContext {
                     );
                 }
                 if matches!(
+                    (&expr.parsed, expr_ty, output_ty),
+                    (
+                        ScalarAst::Call {
+                            op: ScalarOp::Case,
+                            ..
+                        },
+                        Some(FormalAttributeType::String { .. }),
+                        FormalAttributeType::String { .. }
+                    )
+                ) && expr_ty != Some(output_ty)
+                {
+                    output_ty = expr_ty.expect("CASE string result type matched");
+                    self.warning(
+                        &format!("{path}.output[{index}]"),
+                        "calcite_case_string_typmod_overridden",
+                        "PostgreSQL resolves the CASE result typmod from all alternatives; FormalSQL preserves that source-derived character typmod instead of Calcite's stale constrained output metadata.",
+                    );
+                }
+                if matches!(
                     (&expr.parsed, expr_ty),
                     (
                         ScalarAst::Call {
@@ -5596,8 +5809,12 @@ impl LoweringContext {
                     }
                 }
                 let lowered = annotate_literal_term(lowered, output_ty);
-                Some(FormalSelectItem {
-                    expr: lowered,
+                Some(FormalScalarSelectItem {
+                    expr: self.canonical_scalar_value_from_aggregate_term(
+                        &format!("{path}.exprs[{index}]"),
+                        lowered,
+                        output_ty,
+                    )?,
                     alias: column.name.clone(),
                     alias_ty: output_ty,
                     // A fixed DECIMAL result typmod determines the display
@@ -5624,7 +5841,7 @@ impl LoweringContext {
         exprs: &[logos_ir::ir::ScalarExpr],
         output: &[Column],
         input_scope: &Scope,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
         let mut select =
             self.lower_project_select_with_input(path, exprs, output, input_scope, Some(input))?;
         let referenced = select
@@ -5670,13 +5887,8 @@ impl LoweringContext {
                         Some(NumericDscaleProvenance::Attribute(output_name.clone()));
                 }
             }
-            select.push(FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: source.name,
-                        ty: source.formal_ty,
-                    },
-                },
+            select.push(FormalScalarSelectItem {
+                expr: scalar_attribute(source.name, source.formal_ty),
                 alias: output_name,
                 alias_ty: FormalAttributeType::Z,
                 numeric_dscale: source.numeric_dscale,
@@ -5953,54 +6165,47 @@ impl LoweringContext {
                 index: argument_index,
             }],
         };
-        let predicate = self.lower_native_scalar_boolean_expr(
+        let predicate = self.lower_scalar_boolean_expr(
             &format!("{path}.anyValue.nonNull"),
             &predicate_ast,
             input_scope,
         )?;
-        let candidate_item = FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: argument.name.clone(),
-                    ty: FormalAttributeType::Int32,
-                },
-            },
+        let candidate_item = FormalScalarSelectItem {
+            expr: scalar_attribute(argument.name.clone(), FormalAttributeType::Int32),
             alias: output[0].name.clone(),
             alias_ty: FormalAttributeType::Int32,
             numeric_dscale: argument.numeric_dscale.clone(),
         };
         let candidates = FormalQueryExpr::Projection {
             select: vec![candidate_item],
-            input: Box::new(FormalQueryExpr::ScalarSelection {
+            input: Box::new(FormalQueryExpr::Selection {
                 predicate,
                 input: Box::new(input),
             }),
         };
-        let result_item = FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: output[0].name.clone(),
-                    ty: FormalAttributeType::Int32,
-                },
-            },
+        let result_item = FormalScalarSelectItem {
+            expr: scalar_attribute(output[0].name.clone(), FormalAttributeType::Int32),
             alias: output[0].name.clone(),
             alias_ty: FormalAttributeType::Int32,
             numeric_dscale: argument.numeric_dscale.clone(),
         };
-        let null_item = FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    raw: "NULL".to_owned(),
-                    ty: Some(FormalAttributeType::Int32),
+        let null_item = FormalScalarSelectItem {
+            expr: scalar_leaf(
+                FormalAttributeType::Int32,
+                FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw: "NULL".to_owned(),
+                        ty: Some(FormalAttributeType::Int32),
+                    },
                 },
-            },
+            ),
             alias: output[0].name.clone(),
             alias_ty: FormalAttributeType::Int32,
             numeric_dscale: argument.numeric_dscale.clone(),
         };
         let with_empty_fallback = FormalQueryExpr::Join {
             join_kind: FormalQueryJoinKind::Left,
-            predicate: FormalFormulaExpr::True,
+            predicate: FormalScalarExpr::True,
             matched_select: vec![result_item.clone()],
             left_select: vec![null_item],
             right_select: vec![result_item],
@@ -6021,18 +6226,21 @@ impl LoweringContext {
         agg_calls: &[AggregateCall],
         output: &[Column],
         scope: &Scope,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
         let mut select =
             self.lower_aggregate_select(path, group_keys, grouping_set, agg_calls, output, scope)?;
         for (output_index, key) in group_keys.iter().enumerate() {
             if !grouping_set.contains(key) {
                 let output_ty = select[output_index].alias_ty;
-                select[output_index].expr = FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Constant {
-                        raw: "NULL".to_owned(),
-                        ty: Some(output_ty),
+                select[output_index].expr = scalar_leaf(
+                    output_ty,
+                    FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Constant {
+                            raw: "NULL".to_owned(),
+                            ty: Some(output_ty),
+                        },
                     },
-                };
+                );
             }
         }
         Some(select)
@@ -6055,15 +6263,18 @@ impl LoweringContext {
         path: &str,
         scope: &Scope,
         agg_calls: &[AggregateCall],
-    ) -> Option<(Vec<FormalSelectItem>, Scope, Vec<AggregateCall>)> {
+    ) -> Option<(Vec<FormalScalarSelectItem>, Scope, Vec<AggregateCall>)> {
         let mut select = scope
             .attributes
             .iter()
-            .map(|attribute| FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: attribute.name.clone(),
-                        ty: attribute.formal_ty,
+            .map(|attribute| FormalScalarSelectItem {
+                expr: FormalScalarExpr::Leaf {
+                    result_ty: attribute.formal_ty,
+                    term: FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Attribute {
+                            name: attribute.name.clone(),
+                            ty: attribute.formal_ty,
+                        },
                     },
                 },
                 alias: attribute.name.clone(),
@@ -6132,19 +6343,19 @@ impl LoweringContext {
                 }
             };
 
-            let case = ScalarAst::Call {
-                operator: "CASE".to_owned(),
-                op: ScalarOp::Case,
-                args: vec![
-                    filter.parsed.clone(),
-                    argument,
-                    ScalarAst::Literal {
-                        raw: "NULL".to_owned(),
-                    },
-                ],
-            };
-            let case_term =
-                self.lower_aggregate_term(&format!("{call_path}.filteredCase"), &case, scope)?;
+            let case_args = vec![
+                filter.parsed.clone(),
+                argument,
+                ScalarAst::Literal {
+                    raw: "NULL".to_owned(),
+                },
+            ];
+            let case_expr = self.lower_scalar_case_value_at_type(
+                &format!("{call_path}.filteredCase"),
+                &case_args,
+                scope,
+                argument_ty,
+            )?;
             let mut alias = format!("__logos_filtered_aggregate_{index}");
             let mut suffix = 0usize;
             while projected_scope
@@ -6156,8 +6367,8 @@ impl LoweringContext {
                 alias = format!("__logos_filtered_aggregate_{index}_{suffix}");
             }
             let projected_index = projected_scope.attributes.len();
-            select.push(FormalSelectItem {
-                expr: case_term,
+            select.push(FormalScalarSelectItem {
+                expr: case_expr,
                 alias: alias.clone(),
                 alias_ty: argument_ty,
                 numeric_dscale: numeric_dscale.clone(),
@@ -6271,9 +6482,9 @@ impl LoweringContext {
                 output,
                 scope,
             )?;
-            return Some(FormalQueryExpr::ScalarGroup {
-                select: Self::scalar_select_from_legacy(select),
-                group_by: self.lower_scalar_group_keys(&branch_path, grouping_set, scope)?,
+            return Some(FormalQueryExpr::Group {
+                select,
+                group_by: self.lower_group_keys(&branch_path, grouping_set, scope)?,
                 having: FormalScalarExpr::True,
                 input: Box::new(input),
             });
@@ -6349,9 +6560,9 @@ impl LoweringContext {
                 output,
                 scope,
             )?;
-            return Some(FormalQueryExpr::ScalarGroup {
-                select: Self::scalar_select_from_legacy(select),
-                group_by: self.lower_scalar_group_keys(&branch_path, grouping_set, scope)?,
+            return Some(FormalQueryExpr::Group {
+                select,
+                group_by: self.lower_group_keys(&branch_path, grouping_set, scope)?,
                 having: FormalScalarExpr::True,
                 input: Box::new(input),
             });
@@ -6387,7 +6598,7 @@ impl LoweringContext {
         path: &str,
         group_keys: &[usize],
         scope: &Scope,
-    ) -> Option<Vec<FormalAggregateTerm>> {
+    ) -> Option<Vec<FormalScalarExpr>> {
         group_keys
             .iter()
             .enumerate()
@@ -6400,29 +6611,7 @@ impl LoweringContext {
                     );
                     None
                 })?;
-                Some(FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: attr.name,
-                        ty: attr.formal_ty,
-                    },
-                })
-            })
-            .collect()
-    }
-
-    fn lower_scalar_group_keys(
-        &mut self,
-        path: &str,
-        group_keys: &[usize],
-        scope: &Scope,
-    ) -> Option<Vec<FormalScalarExpr>> {
-        let terms = self.lower_group_keys(path, group_keys, scope)?;
-        group_keys
-            .iter()
-            .zip(terms)
-            .map(|(key, term)| {
-                let result_ty = scope.attribute(*key)?.formal_ty;
-                Some(FormalScalarExpr::Leaf { result_ty, term })
+                Some(scalar_attribute(attr.name, attr.formal_ty))
             })
             .collect()
     }
@@ -6435,7 +6624,49 @@ impl LoweringContext {
         agg_calls: &[AggregateCall],
         output: &[Column],
         scope: &Scope,
-    ) -> Option<Vec<FormalSelectItem>> {
+    ) -> Option<Vec<FormalScalarSelectItem>> {
+        let error_classes = agg_calls
+            .iter()
+            .filter_map(|call| {
+                let argument_type = call.args.first().and_then(|arg| {
+                    self.direct_function_type(
+                        &format!("{path}.aggregateErrorOrder.argType"),
+                        &arg.parsed,
+                        scope,
+                    )
+                    .or_else(|| {
+                        self.infer_function_type(
+                            &format!("{path}.aggregateErrorOrder.argType"),
+                            &arg.parsed,
+                            scope,
+                        )
+                    })
+                });
+                let expression_error = call
+                    .args
+                    .iter()
+                    .any(|arg| self.scalar_ast_may_raise_runtime_in_scope(&arg.parsed, scope))
+                    || call.filter.as_ref().is_some_and(|filter| {
+                        self.scalar_ast_may_raise_runtime_in_scope(&filter.parsed, scope)
+                    });
+                if expression_error {
+                    Some(None)
+                } else {
+                    postgres_aggregate_runtime_error_class(&call.function, argument_type).map(Some)
+                }
+            })
+            .collect::<Vec<_>>();
+        let aggregate_error_order_is_observable = error_classes.len() > 1
+            && (error_classes.iter().any(Option::is_none)
+                || error_classes.windows(2).any(|pair| pair[0] != pair[1]));
+        if aggregate_error_order_is_observable {
+            self.error(
+                path,
+                "multiple_error_capable_aggregates_not_supported",
+                "PostgreSQL does not expose a source-order contract for choosing among errors from multiple aggregate transitions/finalizers. FormalSQL currently has a fixed aggregate scheduler, so this aggregate node is conservatively unsupported.",
+            );
+            return None;
+        }
         if !has_unique_column_names(output) {
             self.error(
                 path,
@@ -6483,13 +6714,8 @@ impl LoweringContext {
                     ),
                 );
             }
-            select.push(FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Attribute {
-                        name: attr.name,
-                        ty: attr.formal_ty,
-                    },
-                },
+            select.push(FormalScalarSelectItem {
+                expr: scalar_attribute(attr.name, attr.formal_ty),
                 alias: output[index].name.clone(),
                 alias_ty: output_ty,
                 numeric_dscale: attr.numeric_dscale,
@@ -6541,13 +6767,8 @@ impl LoweringContext {
                             ),
                         );
                     }
-                    select.push(FormalSelectItem {
-                        expr: FormalAggregateTerm::Expr {
-                            term: FormalFunctionTerm::Attribute {
-                                name: attr.name,
-                                ty: output_ty,
-                            },
-                        },
+                    select.push(FormalScalarSelectItem {
+                        expr: scalar_attribute(attr.name, output_ty),
                         alias: output[output_index].name.clone(),
                         alias_ty: output_ty,
                         numeric_dscale: attr.numeric_dscale,
@@ -6604,8 +6825,11 @@ impl LoweringContext {
                     ),
                 );
             }
-            select.push(FormalSelectItem {
-                expr: self.lower_aggregate_call(path, index, call, scope, &output_ty)?,
+            select.push(FormalScalarSelectItem {
+                expr: scalar_leaf(
+                    output_ty,
+                    self.lower_aggregate_call(path, index, call, scope, &output_ty)?,
+                ),
                 alias: output[output_index].name.clone(),
                 alias_ty: output_ty,
                 numeric_dscale: self.aggregate_numeric_dscale(call, scope),
@@ -6619,7 +6843,7 @@ impl LoweringContext {
         path: &str,
         call: &AggregateCall,
         context: GroupingSelectContext<'_>,
-    ) -> Option<FormalSelectItem> {
+    ) -> Option<FormalScalarSelectItem> {
         let GroupingSelectContext {
             group_keys,
             grouping_set,
@@ -6726,13 +6950,16 @@ impl LoweringContext {
             );
             return None;
         }
-        Some(FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    raw: mask.to_string(),
-                    ty: Some(FormalAttributeType::Int32),
+        Some(FormalScalarSelectItem {
+            expr: scalar_leaf(
+                FormalAttributeType::Int32,
+                FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw: mask.to_string(),
+                        ty: Some(FormalAttributeType::Int32),
+                    },
                 },
-            },
+            ),
             alias: output.name.clone(),
             alias_ty: FormalAttributeType::Int32,
             numeric_dscale: Some(NumericDscaleProvenance::Exact(0)),
@@ -7459,6 +7686,118 @@ fn scalar_ast_contains_rel_subquery(ast: &ScalarAst) -> bool {
     }
 }
 
+fn scalar_ast_contains_boolean_connective(ast: &ScalarAst) -> bool {
+    match ast {
+        ScalarAst::Call { op, args, .. } => {
+            matches!(op, ScalarOp::And | ScalarOp::Or)
+                || args.iter().any(scalar_ast_contains_boolean_connective)
+        }
+        ScalarAst::TypeAnnotation { expr, .. } => scalar_ast_contains_boolean_connective(expr),
+        ScalarAst::Window { parsed } => {
+            parsed
+                .args
+                .iter()
+                .any(scalar_ast_contains_boolean_connective)
+                || parsed
+                    .partition_by
+                    .iter()
+                    .any(scalar_ast_contains_boolean_connective)
+                || parsed
+                    .order_by
+                    .iter()
+                    .any(|key| scalar_ast_contains_boolean_connective(&key.expr))
+                || parsed.frame.as_ref().is_some_and(|frame| {
+                    window_frame_bound_contains_boolean_connective(&frame.start)
+                        || frame
+                            .end
+                            .as_ref()
+                            .is_some_and(window_frame_bound_contains_boolean_connective)
+                })
+        }
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Literal { .. }
+        | ScalarAst::Flag { .. }
+        | ScalarAst::RelSubquery { .. } => false,
+    }
+}
+
+fn window_frame_bound_contains_boolean_connective(bound: &WindowFrameBoundAst) -> bool {
+    match bound {
+        WindowFrameBoundAst::OffsetPreceding { expr, .. }
+        | WindowFrameBoundAst::OffsetFollowing { expr, .. } => {
+            scalar_ast_contains_boolean_connective(expr)
+        }
+        WindowFrameBoundAst::UnboundedPreceding
+        | WindowFrameBoundAst::CurrentRow
+        | WindowFrameBoundAst::UnboundedFollowing => false,
+    }
+}
+
+/// A PostgreSQL GROUPING call with `n` arguments returns an INTEGER mask in
+/// `[0, 2^n - 1]`.  Recover the small mask arithmetic used as RANK partition
+/// keys so checked int32 addition is not conservatively mistaken for a
+/// reachable overflow.  No arbitrary aggregate value or cast receives this
+/// range authority.
+fn rank_grouping_integer_bounds(ast: &ScalarAst, input: &RelExpr) -> Option<(i64, i64)> {
+    match ast {
+        ScalarAst::TypeAnnotation { expr, .. } => rank_grouping_integer_bounds(expr, input),
+        ScalarAst::InputRef { index } => {
+            let RelExpr::Aggregate {
+                group_keys,
+                agg_calls,
+                ..
+            } = input
+            else {
+                return None;
+            };
+            let aggregate_index = index.checked_sub(group_keys.len())?;
+            let call = agg_calls.get(aggregate_index)?;
+            if !call.function.eq_ignore_ascii_case("GROUPING")
+                || call.args.is_empty()
+                || call.args.len() >= 31
+            {
+                return None;
+            }
+            Some((0, (1_i64 << call.args.len()) - 1))
+        }
+        ScalarAst::Call {
+            op: ScalarOp::Plus,
+            args,
+            ..
+        } if matches!(args.as_slice(), [_, _]) => {
+            let (left_min, left_max) = rank_grouping_integer_bounds(&args[0], input)?;
+            let (right_min, right_max) = rank_grouping_integer_bounds(&args[1], input)?;
+            let minimum = left_min.checked_add(right_min)?;
+            let maximum = left_max.checked_add(right_max)?;
+            (minimum >= i32::MIN as i64 && maximum <= i32::MAX as i64).then_some((minimum, maximum))
+        }
+        _ => None,
+    }
+}
+
+/// Admit one error-capable window key only when the error belongs to one
+/// direct division operator whose operands are themselves total.  The staged
+/// FormalSQL projection then preserves that exact division outcome before
+/// ranking without inventing an order between competing error sites.
+fn rank_single_error_key_is_supported(ast: &ScalarAst, input: &RelExpr) -> bool {
+    match ast {
+        ScalarAst::TypeAnnotation { expr, .. } => rank_single_error_key_is_supported(expr, input),
+        ScalarAst::Call {
+            op: ScalarOp::Divide,
+            args,
+            ..
+        } if matches!(args.as_slice(), [_, _]) => args
+            .iter()
+            .all(|argument| !scalar_ast_may_raise_runtime_for_input(argument, input)),
+        _ => false,
+    }
+}
+
+fn scalar_ast_requires_direct_scalar_lowering(ast: &ScalarAst) -> bool {
+    scalar_ast_contains_rel_subquery(ast) || scalar_ast_contains_boolean_connective(ast)
+}
+
 fn collect_nested_rel_attribute_names(ast: &ScalarAst, names: &mut BTreeSet<String>) {
     match ast {
         ScalarAst::RelSubquery { rel } => collect_rel_attribute_names(rel, names),
@@ -7496,7 +7835,13 @@ fn collect_nested_rel_attribute_names(ast: &ScalarAst, names: &mut BTreeSet<Stri
 fn collect_rel_attribute_names(rel: &RelExpr, names: &mut BTreeSet<String>) {
     names.extend(rel.output().iter().map(|column| column.name.clone()));
     match rel {
-        RelExpr::TableScan { .. } => {}
+        RelExpr::Bindings { bindings, body, .. } => {
+            for binding in bindings {
+                collect_rel_attribute_names(&binding.rel, names);
+            }
+            collect_rel_attribute_names(body, names);
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => {}
         RelExpr::Project {
             input,
             exprs,
@@ -7611,118 +7956,33 @@ fn fresh_internal_attribute_name(base: &str, used: &mut BTreeSet<String>) -> Str
     unreachable!("the finite set of used attribute names cannot exhaust all numeric suffixes")
 }
 
-fn select_output_term(
-    select: &[FormalSelectItem],
+fn select_output_expr(
+    select: &[FormalScalarSelectItem],
     name: &str,
     ty: FormalAttributeType,
-) -> Option<FormalAggregateTerm> {
+) -> Option<FormalScalarExpr> {
     let mut matches = select
         .iter()
         .filter(|item| item.alias == name && item.alias_ty == ty);
-    let term = matches.next()?.expr.clone();
-    matches.next().is_none().then_some(term)
-}
-
-fn function_term_contains_attribute(term: &FormalFunctionTerm) -> bool {
-    match term {
-        FormalFunctionTerm::Constant { .. } => false,
-        FormalFunctionTerm::Attribute { .. } => true,
-        FormalFunctionTerm::ScalarCall { args, .. } => {
-            args.iter().any(function_term_contains_attribute)
-        }
-    }
-}
-
-/// Replace references to Calcite Aggregate output slots by the exact Group
-/// select terms that produce those slots. A direct output attribute may turn
-/// into an aggregate term (for example COUNT(*)), so an attribute nested
-/// inside a function-term-only context is rejected conservatively.
-fn substitute_having_term(
-    term: &FormalAggregateTerm,
-    select: &[FormalSelectItem],
-) -> Option<FormalAggregateTerm> {
-    match term {
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Attribute { name, ty },
-        } => select_output_term(select, name, *ty),
-        FormalAggregateTerm::Expr { term } => (!function_term_contains_attribute(term))
-            .then(|| FormalAggregateTerm::Expr { term: term.clone() }),
-        FormalAggregateTerm::Aggregate {
-            function,
-            quantifier,
-            arg,
-        } => Some(FormalAggregateTerm::Aggregate {
-            function: *function,
-            quantifier: *quantifier,
-            arg: arg.clone(),
-        }),
-        FormalAggregateTerm::CountStar => Some(FormalAggregateTerm::CountStar),
-        FormalAggregateTerm::ScalarCall { operator, args } => {
-            Some(FormalAggregateTerm::ScalarCall {
-                operator: *operator,
-                args: args
-                    .iter()
-                    .map(|arg| substitute_having_term(arg, select))
-                    .collect::<Option<Vec<_>>>()?,
-            })
-        }
-        FormalAggregateTerm::Case {
-            branches,
-            else_expr,
-        } => Some(FormalAggregateTerm::Case {
-            branches: branches
-                .iter()
-                .map(|branch| {
-                    Some(FormalCaseBranch {
-                        when: substitute_having_term(&branch.when, select)?,
-                        then_expr: substitute_having_term(&branch.then_expr, select)?,
-                    })
-                })
-                .collect::<Option<Vec<_>>>()?,
-            else_expr: Box::new(substitute_having_term(else_expr, select)?),
-        }),
-    }
-}
-
-fn substitute_having_select_item(
-    item: &FormalSelectItem,
-    select: &[FormalSelectItem],
-) -> Option<FormalSelectItem> {
-    Some(FormalSelectItem {
-        expr: substitute_having_term(&item.expr, select)?,
-        alias: item.alias.clone(),
-        alias_ty: item.alias_ty,
-        numeric_dscale: item.numeric_dscale.clone(),
-    })
-}
-
-fn legacy_select_from_scalar_leaves(
-    select: &[FormalScalarSelectItem],
-) -> Option<Vec<FormalSelectItem>> {
-    select
-        .iter()
-        .map(|item| {
-            let FormalScalarExpr::Leaf { result_ty, term } = &item.expr else {
-                return None;
-            };
-            (*result_ty == item.alias_ty).then(|| FormalSelectItem {
-                expr: term.clone(),
-                alias: item.alias.clone(),
-                alias_ty: item.alias_ty,
-                numeric_dscale: item.numeric_dscale.clone(),
-            })
-        })
-        .collect()
+    let expression = matches.next()?.expr.clone();
+    matches.next().is_none().then_some(expression)
 }
 
 fn substitute_having_scalar_expr(
     expression: &FormalScalarExpr,
-    select: &[FormalSelectItem],
+    select: &[FormalScalarSelectItem],
 ) -> Option<FormalScalarExpr> {
     Some(match expression {
+        FormalScalarExpr::Leaf {
+            term:
+                FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute { name, ty },
+                },
+            ..
+        } => select_output_expr(select, name, *ty)?,
         FormalScalarExpr::Leaf { result_ty, term } => FormalScalarExpr::Leaf {
             result_ty: *result_ty,
-            term: substitute_having_term(term, select)?,
+            term: term.clone(),
         },
         FormalScalarExpr::Call {
             result_ty,
@@ -7760,13 +8020,25 @@ fn substitute_having_scalar_expr(
                 .map(|arg| substitute_having_scalar_expr(arg, select))
                 .collect::<Option<Vec<_>>>()?,
         },
-        FormalScalarExpr::And { left, right } => FormalScalarExpr::And {
-            left: Box::new(substitute_having_scalar_expr(left, select)?),
-            right: Box::new(substitute_having_scalar_expr(right, select)?),
+        FormalScalarExpr::And {
+            insertion_sites,
+            operands,
+        } => FormalScalarExpr::And {
+            insertion_sites: insertion_sites.clone(),
+            operands: operands
+                .iter()
+                .map(|operand| substitute_having_scalar_expr(operand, select))
+                .collect::<Option<Vec<_>>>()?,
         },
-        FormalScalarExpr::Or { left, right } => FormalScalarExpr::Or {
-            left: Box::new(substitute_having_scalar_expr(left, select)?),
-            right: Box::new(substitute_having_scalar_expr(right, select)?),
+        FormalScalarExpr::Or {
+            insertion_sites,
+            operands,
+        } => FormalScalarExpr::Or {
+            insertion_sites: insertion_sites.clone(),
+            operands: operands
+                .iter()
+                .map(|operand| substitute_having_scalar_expr(operand, select))
+                .collect::<Option<Vec<_>>>()?,
         },
         FormalScalarExpr::Not { expression } => FormalScalarExpr::Not {
             expression: Box::new(substitute_having_scalar_expr(expression, select)?),
@@ -7803,91 +8075,18 @@ fn substitute_having_scalar_expr(
     })
 }
 
-fn substitute_having_formula_expr(
-    formula: &FormalFormulaExpr,
-    select: &[FormalSelectItem],
-) -> Option<FormalFormulaExpr> {
-    match formula {
-        FormalFormulaExpr::True => Some(FormalFormulaExpr::True),
-        FormalFormulaExpr::False => Some(FormalFormulaExpr::False),
-        FormalFormulaExpr::Predicate { predicate, args } => Some(FormalFormulaExpr::Predicate {
-            predicate: *predicate,
-            args: args
-                .iter()
-                .map(|arg| substitute_having_term(arg, select))
-                .collect::<Option<Vec<_>>>()?,
-        }),
-        FormalFormulaExpr::And { left, right } => Some(FormalFormulaExpr::And {
-            left: Box::new(substitute_having_formula_expr(left, select)?),
-            right: Box::new(substitute_having_formula_expr(right, select)?),
-        }),
-        FormalFormulaExpr::Or { left, right } => Some(FormalFormulaExpr::Or {
-            left: Box::new(substitute_having_formula_expr(left, select)?),
-            right: Box::new(substitute_having_formula_expr(right, select)?),
-        }),
-        FormalFormulaExpr::Not { formula } => Some(FormalFormulaExpr::Not {
-            formula: Box::new(substitute_having_formula_expr(formula, select)?),
-        }),
-        FormalFormulaExpr::In {
-            select: left_select,
-            query,
-        } => Some(FormalFormulaExpr::In {
-            select: left_select
-                .iter()
-                .map(|item| substitute_having_select_item(item, select))
-                .collect::<Option<Vec<_>>>()?,
-            query: query.clone(),
-        }),
-        FormalFormulaExpr::QuantifiedComparison {
-            predicate,
-            args,
-            query,
-        } => Some(FormalFormulaExpr::QuantifiedComparison {
-            predicate: *predicate,
-            args: args
-                .iter()
-                .map(|arg| substitute_having_term(arg, select))
-                .collect::<Option<Vec<_>>>()?,
-            query: query.clone(),
-        }),
-        FormalFormulaExpr::Exists { query } => Some(FormalFormulaExpr::Exists {
-            query: query.clone(),
-        }),
-        FormalFormulaExpr::Scalar { expression } => Some(FormalFormulaExpr::Scalar {
-            expression: Box::new(substitute_having_scalar_expr(expression, select)?),
-        }),
-    }
-}
-
 fn install_query_expr_having(
     query: FormalQueryExpr,
-    predicate: &FormalFormulaExpr,
+    predicate: &FormalScalarExpr,
 ) -> Option<FormalQueryExpr> {
     match query {
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having: FormalScalarExpr::True,
             input,
-        } => {
-            let FormalFormulaExpr::Scalar { expression } = predicate else {
-                return None;
-            };
-            let legacy_select = legacy_select_from_scalar_leaves(&select)?;
-            Some(FormalQueryExpr::ScalarGroup {
-                having: substitute_having_scalar_expr(expression, &legacy_select)?,
-                select,
-                group_by,
-                input,
-            })
-        }
-        FormalQueryExpr::Group {
-            select,
-            group_by,
-            having: FormalFormulaExpr::True,
-            input,
         } => Some(FormalQueryExpr::Group {
-            having: substitute_having_formula_expr(predicate, &select)?,
+            having: substitute_having_scalar_expr(predicate, &select)?,
             select,
             group_by,
             input,
@@ -8880,6 +9079,7 @@ fn rewrite_postgres_decimal_sum_numeric_coalesce_node(
 
 pub(super) fn rel_structural_max_rows(rel: &RelExpr) -> Option<u64> {
     match rel {
+        RelExpr::Bindings { body, .. } => rel_structural_max_rows(body),
         RelExpr::Values { rows, .. } => u64::try_from(rows.len()).ok(),
         RelExpr::Project { input, .. }
         | RelExpr::Filter { input, .. }
@@ -8896,6 +9096,7 @@ pub(super) fn rel_structural_max_rows(rel: &RelExpr) -> Option<u64> {
             Some(1)
         }
         RelExpr::TableScan { .. }
+        | RelExpr::QueryRef { .. }
         | RelExpr::Join { .. }
         | RelExpr::Aggregate { .. }
         | RelExpr::Set { .. } => None,
@@ -9863,7 +10064,8 @@ fn null_literal(ast: &ScalarAst) -> bool {
 
 fn rel_requires_explicit_query_expr(rel: &RelExpr) -> bool {
     match rel {
-        RelExpr::TableScan { .. } => false,
+        RelExpr::Bindings { .. } => true,
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => false,
         RelExpr::Values { rows, .. } => rows
             .iter()
             .flatten()
@@ -9919,7 +10121,7 @@ fn rel_requires_explicit_query_expr(rel: &RelExpr) -> bool {
         }
         // Source-attested SELECT DISTINCT must reach the query-expression
         // lowering branch even when its child is otherwise representable by
-        // the legacy relational subset. Its explicit QExpr_Distinct identity
+        // the query-free relational subset. Its explicit QExpr_Distinct identity
         // is semantically observable under capped EXISTS demand.
         RelExpr::Distinct { .. } => true,
         RelExpr::Set { inputs, .. } => inputs.iter().any(rel_requires_explicit_query_expr),
@@ -9960,7 +10162,7 @@ fn scalar_ast_requires_explicit_query_expr(ast: &ScalarAst) -> bool {
         }
         ScalarAst::Call { op, args, .. } => {
             // CASE is branch-sensitive and may suppress errors in branches that
-            // are not selected. Keep it in the exact FormulaExpr/QueryExpr
+            // are not selected. Keep it in the exact scalar-expression/QueryExpr
             // semantics, just like AND/OR short-circuiting, rather than hiding
             // it inside a deterministic relational query whose row order would
             // choose one otherwise-unobservable first error.

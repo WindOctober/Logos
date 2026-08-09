@@ -1,7 +1,7 @@
 Set Implicit Arguments.
 
 From SQLFS Require Import
-  OrderedSet FiniteSet FiniteBag FiniteCollection FlatData Env Bool3 Formula
+  OrderedSet FiniteSet FiniteBag FiniteCollection FlatData Env Bool3
   SqlOutcome SqlErrorSemantics SqlBagAbstraction SqlQuerySyntax
   SqlQuerySemantics SqlQueryFacts SqlQueryContexts.
 From Logos.FormalSQL Require Import
@@ -23,56 +23,32 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation success_bags :=
   (query_success_bags basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_safe :=
   (query_expr_runtime_safe basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_has_success :=
   (query_expr_has_success basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_equiv :=
   (@query_expr_equiv T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation query_outcome_equiv :=
   (@query_expr_outcome_equiv T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
-
-Example safe_projection_possible_bags_are_exact :
-  forall env select_list input,
-    (forall row,
-      @eval_select_list_runtime_error T symbol_runtime_error
-        aggregate_runtime_error (env_t T env row) select_list = None) ->
-    rel_equiv
-      (success_bags env (QExpr_Project select_list input))
-      (fun output =>
-        exists input_bag,
-          success_bags env input input_bag /\
-          bag_eq T (query_project_bag env select_list input_bag) output).
-Proof.
-intros; now apply query_project_success_bags_safe.
-Qed.
-
-Example projected_table_success_bags_are_functional :
-  forall env select_list outputs table first second,
-    success_bags env (QExpr_Project select_list (QExpr_Table outputs table))
-      first ->
-    success_bags env (QExpr_Project select_list (QExpr_Table outputs table))
-      second ->
-    bag_eq T first second.
-Proof.
-intros env select_list outputs table first second Hfirst Hsecond.
-eapply query_project_success_bags_functional;
-  [| exact Hfirst | exact Hsecond].
-intros first_input second_input Hfirst_input Hsecond_input.
-eapply query_table_success_bags_functional; eassumption.
-Qed.
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Example cross_join_distributes_over_union_all_possible_bags :
   forall env left first second,

@@ -246,17 +246,22 @@ public final class CalciteIrCli {
   }
 
   public static void main(String[] args) throws Exception {
-    Map<String, String> opts = parseArgs(args);
-    if (!opts.containsKey("schema") || !opts.containsKey("sql")) {
+    List<String> sqlPaths = new ArrayList<>();
+    Map<String, String> opts = parseArgs(args, sqlPaths);
+    if (!opts.containsKey("schema") || sqlPaths.isEmpty()) {
       usage();
       System.exit(2);
     }
 
     String schemaSql = Files.readString(Path.of(opts.get("schema")));
     validatePostgresSqlText(schemaSql, "schema");
-    String querySql = Files.readString(Path.of(opts.get("sql")));
-    validatePostgresSqlText(querySql, "query");
-    rejectNestedPostgresQueryBlockComments(querySql);
+    List<String> queryDocuments = new ArrayList<>();
+    for (String sqlPath : sqlPaths) {
+      String querySql = Files.readString(Path.of(sqlPath));
+      validatePostgresSqlText(querySql, "query");
+      rejectNestedPostgresQueryBlockComments(querySql);
+      queryDocuments.add(querySql);
+    }
     String defaultCollation = canonicalDefaultCollation(
         opts.getOrDefault("default-collation", "unspecified"));
     String characterClassification = canonicalCharacterClassification(
@@ -294,7 +299,10 @@ public final class CalciteIrCli {
         .defaultSchema(rootSchema)
         .build();
 
-    List<String> queries = splitQueries(querySql);
+    List<String> queries = new ArrayList<>();
+    for (String queryDocument : queryDocuments) {
+      queries.addAll(splitQueries(queryDocument));
+    }
     Json out = new Json();
     out.beginObject();
     out.name("environment");
@@ -12878,7 +12886,7 @@ public final class CalciteIrCli {
     return false;
   }
 
-  private static Map<String, String> parseArgs(String[] args) {
+  private static Map<String, String> parseArgs(String[] args, List<String> sqlPaths) {
     Map<String, String> opts = new LinkedHashMap<>();
     for (int i = 0; i < args.length; i++) {
       String arg = args[i];
@@ -12892,7 +12900,12 @@ public final class CalciteIrCli {
       if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
         throw new IllegalArgumentException("missing value for option: --" + name);
       }
-      String previous = opts.putIfAbsent(name, args[++i]);
+      String value = args[++i];
+      if (name.equals("sql")) {
+        sqlPaths.add(value);
+        continue;
+      }
+      String previous = opts.putIfAbsent(name, value);
       if (previous != null) {
         throw new IllegalArgumentException("duplicate option: --" + name);
       }

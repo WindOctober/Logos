@@ -21,65 +21,68 @@ Import Tuple.
     truth, never through Rocq equality. *)
 Section TNullMembershipCases.
 
+Context {relname : Type}.
+
 Lemma tnull_in_rows_unknown_iff :
-  forall env select_items rows,
-    @in_rows_truth TNull unknown3 NullValues.is_null_value
-      env select_items rows = unknown3 <->
+  forall values (subquery : query_expr TNull relname) rows,
+    @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+      values subquery rows = unknown3 <->
     Exists
       (fun row =>
-        @in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items row = unknown3)
+        @in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery row = unknown3)
       (@query_canonical_rows TNull rows) /\
     Forall
       (fun row =>
-        @in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items row <> true3)
+        @in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery row <> true3)
       (@query_canonical_rows TNull rows).
 Proof.
-intros env select_items rows.
+intros values subquery rows.
 unfold in_rows_truth.
 apply interp_exists_quant_unknown_iff.
 Qed.
 
 Theorem tnull_in_rows_semantic_cases :
-  forall env select_items rows,
+  forall values (subquery : query_expr TNull relname) rows,
     ((@query_canonical_rows TNull rows = nil) /\
-      @in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items rows = false3) \/
+      @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery rows = false3) \/
     ((exists row,
         In row (@query_canonical_rows TNull rows) /\
-        @in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items row = true3) /\
-      @in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items rows = true3) \/
+        @in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery row = true3) /\
+      @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery rows = true3) \/
     ((Exists
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row = unknown3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row = unknown3)
         (@query_canonical_rows TNull rows) /\
       Forall
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row <> true3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row <> true3)
         (@query_canonical_rows TNull rows)) /\
-      @in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items rows = unknown3) \/
+      @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery rows = unknown3) \/
     ((@query_canonical_rows TNull rows <> nil) /\
       Forall
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row = false3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row = false3)
         (@query_canonical_rows TNull rows) /\
-      @in_rows_truth TNull unknown3 NullValues.is_null_value
-        env select_items rows = false3).
+      @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery rows = false3).
 Proof.
-intros env select_items rows.
+intros values subquery rows.
 remember
-  (@in_rows_truth TNull unknown3 NullValues.is_null_value
-    env select_items rows) as truth eqn:Htruth.
+  (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+    values subquery rows) as truth eqn:Htruth.
 destruct truth.
 - right; left; split; [|now symmetry].
-  apply (@in_rows_true_iff TNull unknown3 NullValues.is_null_value).
+  apply (@in_rows_true_iff TNull relname unknown3
+    NullValues.is_null_value).
   now symmetry.
 - destruct (@query_canonical_rows TNull rows) as [|row tail] eqn:Hrows.
   + left; now split.
@@ -88,34 +91,34 @@ destruct truth.
     split.
     * rewrite Forall_forall.
       intros candidate Hin.
-      apply (@in_rows_false_iff TNull unknown3
-        NullValues.is_null_value env select_items rows).
+      apply (@in_rows_false_iff TNull relname unknown3
+        NullValues.is_null_value values subquery rows).
       -- now symmetry.
       -- rewrite Hrows; exact Hin.
     * now symmetry.
 - right; right; left; split; [|now symmetry].
-  apply tnull_in_rows_unknown_iff.
+  apply (tnull_in_rows_unknown_iff values subquery rows).
   now symmetry.
 Qed.
 
 (** [NOT IN] accepts exactly when every candidate comparison is FALSE.
     Empty candidate input is included by the vacuous [Forall]. *)
 Theorem tnull_not_in_rows_acceptance_iff_all_false :
-  forall env select_items rows,
+  forall values (subquery : query_expr TNull relname) rows,
     Bool.is_true Bool3
       (negb3
-        (@in_rows_truth TNull unknown3 NullValues.is_null_value
-          env select_items rows)) = true <->
+        (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery rows)) = true <->
     Forall
       (fun row =>
-        @in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items row = false3)
+        @in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery row = false3)
       (@query_canonical_rows TNull rows).
 Proof.
-intros env select_items rows.
+intros values subquery rows.
 rewrite Bool.true_is_true, negb3_true_iff.
-rewrite (@in_rows_false_iff TNull unknown3 NullValues.is_null_value
-  env select_items rows).
+rewrite (@in_rows_false_iff TNull relname unknown3
+  NullValues.is_null_value values subquery rows).
 symmetry; apply Forall_forall.
 Qed.
 
@@ -123,22 +126,23 @@ Qed.
     that neither a TRUE match nor an UNKNOWN comparison exists.  This is the
     NULL-aware condition that a plain anti-semijoin must not omit. *)
 Theorem tnull_not_in_rows_acceptance_iff_no_true_or_unknown :
-  forall env select_items rows,
+  forall values (subquery : query_expr TNull relname) rows,
     Bool.is_true Bool3
       (negb3
-        (@in_rows_truth TNull unknown3 NullValues.is_null_value
-          env select_items rows)) = true <->
+        (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery rows)) = true <->
     (~ exists row,
       In row (@query_canonical_rows TNull rows) /\
-      @in_row_truth TNull unknown3 NullValues.is_null_value
-        env select_items row = true3) /\
+      @in_row_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery row = true3) /\
     (~ exists row,
       In row (@query_canonical_rows TNull rows) /\
-      @in_row_truth TNull unknown3 NullValues.is_null_value
-        env select_items row = unknown3).
+      @in_row_truth TNull relname unknown3 NullValues.is_null_value
+        values subquery row = unknown3).
 Proof.
-intros env select_items rows.
-rewrite tnull_not_in_rows_acceptance_iff_all_false.
+intros values subquery rows.
+rewrite (tnull_not_in_rows_acceptance_iff_all_false
+  values subquery rows).
 split.
 - intro Hall; rewrite Forall_forall in Hall.
   split; intros [row [Hin Htruth]].
@@ -147,8 +151,8 @@ split.
 - intros [Htrue Hunknown].
   rewrite Forall_forall.
   intros row Hin.
-  destruct (@in_row_truth TNull unknown3 NullValues.is_null_value
-    env select_items row) eqn:Htruth.
+  destruct (@in_row_truth TNull relname unknown3 NullValues.is_null_value
+    values subquery row) eqn:Htruth.
   + exfalso; apply Htrue; exists row; now split.
   + reflexivity.
   + exfalso; apply Hunknown; exists row; now split.
@@ -175,10 +179,16 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
+Local Abbreviation eval_scalar_values :=
+  (@eval_scalar_values_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Lemma query_rows_bag_occ_local : forall rows row,
   Febag.nb_occ (Fecol.CBag (CTuple T)) row (query_rows_bag rows) =
@@ -274,51 +284,82 @@ Qed.
 (** Membership acceptance is insensitive to DISTINCT, while the underlying
     row bag and its duplicate multiplicities are not identified. *)
 Theorem in_rows_acceptance_distinct :
-  forall env select_items input output,
+  forall values (subquery : query_expr T relname) input output,
+    Forall
+      (query_row_has_outputs (query_expr_outputs subquery)) input ->
     query_same_rows_as_bag output
       (query_distinct_bag (query_rows_bag input)) ->
     Bool.is_true (B T)
-      (@in_rows_truth T unknown value_is_null env select_items output) =
+      (@in_rows_truth T relname unknown value_is_null
+        values subquery output) =
     Bool.is_true (B T)
-      (@in_rows_truth T unknown value_is_null env select_items input).
+      (@in_rows_truth T relname unknown value_is_null
+        values subquery input).
 Proof.
-intros env select_items input output Houtput.
-apply in_rows_acceptance_support_rel.
-now apply query_distinct_rows_support_rel.
+intros values subquery input output Hinput Houtput.
+pose proof
+  (@query_distinct_rows_support_rel input output Houtput) as Hsupport.
+assert (Houtput_rows :
+  Forall (query_row_has_outputs (query_expr_outputs subquery)) output).
+{
+  rewrite Forall_forall in Hinput |- *.
+  intros row Hrow.
+  destruct (proj1 Hsupport row Hrow) as
+    [input_row [Hinput_row Hequal]].
+  eapply (query_row_has_outputs_congr
+    (outputs := query_expr_outputs subquery)
+    (left := input_row) row).
+  - apply Oeset.compare_eq_sym; exact Hequal.
+  - exact (Hinput input_row Hinput_row).
+}
+eapply in_rows_acceptance_support_rel;
+  [exact Houtput_rows|exact Hinput|exact Hsupport].
 Qed.
 
-Theorem formula_in_union_all_acceptance_exact :
-  forall env select_items left right (accept : tuple T -> bool)
+Theorem scalar_expr_in_union_all_acceptance_exact :
+  forall env arguments left right
+      (accept : list (value T) -> tuple T -> bool)
       left_accepted right_accepted,
     query_expr_sort left =S= query_expr_sort right ->
-    first_runtime_error
-      (@eval_select_runtime_error T
-        symbol_runtime_error aggregate_runtime_error env)
-      select_items = None ->
+    (exists values,
+      eval_scalar_values env arguments (SqlSuccess values)) ->
     (exists rows, eval_query env left (SqlSuccess rows)) ->
     (exists rows, eval_query env right (SqlSuccess rows)) ->
-    (forall row,
+    (forall rows,
+      eval_query env (QExpr_Set Union left right) (SqlSuccess rows) ->
+      Forall
+        (query_row_has_outputs
+          (query_expr_outputs (QExpr_Set Union left right))) rows) ->
+    (forall values,
+      eval_scalar_values env arguments (SqlSuccess values) ->
+      forall row,
       Bool.is_true (B T)
-        (@in_row_truth T unknown value_is_null env select_items row) =
-      accept row) ->
-    (forall rows,
+        (@in_row_truth T relname unknown value_is_null
+          values (QExpr_Set Union left right) row) =
+      accept values row) ->
+    (forall values rows,
+      eval_scalar_values env arguments (SqlSuccess values) ->
       eval_query env left (SqlSuccess rows) ->
-      existsb accept rows = left_accepted) ->
-    (forall rows,
+      existsb (accept values) rows = left_accepted) ->
+    (forall values rows,
+      eval_scalar_values env arguments (SqlSuccess values) ->
       eval_query env right (SqlSuccess rows) ->
-      existsb accept rows = right_accepted) ->
+      existsb (accept values) rows = right_accepted) ->
+    (forall error,
+      ~ eval_scalar_values env arguments (SqlError error)) ->
     (forall error, ~ eval_query env left (SqlError error)) ->
     (forall error, ~ eval_query env right (SqlError error)) ->
-    formula_acceptance_exact_at
+    scalar_expr_acceptance_exact_at
       basesort instance unknown symbol_runtime_error
-      aggregate_runtime_error value_is_null env
-      (FExpr_In select_items (QExpr_Set Union left right))
+      aggregate_runtime_error value_is_null boolean_schedule env
+      (SExpr_In arguments (QExpr_Set Union left right))
       (orb left_accepted right_accepted).
 Proof.
-intros env select_items left right accept left_accepted right_accepted
+intros env arguments left right accept left_accepted right_accepted
   Hsort Harguments [left_rows0 Hleft0] [right_rows0 Hright0]
-  Haccept Hleft_fixed Hright_fixed Hleft_errors Hright_errors.
-eapply formula_in_acceptance_exact
+  Houtputs Haccept Hleft_fixed Hright_fixed Hargument_errors
+  Hleft_errors Hright_errors.
+eapply scalar_expr_in_acceptance_exact
   with (accept := accept).
 - exact Harguments.
 - exists
@@ -329,8 +370,10 @@ eapply formula_in_acceptance_exact
   exists left_rows0, right_rows0.
   repeat split; try assumption.
   apply query_elements_same_rows_as_bag.
+- exact Houtputs.
 - exact Haccept.
-- intros output Houtput.
+- intros values output Hvalues Houtput.
+  pose proof (Houtputs output Houtput) as Houtput_rows.
   apply eval_query_expr_set_success_iff in Houtput.
   destruct Houtput as
     [left_rows [right_rows [Hleft [Hright Houtput]]]].
@@ -353,30 +396,33 @@ eapply formula_in_acceptance_exact
   }
   assert (Hproper : forall first second,
     Oeset.compare (OTuple T) first second = Eq ->
-    accept first = accept second).
+    query_row_has_outputs
+      (query_expr_outputs (QExpr_Set Union left right)) first ->
+    accept values first = accept values second).
   {
-    intros first second Hequal.
-    rewrite <- (Haccept first), <- (Haccept second).
+    intros first second Hequal Hfirst_outputs.
+    rewrite <- (Haccept values Hvalues first),
+      <- (Haccept values Hvalues second).
     apply f_equal.
-    unfold in_row_truth.
-    apply query_tuple_equal_congr.
-    + apply Oeset.compare_eq_refl.
-    + exact Hequal.
+    eapply in_row_truth_congr; eassumption.
   }
-  assert (Hexists : existsb accept output =
-    existsb accept (left_rows ++ right_rows)).
+  assert (Hexists : existsb (accept values) output =
+    existsb (accept values) (left_rows ++ right_rows)).
   {
-    eapply existsb_rel_permut; [|exact Hpermut].
-    intros first second Hequal; now apply Hproper.
+    eapply existsb_rel_permut_with_left_property;
+      [|exact Hpermut|exact Houtput_rows].
+    exact Hproper.
   }
   rewrite Hexists.
   transitivity
     (Datatypes.orb
-      (existsb accept left_rows) (existsb accept right_rows)).
+      (existsb (accept values) left_rows)
+      (existsb (accept values) right_rows)).
   + apply List.existsb_app.
-  + rewrite (Hleft_fixed left_rows Hleft),
-      (Hright_fixed right_rows Hright).
+  + rewrite (Hleft_fixed values left_rows Hvalues Hleft),
+      (Hright_fixed values right_rows Hvalues Hright).
     reflexivity.
+- exact Hargument_errors.
 - intros error Herror.
   inversion Herror; subst.
   + eapply Hleft_errors; eassumption.
@@ -385,7 +431,7 @@ Qed.
 
 End UnionAllMembershipAcceptance.
 
-(** Exact formula-level lifts.  The fixed correlated environment is retained
+(** Exact typed-scalar lifts.  The fixed correlated environment is retained
     throughout; argument failures and child query errors remain observable.
     The row predicates below establish, rather than assume, the Bool3 result
     used by the generic [NOT IN] outcome theorem. *)
@@ -403,120 +449,136 @@ Variable aggregate_runtime_error :
   aggregate TNull ->
   list (option sql_runtime_error * value TNull) ->
   option sql_runtime_error.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome TNull relname basesort instance unknown3
     symbol_runtime_error aggregate_runtime_error
-    NullValues.is_null_value).
+    NullValues.is_null_value boolean_schedule).
+Local Abbreviation eval_scalar_values :=
+  (@eval_scalar_values_outcome TNull relname basesort instance unknown3
+    symbol_runtime_error aggregate_runtime_error
+    NullValues.is_null_value boolean_schedule).
 
-Theorem tnull_formula_not_in_accepts_exact_of_all_false :
-  forall env select_items subquery,
-    first_runtime_error
-      (@eval_select_runtime_error TNull
-        symbol_runtime_error aggregate_runtime_error env)
-      select_items = None ->
+Theorem tnull_scalar_expr_not_in_accepts_exact_of_all_false :
+  forall env arguments subquery,
+    (exists values,
+      eval_scalar_values env arguments (SqlSuccess values)) ->
     (exists rows, eval_query env subquery (SqlSuccess rows)) ->
-    (forall rows,
+    (forall values rows,
+      eval_scalar_values env arguments (SqlSuccess values) ->
       eval_query env subquery (SqlSuccess rows) ->
       Forall
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row = false3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row = false3)
         (@query_canonical_rows TNull rows)) ->
+    (forall error,
+      ~ eval_scalar_values env arguments (SqlError error)) ->
     (forall error, ~ eval_query env subquery (SqlError error)) ->
-    formula_acceptance_exact_at
+    scalar_expr_acceptance_exact_at
       basesort instance unknown3 symbol_runtime_error
-      aggregate_runtime_error NullValues.is_null_value env
-      (FExpr_Not (FExpr_In select_items subquery)) true.
+      aggregate_runtime_error NullValues.is_null_value boolean_schedule env
+      (SExpr_Not (SExpr_In arguments subquery)) true.
 Proof.
-intros env select_items subquery Harguments Hsuccess Hall Herrors.
+intros env arguments subquery Harguments Hsuccess Hall
+  Hargument_errors Herrors.
 pose proof
-  (@formula_not_in_acceptance_exact_of_fixed_truth
+  (@scalar_expr_not_in_acceptance_exact_of_fixed_truth
     TNull relname basesort instance unknown3 symbol_runtime_error
     aggregate_runtime_error NullValues.is_null_value
-    env select_items subquery false3 Harguments Hsuccess) as Hlift.
-assert (Hfixed : forall rows,
+    boolean_schedule env arguments subquery false3 Harguments Hsuccess)
+    as Hlift.
+assert (Hfixed : forall values rows,
+  eval_scalar_values env arguments (SqlSuccess values) ->
   eval_query env subquery (SqlSuccess rows) ->
-  @in_rows_truth TNull unknown3 NullValues.is_null_value
-    env select_items rows = false3).
+  @in_rows_truth TNull relname unknown3 NullValues.is_null_value
+    values subquery rows = false3).
 {
-  intros rows Hrows.
-  apply (@in_rows_false_iff TNull unknown3 NullValues.is_null_value
-    env select_items rows).
+  intros values rows Hvalues Hrows.
+  apply (@in_rows_false_iff TNull relname unknown3
+    NullValues.is_null_value values subquery rows).
   rewrite <- Forall_forall.
-  exact (Hall rows Hrows).
+  exact (Hall values rows Hvalues Hrows).
 }
-specialize (Hlift Hfixed Herrors).
+specialize (Hlift Hfixed Hargument_errors Herrors).
 cbn [negb3] in Hlift.
 exact Hlift.
 Qed.
 
-Theorem tnull_formula_not_in_rejects_exact_of_true_match :
-  forall env select_items subquery,
-    first_runtime_error
-      (@eval_select_runtime_error TNull
-        symbol_runtime_error aggregate_runtime_error env)
-      select_items = None ->
+Theorem tnull_scalar_expr_not_in_rejects_exact_of_true_match :
+  forall env arguments subquery,
+    (exists values,
+      eval_scalar_values env arguments (SqlSuccess values)) ->
     (exists rows, eval_query env subquery (SqlSuccess rows)) ->
-    (forall rows,
+    (forall values rows,
+      eval_scalar_values env arguments (SqlSuccess values) ->
       eval_query env subquery (SqlSuccess rows) ->
       exists row,
         In row (@query_canonical_rows TNull rows) /\
-        @in_row_truth TNull unknown3 NullValues.is_null_value
-          env select_items row = true3) ->
+        @in_row_truth TNull relname unknown3 NullValues.is_null_value
+          values subquery row = true3) ->
+    (forall error,
+      ~ eval_scalar_values env arguments (SqlError error)) ->
     (forall error, ~ eval_query env subquery (SqlError error)) ->
-    formula_acceptance_exact_at
+    scalar_expr_acceptance_exact_at
       basesort instance unknown3 symbol_runtime_error
-      aggregate_runtime_error NullValues.is_null_value env
-      (FExpr_Not (FExpr_In select_items subquery)) false.
+      aggregate_runtime_error NullValues.is_null_value boolean_schedule env
+      (SExpr_Not (SExpr_In arguments subquery)) false.
 Proof.
-intros env select_items subquery Harguments Hsuccess Hmatch Herrors.
+intros env arguments subquery Harguments Hsuccess Hmatch
+  Hargument_errors Herrors.
 pose proof
-  (@formula_not_in_acceptance_exact_of_fixed_truth
+  (@scalar_expr_not_in_acceptance_exact_of_fixed_truth
     TNull relname basesort instance unknown3 symbol_runtime_error
     aggregate_runtime_error NullValues.is_null_value
-    env select_items subquery true3 Harguments Hsuccess) as Hlift.
-specialize (Hlift (fun rows Hrows =>
-  (proj2 (@in_rows_true_iff TNull unknown3 NullValues.is_null_value
-    env select_items rows)) (Hmatch rows Hrows)) Herrors).
+    boolean_schedule env arguments subquery true3 Harguments Hsuccess)
+    as Hlift.
+specialize (Hlift (fun values rows Hvalues Hrows =>
+  (proj2 (@in_rows_true_iff TNull relname unknown3
+    NullValues.is_null_value values subquery rows))
+    (Hmatch values rows Hvalues Hrows)) Hargument_errors Herrors).
 cbn [negb3] in Hlift.
 exact Hlift.
 Qed.
 
-Theorem tnull_formula_not_in_rejects_exact_of_unknown_without_match :
-  forall env select_items subquery,
-    first_runtime_error
-      (@eval_select_runtime_error TNull
-        symbol_runtime_error aggregate_runtime_error env)
-      select_items = None ->
+Theorem tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match :
+  forall env arguments subquery,
+    (exists values,
+      eval_scalar_values env arguments (SqlSuccess values)) ->
     (exists rows, eval_query env subquery (SqlSuccess rows)) ->
-    (forall rows,
+    (forall values rows,
+      eval_scalar_values env arguments (SqlSuccess values) ->
       eval_query env subquery (SqlSuccess rows) ->
       Exists
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row = unknown3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row = unknown3)
         (@query_canonical_rows TNull rows) /\
       Forall
         (fun row =>
-          @in_row_truth TNull unknown3 NullValues.is_null_value
-            env select_items row <> true3)
+          @in_row_truth TNull relname unknown3 NullValues.is_null_value
+            values subquery row <> true3)
         (@query_canonical_rows TNull rows)) ->
+    (forall error,
+      ~ eval_scalar_values env arguments (SqlError error)) ->
     (forall error, ~ eval_query env subquery (SqlError error)) ->
-    formula_acceptance_exact_at
+    scalar_expr_acceptance_exact_at
       basesort instance unknown3 symbol_runtime_error
-      aggregate_runtime_error NullValues.is_null_value env
-      (FExpr_Not (FExpr_In select_items subquery)) false.
+      aggregate_runtime_error NullValues.is_null_value boolean_schedule env
+      (SExpr_Not (SExpr_In arguments subquery)) false.
 Proof.
-intros env select_items subquery Harguments Hsuccess Hunknown Herrors.
+intros env arguments subquery Harguments Hsuccess Hunknown
+  Hargument_errors Herrors.
 pose proof
-  (@formula_not_in_acceptance_exact_of_fixed_truth
+  (@scalar_expr_not_in_acceptance_exact_of_fixed_truth
     TNull relname basesort instance unknown3 symbol_runtime_error
     aggregate_runtime_error NullValues.is_null_value
-    env select_items subquery unknown3 Harguments Hsuccess) as Hlift.
-specialize (Hlift (fun rows Hrows =>
-  (proj2 (tnull_in_rows_unknown_iff env select_items rows))
-    (Hunknown rows Hrows)) Herrors).
+    boolean_schedule env arguments subquery unknown3 Harguments Hsuccess)
+    as Hlift.
+specialize (Hlift (fun values rows Hvalues Hrows =>
+  (proj2 (tnull_in_rows_unknown_iff values subquery rows))
+    (Hunknown values rows Hvalues Hrows)) Hargument_errors Herrors).
 cbn [negb3] in Hlift.
 exact Hlift.
 Qed.

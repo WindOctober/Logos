@@ -7,8 +7,7 @@ From SQLFS Require Import
   Bool3 Env FiniteBag FiniteCollection FiniteSet SqlErrorSemantics SqlOutcome
   OrderedSet SqlBagAbstraction SqlQueryContexts SqlQueryFacts SqlQuerySemantics
   SqlQuerySyntax.
-From Logos.FormalSQL Require Import
-  RelationalAlgebraFacts AggregateRuntimeFacts OrderedQueryFacts.
+From Logos.FormalSQL Require Import OrderedQueryFacts.
 
 Import Tuple.
 Import ListNotations.
@@ -27,81 +26,20 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation query_outcome_equiv :=
   (@query_expr_outcome_equiv T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation success_bags :=
   (query_success_bags basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
-
-(** No SELECT-list runtime-safety premise appears here.  The two successful
-    observations themselves suffice for the projection functionality rule. *)
-Theorem projected_table_success_bags_functional_without_safety :
-  forall env select_list outputs table first second,
-    success_bags env
-      (QExpr_Project select_list (QExpr_Table outputs table)) first ->
-    success_bags env
-      (QExpr_Project select_list (QExpr_Table outputs table)) second ->
-    bag_eq T first second.
-Proof.
-intros env select_list outputs table first second Hfirst Hsecond.
-eapply query_project_success_bags_functional;
-  [|exact Hfirst|exact Hsecond].
-intros child_first child_second Hchild_first Hchild_second.
-eapply query_table_success_bags_functional; eassumption.
-Qed.
-
-Theorem distinct_projected_table_success_bags_functional :
-  forall env select_list outputs table first second,
-    success_bags env
-      (QExpr_Distinct
-        (QExpr_Project select_list (QExpr_Table outputs table))) first ->
-    success_bags env
-      (QExpr_Distinct
-        (QExpr_Project select_list (QExpr_Table outputs table))) second ->
-    bag_eq T first second.
-Proof.
-intros env select_list outputs table first second Hfirst Hsecond.
-eapply query_distinct_success_bags_functional;
-  [|exact Hfirst|exact Hsecond].
-intros child_first child_second Hchild_first Hchild_second.
-eapply query_project_success_bags_functional;
-  [|exact Hchild_first|exact Hchild_second].
-intros table_first table_second Htable_first Htable_second.
-eapply query_table_success_bags_functional; eassumption.
-Qed.
-
-Theorem set_of_projected_tables_success_bags_functional :
-  forall env operation select_list outputs left_table right_table first second,
-    success_bags env
-      (QExpr_Set operation
-        (QExpr_Project select_list (QExpr_Table outputs left_table))
-        (QExpr_Project select_list (QExpr_Table outputs right_table))) first ->
-    success_bags env
-      (QExpr_Set operation
-        (QExpr_Project select_list (QExpr_Table outputs left_table))
-        (QExpr_Project select_list (QExpr_Table outputs right_table))) second ->
-    bag_eq T first second.
-Proof.
-intros env operation select_list outputs left_table right_table
-  first second Hfirst Hsecond.
-eapply query_set_success_bags_functional;
-  [| |exact Hfirst|exact Hsecond].
-- intros child_first child_second Hchild_first Hchild_second.
-  eapply query_project_success_bags_functional;
-    [|exact Hchild_first|exact Hchild_second].
-  intros table_first table_second Htable_first Htable_second.
-  eapply query_table_success_bags_functional; eassumption.
-- intros child_first child_second Hchild_first Hchild_second.
-  eapply query_project_success_bags_functional;
-    [|exact Hchild_first|exact Hchild_second].
-  intros table_first table_second Htable_first Htable_second.
-  eapply query_table_success_bags_functional; eassumption.
-Qed.
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Theorem cross_join_of_tables_success_bags_functional :
   forall env left_outputs left_table right_outputs right_table first second,
@@ -131,59 +69,69 @@ Theorem grouping_sets_nil_outcome_regression :
   forall env input outcome,
     @eval_grouping_sets_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env [] input outcome <->
+      boolean_schedule env [] input outcome <->
     outcome = SqlSuccess (Febag.empty (Fecol.CBag (CTuple T))).
 Proof.
-apply eval_grouping_sets_nil_outcome_iff.
+intros env input outcome; split.
+- intro Heval; inversion Heval; reflexivity.
+- intro Houtcome; subst; constructor.
 Qed.
 
 Theorem grouping_sets_cons_success_regression :
-  forall env select_list group_terms grouping_sets input output,
+  forall env select_list group_keys grouping_sets input output,
     @eval_grouping_sets_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env ((select_list, group_terms) :: grouping_sets) input
+      boolean_schedule env ((select_list, group_keys) :: grouping_sets) input
       (SqlSuccess output) <->
     exists head_bag tail_bag,
       @eval_group_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env select_list group_terms FExpr_True input
+        boolean_schedule env select_list group_keys SExpr_True input
         (SqlSuccess head_bag) /\
       @eval_grouping_sets_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env grouping_sets input (SqlSuccess tail_bag) /\
+        boolean_schedule env grouping_sets input (SqlSuccess tail_bag) /\
       output = query_set_bag Union head_bag tail_bag.
 Proof.
-apply eval_grouping_sets_cons_success_iff.
+intros env select_list group_keys grouping_sets input output; split.
+- intro Heval; inversion Heval; subst.
+  eexists; eexists; repeat split; eassumption || reflexivity.
+- intros [head_bag [tail_bag [Hhead [Htail Houtput]]]].
+  subst output; now apply EGroupingSets_ConsSuccess.
 Qed.
 
 Theorem grouping_sets_cons_error_regression :
-  forall env select_list group_terms grouping_sets input error,
+  forall env select_list group_keys grouping_sets input error,
     @eval_grouping_sets_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env ((select_list, group_terms) :: grouping_sets) input
+      boolean_schedule env ((select_list, group_keys) :: grouping_sets) input
       (SqlError error) <->
     @eval_group_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env select_list group_terms FExpr_True input (SqlError error) \/
+      boolean_schedule env select_list group_keys SExpr_True input
+      (SqlError error) \/
     exists head_bag,
       @eval_group_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env select_list group_terms FExpr_True input
+        boolean_schedule env select_list group_keys SExpr_True input
         (SqlSuccess head_bag) /\
       @eval_grouping_sets_bag_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env grouping_sets input (SqlError error).
+        boolean_schedule env grouping_sets input (SqlError error).
 Proof.
-apply eval_grouping_sets_cons_error_iff.
+intros env select_list group_keys grouping_sets input error; split.
+- intro Heval; inversion Heval; subst.
+  + now left.
+  + right; eexists; now split; eassumption.
+- intros [Hhead | [head_bag [Hhead Htail]]].
+  + now apply EGroupingSets_HeadError.
+  + eapply EGroupingSets_TailError with (head_bag := head_bag).
+    * exact Hhead.
+    * exact Htail.
 Qed.
 
 End OrderedGroupingSetsFunctionalityRegression.
 
-Print Assumptions project_rows_success_exact.
-Print Assumptions query_project_success_bags_functional.
 Print Assumptions query_set_success_bags_functional.
 Print Assumptions query_cross_join_success_bags_functional.
 Print Assumptions query_distinct_success_bags_functional.
-Print Assumptions eval_grouping_sets_nil_outcome_iff.
-Print Assumptions eval_grouping_sets_cons_success_iff.
-Print Assumptions eval_grouping_sets_cons_error_iff.

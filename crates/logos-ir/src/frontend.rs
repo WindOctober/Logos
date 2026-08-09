@@ -24,6 +24,26 @@ const SQL_FRONTEND_PARENT_ENVIRONMENT_ALLOWLIST: &[&str] = &[
 
 pub trait SqlIrFrontend {
     fn load_sql(&self, schema_path: &Path, query_path: &Path) -> Result<LogosIrFile>;
+
+    /// Load independent SQL programs against one schema. Implementations may
+    /// share parser/catalog initialization, but must preserve the supplied
+    /// program order and return one IR document per input path.
+    fn load_sql_batch(
+        &self,
+        schema_path: &Path,
+        query_paths: &[&Path],
+        query_counts: &[usize],
+    ) -> Result<Vec<LogosIrFile>> {
+        if query_paths.len() != query_counts.len() {
+            return Err(Error::SqlIrFrontendCommand(
+                "SQL frontend batch path/count arity mismatch".to_owned(),
+            ));
+        }
+        query_paths
+            .iter()
+            .map(|path| self.load_sql(schema_path, path))
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +103,80 @@ impl SqlIrFrontend for ShellSqlIrFrontend {
         let raw: CalciteFile =
             serde_json::from_slice(&output.stdout).map_err(Error::SqlIrFrontendJson)?;
         convert_raw_file(raw)
+    }
+
+    fn load_sql_batch(
+        &self,
+        schema_path: &Path,
+        query_paths: &[&Path],
+        query_counts: &[usize],
+    ) -> Result<Vec<LogosIrFile>> {
+        if query_paths.len() != query_counts.len() {
+            return Err(Error::SqlIrFrontendCommand(
+                "SQL frontend batch path/count arity mismatch".to_owned(),
+            ));
+        }
+        if query_paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sql_arguments = query_paths
+            .iter()
+            .map(|path| format!(" --sql {}", shell_quote(path)))
+            .collect::<String>();
+        let command = format!(
+            "{} --schema {}{} --default-collation {} --character-classification {} --locale-provider {} --server-encoding {}",
+            self.command,
+            shell_quote(schema_path),
+            sql_arguments,
+            self.environment.default_collation_label(),
+            self.environment.character_classification_label(),
+            self.environment.locale_provider_label(),
+            self.environment.server_encoding_label(),
+        );
+        let mut process = Command::new(SQL_FRONTEND_SHELL);
+        process
+            .args(SQL_FRONTEND_SHELL_ARGS)
+            .arg(command)
+            .env_clear();
+        for (name, value) in SQL_FRONTEND_FIXED_ENVIRONMENT {
+            process.env(name, value);
+        }
+        for name in SQL_FRONTEND_PARENT_ENVIRONMENT_ALLOWLIST {
+            if let Some(value) = std::env::var_os(name) {
+                process.env(name, value);
+            }
+        }
+        let output = process
+            .output()
+            .map_err(|source| Error::SqlIrFrontendCommand(source.to_string()))?;
+        if !output.status.success() {
+            return Err(Error::SqlIrFrontendCommand(
+                String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+            ));
+        }
+
+        let raw: CalciteFile =
+            serde_json::from_slice(&output.stdout).map_err(Error::SqlIrFrontendJson)?;
+        let combined = convert_raw_file(raw)?;
+        let expected_total = query_counts.iter().sum::<usize>();
+        if combined.queries.len() != expected_total {
+            return Err(Error::SqlIrFrontendCommand(format!(
+                "SQL frontend returned {} batched queries, expected {expected_total}",
+                combined.queries.len(),
+            )));
+        }
+
+        let mut remaining = combined.queries.into_iter();
+        let mut documents = Vec::with_capacity(query_counts.len());
+        for count in query_counts {
+            let queries = remaining.by_ref().take(*count).collect::<Vec<_>>();
+            documents.push(LogosIrFile {
+                environment: combined.environment,
+                schema: combined.schema.clone(),
+                queries,
+            });
+        }
+        Ok(documents)
     }
 }
 

@@ -10,6 +10,8 @@ The semantics-generic implementation is owned by [`SqlRenameFacts.v`](../../../v
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:39`](../RenameTransportFacts.v#L39)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that name-only TNull attribute renaming preserves the exact SQL value type, including every textual, decimal, and temporal typmod.
 
 Applicability: Use only with `rename_tnull_attribute_name`, which changes the textual name and leaves the complete SQL type/typmod constructor untouched.
@@ -31,6 +33,8 @@ Lemma tnull_attribute_name_renaming_type_preserving :
 ## `tnull_attribute_name_renaming_value_conforms`
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:51`](../RenameTransportFacts.v#L51)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Preserves and reflects TNull value conformance under name-only attribute renaming, including NULL payloads and constrained types.
 
@@ -54,6 +58,8 @@ Lemma tnull_attribute_name_renaming_value_conforms :
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:60`](../RenameTransportFacts.v#L60)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Discharges actual successful-row type/typmod safety for every row under the name-only TNull attribute adapter.
 
 Applicability: Use only with `rename_tnull_attribute_name`, which changes the textual name and leaves the complete SQL type/typmod constructor untouched.
@@ -74,6 +80,8 @@ Lemma tnull_rows_name_renaming_type_safe :
 ## `tnull_tuple_conforms_sort_renaming_transport`
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:69`](../RenameTransportFacts.v#L69)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports tuple/schema conformance through name-only renaming under injectivity on the source sort, rejecting attribute collisions.
 
@@ -101,6 +109,8 @@ Theorem tnull_tuple_conforms_sort_renaming_transport :
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:117`](../RenameTransportFacts.v#L117)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Commutes exact row-wise renaming with the displayed ordered slice, preserving row order and duplicate occurrences.
 
 Applicability: Use for OFFSET/FETCH-style ordered slicing after establishing exact pointwise row renaming; the conclusion is not merely bag equality.
@@ -124,6 +134,8 @@ Lemma tnull_rows_renaming_firstn_transport :
 
 Source: [`theories/FormalSQL/RenameTransportFacts.v:127`](../RenameTransportFacts.v#L127)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Commutes exact row-wise renaming with the displayed ordered slice, preserving row order and duplicate occurrences.
 
 Applicability: Use for OFFSET/FETCH-style ordered slicing after establishing exact pointwise row renaming; the conclusion is not merely bag equality.
@@ -145,7 +157,9 @@ Lemma tnull_rows_renaming_skipn_transport :
 
 ## `tnull_query_mapped_schema_outcome_equiv_mapped_schema`
 
-Source: [`theories/FormalSQL/RenameTransportFacts.v:170`](../RenameTransportFacts.v#L170)
+Source: [`theories/FormalSQL/RenameTransportFacts.v:178`](../RenameTransportFacts.v#L178)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_mapped_schema_possible_outcome_equiv_mapped_schema` for the public result.
 
 Purpose/direction: Extracts the ordered name-only mapped output schema from exact TNull observations; this observational relation is neither full alpha-renaming nor ordinary same-schema equivalence.
 
@@ -153,9 +167,9 @@ Applicability: Use to recover the target schema from mapped-schema outcome equiv
 
 Important premises: Supply a textual `string -> string` map and exact mapped-schema outcomes.  The facade applies `rename_tnull_attribute_name`, so typmods cannot change, but this premise alone does not certify predicate/key/subquery metadata.
 
-Cross-index: `renaming`, `facade`, `outcome`, `runtime`, `schema`, `scalar`
+Cross-index: `scheduled`, `renaming`, `facade`, `outcome`, `runtime`, `schema`, `scalar`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `string`, `VARCHAR`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `string`, `VARCHAR`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma tnull_query_mapped_schema_outcome_equiv_mapped_schema :
@@ -169,7 +183,9 @@ Lemma tnull_query_mapped_schema_outcome_equiv_mapped_schema :
 
 ## `tnull_query_renaming_context_chain_transport`
 
-Source: [`theories/FormalSQL/RenameTransportFacts.v:204`](../RenameTransportFacts.v#L204)
+Source: [`theories/FormalSQL/RenameTransportFacts.v:218`](../RenameTransportFacts.v#L218)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Closes a proved name-only renaming transport under an arbitrary list of paired query contexts, retaining typmods, operator metadata, and outcomes.
 
@@ -177,9 +193,9 @@ Applicability: Use for any finite nesting after certifying every paired context 
 
 Important premises: Supply a textual `string -> string` map, `Forall2` compatibility for the complete left/right context lists, and a transport proof for the holes.  The facade preserves typmods and infers no metadata premise from output-only renaming.
 
-Cross-index: `renaming`, `facade`, `grouping`, `projection`, `join`, `bag`, `ordered`, `scalar`
+Cross-index: `scheduled`, `renaming`, `facade`, `grouping`, `projection`, `join`, `bag`, `ordered`, `scalar`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `GROUP BY`, `projection`, `SELECT list`, `ORDER BY`, `ordered observation`, `window`, `PARTITION BY`, `string`, `VARCHAR`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `GROUP BY`, `projection`, `SELECT list`, `ORDER BY`, `ordered observation`, `window`, `PARTITION BY`, `string`, `VARCHAR`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem tnull_query_renaming_context_chain_transport :
@@ -198,9 +214,11 @@ Theorem tnull_query_renaming_context_chain_transport :
         (plug_query_rename_contexts right_contexts right).
 ```
 
-## `query_formula_outcome_rename_compatible_success_iff`
+## `query_scalar_expr_outcome_rename_compatible_success_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:152`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L152)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:160`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L160)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -208,24 +226,26 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
-Lemma query_formula_outcome_rename_compatible_success_iff :
+Lemma query_scalar_expr_outcome_rename_compatible_success_iff :
   forall environment_relation left right left_env right_env,
-    query_formula_outcome_rename_compatible
+    query_scalar_expr_outcome_rename_compatible
       environment_relation left right ->
     environment_relation left_env right_env ->
     forall truth,
-      (eval_formula left_env left (SqlSuccess truth) <->
-       eval_formula right_env right (SqlSuccess truth)).
+      (eval_scalar_boolean left_env left (SqlSuccess truth) <->
+       eval_scalar_boolean right_env right (SqlSuccess truth)).
 ```
 
-## `query_formula_outcome_rename_compatible_error_iff`
+## `query_scalar_expr_outcome_rename_compatible_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:172`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L172)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:180`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L180)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -233,24 +253,26 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
-Lemma query_formula_outcome_rename_compatible_error_iff :
+Lemma query_scalar_expr_outcome_rename_compatible_error_iff :
   forall environment_relation left right left_env right_env,
-    query_formula_outcome_rename_compatible
+    query_scalar_expr_outcome_rename_compatible
       environment_relation left right ->
     environment_relation left_env right_env ->
     forall error,
-      (eval_formula left_env left (SqlError error) <->
-       eval_formula right_env right (SqlError error)).
+      (eval_scalar_boolean left_env left (SqlError error) <->
+       eval_scalar_boolean right_env right (SqlError error)).
 ```
 
 ## `query_rename_transport_under_closed`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:271`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L271)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:281`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L281)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -258,9 +280,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_rename_trans
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_rename_transport_under_closed :
@@ -273,7 +295,9 @@ Lemma query_rename_transport_under_closed :
 
 ## `query_unary_outcome_lift_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:324`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L324)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:334`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L334)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -281,9 +305,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for collisio
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_unary_outcome_lift_transport :
@@ -300,7 +324,9 @@ Lemma query_unary_outcome_lift_transport :
 
 ## `query_binary_outcome_lift_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:366`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L366)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:376`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L376)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -308,9 +334,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_binary_outcome_lift_error_iff :
@@ -329,7 +355,9 @@ Lemma query_binary_outcome_lift_error_iff :
 
 ## `query_binary_outcome_lift_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:394`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L394)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:404`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L404)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -337,9 +365,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for collisio
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma query_binary_outcome_lift_transport :
@@ -360,7 +388,9 @@ Lemma query_binary_outcome_lift_transport :
 
 ## `query_outcome_rename_transport_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:472`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L472)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:482`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L482)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -368,9 +398,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_outcome_rename_transport_congr :
@@ -383,7 +413,9 @@ Lemma query_outcome_rename_transport_congr :
 
 ## `query_unary_constructor_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:520`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L520)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:530`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L530)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -391,9 +423,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_unary_constr
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_unary_constructor_rename_transport :
@@ -416,7 +448,9 @@ Lemma query_unary_constructor_rename_transport :
 
 ## `query_binary_constructor_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:551`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L551)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:561`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L561)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -424,9 +458,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_binary_const
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_binary_constructor_rename_transport :
@@ -452,7 +486,9 @@ Lemma query_binary_constructor_rename_transport :
 
 ## `query_rows_bag_rename_rows`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:600`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L600)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:610`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L610)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query rows bag rename rows law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -460,9 +496,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Lemma query_rows_bag_rename_rows :
@@ -473,7 +509,9 @@ Lemma query_rows_bag_rename_rows :
 
 ## `query_rename_bag_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:619`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L619)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:629`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L629)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -481,9 +519,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_rename_bag_congr :
@@ -494,7 +532,9 @@ Lemma query_rename_bag_congr :
 
 ## `query_same_rows_as_bag_rename_rows`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:649`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L649)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:659`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L659)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Bridges the two displayed representations of collision-safe attribute and query renaming transport.
 
@@ -502,9 +542,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Lemma query_same_rows_as_bag_rename_rows :
@@ -516,7 +556,9 @@ Lemma query_same_rows_as_bag_rename_rows :
 
 ## `query_bag_source_renamed_rows_preimage`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:665`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L665)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:675`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L675)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query bag source renamed rows preimage law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -524,9 +566,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Lemma query_bag_source_renamed_rows_preimage :
@@ -540,7 +582,9 @@ Lemma query_bag_source_renamed_rows_preimage :
 
 ## `query_bag_source_local_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:705`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L705)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:715`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L715)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -548,9 +592,9 @@ Applicability: Use when moving from the modeled operator result to a bound, leng
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem query_bag_source_local_rename_transport :
@@ -564,7 +608,9 @@ Theorem query_bag_source_local_rename_transport :
 
 ## `query_source_constructor_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:747`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L747)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:757`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L757)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -572,9 +618,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_source_const
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_source_constructor_rename_transport :
@@ -588,7 +634,9 @@ Lemma query_source_constructor_rename_transport :
 
 ## `eval_query_error_source_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:765`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L765)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:775`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L775)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -596,9 +644,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `renaming`, `runtime`
+Cross-index: `scheduled`, `renaming`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_error_source_iff :
@@ -609,7 +657,9 @@ Lemma eval_query_error_source_iff :
 
 ## `eval_query_values_source_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:775`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L775)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:785`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L785)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -617,9 +667,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma eval_query_values_source_iff :
@@ -630,7 +680,9 @@ Lemma eval_query_values_source_iff :
 
 ## `eval_query_table_source_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:787`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L787)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:797`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L797)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -638,9 +690,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma eval_query_table_source_iff :
@@ -652,7 +704,9 @@ Lemma eval_query_table_source_iff :
 
 ## `QExpr_Error_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:802`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L802)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:812`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L812)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Error`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -660,9 +714,9 @@ Applicability: Use after proving the mapped, admissible endpoint-schema contract
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  No child or local premise is needed; the error value itself must be identical.
 
-Cross-index: `renaming`, `runtime`
+Cross-index: `scheduled`, `renaming`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Theorem QExpr_Error_rename_transport :
@@ -675,7 +729,9 @@ Theorem QExpr_Error_rename_transport :
 
 ## `QExpr_Values_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:828`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L828)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:838`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L838)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Values`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -683,9 +739,9 @@ Applicability: Use only when the target VALUES bag is the concrete renamed sourc
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep `query_bag_source_rename_safe` and exact mapped-bag equality; declared outputs alone do not constrain malformed rows.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem QExpr_Values_rename_transport :
@@ -703,7 +759,9 @@ Theorem QExpr_Values_rename_transport :
 
 ## `QExpr_Table_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:854`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L854)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:864`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L864)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Table`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -711,9 +769,9 @@ Applicability: Use with an explicitly transported table/database bag; changing o
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep actual table-bag safety and exact mapped equality between the two database scans.
 
-Cross-index: `renaming`, `bag`
+Cross-index: `scheduled`, `renaming`, `bag`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Theorem QExpr_Table_rename_transport :
@@ -735,7 +793,9 @@ Theorem QExpr_Table_rename_transport :
 
 ## `eval_query_set_binary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1070`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1070)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1081`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1081)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -743,9 +803,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `set operation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `set operation`
 
 ```rocq
 Lemma eval_query_set_binary_lift_iff :
@@ -758,7 +818,9 @@ Lemma eval_query_set_binary_lift_iff :
 
 ## `eval_query_natural_join_binary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1092`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1092)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1103`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1103)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -766,9 +828,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`
 
 ```rocq
 Lemma eval_query_natural_join_binary_lift_iff :
@@ -781,7 +843,9 @@ Lemma eval_query_natural_join_binary_lift_iff :
 
 ## `eval_query_cross_join_binary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1114`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1114)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1125`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1125)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -789,9 +853,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `cross product`, `CROSS JOIN`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `cross product`, `CROSS JOIN`
 
 ```rocq
 Lemma eval_query_cross_join_binary_lift_iff :
@@ -804,7 +868,9 @@ Lemma eval_query_cross_join_binary_lift_iff :
 
 ## `eval_query_join_binary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1136`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1136)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1147`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1147)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -812,9 +878,9 @@ Applicability: Use for goals whose exact QueryJoin kind selects the stated colli
 
 Important premises: retain every explicit join-kind branch and predicate/projection premise.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`
 
 ```rocq
 Lemma eval_query_join_binary_lift_iff :
@@ -831,7 +897,9 @@ Lemma eval_query_join_binary_lift_iff :
 
 ## `QExpr_Set_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1175`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1175)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1186`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1186)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Set`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -839,9 +907,9 @@ Applicability: Use after transporting both children and certifying schema compar
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep union-support injection, both child transports, and the binary local compatibility premise for actual representatives.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `set operation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `set operation`
 
 ```rocq
 Theorem QExpr_Set_rename_transport :
@@ -863,7 +931,9 @@ Theorem QExpr_Set_rename_transport :
 
 ## `QExpr_NaturalJoin_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1205`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1205)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1216`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1216)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_NaturalJoin`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -871,9 +941,9 @@ Applicability: Use after transporting both children and proving the exact NULL-a
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep union-support injection, both child transports, and the NULL-aware binary local compatibility premise.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`
 
 ```rocq
 Theorem QExpr_NaturalJoin_rename_transport :
@@ -893,7 +963,9 @@ Theorem QExpr_NaturalJoin_rename_transport :
 
 ## `QExpr_CrossJoin_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1233`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1233)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1244`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1244)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_CrossJoin`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -901,9 +973,9 @@ Applicability: Use with disjoint admissible endpoint schemas and an exact local 
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep union-support injection, both endpoint disjointness proofs, both child transports, and binary local compatibility.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `cross product`, `CROSS JOIN`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `join`, `cross product`, `CROSS JOIN`
 
 ```rocq
 Theorem QExpr_CrossJoin_rename_transport :
@@ -927,7 +999,9 @@ Theorem QExpr_CrossJoin_rename_transport :
 
 ## `QExpr_Join_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1264`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1264)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1275`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1275)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Join`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -935,9 +1009,9 @@ Applicability: Use only when predicate, all kind-dependent projections/aliases, 
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep union-support injection, both child transports, exact predicate outcomes over joined row environments, and full binary local compatibility.
 
-Cross-index: `renaming`, `join`
+Cross-index: `scheduled`, `renaming`, `join`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`
 
 ```rocq
 Theorem QExpr_Join_rename_transport :
@@ -955,7 +1029,7 @@ Theorem QExpr_Join_rename_transport :
         right_matched right_left_select right_right_select left' right') ->
     query_rename_transport_under environment_relation rho left left' ->
     query_rename_transport_under environment_relation rho right right' ->
-    query_formula_outcome_rename_compatible
+    query_scalar_expr_outcome_rename_compatible
       (query_join_environment_rename environment_relation rho)
       left_predicate right_predicate ->
     query_binary_local_rename_compatible environment_relation rho
@@ -972,7 +1046,9 @@ Theorem QExpr_Join_rename_transport :
 
 ## `eval_query_project_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1308`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1308)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1319`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1319)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -980,9 +1056,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `projection`
+Cross-index: `scheduled`, `renaming`, `projection`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
 
 ```rocq
 Lemma eval_query_project_unary_lift_iff :
@@ -994,7 +1070,9 @@ Lemma eval_query_project_unary_lift_iff :
 
 ## `eval_query_row_map_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1324`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1324)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1334`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1334)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1002,9 +1080,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `projection`
+Cross-index: `scheduled`, `renaming`, `projection`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
 
 ```rocq
 Lemma eval_query_row_map_unary_lift_iff :
@@ -1016,7 +1094,9 @@ Lemma eval_query_row_map_unary_lift_iff :
 
 ## `eval_query_filter_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1340`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1340)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1350`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1350)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1024,21 +1104,23 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `filter`
+Cross-index: `scheduled`, `renaming`, `filter`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `filter`, `WHERE`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `filter`, `WHERE`
 
 ```rocq
 Lemma eval_query_filter_unary_lift_iff :
-  forall env formula input outcome,
-    eval_query env (QExpr_Filter formula input) outcome <->
+  forall env expression input outcome,
+    eval_query env (QExpr_Filter expression input) outcome <->
     query_unary_outcome_lift (eval_query env input)
-      (query_filter_local env formula) outcome.
+      (query_filter_local env expression) outcome.
 ```
 
 ## `eval_query_group_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1355`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1355)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1365`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1365)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1046,9 +1128,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `grouping`
+Cross-index: `scheduled`, `renaming`, `grouping`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `GROUP BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `GROUP BY`
 
 ```rocq
 Lemma eval_query_group_unary_lift_iff :
@@ -1060,7 +1142,9 @@ Lemma eval_query_group_unary_lift_iff :
 
 ## `eval_query_grouping_sets_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1378`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1378)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1388`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1388)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1068,9 +1152,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`, `grouping`
+Cross-index: `scheduled`, `renaming`, `grouping`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `grouping sets`, `GROUP BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `grouping sets`, `GROUP BY`
 
 ```rocq
 Lemma eval_query_grouping_sets_unary_lift_iff :
@@ -1082,7 +1166,9 @@ Lemma eval_query_grouping_sets_unary_lift_iff :
 
 ## `eval_query_rank_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1401`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1401)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1411`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1411)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1090,9 +1176,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
 
 ```rocq
 Lemma eval_query_rank_unary_lift_iff :
@@ -1107,7 +1193,9 @@ Lemma eval_query_rank_unary_lift_iff :
 
 ## `eval_query_window_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1430`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1430)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1440`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1440)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1115,9 +1203,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
 
 ```rocq
 Lemma eval_query_window_unary_lift_iff :
@@ -1130,7 +1218,9 @@ Lemma eval_query_window_unary_lift_iff :
 
 ## `eval_query_distinct_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1462`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1462)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1472`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1472)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1138,9 +1228,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `DISTINCT`, `duplicate elimination`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `DISTINCT`, `duplicate elimination`
 
 ```rocq
 Lemma eval_query_distinct_unary_lift_iff :
@@ -1152,7 +1242,9 @@ Lemma eval_query_distinct_unary_lift_iff :
 
 ## `eval_query_order_by_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1479`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1479)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1489`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1489)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1160,9 +1252,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `ORDER BY`, `ordered observation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `ORDER BY`, `ordered observation`
 
 ```rocq
 Lemma eval_query_order_by_unary_lift_iff :
@@ -1174,7 +1266,9 @@ Lemma eval_query_order_by_unary_lift_iff :
 
 ## `eval_query_offset_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1496`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1496)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1506`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1506)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1182,9 +1276,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
 
 ```rocq
 Lemma eval_query_offset_unary_lift_iff :
@@ -1196,7 +1290,9 @@ Lemma eval_query_offset_unary_lift_iff :
 
 ## `eval_query_fetch_unary_lift_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1512`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1512)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1522`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1522)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
@@ -1204,9 +1300,9 @@ Applicability: Use in either direction to invert or construct a goal about colli
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma eval_query_fetch_unary_lift_iff :
@@ -1218,7 +1314,9 @@ Lemma eval_query_fetch_unary_lift_iff :
 
 ## `outcome_rename_equiv_deterministic_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1544`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1544)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1554`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1554)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -1226,9 +1324,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma outcome_rename_equiv_deterministic_transport :
@@ -1241,7 +1339,9 @@ Lemma outcome_rename_equiv_deterministic_transport :
 
 ## `row_map_rows_outcome_callback_rename_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1580`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1580)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1590`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1590)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -1249,9 +1349,9 @@ Applicability: Use to orient, transport, or compose a semantic relation about co
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
-Cross-index: `renaming`, `outcome`, `runtime`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
 
 ```rocq
 Lemma row_map_rows_outcome_callback_rename_equiv :
@@ -1266,7 +1366,9 @@ Lemma row_map_rows_outcome_callback_rename_equiv :
 
 ## `query_row_map_callback_rename_compatible_scheduler`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1629`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1629)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1639`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1639)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query row map callback rename compatible scheduler law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1274,9 +1376,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_row_map_call
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_row_map_callback_rename_compatible_scheduler :
@@ -1288,7 +1390,9 @@ Lemma query_row_map_callback_rename_compatible_scheduler :
 
 ## `query_row_map_local_rename_compatible_of_scheduler`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1649`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1649)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1659`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1659)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query row map local rename compatible of scheduler law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1296,9 +1400,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_row_map_loca
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_row_map_local_rename_compatible_of_scheduler :
@@ -1311,7 +1415,9 @@ Lemma query_row_map_local_rename_compatible_of_scheduler :
 
 ## `query_offset_local_rename_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1663`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1663)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1673`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1673)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query offset local rename compatible law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1319,9 +1425,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_offset_local
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
 
 ```rocq
 Lemma query_offset_local_rename_compatible :
@@ -1333,7 +1439,9 @@ Lemma query_offset_local_rename_compatible :
 
 ## `query_fetch_local_rename_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1676`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1676)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1686`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1686)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query fetch local rename compatible law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1341,9 +1449,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_fetch_local_
 
 Important premises: retain exact order whenever the declaration observes it.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
 
 ```rocq
 Lemma query_fetch_local_rename_compatible :
@@ -1355,7 +1463,9 @@ Lemma query_fetch_local_rename_compatible :
 
 ## `QExpr_Project_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1710`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1710)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1721`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1721)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Project`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1363,9 +1473,9 @@ Applicability: Use only with a local proof covering every selected expression, i
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport and the projection-local compatibility premise; output-only alias mapping does not prove input-expression transport.
 
-Cross-index: `renaming`, `projection`
+Cross-index: `scheduled`, `renaming`, `projection`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
 
 ```rocq
 Theorem QExpr_Project_rename_transport :
@@ -1384,7 +1494,9 @@ Theorem QExpr_Project_rename_transport :
 
 ## `QExpr_RowMap_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1736`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1736)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1747`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1747)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_RowMap`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1392,9 +1504,9 @@ Applicability: Use with pointwise callback conjugacy plus cross-output collision
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport, pointwise callback compatibility, and successful-output collision/type safety.
 
-Cross-index: `renaming`, `projection`
+Cross-index: `scheduled`, `renaming`, `projection`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `projection`, `SELECT list`
 
 ```rocq
 Theorem QExpr_RowMap_rename_transport :
@@ -1413,17 +1525,19 @@ Theorem QExpr_RowMap_rename_transport :
 
 ## `QExpr_Filter_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1766`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1766)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1777`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1777)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Filter`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
-Applicability: Use with exact formula outcomes in renamed row environments and the exact ordered filter scheduler; FALSE and UNKNOWN may not be exchanged.
+Applicability: Use with exact typed Boolean outcomes in renamed row environments and the exact ordered filter scheduler; FALSE and UNKNOWN may not be exchanged.
 
-Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport, exact Bool3/error formula compatibility, and ordered unary local compatibility.
+Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport, exact typed Bool3/error compatibility, and ordered unary local compatibility.
 
-Cross-index: `renaming`, `filter`
+Cross-index: `scheduled`, `renaming`, `filter`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `filter`, `WHERE`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `filter`, `WHERE`
 
 ```rocq
 Theorem QExpr_Filter_rename_transport :
@@ -1432,7 +1546,7 @@ Theorem QExpr_Filter_rename_transport :
       (QExpr_Filter left_formula input)
       (QExpr_Filter right_formula input') ->
     query_rename_transport_under environment_relation rho input input' ->
-    query_formula_outcome_rename_compatible
+    query_scalar_expr_outcome_rename_compatible
       (query_row_environment_rename environment_relation rho)
       left_formula right_formula ->
     query_unary_local_rename_compatible environment_relation rho
@@ -1445,7 +1559,9 @@ Theorem QExpr_Filter_rename_transport :
 
 ## `QExpr_Group_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1794`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1794)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1805`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1805)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Group`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1453,36 +1569,40 @@ Applicability: Use with paired reachable group formation, exact HAVING Bool3/agg
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport, reachable group-formation pairing, exact HAVING plus aggregate-precheck compatibility, and unary local compatibility.
 
-Cross-index: `renaming`, `grouping`
+Cross-index: `scheduled`, `renaming`, `grouping`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `GROUP BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `GROUP BY`
 
 ```rocq
 Theorem QExpr_Group_rename_transport :
   forall environment_relation rho
-      left_select right_select left_terms right_terms
+      left_select right_select left_keys right_keys left_terms right_terms
       left_having right_having input input',
     query_rename_schema_compatible rho
-      (QExpr_Group left_select left_terms left_having input)
-      (QExpr_Group right_select right_terms right_having input') ->
+      (QExpr_Group left_select left_keys left_having input)
+      (QExpr_Group right_select right_keys right_having input') ->
     query_rename_transport_under environment_relation rho input input' ->
+    scalar_group_key_terms left_keys = Some left_terms ->
+    scalar_group_key_terms right_keys = Some right_terms ->
     query_group_formation_rename_compatible
       environment_relation rho left_terms right_terms ->
-    query_group_formula_outcome_rename_compatible
+    query_group_scalar_expr_outcome_rename_compatible
       (query_group_environment_rename
         environment_relation rho left_terms right_terms)
       left_having right_having ->
     query_unary_local_rename_compatible environment_relation rho
-      (fun env => query_group_local env left_select left_terms left_having)
-      (fun env => query_group_local env right_select right_terms right_having) ->
+      (fun env => query_group_local env left_select left_keys left_having)
+      (fun env => query_group_local env right_select right_keys right_having) ->
     query_rename_transport_under environment_relation rho
-      (QExpr_Group left_select left_terms left_having input)
-      (QExpr_Group right_select right_terms right_having input').
+      (QExpr_Group left_select left_keys left_having input)
+      (QExpr_Group right_select right_keys right_having input').
 ```
 
 ## `QExpr_GroupingSets_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1829`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1829)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1842`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1842)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_GroupingSets`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1490,9 +1610,9 @@ Applicability: Use only after pairing every grouping-set branch, its projection/
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep child transport and one exact unary local compatibility proof covering every grouping-set branch.
 
-Cross-index: `renaming`, `grouping`
+Cross-index: `scheduled`, `renaming`, `grouping`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `grouping sets`, `GROUP BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `grouping sets`, `GROUP BY`
 
 ```rocq
 Theorem QExpr_GroupingSets_rename_transport :
@@ -1511,7 +1631,9 @@ Theorem QExpr_GroupingSets_rename_transport :
 
 ## `QExpr_Rank_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1855`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1855)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1868`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1868)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Rank`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1519,9 +1641,9 @@ Applicability: Use when partition/order keys and the fresh rank output alias are
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep both key-list relations, mapped fresh output alias, child transport, and exact rank-local compatibility.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
 
 ```rocq
 Theorem QExpr_Rank_rename_transport :
@@ -1548,7 +1670,9 @@ Theorem QExpr_Rank_rename_transport :
 
 ## `QExpr_Window_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1892`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1892)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1905`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1905)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Window`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1556,9 +1680,9 @@ Applicability: Use when partition/order keys, every window item and alias, order
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep both key-list relations, mapped item aliases, child transport, and exact window-local compatibility.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `window`, `PARTITION BY`
 
 ```rocq
 Theorem QExpr_Window_rename_transport :
@@ -1585,7 +1709,9 @@ Theorem QExpr_Window_rename_transport :
 
 ## `QExpr_Distinct_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1929`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1929)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1942`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1942)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Distinct`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1593,9 +1719,9 @@ Applicability: Use only under collision-reflecting child transport and the exact
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep source-sort injection, child transport, and exact duplicate-elimination local compatibility.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `DISTINCT`, `duplicate elimination`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `DISTINCT`, `duplicate elimination`
 
 ```rocq
 Theorem QExpr_Distinct_rename_transport :
@@ -1613,7 +1739,9 @@ Theorem QExpr_Distinct_rename_transport :
 
 ## `QExpr_OrderBy_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1953`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1953)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1966`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1966)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_OrderBy`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1621,9 +1749,9 @@ Applicability: Use when each sort-key attribute, direction, NULL placement, comp
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep the complete sort-key relation, child transport, and exact order-producing local compatibility.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `ORDER BY`, `ordered observation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `ORDER BY`, `ordered observation`
 
 ```rocq
 Theorem QExpr_OrderBy_rename_transport :
@@ -1641,7 +1769,9 @@ Theorem QExpr_OrderBy_rename_transport :
 
 ## `QExpr_Offset_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1977`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1977)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1990`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1990)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Offset`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1649,9 +1779,9 @@ Applicability: Use after transporting the child and mapped endpoint schema; the 
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep the child transport; the constructor-local `skipn` compatibility is proved by the library.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `OFFSET`
 
 ```rocq
 Theorem QExpr_Offset_rename_transport :
@@ -1665,7 +1795,9 @@ Theorem QExpr_Offset_rename_transport :
 
 ## `QExpr_Fetch_rename_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:1998`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L1998)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2011`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2011)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Provides the constructor-local renaming transport theorem for `QExpr_Fetch`, preserving mapped schemas and exact successful/error observations under every displayed semantic side condition.
 
@@ -1673,9 +1805,9 @@ Applicability: Use after transporting the child and mapped endpoint schema; the 
 
 Important premises: The displayed `query_rename_schema_compatible` premise retains ordered mapped outputs, collision/type safety, and admissibility of both endpoints.  Keep the child transport; the constructor-local `firstn` compatibility is proved by the library.
 
-Cross-index: `renaming`, `ordered`
+Cross-index: `scheduled`, `renaming`, `ordered`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `FETCH`, `LIMIT`
 
 ```rocq
 Theorem QExpr_Fetch_rename_transport :
@@ -1689,7 +1821,9 @@ Theorem QExpr_Fetch_rename_transport :
 
 ## `row_map_rows_output_rename`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2029`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2029)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2042`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2042)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Characterizes the output-boundary RowMap adapter that relabels only successful result tuples and preserves child errors; it is not a full query alpha-renaming theorem.
 
@@ -1697,9 +1831,9 @@ Applicability: Use only at an output observation boundary.  It does not rename p
 
 Important premises: The adapter uses the existing `QExpr_RowMap` and maps successful rows only; retain the exact child evaluation and error category.  No conclusion about attribute-bearing metadata inside the child query follows.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma row_map_rows_output_rename :
@@ -1711,7 +1845,9 @@ Lemma row_map_rows_output_rename :
 
 ## `query_output_rename_adapter_outputs`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2038`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2038)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2051`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2051)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Characterizes the output-boundary RowMap adapter that relabels only successful result tuples and preserves child errors; it is not a full query alpha-renaming theorem.
 
@@ -1719,9 +1855,9 @@ Applicability: Use only at an output observation boundary.  It does not rename p
 
 Important premises: The adapter uses the existing `QExpr_RowMap` and maps successful rows only; retain the exact child evaluation and error category.  No conclusion about attribute-bearing metadata inside the child query follows.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_output_rename_adapter_outputs :
@@ -1732,7 +1868,9 @@ Lemma query_output_rename_adapter_outputs :
 
 ## `eval_query_output_rename_adapter_success_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2046`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2046)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2059`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2059)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Characterizes the output-boundary RowMap adapter that relabels only successful result tuples and preserves child errors; it is not a full query alpha-renaming theorem.
 
@@ -1740,9 +1878,9 @@ Applicability: Use only at an output observation boundary.  It does not rename p
 
 Important premises: The adapter uses the existing `QExpr_RowMap` and maps successful rows only; retain the exact child evaluation and error category.  No conclusion about attribute-bearing metadata inside the child query follows.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma eval_query_output_rename_adapter_success_iff :
@@ -1756,7 +1894,9 @@ Lemma eval_query_output_rename_adapter_success_iff :
 
 ## `eval_query_output_rename_adapter_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2068`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2068)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2081`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2081)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Characterizes the output-boundary RowMap adapter that relabels only successful result tuples and preserves child errors; it is not a full query alpha-renaming theorem.
 
@@ -1764,9 +1904,9 @@ Applicability: Use only at an output observation boundary.  It does not rename p
 
 Important premises: The adapter uses the existing `QExpr_RowMap` and maps successful rows only; retain the exact child evaluation and error category.  No conclusion about attribute-bearing metadata inside the child query follows.
 
-Cross-index: `renaming`, `runtime`
+Cross-index: `scheduled`, `renaming`, `runtime`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_output_rename_adapter_error_iff :
@@ -1778,7 +1918,9 @@ Lemma eval_query_output_rename_adapter_error_iff :
 
 ## `query_mapped_schema_outcome_equiv_mapped_schema`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2098`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2098)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2111`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2111)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_mapped_schema_possible_outcome_equiv_mapped_schema` for the public result.
 
 Purpose/direction: Connects constructor-certified transport to exact mapped-schema observations; this relation alone does not certify renamed operator metadata.
 
@@ -1786,9 +1928,9 @@ Applicability: Use to package or project exact outcomes under a mapped ordered s
 
 Important premises: Retain the full mapped-schema and exact success/error relation displayed.  For alpha-renaming, separately derive it from the relevant `QExpr_*_rename_transport` theorems and their metadata, collision, typing, and admissibility premises.
 
-Cross-index: `renaming`, `outcome`, `runtime`, `schema`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`, `schema`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Lemma query_mapped_schema_outcome_equiv_mapped_schema :
@@ -1800,7 +1942,9 @@ Lemma query_mapped_schema_outcome_equiv_mapped_schema :
 
 ## `query_rename_transport_under_implies_mapped_schema_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2109`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2109)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2122`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2122)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv` for the public result.
 
 Purpose/direction: Connects constructor-certified transport to exact mapped-schema observations; this relation alone does not certify renamed operator metadata.
 
@@ -1808,9 +1952,9 @@ Applicability: Use to package or project exact outcomes under a mapped ordered s
 
 Important premises: Retain the full mapped-schema and exact success/error relation displayed.  For alpha-renaming, separately derive it from the relevant `QExpr_*_rename_transport` theorems and their metadata, collision, typing, and admissibility premises.
 
-Cross-index: `renaming`, `outcome`, `runtime`, `schema`
+Cross-index: `scheduled`, `renaming`, `outcome`, `runtime`, `schema`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
 
 ```rocq
 Theorem query_rename_transport_under_implies_mapped_schema_outcome_equiv :
@@ -1825,7 +1969,9 @@ Theorem query_rename_transport_under_implies_mapped_schema_outcome_equiv :
 
 ## `query_rename_hole_context_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2146`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2146)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2159`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2159)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: States the query rename hole context compatible law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1833,9 +1979,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_rename_hole_
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Lemma query_rename_hole_context_compatible :
@@ -1846,7 +1992,9 @@ Lemma query_rename_hole_context_compatible :
 
 ## `query_rename_context_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2154`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2154)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2167`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2167)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -1854,9 +2002,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_rename_conte
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Theorem query_rename_context_transport :
@@ -1871,7 +2019,9 @@ Theorem query_rename_context_transport :
 
 ## `query_rename_context_chain_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2179`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2179)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v:2192`](../../../vendor/FormalSQL/src/data/sql/SqlQueryRenameTransport.v#L2192)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -1879,9 +2029,9 @@ Applicability: Use when the goal or a hypothesis matches the `query_rename_conte
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
-Cross-index: `renaming`
+Cross-index: `scheduled`, `renaming`
 
-Search aliases: `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
+Search aliases: `fixed Boolean schedule`, `foundation`, `renaming transport and alpha-renaming`, `rename`, `renaming`, `alias`, `alpha-renaming`, `transport`
 
 ```rocq
 Theorem query_rename_context_chain_transport :
@@ -1899,6 +2049,8 @@ Theorem query_rename_context_chain_transport :
 ## `attribute_rename_injective_on_identity`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:78`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L78)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Recovers source equality from the declared collision-safe attribute and query renaming transport representation.
 
@@ -1920,6 +2072,8 @@ Lemma attribute_rename_injective_on_identity :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:85`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L85)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the attribute rename type preserving on identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `attribute_rename_type_preserving_on_identity` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -1940,6 +2094,8 @@ Lemma attribute_rename_type_preserving_on_identity :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:92`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L92)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the attribute rename map identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `attribute_rename_map_identity` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -1959,6 +2115,8 @@ Lemma attribute_rename_map_identity :
 ## `attribute_rename_map_compose`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:106`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L106)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the attribute rename map compose law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -1981,6 +2139,8 @@ Lemma attribute_rename_map_compose :
 ## `attribute_rename_injective_on_compose`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:129`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L129)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Recovers source equality from the declared collision-safe attribute and query renaming transport representation.
 
@@ -2006,6 +2166,8 @@ Lemma attribute_rename_injective_on_compose :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:145`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L145)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the attribute rename type preserving on compose law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `attribute_rename_type_preserving_on_compose` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2030,6 +2192,8 @@ Lemma attribute_rename_type_preserving_on_compose :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:160`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L160)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the attribute rename collision free between of union law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `attribute_rename_collision_free_between_of_union` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2050,6 +2214,8 @@ Lemma attribute_rename_collision_free_between_of_union :
 ## `attribute_rename_fresh_for_of_union_injective`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:173`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L173)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Recovers source equality from the declared collision-safe attribute and query renaming transport representation.
 
@@ -2073,6 +2239,8 @@ Lemma attribute_rename_fresh_for_of_union_injective :
 ## `attribute_rename_collision_rejects_injectivity`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:199`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L199)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the attribute rename collision rejects injectivity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2098,6 +2266,8 @@ Lemma attribute_rename_collision_rejects_injectivity :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:220`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L220)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_tuple_labels_transport` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2118,6 +2288,8 @@ Lemma rename_tuple_labels_transport :
 ## `rename_tuple_lookup_transport`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:228`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L228)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -2142,6 +2314,8 @@ Lemma rename_tuple_lookup_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:239`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L239)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_tuple_value_transport` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2164,6 +2338,8 @@ Lemma rename_tuple_value_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:248`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L248)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rename tuple identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_tuple_identity` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2183,6 +2359,8 @@ Lemma rename_tuple_identity :
 ## `rename_tuple_composition`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:272`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L272)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rename tuple composition law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2208,6 +2386,8 @@ Lemma rename_tuple_composition :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:346`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L346)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_tuple_equivalence_transport` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2228,6 +2408,8 @@ Lemma rename_tuple_equivalence_transport :
 ## `rename_tuple_equivalence_reflection`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:354`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L354)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -2252,6 +2434,8 @@ Lemma rename_tuple_equivalence_reflection :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:365`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L365)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for collision-safe attribute and query renaming transport.
 
 Applicability: Use in either direction to invert or construct a goal about collision-safe attribute and query renaming transport.
@@ -2274,6 +2458,8 @@ Lemma rename_tuple_equivalence_iff :
 ## `rename_tuple_well_typed_transport`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:376`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L376)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -2298,6 +2484,8 @@ Lemma rename_tuple_well_typed_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:442`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L442)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about collision-safe attribute and query renaming transport.
@@ -2317,6 +2505,8 @@ Lemma rows_rename_equiv_canonical :
 ## `rows_rename_equiv_of_canonical_ordered`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:451`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L451)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -2338,6 +2528,8 @@ Lemma rows_rename_equiv_of_canonical_ordered :
 ## `rows_rename_sound_canonical`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:467`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L467)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows rename sound canonical law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2361,6 +2553,8 @@ Lemma rows_rename_sound_canonical :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:478`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L478)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rename rows identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_rows_identity` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2380,6 +2574,8 @@ Lemma rename_rows_identity :
 ## `rows_rename_collision_safe_identity`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:487`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L487)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows rename collision safe identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2402,6 +2598,8 @@ Lemma rows_rename_collision_safe_identity :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:496`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L496)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename type safe identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -2422,6 +2620,8 @@ Lemma rows_rename_type_safe_identity :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:503`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L503)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename sound identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_rename_sound_identity` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2441,6 +2641,8 @@ Lemma rows_rename_sound_identity :
 ## `rename_rows_composition`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:514`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L514)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rename rows composition law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2470,6 +2672,8 @@ Lemma rename_rows_composition :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:538`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L538)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates collision-safe attribute and query renaming transport to the exact list length or bag cardinality shown below.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_rows_length` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2489,6 +2693,8 @@ Lemma rename_rows_length :
 ## `rows_rename_equiv_length`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:545`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L545)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates collision-safe attribute and query renaming transport to the exact list length or bag cardinality shown below.
 
@@ -2511,6 +2717,8 @@ Lemma rows_rename_equiv_length :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:553`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L553)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rename rows firstn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rename_rows_firstn` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2531,6 +2739,8 @@ Lemma rename_rows_firstn :
 ## `rename_rows_skipn`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:563`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L563)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rename rows skipn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2553,6 +2763,8 @@ Lemma rename_rows_skipn :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:573`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L573)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about collision-safe attribute and query renaming transport.
@@ -2573,6 +2785,8 @@ Lemma rows_rename_equiv_firstn :
 ## `rows_rename_equiv_skipn`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:587`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L587)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -2595,6 +2809,8 @@ Lemma rows_rename_equiv_skipn :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:601`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L601)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename collision safe firstn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -2615,6 +2831,8 @@ Lemma rows_rename_collision_safe_firstn :
 ## `rows_rename_collision_safe_skipn`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:616`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L616)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows rename collision safe skipn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2637,6 +2855,8 @@ Lemma rows_rename_collision_safe_skipn :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:631`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L631)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename type safe firstn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -2657,6 +2877,8 @@ Lemma rows_rename_type_safe_firstn :
 ## `rows_rename_type_safe_skipn`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:643`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L643)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows rename type safe skipn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
@@ -2679,6 +2901,8 @@ Lemma rows_rename_type_safe_skipn :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:655`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L655)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename sound firstn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_rename_sound_firstn` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2700,6 +2924,8 @@ Lemma rows_rename_sound_firstn :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:667`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L667)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows rename sound skipn law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_rename_sound_skipn` direction for collision-safe attribute and query renaming transport; do not reverse or strengthen the displayed conclusion.
@@ -2720,6 +2946,8 @@ Lemma rows_rename_sound_skipn :
 ## `rows_rename_sound_reflects_equivalence`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:679`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L679)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -2745,6 +2973,8 @@ Lemma rows_rename_sound_reflects_equivalence :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:694`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L694)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the declared collision-safe attribute and query renaming transport result is invariant under input permutation.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about collision-safe attribute and query renaming transport.
@@ -2766,6 +2996,8 @@ Lemma rename_rows_permutation_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:703`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L703)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about collision-safe attribute and query renaming transport.
@@ -2786,6 +3018,8 @@ Lemma rename_rows_ordered_equiv_transport :
 ## `rename_rows_multiplicity_transport`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:727`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L727)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -2813,6 +3047,8 @@ Lemma rename_rows_multiplicity_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:746`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L746)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about collision-safe attribute and query renaming transport.
@@ -2836,6 +3072,8 @@ Lemma rows_rename_sound_multiplicity_transport :
 ## `rename_bag_multiplicity_transport`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:760`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L760)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -2861,6 +3099,8 @@ Lemma rename_bag_multiplicity_transport :
 ## `rename_rows_well_typed_transport`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:782`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L782)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for collision-safe attribute and query renaming transport.
 
@@ -2889,6 +3129,8 @@ Lemma rename_rows_well_typed_transport :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:826`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L826)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Inverts or constructs the successful evaluation branch for collision-safe attribute and query renaming transport.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -2910,6 +3152,8 @@ Lemma rename_query_outcome_success :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:834`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L834)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for collision-safe attribute and query renaming transport.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -2929,6 +3173,8 @@ Lemma rename_query_outcome_error :
 ## `outcome_rename_equiv_success`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:841`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L841)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
@@ -2951,6 +3197,8 @@ Lemma outcome_rename_equiv_success :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:849`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L849)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about collision-safe attribute and query renaming transport.
@@ -2972,6 +3220,8 @@ Lemma outcome_rename_equiv_error :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:857`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L857)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes collision-safe attribute and query renaming transport across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about collision-safe attribute and query renaming transport.
@@ -2992,6 +3242,8 @@ Lemma outcome_rename_equiv_canonical :
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:866`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L866)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rename query outcome identity law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for collision-safe attribute and query renaming transport.
@@ -3011,6 +3263,8 @@ Lemma rename_query_outcome_identity :
 ## `rename_query_outcome_composition`
 
 Source: [`vendor/FormalSQL/src/data/sql/SqlRenameFacts.v:875`](../../../vendor/FormalSQL/src/data/sql/SqlRenameFacts.v#L875)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rename query outcome composition law for collision-safe attribute and query renaming transport, in the exact direction displayed by the declaration.
 

@@ -3,7 +3,9 @@ use super::rel::{
 };
 use super::scalar::{rel_expr_may_raise_runtime, scalar_ast_may_raise_runtime_for_input};
 use super::*;
-use crate::core::syntax::{FormalRowMapAdapter, query_expr_output_signature};
+use crate::core::syntax::{
+    FormalRowMapAdapter, FormalScalarQuantifier, query_expr_output_signature,
+};
 use std::fs;
 use std::process::Command;
 
@@ -14,12 +16,563 @@ use logos_ir::ir::ScalarOp;
 use logos_ir::ir::{
     AggregateCall, AggregateModifiers, CheckConstraint, Column, CorrelationBinding,
     ForeignKeyConstraint, ForeignKeyMatch, IntegrityComparison, IntegrityPredicate,
-    IntegritySortDirection, IntegrityValueExpr, JoinType, Query, QueryAnalysisError, RelExpr,
-    ScalarAst, ScalarExpr, ScalarSourceClauseOwnership, ScalarSourceProvenance, Schema, SetOp,
-    SortDirection, SortKey, SortNullDirection, SourceClauseKind, SourceGroupingProvenance,
-    SqlStringType, SqlType, Table, TableConstraints, UniqueIndexConstraint, UniqueIndexTerm,
-    WindowAst, WindowFrameAst, WindowFrameBoundAst, WindowFrameUnits, WindowOrderKey,
+    IntegritySortDirection, IntegrityValueExpr, JoinType, Query, QueryAnalysisError,
+    QueryBinding as IrQueryBinding, RelExpr, ScalarAst, ScalarExpr, ScalarSourceClauseOwnership,
+    ScalarSourceProvenance, Schema, SetOp, SortDirection, SortKey, SortNullDirection,
+    SourceClauseKind, SourceGroupingProvenance, SqlStringType, SqlType, Table, TableConstraints,
+    UniqueIndexConstraint, UniqueIndexTerm, WindowAst, WindowFrameAst, WindowFrameBoundAst,
+    WindowFrameUnits, WindowOrderKey,
 };
+
+#[test]
+fn lowers_query_local_binding_once_and_emits_bound_query_program() {
+    let output = vec![typed_column("x", SqlType::Integer)];
+    let definition = one_row_values(
+        output.clone(),
+        vec![ScalarAst::TypeAnnotation {
+            expr: Box::new(ScalarAst::Literal {
+                raw: "1".to_owned(),
+            }),
+            ty: "INTEGER".to_owned(),
+        }],
+    );
+    let reference = || RelExpr::QueryRef {
+        binding: "cte_binding_0".to_owned(),
+        output: output.clone(),
+    };
+    let body = RelExpr::Set {
+        op: SetOp::Union,
+        all: true,
+        inputs: vec![reference(), reference()],
+        output: output.clone(),
+    };
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Bindings {
+            bindings: vec![IrQueryBinding {
+                id: "cte_binding_0".to_owned(),
+                source_name: "shared_rows".to_owned(),
+                rel: definition,
+            }],
+            body: Box::new(body),
+            output,
+        },
+        analysis_errors: Vec::new(),
+    };
+    let lowered = lower_query(&query);
+    assert_eq!(
+        lowered.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        lowered.diagnostics
+    );
+    assert_eq!(lowered.bindings.len(), 1);
+    assert_eq!(lowered.bindings[0].source_name, "shared_rows");
+    assert_eq!(lowered.bindings[0].relation, "__logos_test_0_cte_0");
+
+    let body = lowered.query_expr.as_ref().unwrap();
+    let signature = lowered.output_signature.as_deref().unwrap();
+    let target = lower_query(&Query {
+        source_sql: None,
+        rel: one_row_values(
+            vec![typed_column("x", SqlType::Integer)],
+            vec![ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                }),
+                ty: "INTEGER".to_owned(),
+            }],
+        ),
+        analysis_errors: Vec::new(),
+    });
+    let module = emit_rocq_bound_query_program_module_with_signatures(
+        &[(body, signature, lowered.bindings.as_slice())],
+        &[(
+            target.query_expr.as_ref().unwrap(),
+            target.output_signature.as_deref().unwrap(),
+            &[],
+        )],
+    )
+    .expect("bound query module");
+    assert!(
+        module
+            .rocq_module
+            .contains("Definition source_query_binding_0_0_expr")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("Definition source_bound_query_program")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("Definition target_bound_query_program")
+    );
+    assert!(module.rocq_module.contains("declare_local_query_schemas"));
+    assert_eq!(
+        module
+            .rocq_module
+            .matches("Definition source_query_binding_0_0 (")
+            .count(),
+        1,
+        "one CTE definition must be represented by one materialized binding"
+    );
+
+    let proof = emit_rocq_bound_query_proof_module_for_mode(VerificationMode::OutcomeUnconditional);
+    assert!(
+        proof
+            .rocq_module
+            .contains("bound_query_program_demand_safe_outcome_equiv"),
+        "error-preserving acceptance must not trust eager CTE errors"
+    );
+    assert!(
+        proof
+            .rocq_module
+            .contains("generated_query_program_materialization_safe"),
+        "bound-query countermodels must certify local-binding materialization safety"
+    );
+}
+
+#[test]
+fn query_local_binding_preserves_typmodless_numeric_display_scale() {
+    let definition_output = vec![decimal_column_unconstrained("total")];
+    let definition = RelExpr::Aggregate {
+        input: Box::new(one_row_values(
+            vec![decimal_column("amount", 7, 2)],
+            vec![ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Literal {
+                    raw: "1.00".to_owned(),
+                }),
+                ty: "DECIMAL(7,2)".to_owned(),
+            }],
+        )),
+        group_keys: Vec::new(),
+        grouping_sets: vec![Vec::new()],
+        agg_calls: vec![AggregateCall {
+            raw: "SUM($0)".to_owned(),
+            function: "SUM".to_owned(),
+            distinct: false,
+            modifiers: AggregateModifiers::default(),
+            args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+            filter: None,
+        }],
+        output: definition_output.clone(),
+    };
+    let query = Query {
+        source_sql: None,
+        rel: RelExpr::Bindings {
+            bindings: vec![IrQueryBinding {
+                id: "cte_binding_0".to_owned(),
+                source_name: "totals".to_owned(),
+                rel: definition,
+            }],
+            body: Box::new(RelExpr::Aggregate {
+                input: Box::new(RelExpr::QueryRef {
+                    binding: "cte_binding_0".to_owned(),
+                    output: definition_output,
+                }),
+                group_keys: Vec::new(),
+                grouping_sets: vec![Vec::new()],
+                agg_calls: vec![AggregateCall {
+                    raw: "AVG($0)".to_owned(),
+                    function: "AVG".to_owned(),
+                    distinct: false,
+                    modifiers: AggregateModifiers::default(),
+                    args: vec![scalar(ScalarAst::InputRef { index: 0 })],
+                    filter: None,
+                }],
+                output: vec![decimal_column_unconstrained("average_total")],
+            }),
+            output: vec![decimal_column_unconstrained("average_total")],
+        },
+        analysis_errors: Vec::new(),
+    };
+
+    let lowered = lower_query(&query);
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    let body = lowered.query_expr.as_ref().expect("bound query body");
+    let signature = lowered
+        .output_signature
+        .as_deref()
+        .expect("output signature");
+    let module = emit_rocq_bound_query_program_module_with_signatures(
+        &[(body, signature, lowered.bindings.as_slice())],
+        &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+    )
+    .expect("bound query module");
+    assert!(
+        module
+            .rocq_module
+            .contains("AAggregate (AggregateAverageNumericAtScale (2)%Z) AggregateAll"),
+        "a typmodless SUM result must retain its independently proved display scale across the local binding"
+    );
+}
+
+#[test]
+fn bound_query_emission_rejects_cross_component_boolean_site_reuse() {
+    let query_with_site = || FormalQueryExpr::Selection {
+        predicate: FormalScalarExpr::And {
+            insertion_sites: vec![Vec::new(), vec!["shared-site".to_owned()]],
+            operands: vec![FormalScalarExpr::True, FormalScalarExpr::True],
+        },
+        input: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    let body = query_with_site();
+    let binding_query = query_with_site();
+    let binding = FormalQueryBinding {
+        id: "binding".to_owned(),
+        source_name: "shared_rows".to_owned(),
+        relation: "__logos_test_cte".to_owned(),
+        output_signature: Vec::new(),
+        query_expr: binding_query,
+    };
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&body, &[], &[binding])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "one statement-wide Boolean schedule requires globally unique site identities"
+    );
+}
+
+#[test]
+fn bound_query_emission_rejects_forward_local_relation_references() {
+    let later_relation = "__logos_test_later_cte".to_owned();
+    let first = FormalQueryBinding {
+        id: "first".to_owned(),
+        source_name: "first".to_owned(),
+        relation: "__logos_test_first_cte".to_owned(),
+        output_signature: Vec::new(),
+        query_expr: FormalQueryExpr::Table {
+            relation: later_relation.clone(),
+            columns: Vec::new(),
+        },
+    };
+    let later = FormalQueryBinding {
+        id: "later".to_owned(),
+        source_name: "later".to_owned(),
+        relation: later_relation,
+        output_signature: Vec::new(),
+        query_expr: FormalQueryExpr::EmptyTuple,
+    };
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[first, later])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "a CTE definition may reference only lexically earlier local bindings"
+    );
+}
+
+#[test]
+fn bound_query_emission_rejects_non_authoritative_local_scan_order() {
+    let first = formal_attribute("first", FormalAttributeType::Z);
+    let second = formal_attribute("second", FormalAttributeType::Bool);
+    let authoritative = vec![first.clone(), second.clone()];
+    let forged = vec![second, first];
+    let relation = "__logos_test_ordered_cte".to_owned();
+    let binding = FormalQueryBinding {
+        id: "ordered".to_owned(),
+        source_name: "ordered".to_owned(),
+        relation: relation.clone(),
+        output_signature: authoritative.clone(),
+        query_expr: FormalQueryExpr::Empty {
+            columns: authoritative,
+        },
+    };
+    let body = FormalQueryExpr::Table {
+        relation,
+        columns: forged.clone(),
+    };
+
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&body, forged.as_slice(), &[binding])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "a local scan must retain the binding's exact name/type/arity/order signature"
+    );
+}
+
+#[test]
+fn bound_query_emission_rejects_non_root_analysis_errors() {
+    let binding_error = FormalQueryBinding {
+        id: "error".to_owned(),
+        source_name: "error".to_owned(),
+        relation: "__logos_test_error_cte".to_owned(),
+        output_signature: Vec::new(),
+        query_expr: FormalQueryExpr::Error {
+            columns: Vec::new(),
+            error: FormalQueryError::UndefinedColumn,
+        },
+    };
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[binding_error])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "a binding-local analysis error must not be executed as a CTE"
+    );
+
+    let ordinary_binding = FormalQueryBinding {
+        id: "ordinary".to_owned(),
+        source_name: "ordinary".to_owned(),
+        relation: "__logos_test_ordinary_cte".to_owned(),
+        output_signature: Vec::new(),
+        query_expr: FormalQueryExpr::EmptyTuple,
+    };
+    let root_error = FormalQueryExpr::Error {
+        columns: Vec::new(),
+        error: FormalQueryError::UndefinedColumn,
+    };
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&root_error, &[], &[ordinary_binding])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "a statement-root analysis error must take priority over and remove all bindings"
+    );
+}
+
+#[test]
+fn lowering_promotes_attested_bound_analysis_error_to_the_statement_root() {
+    let outer_output = vec![typed_column("x", SqlType::Integer)];
+    let binding_output = vec![typed_column("y", SqlType::Integer)];
+    let typed_one = || ScalarAst::TypeAnnotation {
+        expr: Box::new(ScalarAst::Literal {
+            raw: "1".to_owned(),
+        }),
+        ty: "INTEGER".to_owned(),
+    };
+    let query = Query {
+        source_sql: Some("with local as (select 1 as y) select 1 as x order by x + 1".to_owned()),
+        rel: RelExpr::Bindings {
+            bindings: vec![IrQueryBinding {
+                id: "local".to_owned(),
+                source_name: "local".to_owned(),
+                rel: one_row_values(binding_output, vec![typed_one()]),
+            }],
+            body: Box::new(one_row_values(outer_output.clone(), vec![typed_one()])),
+            output: outer_output,
+        },
+        analysis_errors: vec![
+            QueryAnalysisError::PostgresOrderByAliasExpressionUndefinedColumn {
+                sql_state: "42703".to_owned(),
+                query_block_id: "query-0".to_owned(),
+                source_order_item_node_id: "query-0/order-0".to_owned(),
+                source_order_item_sql: "x + 1".to_owned(),
+                output_alias: "x".to_owned(),
+            },
+        ],
+    };
+
+    let lowered = lower_query_with_schema_config(
+        &query,
+        &Schema { tables: Vec::new() },
+        &LoweringConfig::default(),
+    );
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    assert!(
+        lowered.bindings.is_empty(),
+        "statement analysis happens before any query-local binding executes"
+    );
+    let Some(FormalQueryExpr::Error { columns, error }) = lowered.query_expr.as_ref() else {
+        panic!("attested analysis error must be the sole statement root: {lowered:#?}");
+    };
+    assert_eq!(*error, FormalQueryError::UndefinedColumn);
+    assert_eq!(Some(columns), lowered.output_signature.as_ref());
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(
+                lowered.query_expr.as_ref().unwrap(),
+                lowered.output_signature.as_deref().unwrap(),
+                lowered.bindings.as_slice(),
+            )],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_some(),
+        "canonical root analysis errors remain emit-ready"
+    );
+}
+
+#[test]
+fn binding_root_analysis_error_normalizes_to_the_outer_statement_signature() {
+    let outer_columns = vec![formal_attribute("outer", FormalAttributeType::Z)];
+    let mut body = Some(FormalQueryExpr::Empty {
+        columns: outer_columns.clone(),
+    });
+    let mut bindings = vec![FormalQueryBinding {
+        id: "local_error".to_owned(),
+        source_name: "local_error".to_owned(),
+        relation: "__logos_local_error".to_owned(),
+        output_signature: vec![formal_attribute("inner", FormalAttributeType::Bool)],
+        query_expr: FormalQueryExpr::Error {
+            columns: vec![formal_attribute("inner", FormalAttributeType::Bool)],
+            error: FormalQueryError::UndefinedFunction,
+        },
+    }];
+
+    assert_eq!(
+        normalize_bound_analysis_errors(&mut bindings, &mut body),
+        BoundAnalysisErrorNormalization::Promoted
+    );
+    assert!(bindings.is_empty());
+    assert_eq!(
+        body,
+        Some(FormalQueryExpr::Error {
+            columns: outer_columns,
+            error: FormalQueryError::UndefinedFunction,
+        })
+    );
+}
+
+fn scheduled_boolean_value(site: &str) -> FormalScalarExpr {
+    FormalScalarExpr::BooleanValue {
+        expression: Box::new(FormalScalarExpr::And {
+            insertion_sites: vec![Vec::new(), vec![site.to_owned()]],
+            operands: vec![FormalScalarExpr::True, FormalScalarExpr::True],
+        }),
+    }
+}
+
+#[test]
+fn join_select_lists_participate_in_boolean_and_analysis_validation() {
+    let repeated_site_join = FormalQueryExpr::Join {
+        join_kind: FormalQueryJoinKind::Left,
+        predicate: FormalScalarExpr::True,
+        matched_select: vec![
+            FormalScalarSelectItem {
+                expr: scheduled_boolean_value("join.select.shared"),
+                alias: "left_bool".to_owned(),
+                alias_ty: FormalAttributeType::Bool,
+                numeric_dscale: None,
+            },
+            FormalScalarSelectItem {
+                expr: scheduled_boolean_value("join.select.shared"),
+                alias: "right_bool".to_owned(),
+                alias_ty: FormalAttributeType::Bool,
+                numeric_dscale: None,
+            },
+        ],
+        left_select: vec![
+            FormalScalarSelectItem {
+                expr: FormalScalarExpr::BooleanValue {
+                    expression: Box::new(FormalScalarExpr::True),
+                },
+                alias: "left_bool".to_owned(),
+                alias_ty: FormalAttributeType::Bool,
+                numeric_dscale: None,
+            },
+            FormalScalarSelectItem {
+                expr: FormalScalarExpr::BooleanValue {
+                    expression: Box::new(FormalScalarExpr::True),
+                },
+                alias: "right_bool".to_owned(),
+                alias_ty: FormalAttributeType::Bool,
+                numeric_dscale: None,
+            },
+        ],
+        right_select: Vec::new(),
+        left: Box::new(FormalQueryExpr::EmptyTuple),
+        right: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    let repeated_signature = query_expr_output_signature(&repeated_site_join).unwrap();
+    assert!(
+        emit_rocq_query_program_module_with_signatures(
+            &[(&repeated_site_join, repeated_signature.as_slice())],
+            &[(&FormalQueryExpr::EmptyTuple, &[])],
+        )
+        .is_none(),
+        "JOIN projection sites share the statement-wide Boolean schedule namespace"
+    );
+
+    let nested_error_join = FormalQueryExpr::Join {
+        join_kind: FormalQueryJoinKind::Left,
+        predicate: FormalScalarExpr::True,
+        matched_select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Subquery {
+                result_ty: FormalAttributeType::Z,
+                query: Box::new(FormalQueryExpr::Error {
+                    columns: vec![formal_attribute("value", FormalAttributeType::Z)],
+                    error: FormalQueryError::UndefinedColumn,
+                }),
+            },
+            alias: "value".to_owned(),
+            alias_ty: FormalAttributeType::Z,
+            numeric_dscale: None,
+        }],
+        left_select: vec![z_select_item("value")],
+        right_select: Vec::new(),
+        left: Box::new(FormalQueryExpr::EmptyTuple),
+        right: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    let nested_signature = query_expr_output_signature(&nested_error_join).unwrap();
+    assert!(
+        emit_rocq_query_program_module_with_signatures(
+            &[(&nested_error_join, nested_signature.as_slice())],
+            &[(&FormalQueryExpr::EmptyTuple, &[])],
+        )
+        .is_none(),
+        "an analysis error inside a JOIN projection scalar subquery is not a statement root"
+    );
+}
+
+#[test]
+fn join_select_scalar_subqueries_participate_in_local_dependency_validation() {
+    let later_relation = "__logos_test_join_select_later".to_owned();
+    let later_output = vec![formal_attribute("x", FormalAttributeType::Z)];
+    let first_output = vec![formal_attribute("projected", FormalAttributeType::Z)];
+    let first = FormalQueryBinding {
+        id: "first".to_owned(),
+        source_name: "first".to_owned(),
+        relation: "__logos_test_join_select_first".to_owned(),
+        output_signature: first_output.clone(),
+        query_expr: FormalQueryExpr::Join {
+            join_kind: FormalQueryJoinKind::Left,
+            predicate: FormalScalarExpr::True,
+            matched_select: vec![FormalScalarSelectItem {
+                expr: FormalScalarExpr::Subquery {
+                    result_ty: FormalAttributeType::Z,
+                    query: Box::new(FormalQueryExpr::Table {
+                        relation: later_relation.clone(),
+                        columns: later_output.clone(),
+                    }),
+                },
+                alias: "projected".to_owned(),
+                alias_ty: FormalAttributeType::Z,
+                numeric_dscale: None,
+            }],
+            left_select: vec![z_select_item("projected")],
+            right_select: Vec::new(),
+            left: Box::new(FormalQueryExpr::EmptyTuple),
+            right: Box::new(FormalQueryExpr::EmptyTuple),
+        },
+    };
+    let later = FormalQueryBinding {
+        id: "later".to_owned(),
+        source_name: "later".to_owned(),
+        relation: later_relation,
+        output_signature: later_output.clone(),
+        query_expr: FormalQueryExpr::Empty {
+            columns: later_output,
+        },
+    };
+
+    assert!(
+        emit_rocq_bound_query_program_module_with_signatures(
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[first, later])],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .is_none(),
+        "a forward CTE reference cannot hide inside a JOIN projection scalar subquery"
+    );
+}
 
 #[test]
 fn generated_numeric_annotations_use_the_shared_closed_parser() {
@@ -69,7 +622,6 @@ fn emitted_definition_shape<'a>(module: &'a FormalQueryModule, symbol: &str) -> 
 fn assert_no_physical_plan_constructs(module: &FormalQueryModule) {
     for marker in [
         "QExpr_Pg",
-        "FExpr_Pg",
         "frozen_",
         "PgFetch",
         "PgGroupFetch",
@@ -92,18 +644,13 @@ fn selection_under_optional_output_restore(
 ) -> Option<(&FormalScalarExpr, &FormalQueryExpr)> {
     let query = match query {
         FormalQueryExpr::Projection { input, .. }
-            if matches!(input.as_ref(), FormalQueryExpr::ScalarSelection { .. }) =>
-        {
-            input.as_ref()
-        }
-        FormalQueryExpr::ScalarProjection { input, .. }
-            if matches!(input.as_ref(), FormalQueryExpr::ScalarSelection { .. }) =>
+            if matches!(input.as_ref(), FormalQueryExpr::Selection { .. }) =>
         {
             input.as_ref()
         }
         query => query,
     };
-    let FormalQueryExpr::ScalarSelection { predicate, input } = query else {
+    let FormalQueryExpr::Selection { predicate, input } = query else {
         return None;
     };
     Some((predicate, input.as_ref()))
@@ -114,6 +661,15 @@ fn proof_emitters_select_success_outcome_and_conditional_goals() {
     let safe = emit_rocq_query_expr_proof_module_for_mode(VerificationMode::SafeUnconditional);
     assert!(
         safe.rocq_module
+            .contains("@query_program_possible_equiv TNull relname")
+    );
+    assert!(
+        safe.rocq_module
+            .contains("@eval_query_expr_possible_outcome TNull relname")
+    );
+    assert!(
+        !safe
+            .rocq_module
             .contains("@query_program_equiv TNull relname")
     );
     assert!(
@@ -150,6 +706,11 @@ fn proof_emitters_select_success_outcome_and_conditional_goals() {
     assert!(
         outcome
             .rocq_module
+            .contains("@query_program_possible_outcome_equiv TNull relname")
+    );
+    assert!(
+        !outcome
+            .rocq_module
             .contains("@query_program_outcome_equiv TNull relname")
     );
     assert!(
@@ -162,7 +723,7 @@ fn proof_emitters_select_success_outcome_and_conditional_goals() {
     assert!(
         conditional
             .rocq_module
-            .contains("@query_program_outcome_equiv TNull relname")
+            .contains("@query_program_possible_outcome_equiv TNull relname")
     );
     assert!(
         conditional
@@ -198,8 +759,11 @@ fn proof_emitters_select_success_outcome_and_conditional_goals() {
 
 fn scalar_validation_query(expr: FormalAggregateTerm) -> FormalQueryExpr {
     FormalQueryExpr::Projection {
-        select: vec![FormalSelectItem {
-            expr,
+        select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Bool,
+                term: expr,
+            },
             alias: "value".to_owned(),
             alias_ty: FormalAttributeType::Bool,
             numeric_dscale: None,
@@ -252,6 +816,244 @@ fn scalar_operator_arity_table_rejects_nearby_malformed_calls() {
 }
 
 #[test]
+fn aggregate_function_terms_match_rocq_strict_admission_boundary() {
+    let function_constant = |raw: &str, ty| FormalFunctionTerm::Constant {
+        raw: raw.to_owned(),
+        ty: Some(ty),
+    };
+    let hidden_calls = vec![
+        (
+            "CASE",
+            FormalFunctionTerm::ScalarCall {
+                operator: ScalarOperator::Case,
+                args: vec![
+                    function_constant("true", FormalAttributeType::Bool),
+                    function_constant("1", FormalAttributeType::Int32),
+                    function_constant("0", FormalAttributeType::Int32),
+                ],
+            },
+        ),
+        (
+            "predicate value",
+            FormalFunctionTerm::ScalarCall {
+                operator: ScalarOperator::PredicateValue(FormalPredicate::IsNull),
+                args: vec![function_constant("1", FormalAttributeType::Int32)],
+            },
+        ),
+        (
+            "Boolean NOT",
+            FormalFunctionTerm::ScalarCall {
+                operator: ScalarOperator::Boolean(ScalarBooleanOperator::Not),
+                args: vec![function_constant("true", FormalAttributeType::Bool)],
+            },
+        ),
+        (
+            "scheduled Boolean AND",
+            FormalFunctionTerm::ScalarCall {
+                operator: ScalarOperator::Boolean(ScalarBooleanOperator::And),
+                args: vec![
+                    function_constant("true", FormalAttributeType::Bool),
+                    function_constant("false", FormalAttributeType::Bool),
+                ],
+            },
+        ),
+    ];
+
+    for (label, arg) in hidden_calls {
+        let query = FormalQueryExpr::Group {
+            select: vec![FormalScalarSelectItem {
+                expr: FormalScalarExpr::Leaf {
+                    result_ty: FormalAttributeType::Int64,
+                    term: FormalAggregateTerm::Aggregate {
+                        function: FormalAggregateFunction::Count,
+                        quantifier: FormalAggregateQuantifier::All,
+                        arg,
+                    },
+                },
+                alias: "counted".to_owned(),
+                alias_ty: FormalAttributeType::Int64,
+                numeric_dscale: None,
+            }],
+            group_by: Vec::new(),
+            having: FormalScalarExpr::True,
+            input: Box::new(FormalQueryExpr::EmptyTuple),
+        };
+        let error = validate_query_expr_scalar_operators(&query)
+            .expect_err("strict aggregate argument must be rejected");
+        assert!(
+            error.contains("strict aggregate function terms reject CASE, Boolean, and predicate-value operators"),
+            "{label}: {error}"
+        );
+        assert!(
+            try_emit_rocq_query_module(&query, &query).is_none(),
+            "{label} must fail before Rocq emission"
+        );
+    }
+
+    let value_leaf = |raw: &str| FormalScalarExpr::Leaf {
+        result_ty: FormalAttributeType::Int32,
+        term: FormalAggregateTerm::Expr {
+            term: function_constant(raw, FormalAttributeType::Int32),
+        },
+    };
+    let is_null = || FormalScalarExpr::Predicate {
+        predicate: FormalPredicate::IsNull,
+        args: vec![value_leaf("1")],
+    };
+    let canonical = FormalQueryExpr::Projection {
+        select: vec![
+            FormalScalarSelectItem {
+                expr: FormalScalarExpr::Case {
+                    result_ty: FormalAttributeType::Int32,
+                    condition: Box::new(is_null()),
+                    then_expr: Box::new(value_leaf("1")),
+                    else_expr: Box::new(value_leaf("0")),
+                },
+                alias: "case_value".to_owned(),
+                alias_ty: FormalAttributeType::Int32,
+                numeric_dscale: None,
+            },
+            FormalScalarSelectItem {
+                expr: FormalScalarExpr::BooleanValue {
+                    expression: Box::new(FormalScalarExpr::And {
+                        insertion_sites: vec![Vec::new(), vec!["typed_boolean_rhs".to_owned()]],
+                        operands: vec![is_null(), FormalScalarExpr::True],
+                    }),
+                },
+                alias: "boolean_value".to_owned(),
+                alias_ty: FormalAttributeType::Bool,
+                numeric_dscale: None,
+            },
+        ],
+        input: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    validate_query_expr_scalar_operators(&canonical)
+        .expect("typed CASE, predicate, Boolean schedule, and BooleanValue remain canonical");
+    let module = try_emit_rocq_query_module(&canonical, &canonical)
+        .expect("canonical scalar expressions should emit");
+    assert!(
+        module
+            .rocq_module
+            .contains("|- forall truth, _ => intros []; reflexivity")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("Lemma scalar_select_list_0_admissible_row_select_generated_schema")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("apply (scalar_select_list_0_admissible_row_select_generated_schema).")
+    );
+}
+
+#[test]
+fn window_items_share_the_rocq_scalar_leaf_shape_boundary() {
+    let aggregate_constant = |raw: &str, ty| FormalAggregateTerm::Expr {
+        term: FormalFunctionTerm::Constant {
+            raw: raw.to_owned(),
+            ty: Some(ty),
+        },
+    };
+    let invalid_functions = vec![
+        (
+            "ordinary aggregate-term call",
+            FormalWindowFunction::Aggregate {
+                term: FormalAggregateTerm::ScalarCall {
+                    operator: ScalarOperator::Add(ScalarNumericKind::Int32),
+                    args: vec![
+                        aggregate_constant("1", FormalAttributeType::Int32),
+                        aggregate_constant("2", FormalAttributeType::Int32),
+                    ],
+                },
+            },
+        ),
+        (
+            "structured aggregate-term CASE",
+            FormalWindowFunction::FullPartitionAggregate {
+                term: FormalAggregateTerm::Case {
+                    branches: vec![FormalCaseBranch {
+                        when: aggregate_constant("true", FormalAttributeType::Bool),
+                        then_expr: aggregate_constant("1", FormalAttributeType::Int32),
+                    }],
+                    else_expr: Box::new(aggregate_constant("0", FormalAttributeType::Int32)),
+                },
+            },
+        ),
+    ];
+
+    let window_query = |function| FormalQueryExpr::Window {
+        partition_keys: Vec::new(),
+        order_keys: Vec::new(),
+        items: vec![FormalWindowItem {
+            output: formal_attribute("window_value", FormalAttributeType::Int32),
+            function,
+            numeric_dscale: None,
+        }],
+        input: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    for (label, function) in invalid_functions {
+        let query = window_query(function);
+        let error = validate_query_expr_scalar_operators(&query)
+            .expect_err("window items must use the scalar leaf shape");
+        assert!(
+            error.contains("window items use the same leaf boundary"),
+            "{label}: {error}"
+        );
+        assert!(
+            try_emit_rocq_query_module(&query, &query).is_none(),
+            "{label} must fail before Rocq emission"
+        );
+    }
+
+    let admitted = FormalQueryExpr::Window {
+        partition_keys: Vec::new(),
+        order_keys: Vec::new(),
+        items: vec![FormalWindowItem {
+            output: formal_attribute("window_count", FormalAttributeType::Int64),
+            function: FormalWindowFunction::Aggregate {
+                term: FormalAggregateTerm::Aggregate {
+                    function: FormalAggregateFunction::Count,
+                    quantifier: FormalAggregateQuantifier::All,
+                    arg: FormalFunctionTerm::Constant {
+                        raw: "1".to_owned(),
+                        ty: Some(FormalAttributeType::Int32),
+                    },
+                },
+            },
+            numeric_dscale: None,
+        }],
+        input: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+    validate_query_expr_scalar_operators(&admitted)
+        .expect("a true aggregate window leaf remains admitted");
+    let module = try_emit_rocq_query_module(&admitted, &admitted)
+        .expect("a true aggregate window leaf should emit Rocq");
+    assert!(
+        module
+            .rocq_module
+            .contains("unfold WindowAggregateItem, TNullLeafHasType; split; reflexivity.")
+    );
+
+    let full_partition = window_query(FormalWindowFunction::FullPartitionAggregate {
+        term: FormalAggregateTerm::Aggregate {
+            function: FormalAggregateFunction::MinInt32,
+            quantifier: FormalAggregateQuantifier::All,
+            arg: FormalFunctionTerm::Constant {
+                raw: "1".to_owned(),
+                ty: Some(FormalAttributeType::Int32),
+            },
+        },
+    });
+    let module = try_emit_rocq_query_module(&full_partition, &full_partition)
+        .expect("a full-partition aggregate window leaf should emit Rocq");
+    assert!(module.rocq_module.contains(
+        "unfold WindowFullPartitionAggregateItem, TNullLeafHasType; split; reflexivity."
+    ));
+}
+
+#[test]
 fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     let malformed_arity = scalar_validation_query(FormalAggregateTerm::Expr {
         term: FormalFunctionTerm::ScalarCall {
@@ -261,8 +1063,30 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     });
     let error = validate_query_expr_scalar_operators(&malformed_arity)
         .expect_err("zero-argument NOT must be rejected");
-    assert!(error.contains("does not accept 0 arguments"));
+    assert!(error.contains("scalar leaves admit only atomic"));
     assert!(try_emit_rocq_query_module(&malformed_arity, &malformed_arity).is_none());
+
+    let strict_boolean = scalar_validation_query(FormalAggregateTerm::ScalarCall {
+        operator: ScalarOperator::Boolean(ScalarBooleanOperator::And),
+        args: vec![
+            FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw: "true".to_owned(),
+                    ty: Some(FormalAttributeType::Bool),
+                },
+            },
+            FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw: "false".to_owned(),
+                    ty: Some(FormalAttributeType::Bool),
+                },
+            },
+        ],
+    });
+    let error = validate_query_expr_scalar_operators(&strict_boolean)
+        .expect_err("strict aggregate-term AND must not bypass canonical Boolean scheduling");
+    assert!(error.contains("scalar leaves admit only atomic"));
+    assert!(try_emit_rocq_query_module(&strict_boolean, &strict_boolean).is_none());
 
     let generic_aggregate_case = scalar_validation_query(FormalAggregateTerm::ScalarCall {
         operator: ScalarOperator::Case,
@@ -275,16 +1099,19 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     });
     let error = validate_query_expr_scalar_operators(&generic_aggregate_case)
         .expect_err("aggregate CASE must retain its structured representation");
-    assert!(error.contains("must use FormalAggregateTerm::Case"));
+    assert!(error.contains("scalar leaves admit only atomic"));
     assert!(try_emit_rocq_query_module(&generic_aggregate_case, &generic_aggregate_case).is_none());
 
     let malformed_predicate = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::Predicate {
+        predicate: FormalScalarExpr::Predicate {
             predicate: FormalPredicate::Eq,
-            args: vec![FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    raw: "1".to_owned(),
-                    ty: Some(FormalAttributeType::Int32),
+            args: vec![FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Int32,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw: "1".to_owned(),
+                        ty: Some(FormalAttributeType::Int32),
+                    },
                 },
             }],
         },
@@ -295,7 +1122,7 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     assert!(error.contains("predicate Eq does not accept 1 arguments"));
     assert!(try_emit_rocq_query_module(&malformed_predicate, &malformed_predicate).is_none());
 
-    let mistyped_native_predicate = FormalQueryExpr::ScalarSelection {
+    let mistyped_scalar_predicate = FormalQueryExpr::Selection {
         predicate: FormalScalarExpr::Predicate {
             predicate: FormalPredicate::IsTrue,
             args: vec![FormalScalarExpr::Leaf {
@@ -310,11 +1137,11 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
         },
         input: Box::new(FormalQueryExpr::EmptyTuple),
     };
-    let error = validate_query_expr_scalar_operators(&mistyped_native_predicate)
+    let error = validate_query_expr_scalar_operators(&mistyped_scalar_predicate)
         .expect_err("IS TRUE over INTEGER must be rejected by the typed scalar boundary");
     assert!(error.contains("predicate IsTrue rejects argument types"));
     assert!(
-        try_emit_rocq_query_module(&mistyped_native_predicate, &mistyped_native_predicate)
+        try_emit_rocq_query_module(&mistyped_scalar_predicate, &mistyped_scalar_predicate)
             .is_none()
     );
 
@@ -327,7 +1154,7 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
             },
         },
     };
-    let mistyped_native_call = FormalQueryExpr::ScalarProjection {
+    let mistyped_scalar_call = FormalQueryExpr::Projection {
         select: vec![FormalScalarSelectItem {
             expr: FormalScalarExpr::Call {
                 result_ty: FormalAttributeType::String {
@@ -344,10 +1171,10 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
         }],
         input: Box::new(FormalQueryExpr::EmptyTuple),
     };
-    let error = validate_query_expr_scalar_operators(&mistyped_native_call)
+    let error = validate_query_expr_scalar_operators(&mistyped_scalar_call)
         .expect_err("string concatenation over INTEGER operands must be rejected");
     assert!(error.contains("StringConcat rejects argument types"));
-    assert!(try_emit_rocq_query_module(&mistyped_native_call, &mistyped_native_call).is_none());
+    assert!(try_emit_rocq_query_module(&mistyped_scalar_call, &mistyped_scalar_call).is_none());
 
     let unconstrained_numeric_leaf = || FormalScalarExpr::Leaf {
         result_ty: FormalAttributeType::Numeric,
@@ -358,7 +1185,7 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
             },
         },
     };
-    let invented_decimal_typmod = FormalQueryExpr::ScalarProjection {
+    let invented_decimal_typmod = FormalQueryExpr::Projection {
         select: vec![FormalScalarSelectItem {
             expr: FormalScalarExpr::Call {
                 result_ty: FormalAttributeType::Decimal {
@@ -396,7 +1223,7 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     assert!(error.contains("analysis error may occur only at the query root"));
     assert!(try_emit_rocq_query_module(&nested_analysis_error, &nested_analysis_error).is_none());
 
-    let mistyped_aggregate_leaf = FormalQueryExpr::ScalarProjection {
+    let mistyped_aggregate_leaf = FormalQueryExpr::Projection {
         select: vec![FormalScalarSelectItem {
             expr: FormalScalarExpr::Leaf {
                 result_ty: FormalAttributeType::Int64,
@@ -433,16 +1260,20 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     });
     let error = validate_query_expr_scalar_operators(&empty_case)
         .expect_err("CASE without a WHEN/THEN branch must be rejected");
-    assert!(error.contains("structured CASE requires at least one WHEN/THEN branch"));
+    assert!(error.contains("scalar leaves admit only atomic"));
     assert!(try_emit_rocq_query_module(&empty_case, &empty_case).is_none());
 
     let malformed_quantified_predicate = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::QuantifiedComparison {
+        predicate: FormalScalarExpr::QuantifiedComparison {
+            quantifier: FormalScalarQuantifier::Exists,
             predicate: FormalPredicate::IsNull,
-            args: vec![FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    raw: "true".to_owned(),
-                    ty: Some(FormalAttributeType::Bool),
+            args: vec![FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Bool,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw: "true".to_owned(),
+                        ty: Some(FormalAttributeType::Bool),
+                    },
                 },
             }],
             query: Box::new(scalar_validation_query(FormalAggregateTerm::Expr {
@@ -465,11 +1296,14 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
         .is_none()
     );
 
-    let bool_item = FormalSelectItem {
-        expr: FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant {
-                raw: "true".to_owned(),
-                ty: Some(FormalAttributeType::Bool),
+    let bool_item = FormalScalarSelectItem {
+        expr: FormalScalarExpr::Leaf {
+            result_ty: FormalAttributeType::Bool,
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw: "true".to_owned(),
+                    ty: Some(FormalAttributeType::Bool),
+                },
             },
         },
         alias: "value".to_owned(),
@@ -488,12 +1322,16 @@ fn malformed_scalar_calls_are_rejected_before_rocq_emission() {
     ];
     for (label, subquery) in wrong_width_subqueries {
         let malformed_quantified_width = FormalQueryExpr::Selection {
-            predicate: FormalFormulaExpr::QuantifiedComparison {
+            predicate: FormalScalarExpr::QuantifiedComparison {
+                quantifier: FormalScalarQuantifier::Exists,
                 predicate: FormalPredicate::Eq,
-                args: vec![FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Constant {
-                        raw: "true".to_owned(),
-                        ty: Some(FormalAttributeType::Bool),
+                args: vec![FormalScalarExpr::Leaf {
+                    result_ty: FormalAttributeType::Bool,
+                    term: FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Constant {
+                            raw: "true".to_owned(),
+                            ty: Some(FormalAttributeType::Bool),
+                        },
                     },
                 }],
                 query: Box::new(subquery),
@@ -519,7 +1357,7 @@ fn quantified_comparison_uses_semi_anti_authoritative_output_signature() {
     let empty_input = || FormalQueryExpr::EmptyTuple;
     let join = |join_kind, matched_select, left_select| FormalQueryExpr::Join {
         join_kind,
-        predicate: FormalFormulaExpr::True,
+        predicate: FormalScalarExpr::True,
         matched_select,
         left_select,
         right_select: vec![z_select_item("right")],
@@ -527,12 +1365,16 @@ fn quantified_comparison_uses_semi_anti_authoritative_output_signature() {
         right: Box::new(empty_input()),
     };
     let quantified_query = |query| FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::QuantifiedComparison {
+        predicate: FormalScalarExpr::QuantifiedComparison {
+            quantifier: FormalScalarQuantifier::Exists,
             predicate: FormalPredicate::Eq,
-            args: vec![FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    raw: "1".to_owned(),
-                    ty: Some(FormalAttributeType::Z),
+            args: vec![FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Z,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw: "1".to_owned(),
+                        ty: Some(FormalAttributeType::Z),
+                    },
                 },
             }],
             query: Box::new(query),
@@ -654,11 +1496,14 @@ fn query_output_signature_requires_exact_ordered_attributes() {
         op: FormalSetOp::Union,
         left: Box::new(projected(&["left"])),
         right: Box::new(FormalQueryExpr::Projection {
-            select: vec![FormalSelectItem {
-                expr: FormalAggregateTerm::Expr {
-                    term: FormalFunctionTerm::Constant {
-                        raw: "true".to_owned(),
-                        ty: Some(FormalAttributeType::Bool),
+            select: vec![FormalScalarSelectItem {
+                expr: FormalScalarExpr::Leaf {
+                    result_ty: FormalAttributeType::Bool,
+                    term: FormalAggregateTerm::Expr {
+                        term: FormalFunctionTerm::Constant {
+                            raw: "true".to_owned(),
+                            ty: Some(FormalAttributeType::Bool),
+                        },
                     },
                 },
                 alias: "left".to_owned(),
@@ -740,11 +1585,14 @@ fn query_output_signature_requires_exact_ordered_attributes() {
                 group_by: Vec::new(),
             },
             FormalGroupingSet {
-                select: vec![FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Constant {
-                            raw: "true".to_owned(),
-                            ty: Some(FormalAttributeType::Bool),
+                select: vec![FormalScalarSelectItem {
+                    expr: FormalScalarExpr::Leaf {
+                        result_ty: FormalAttributeType::Bool,
+                        term: FormalAggregateTerm::Expr {
+                            term: FormalFunctionTerm::Constant {
+                                raw: "true".to_owned(),
+                                ty: Some(FormalAttributeType::Bool),
+                            },
                         },
                     },
                     alias: "first".to_owned(),
@@ -907,9 +1755,12 @@ fn numeric_model_test_term(name: &str) -> FormalAggregateTerm {
     }
 }
 
-fn numeric_model_test_select_item(name: &str) -> FormalSelectItem {
-    FormalSelectItem {
-        expr: numeric_model_test_term(name),
+fn numeric_model_test_select_item(name: &str) -> FormalScalarSelectItem {
+    FormalScalarSelectItem {
+        expr: FormalScalarExpr::Leaf {
+            result_ty: FormalAttributeType::Numeric,
+            term: numeric_model_test_term(name),
+        },
         alias: name.to_owned(),
         alias_ty: FormalAttributeType::Numeric,
         numeric_dscale: None,
@@ -918,15 +1769,18 @@ fn numeric_model_test_select_item(name: &str) -> FormalSelectItem {
 
 /// A one-column SQL-visible subquery whose hidden implementation uses the
 /// abstract NumericExp model. Varying `relation` creates a structural CSE
-/// near-miss without changing the surrounding formula constructor.
+/// near-miss without changing the surrounding scalar constructor.
 fn nested_numeric_exp_model_query(relation: &str) -> FormalQueryExpr {
     let avg_value = formal_attribute("avg_value", FormalAttributeType::Numeric);
     let avg_dscale = formal_attribute("avg_dscale", FormalAttributeType::Z);
     let exp_value = formal_attribute("exp_value", FormalAttributeType::Numeric);
     let exp_dscale = formal_attribute("exp_dscale", FormalAttributeType::Z);
     FormalQueryExpr::Projection {
-        select: vec![FormalSelectItem {
-            expr: numeric_model_test_term("exp_value"),
+        select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Numeric,
+                term: numeric_model_test_term("exp_value"),
+            },
             alias: "exp_value".to_owned(),
             alias_ty: FormalAttributeType::Numeric,
             numeric_dscale: Some(NumericDscaleProvenance::Attribute("exp_dscale".to_owned())),
@@ -947,9 +1801,35 @@ fn nested_numeric_exp_model_query(relation: &str) -> FormalQueryExpr {
     }
 }
 
+#[test]
+fn numeric_exp_model_requirement_reaches_join_select_scalar_subqueries() {
+    let join = FormalQueryExpr::Join {
+        join_kind: FormalQueryJoinKind::Left,
+        predicate: FormalScalarExpr::True,
+        matched_select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Subquery {
+                result_ty: FormalAttributeType::Numeric,
+                query: Box::new(nested_numeric_exp_model_query("JOIN_MODEL_INPUT")),
+            },
+            alias: "modeled".to_owned(),
+            alias_ty: FormalAttributeType::Numeric,
+            numeric_dscale: None,
+        }],
+        left_select: vec![numeric_model_test_select_item("modeled")],
+        right_select: Vec::new(),
+        left: Box::new(FormalQueryExpr::EmptyTuple),
+        right: Box::new(FormalQueryExpr::EmptyTuple),
+    };
+
+    assert!(
+        join.requires_numeric_exp_model(),
+        "NumericExp hidden only in a JOIN projection scalar subquery still owns a model parameter"
+    );
+}
+
 fn numeric_model_exists_selection(outer_relation: &str, model_relation: &str) -> FormalQueryExpr {
     FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::Exists {
+        predicate: FormalScalarExpr::Exists {
             query: Box::new(nested_numeric_exp_model_query(model_relation)),
         },
         input: Box::new(FormalQueryExpr::Table {
@@ -960,18 +1840,21 @@ fn numeric_model_exists_selection(outer_relation: &str, model_relation: &str) ->
 }
 
 #[test]
-fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries() {
+fn numeric_exp_model_reaches_selection_and_group_through_all_scalar_subqueries() {
     let shared = nested_numeric_exp_model_query("MODEL_INPUT");
     let probe = numeric_model_test_select_item("probe");
     let source = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::And {
-            left: Box::new(FormalFormulaExpr::In {
-                select: vec![probe.clone()],
-                query: Box::new(shared.clone()),
-            }),
-            right: Box::new(FormalFormulaExpr::Exists {
-                query: Box::new(shared.clone()),
-            }),
+        predicate: FormalScalarExpr::And {
+            insertion_sites: vec![Vec::new(), vec!["test.selection.and".to_owned()]],
+            operands: vec![
+                FormalScalarExpr::In {
+                    args: vec![probe.expr.clone()],
+                    query: Box::new(shared.clone()),
+                },
+                FormalScalarExpr::Exists {
+                    query: Box::new(shared.clone()),
+                },
+            ],
         },
         input: Box::new(FormalQueryExpr::Table {
             relation: "OUTER_SELECTION".to_owned(),
@@ -981,7 +1864,8 @@ fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries(
     let target = FormalQueryExpr::Group {
         select: vec![probe.clone()],
         group_by: vec![probe.expr.clone()],
-        having: FormalFormulaExpr::QuantifiedComparison {
+        having: FormalScalarExpr::QuantifiedComparison {
+            quantifier: FormalScalarQuantifier::Exists,
             predicate: FormalPredicate::Eq,
             args: vec![probe.expr.clone()],
             query: Box::new(shared),
@@ -996,7 +1880,7 @@ fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries(
     assert!(target.requires_numeric_exp_model());
 
     // Select/group terms alone do not acquire a NumericExp dependency: only
-    // their input and query-bearing predicate/HAVING formula can introduce it.
+    // their input and query-bearing predicate/HAVING scalar expression can introduce it.
     let model_free_projection = FormalQueryExpr::Projection {
         select: vec![probe.clone()],
         input: Box::new(FormalQueryExpr::Table {
@@ -1007,7 +1891,7 @@ fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries(
     let model_free_group = FormalQueryExpr::Group {
         select: vec![probe.clone()],
         group_by: vec![probe.expr],
-        having: FormalFormulaExpr::True,
+        having: FormalScalarExpr::True,
         input: Box::new(FormalQueryExpr::Table {
             relation: "MODEL_FREE_GROUP".to_owned(),
             columns: vec![formal_attribute("probe", FormalAttributeType::Numeric)],
@@ -1023,15 +1907,15 @@ fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries(
     for definition in [
         "Definition source_query_expr (generated_numeric_exp_model : NumericExpModel)",
         "Definition target_query_expr (generated_numeric_exp_model : NumericExpModel)",
-        "Definition formula_expr_predicate_0 (generated_numeric_exp_model : NumericExpModel)",
-        "Definition formula_expr_predicate_1 (generated_numeric_exp_model : NumericExpModel)",
+        "Definition scalar_expr_predicate_0 (generated_numeric_exp_model : NumericExpModel)",
+        "Definition scalar_expr_predicate_1 (generated_numeric_exp_model : NumericExpModel)",
     ] {
         assert!(
             module.rocq_module.contains(definition),
             "missing {definition}"
         );
     }
-    for constructor in ["FExpr_In", "FExpr_Exists", "FExpr_Quant Exists_F"] {
+    for constructor in ["SExpr_In", "SExpr_Exists", "SExpr_Quant", "Exists_F"] {
         assert!(
             module.rocq_module.contains(constructor),
             "missing {constructor}"
@@ -1051,9 +1935,11 @@ fn numeric_exp_model_reaches_selection_and_group_through_all_formula_subqueries(
     assert!(module.rocq_module.contains(
         "Definition shared_query_expr_0 (generated_numeric_exp_model : NumericExpModel)"
     ));
-    assert!(module.rocq_module.contains(
-        "shared_query_expr_0_typed_native_scalar_admissible_with_outputs_generated_schema"
-    ));
+    assert!(
+        module
+            .rocq_module
+            .contains("shared_query_expr_0_admissible_with_outputs_generated_schema")
+    );
 }
 
 #[test]
@@ -1066,7 +1952,7 @@ fn generated_metadata_solver_uses_only_structural_and_local_cbn_closure() {
         .expect("generated metadata solver should start with a structural branch");
     let structural_close = module
         .rocq_module
-        .find("solve [contradiction | reflexivity | congruence | tauto]")
+        .find("solve [contradiction | reflexivity | congruence | tauto |")
         .expect("generated metadata solver should close trivial structural goals");
     let cbn_fallback = module
         .rocq_module
@@ -1080,16 +1966,19 @@ fn generated_metadata_solver_uses_only_structural_and_local_cbn_closure() {
 
 #[test]
 fn nested_not_exists_admissibility_stays_compositional() {
-    let query = FormalQueryExpr::ScalarSelection {
+    let query = FormalQueryExpr::Selection {
         predicate: FormalScalarExpr::And {
-            left: Box::new(FormalScalarExpr::Not {
-                expression: Box::new(FormalScalarExpr::Exists {
-                    query: Box::new(nested_numeric_exp_model_query("MODEL_LEFT")),
-                }),
-            }),
-            right: Box::new(FormalScalarExpr::Exists {
-                query: Box::new(nested_numeric_exp_model_query("MODEL_RIGHT")),
-            }),
+            insertion_sites: vec![vec![], vec!["test.scalar-selection.and".to_owned()]],
+            operands: vec![
+                FormalScalarExpr::Not {
+                    expression: Box::new(FormalScalarExpr::Exists {
+                        query: Box::new(nested_numeric_exp_model_query("MODEL_LEFT")),
+                    }),
+                },
+                FormalScalarExpr::Exists {
+                    query: Box::new(nested_numeric_exp_model_query("MODEL_RIGHT")),
+                },
+            ],
         },
         input: Box::new(FormalQueryExpr::Table {
             relation: "OUTER".to_owned(),
@@ -1097,6 +1986,12 @@ fn nested_not_exists_admissibility_stays_compositional() {
         }),
     };
     let module = emit_rocq_query_module(&query, &query);
+    assert!(
+        module
+            .rocq_module
+            .contains("@SExpr_ConjList TNull relname ([[]; [\"b0\"]]) And_F")
+    );
+    assert!(!module.rocq_module.contains("test.scalar-selection.and"));
     let certificate_start = module
         .rocq_module
         .find("Lemma scalar_expr_predicate_0_admissible_where_generated_schema")
@@ -1104,7 +1999,7 @@ fn nested_not_exists_admissibility_stays_compositional() {
     let certificate_tail = &module.rocq_module[certificate_start..];
     let certificate_end = certificate_tail
         .find("\nQed.")
-        .expect("end of nested formula admissibility certificate");
+        .expect("end of nested scalar admissibility certificate");
     let certificate = &certificate_tail[..certificate_end];
     assert!(certificate.contains("split."), "{certificate}");
     assert_eq!(
@@ -1119,6 +2014,31 @@ fn nested_not_exists_admissibility_stays_compositional() {
             .rocq_module
             .contains("@SExpr_Not TNull relname (@SExpr_Exists TNull relname")
     );
+}
+
+#[test]
+fn rocq_emission_compacts_boolean_sites_injectively_across_query_sides() {
+    fn query(site: &str) -> FormalQueryExpr {
+        FormalQueryExpr::Selection {
+            predicate: FormalScalarExpr::And {
+                insertion_sites: vec![Vec::new(), vec![site.to_owned()]],
+                operands: vec![FormalScalarExpr::True, FormalScalarExpr::True],
+            },
+            input: Box::new(FormalQueryExpr::Table {
+                relation: "t".to_owned(),
+                columns: Vec::new(),
+            }),
+        }
+    }
+
+    let source_site = "source.deep.path.predicate.booleanOrder[1][0]";
+    let target_site = "target.other.path.predicate.booleanOrder[1][0]";
+    let module = emit_rocq_query_module(&query(source_site), &query(target_site));
+
+    assert!(module.rocq_module.contains("[[]; [\"b0\"]]"));
+    assert!(module.rocq_module.contains("[[]; [\"b1\"]]"));
+    assert!(!module.rocq_module.contains(source_site));
+    assert!(!module.rocq_module.contains(target_site));
 }
 
 #[test]
@@ -1363,21 +2283,21 @@ fn lowers_source_attested_numeric_exp_avg_and_carries_runtime_scale_to_division(
         panic!("the SQL root must strip its hidden runtime scale")
     };
     assert_eq!(root_select.len(), 2);
-    let FormalQueryExpr::ScalarProjection {
+    let FormalQueryExpr::Projection {
         select: outer_select,
         input: outer_input,
     } = root_input.as_ref()
     else {
         panic!("the outer projection must retain its live runtime scale")
     };
-    let FormalQueryExpr::ScalarSelection {
+    let FormalQueryExpr::Selection {
         input: selected_input,
         ..
     } = outer_input.as_ref()
     else {
         panic!("the numeric consumer must remain above the intermediate projection")
     };
-    let FormalQueryExpr::ScalarProjection {
+    let FormalQueryExpr::Projection {
         select: intermediate_select,
         ..
     } = selected_input.as_ref()
@@ -2083,7 +3003,7 @@ fn lowers_structured_rank_from_logical_window_without_frozen_plan_authority() {
     assert!(matches!(order_keys.as_slice(), [key]
         if key.direction == FormalSortDirection::Desc
             && key.null_direction == FormalNullDirection::Last));
-    assert_eq!(rank_attribute.name, "ranking");
+    assert!(rank_attribute.name.starts_with("__logos_rank_value"));
     assert_eq!(rank_attribute.ty, FormalAttributeType::Int64);
 
     let module = emit_rocq_query_module_for_test(&query);
@@ -2176,18 +3096,11 @@ fn declarative_rank_fails_closed_on_incomplete_or_observable_staging() {
         SortNullDirection::Last,
     );
 
-    for (label, window, expected_code) in [
-        (
-            "non-default frame",
-            wrong_frame,
-            "rank_window_shape_not_supported",
-        ),
-        (
-            "runtime-capable order key",
-            risky_order,
-            "rank_window_expression_runtime_not_supported",
-        ),
-    ] {
+    for (label, window, expected_code) in [(
+        "non-default frame",
+        wrong_frame,
+        "rank_window_shape_not_supported",
+    )] {
         let lowered = lower_query(&query_with_default_rank_window(window, false));
         assert_eq!(lowered.status, LoweringStatus::Blocked, "{label}");
         assert!(
@@ -2199,6 +3112,49 @@ fn declarative_rank_fails_closed_on_incomplete_or_observable_staging() {
             lowered.diagnostics
         );
     }
+
+    let direct_division = lower_query(&query_with_default_rank_window(risky_order, false));
+    assert_eq!(
+        direct_division.status,
+        LoweringStatus::Lowered,
+        "one direct division key is evaluated once in the staged key projection: {:#?}",
+        direct_division.diagnostics
+    );
+
+    let nested_risky_order = default_range_rank_window(
+        vec![ScalarAst::InputRef { index: 0 }],
+        ScalarAst::Call {
+            operator: "+".to_owned(),
+            op: ScalarOp::Plus,
+            args: vec![
+                ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::InputRef { index: 1 },
+                        ScalarAst::InputRef { index: 0 },
+                    ],
+                },
+                ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::InputRef { index: 0 },
+                        ScalarAst::InputRef { index: 1 },
+                    ],
+                },
+            ],
+        },
+        SortDirection::Descending,
+        SortNullDirection::Last,
+    );
+    let nested = lower_query(&query_with_default_rank_window(nested_risky_order, false));
+    assert_eq!(nested.status, LoweringStatus::Blocked);
+    assert!(
+        nested.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "rank_window_expression_runtime_not_supported"
+        })
+    );
 
     let nullable = lower_query(&query_with_default_rank_window(base, true));
     assert_eq!(nullable.status, LoweringStatus::Blocked);
@@ -2236,6 +3192,13 @@ fn lowers_builtin_boolean_value_expressions_with_typed_operators() {
                         op: ScalarOp::IsNull,
                         args: vec![ScalarAst::InputRef { index: 0 }],
                     },
+                    ScalarAst::Call {
+                        operator: "IS NULL".to_owned(),
+                        op: ScalarOp::IsNull,
+                        args: vec![ScalarAst::Literal {
+                            raw: "NULL".to_owned(),
+                        }],
+                    },
                 ],
             })],
             correlations: Vec::new(),
@@ -2257,21 +3220,108 @@ fn lowers_builtin_boolean_value_expressions_with_typed_operators() {
     );
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    assert!(module.rocq_module.contains("ScalarBoolean ScalarAnd"));
+    assert!(module.rocq_module.contains("@SExpr_ConjList TNull relname"));
     assert!(
         module
             .rocq_module
-            .contains("ScalarPredicateValue PredicateLt")
+            .contains("@SExpr_Pred TNull relname (PredicateLt")
     );
     assert!(
         module
             .rocq_module
-            .contains("ScalarPredicateValue PredicateIsNull")
+            .contains("@SExpr_Pred TNull relname (PredicateIsNull")
+    );
+    assert!(module.rocq_module.contains("NullZ"));
+}
+
+#[test]
+fn variadic_boolean_lowering_assigns_distinct_stable_sites() {
+    let ast = ScalarAst::Call {
+        operator: "AND".to_owned(),
+        op: ScalarOp::And,
+        args: vec![
+            ScalarAst::Literal {
+                raw: "true".to_owned(),
+            },
+            ScalarAst::Literal {
+                raw: "false".to_owned(),
+            },
+            ScalarAst::Literal {
+                raw: "true".to_owned(),
+            },
+        ],
+    };
+    let mut context = LoweringContext::new(LoweringConfig::default(), None);
+    let lowered = context
+        .lower_scalar_boolean_expr(
+            "predicate",
+            &ast,
+            &Scope {
+                attributes: Vec::new(),
+            },
+        )
+        .expect("variadic AND should lower");
+
+    let FormalScalarExpr::And {
+        insertion_sites,
+        operands,
+    } = lowered
+    else {
+        panic!("three-way AND should lower to one flattened scheduled node");
+    };
+    assert_eq!(operands.len(), 3);
+    assert_eq!(
+        insertion_sites,
+        vec![
+            Vec::<String>::new(),
+            vec!["predicate.booleanOrder[1][0]".to_owned()],
+            vec![
+                "predicate.booleanOrder[2][0]".to_owned(),
+                "predicate.booleanOrder[2][1]".to_owned(),
+            ],
+        ]
     );
 }
 
 #[test]
-fn boolean_connectives_require_every_operand_to_be_runtime_total() {
+fn rocq_emission_rejects_empty_or_reused_boolean_sites() {
+    fn query_with_sites(outer: &str, inner: &str) -> FormalQueryExpr {
+        FormalQueryExpr::Selection {
+            predicate: FormalScalarExpr::And {
+                insertion_sites: vec![vec![], vec![outer.to_owned()]],
+                operands: vec![
+                    FormalScalarExpr::And {
+                        insertion_sites: vec![vec![], vec![inner.to_owned()]],
+                        operands: vec![FormalScalarExpr::True, FormalScalarExpr::True],
+                    },
+                    FormalScalarExpr::True,
+                ],
+            },
+            input: Box::new(FormalQueryExpr::Table {
+                relation: "T".to_owned(),
+                columns: vec![formal_attribute("x", FormalAttributeType::Z)],
+            }),
+        }
+    }
+
+    for (label, query) in [
+        ("empty", query_with_sites("", "inner")),
+        ("duplicate", query_with_sites("shared", "shared")),
+    ] {
+        let signature = query_expr_output_signature(&query).expect("table signature");
+        assert!(
+            emit_rocq_query_program_module_with_signatures(
+                &[(&query, &signature)],
+                &[(&query, &signature)],
+            )
+            .is_none(),
+            "{label} Boolean sites must fail before Rocq emission"
+        );
+    }
+}
+
+#[test]
+fn boolean_connectives_lower_runtime_risky_operands_for_relational_scheduling() {
     let scope = Scope {
         attributes: vec![
             ScopeAttribute {
@@ -2332,14 +3382,13 @@ fn boolean_connectives_require_every_operand_to_be_runtime_total() {
 
             assert!(
                 context
-                    .lower_formula_expr("predicate", &predicate, &scope)
-                    .is_none(),
-                "{op:?} risky_first={risky_first}"
+                    .lower_scalar_boolean_expr("predicate", &predicate, &scope)
+                    .is_some(),
+                "{op:?} risky_first={risky_first}: {:#?}",
+                context.diagnostics
             );
             assert!(
-                context.diagnostics.iter().any(|diagnostic| {
-                    diagnostic.code == "boolean_short_circuit_runtime_error_not_supported"
-                }),
+                context.diagnostics.is_empty(),
                 "{op:?} risky_first={risky_first}: {:#?}",
                 context.diagnostics
             );
@@ -2353,7 +3402,7 @@ fn boolean_connectives_require_every_operand_to_be_runtime_total() {
         let mut safe_context = LoweringContext::new(LoweringConfig::default(), None);
         assert!(
             safe_context
-                .lower_formula_expr("predicate", &safe_predicate, &scope)
+                .lower_scalar_boolean_expr("predicate", &safe_predicate, &scope)
                 .is_some(),
             "{op:?}: {:#?}",
             safe_context.diagnostics
@@ -2362,7 +3411,418 @@ fn boolean_connectives_require_every_operand_to_be_runtime_total() {
 }
 
 #[test]
-fn boolean_connective_subquery_risk_distinguishes_scalar_and_relational_roles() {
+fn boolean_absorption_with_runtime_error_fails_closed() {
+    let scope = Scope {
+        attributes: vec![
+            ScopeAttribute {
+                name: "numerator".to_owned(),
+                visible_name: "numerator".to_owned(),
+                formal_ty: FormalAttributeType::Int32,
+                numeric_dscale: None,
+            },
+            ScopeAttribute {
+                name: "denominator".to_owned(),
+                visible_name: "denominator".to_owned(),
+                formal_ty: FormalAttributeType::Int32,
+                numeric_dscale: None,
+            },
+        ],
+    };
+    let repeated = ScalarAst::Call {
+        operator: "=".to_owned(),
+        op: ScalarOp::Eq,
+        args: vec![
+            ScalarAst::InputRef { index: 0 },
+            ScalarAst::Literal {
+                raw: "1".to_owned(),
+            },
+        ],
+    };
+    let risky = ScalarAst::Call {
+        operator: ">".to_owned(),
+        op: ScalarOp::Gt,
+        args: vec![
+            ScalarAst::Call {
+                operator: "/".to_owned(),
+                op: ScalarOp::Divide,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::InputRef { index: 1 },
+                ],
+            },
+            ScalarAst::Literal {
+                raw: "0".to_owned(),
+            },
+        ],
+    };
+    let predicate = ScalarAst::Call {
+        operator: "OR".to_owned(),
+        op: ScalarOp::Or,
+        args: vec![
+            repeated.clone(),
+            ScalarAst::Call {
+                operator: "AND".to_owned(),
+                op: ScalarOp::And,
+                args: vec![repeated, risky],
+            },
+        ],
+    };
+    let mut context = LoweringContext::new(LoweringConfig::default(), None);
+
+    assert!(
+        context
+            .lower_scalar_boolean_expr("predicate", &predicate, &scope)
+            .is_none()
+    );
+    assert!(
+        context
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "boolean_algebra_runtime_error_not_supported" })
+    );
+}
+
+#[test]
+fn planner_foldable_boolean_constant_with_runtime_error_fails_closed() {
+    let closed_error = ScalarAst::Call {
+        operator: ">".to_owned(),
+        op: ScalarOp::Gt,
+        args: vec![
+            ScalarAst::Call {
+                operator: "/".to_owned(),
+                op: ScalarOp::Divide,
+                args: vec![
+                    ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    },
+                    ScalarAst::Literal {
+                        raw: "0".to_owned(),
+                    },
+                ],
+            },
+            ScalarAst::Literal {
+                raw: "0".to_owned(),
+            },
+        ],
+    };
+    for (op, decisive) in [(ScalarOp::And, "false"), (ScalarOp::Or, "true")] {
+        let predicate = ScalarAst::Call {
+            operator: format!("{op:?}"),
+            op,
+            args: vec![
+                ScalarAst::Literal {
+                    raw: decisive.to_owned(),
+                },
+                closed_error.clone(),
+            ],
+        };
+        let mut context = LoweringContext::new(LoweringConfig::default(), None);
+        assert!(
+            context
+                .lower_scalar_boolean_expr(
+                    "predicate",
+                    &predicate,
+                    &Scope {
+                        attributes: Vec::new(),
+                    },
+                )
+                .is_none()
+        );
+        assert!(context.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "boolean_planner_constant_error_not_supported"
+        }));
+    }
+
+    let dynamic_case_with_closed_error = ScalarAst::Call {
+        operator: "AND".to_owned(),
+        op: ScalarOp::And,
+        args: vec![
+            ScalarAst::Call {
+                operator: "CASE".to_owned(),
+                op: ScalarOp::Case,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::Literal {
+                        raw: "true".to_owned(),
+                    },
+                    closed_error,
+                ],
+            },
+            ScalarAst::Literal {
+                raw: "true".to_owned(),
+            },
+        ],
+    };
+    let mut context = LoweringContext::new(LoweringConfig::default(), None);
+    assert!(
+        context
+            .lower_scalar_boolean_expr(
+                "predicate",
+                &dynamic_case_with_closed_error,
+                &Scope {
+                    attributes: vec![ScopeAttribute {
+                        name: "flag".to_owned(),
+                        visible_name: "flag".to_owned(),
+                        formal_ty: FormalAttributeType::Bool,
+                        numeric_dscale: None,
+                    }],
+                },
+            )
+            .is_none()
+    );
+    assert!(
+        context.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "boolean_planner_constant_error_not_supported"
+        })
+    );
+}
+
+#[test]
+fn planner_closed_immutable_errors_fail_closed_across_query_tree() {
+    let closed_error = || ScalarAst::Call {
+        operator: ">".to_owned(),
+        op: ScalarOp::Gt,
+        args: vec![
+            ScalarAst::Call {
+                operator: "/".to_owned(),
+                op: ScalarOp::Divide,
+                args: vec![
+                    ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    },
+                    ScalarAst::Literal {
+                        raw: "0".to_owned(),
+                    },
+                ],
+            },
+            ScalarAst::Literal {
+                raw: "0".to_owned(),
+            },
+        ],
+    };
+    let assert_planner_blocked = |query: Query| {
+        let lowered = lower_query(&query);
+        assert_eq!(lowered.status, LoweringStatus::Blocked);
+        assert!(
+            lowered.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "boolean_planner_constant_error_not_supported"
+            }),
+            "{:#?}",
+            lowered.diagnostics
+        );
+    };
+
+    let bool_input = vec![typed_column("flag", SqlType::Boolean)];
+    let case_output = vec![typed_column("result", SqlType::Integer)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(one_row_values(
+                bool_input.clone(),
+                vec![ScalarAst::Literal {
+                    raw: "true".to_owned(),
+                }],
+            )),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "CASE".to_owned(),
+                op: ScalarOp::Case,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::Literal {
+                        raw: "1".to_owned(),
+                    },
+                    closed_error(),
+                ],
+            })],
+            correlations: Vec::new(),
+            output: case_output.clone(),
+        },
+        case_output,
+    ));
+
+    let subquery_output = vec![typed_column("subquery_flag", SqlType::Boolean)];
+    let subquery = one_row_values(subquery_output, vec![closed_error()]);
+    let boolean_output = vec![typed_column("result", SqlType::Boolean)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(one_row_values(
+                bool_input,
+                vec![ScalarAst::Literal {
+                    raw: "true".to_owned(),
+                }],
+            )),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "OR".to_owned(),
+                op: ScalarOp::Or,
+                args: vec![
+                    ScalarAst::InputRef { index: 0 },
+                    ScalarAst::RelSubquery {
+                        rel: Box::new(subquery),
+                    },
+                ],
+            })],
+            correlations: Vec::new(),
+            output: boolean_output.clone(),
+        },
+        boolean_output,
+    ));
+
+    let aggregate_output = vec![typed_column("count", SqlType::BigInt)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Aggregate {
+            input: Box::new(one_row_values(
+                vec![typed_column("value", SqlType::Integer)],
+                vec![ScalarAst::Literal {
+                    raw: "1".to_owned(),
+                }],
+            )),
+            group_keys: Vec::new(),
+            grouping_sets: vec![Vec::new()],
+            agg_calls: vec![AggregateCall {
+                raw: "COUNT(*) FILTER (WHERE 1 / 0 > 0)".to_owned(),
+                function: "COUNT".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: Vec::new(),
+                filter: Some(scalar(closed_error())),
+            }],
+            output: aggregate_output.clone(),
+        },
+        aggregate_output,
+    ));
+
+    let projection_output = vec![typed_column("value", SqlType::Boolean)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(RelExpr::Values {
+                rows: Vec::new(),
+                output: Vec::new(),
+            }),
+            exprs: vec![scalar(closed_error())],
+            correlations: Vec::new(),
+            output: projection_output.clone(),
+        },
+        projection_output,
+    ));
+
+    let aggregate_output = vec![typed_column("count", SqlType::BigInt)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Aggregate {
+            input: Box::new(RelExpr::Values {
+                rows: Vec::new(),
+                output: Vec::new(),
+            }),
+            group_keys: Vec::new(),
+            grouping_sets: vec![Vec::new()],
+            agg_calls: vec![AggregateCall {
+                raw: "COUNT(1 / 0)".to_owned(),
+                function: "COUNT".to_owned(),
+                distinct: false,
+                modifiers: AggregateModifiers::default(),
+                args: vec![scalar(ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::Literal {
+                            raw: "1".to_owned(),
+                        },
+                        ScalarAst::Literal {
+                            raw: "0".to_owned(),
+                        },
+                    ],
+                })],
+                filter: None,
+            }],
+            output: aggregate_output.clone(),
+        },
+        aggregate_output,
+    ));
+
+    let truncated_sign = ScalarAst::TypeAnnotation {
+        expr: Box::new(ScalarAst::Call {
+            operator: "CAST".to_owned(),
+            op: ScalarOp::Cast,
+            args: vec![ScalarAst::TypeAnnotation {
+                expr: Box::new(ScalarAst::Call {
+                    operator: "CAST".to_owned(),
+                    op: ScalarOp::Cast,
+                    args: vec![ScalarAst::Literal {
+                        raw: "'+1'".to_owned(),
+                    }],
+                }),
+                ty: "CHAR(1)".to_owned(),
+            }],
+        }),
+        ty: "INTEGER".to_owned(),
+    };
+    let integer_output = vec![typed_column("value", SqlType::Integer)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(one_row_values(Vec::new(), Vec::new())),
+            exprs: vec![scalar(truncated_sign)],
+            correlations: Vec::new(),
+            output: integer_output.clone(),
+        },
+        integer_output,
+    ));
+
+    let dynamic_text_to_int = || ScalarAst::TypeAnnotation {
+        expr: Box::new(ScalarAst::Call {
+            operator: "CAST".to_owned(),
+            op: ScalarOp::Cast,
+            args: vec![ScalarAst::InputRef { index: 0 }],
+        }),
+        ty: "INTEGER".to_owned(),
+    };
+    let closed_division = || ScalarAst::Call {
+        operator: "/".to_owned(),
+        op: ScalarOp::Divide,
+        args: vec![
+            ScalarAst::Literal {
+                raw: "1".to_owned(),
+            },
+            ScalarAst::Literal {
+                raw: "0".to_owned(),
+            },
+        ],
+    };
+    let text_input = one_row_values(
+        vec![typed_column("text_value", SqlType::text())],
+        vec![ScalarAst::Literal {
+            raw: "'bad'".to_owned(),
+        }],
+    );
+    let competing_output = vec![
+        typed_column("dynamic_error", SqlType::Integer),
+        typed_column("planner_error", SqlType::Integer),
+    ];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(text_input.clone()),
+            exprs: vec![scalar(dynamic_text_to_int()), scalar(closed_division())],
+            correlations: Vec::new(),
+            output: competing_output.clone(),
+        },
+        competing_output,
+    ));
+
+    let nested_output = vec![typed_column("value", SqlType::Integer)];
+    assert_planner_blocked(query_for_rel(
+        RelExpr::Project {
+            input: Box::new(text_input),
+            exprs: vec![scalar(ScalarAst::Call {
+                operator: "+".to_owned(),
+                op: ScalarOp::Plus,
+                args: vec![dynamic_text_to_int(), closed_division()],
+            })],
+            correlations: Vec::new(),
+            output: nested_output.clone(),
+        },
+        nested_output,
+    ));
+}
+
+#[test]
+fn boolean_connectives_lower_scalar_and_relational_subquery_roles() {
     let scope = Scope {
         attributes: vec![ScopeAttribute {
             name: "outer_flag".to_owned(),
@@ -2390,12 +3850,12 @@ fn boolean_connective_subquery_risk_distinguishes_scalar_and_relational_roles() 
     let mut direct_context = LoweringContext::new(LoweringConfig::default(), None);
     assert!(
         direct_context
-            .lower_formula_expr("predicate", &direct_predicate, &scope)
-            .is_none()
+            .lower_scalar_boolean_expr("predicate", &direct_predicate, &scope)
+            .is_some(),
+        "{:#?}",
+        direct_context.diagnostics
     );
-    assert!(direct_context.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "boolean_short_circuit_runtime_error_not_supported"
-    }));
+    assert!(direct_context.diagnostics.is_empty());
 
     let exists = ScalarAst::Call {
         operator: "EXISTS".to_owned(),
@@ -2423,15 +3883,13 @@ fn boolean_connective_subquery_risk_distinguishes_scalar_and_relational_roles() 
         let mut context = LoweringContext::new(LoweringConfig::default(), None);
         assert!(
             context
-                .lower_formula_expr("predicate", &predicate, &scope)
+                .lower_scalar_boolean_expr("predicate", &predicate, &scope)
                 .is_some(),
             "{label}: {:#?}",
             context.diagnostics
         );
         assert!(
-            !context.diagnostics.iter().any(|diagnostic| {
-                diagnostic.code == "boolean_short_circuit_runtime_error_not_supported"
-            }),
+            context.diagnostics.is_empty(),
             "{label}: {:#?}",
             context.diagnostics
         );
@@ -2479,30 +3937,30 @@ fn predicate_value_reuses_mixed_integral_numeric_coercion() {
         "{:#?}",
         lowered.diagnostics
     );
-    let FormalQueryExpr::ScalarProjection { select, .. } =
+    let FormalQueryExpr::Projection { select, .. } =
         lowered_query_expr(&lowered).expect("mixed numeric comparison projection")
     else {
         panic!("expected relational projection");
     };
     for (item, cast_index) in select.iter().zip([0, 1]) {
-        let FormalScalarExpr::Leaf {
-            term:
-                FormalAggregateTerm::ScalarCall {
-                    operator: ScalarOperator::PredicateValue(FormalPredicate::Eq),
-                    args,
-                },
-            ..
-        } = &item.expr
+        let FormalScalarExpr::BooleanValue { expression } = &item.expr else {
+            panic!("expected equality predicate value, got {:?}", item.expr);
+        };
+        let FormalScalarExpr::Predicate {
+            predicate: FormalPredicate::Eq,
+            args,
+        } = expression.as_ref()
         else {
             panic!("expected equality predicate value, got {:?}", item.expr);
         };
         assert!(matches!(
             &args[cast_index],
-            FormalAggregateTerm::ScalarCall {
+            FormalScalarExpr::Call {
                 operator: ScalarOperator::Cast(ScalarCast::ToNumeric(
                     ScalarNumericSource::Int32
                 )),
                 args,
+                ..
             } if args.len() == 1
         ));
     }
@@ -2687,7 +4145,7 @@ fn locale_dependent_case_mapping_is_not_masked_by_outer_boolean_runtime_risk() {
 
     assert!(
         context
-            .lower_formula_expr("predicate", &predicate, &scope)
+            .lower_scalar_boolean_expr("predicate", &predicate, &scope)
             .is_none()
     );
     assert!(
@@ -2696,9 +4154,6 @@ fn locale_dependent_case_mapping_is_not_masked_by_outer_boolean_runtime_risk() {
             .iter()
             .any(|diagnostic| { diagnostic.code == "string_case_locale_semantics_not_supported" })
     );
-    assert!(!context.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "boolean_short_circuit_runtime_error_not_supported"
-    }));
 }
 #[test]
 fn rejects_scalar_functions_without_a_rocq_interpretation() {
@@ -3509,7 +4964,7 @@ fn lowers_bare_non_integer_double_literal_output_annotation() {
 }
 
 #[test]
-fn lowers_non_integer_double_literal_in_formula_context() {
+fn lowers_non_integer_double_literal_in_predicate_context() {
     let output = vec![typed_column("value", SqlType::Double)];
     let query = Query {
         source_sql: None,
@@ -3607,7 +5062,7 @@ fn lowers_float_and_double_order_predicates_with_matching_operators() {
 
     assert_eq!(lowered_float.status, LoweringStatus::Lowered);
     assert_eq!(lowered_double.status, LoweringStatus::Lowered);
-    let FormalQueryExpr::ScalarSelection {
+    let FormalQueryExpr::Selection {
         predicate:
             FormalScalarExpr::Predicate {
                 predicate: float_predicate,
@@ -3618,7 +5073,7 @@ fn lowers_float_and_double_order_predicates_with_matching_operators() {
     else {
         panic!("expected float selection predicate");
     };
-    let FormalQueryExpr::ScalarSelection {
+    let FormalQueryExpr::Selection {
         predicate:
             FormalScalarExpr::Predicate {
                 predicate: double_predicate,
@@ -3712,23 +5167,21 @@ fn lowers_complementary_text_order_disjunction_as_disequality() {
                 numeric_dscale: None,
             }],
         };
-        let mut formula_context = LoweringContext::new(LoweringConfig::default(), None);
+        let mut predicate_context = LoweringContext::new(LoweringConfig::default(), None);
         assert!(matches!(
-            formula_context.lower_formula_expr("predicate", &predicate_ast, &scope),
-            Some(FormalFormulaExpr::Scalar { expression })
-                if matches!(expression.as_ref(), FormalScalarExpr::Predicate {
-                    predicate: FormalPredicate::Neq,
-                    ..
-                })
+            predicate_context.lower_scalar_boolean_expr("predicate", &predicate_ast, &scope),
+            Some(FormalScalarExpr::Predicate {
+                predicate: FormalPredicate::Neq,
+                ..
+            })
         ));
         let mut expression_context = LoweringContext::new(LoweringConfig::default(), None);
         assert!(matches!(
-            expression_context.lower_formula_expr("predicate", &predicate_ast, &scope),
-            Some(FormalFormulaExpr::Scalar { expression })
-                if matches!(expression.as_ref(), FormalScalarExpr::Predicate {
-                    predicate: FormalPredicate::Neq,
-                    ..
-                })
+            expression_context.lower_scalar_boolean_expr("predicate", &predicate_ast, &scope),
+            Some(FormalScalarExpr::Predicate {
+                predicate: FormalPredicate::Neq,
+                ..
+            })
         ));
     }
 }
@@ -3778,14 +5231,15 @@ fn date_interval_comparisons_use_exact_postgres_cross_type_order_predicates() {
         (ScalarOp::Gte, FormalPredicate::DateGteTimestamp),
     ] {
         let mut context = LoweringContext::new(LoweringConfig::default(), None);
-        let lowered =
-            context.lower_formula_expr("predicate", &date_plus_interval_comparison_ast(op), &scope);
+        let lowered = context.lower_scalar_boolean_expr(
+            "predicate",
+            &date_plus_interval_comparison_ast(op),
+            &scope,
+        );
         assert!(
             matches!(lowered,
-                Some(FormalFormulaExpr::Scalar { expression })
-                    if matches!(expression.as_ref(),
-                        FormalScalarExpr::Predicate { predicate, args }
-                            if *predicate == expected && args.len() == 2)),
+                Some(FormalScalarExpr::Predicate { predicate, args })
+                    if predicate == expected && args.len() == 2),
             "{}: {:#?}",
             expected.model_name(),
             context.diagnostics
@@ -3796,7 +5250,7 @@ fn date_interval_comparisons_use_exact_postgres_cross_type_order_predicates() {
     let mut equality = LoweringContext::new(LoweringConfig::default(), None);
     assert!(
         equality
-            .lower_formula_expr(
+            .lower_scalar_boolean_expr(
                 "predicate",
                 &date_plus_interval_comparison_ast(ScalarOp::Eq),
                 &scope,
@@ -3843,7 +5297,7 @@ fn date_timestamp_value_comparison_uses_the_cross_type_predicate_operator() {
         "{:#?}",
         lowered.diagnostics
     );
-    let FormalQueryExpr::ScalarProjection { select, .. } =
+    let FormalQueryExpr::Projection { select, .. } =
         lowered_query_expr(&lowered).expect("value comparison projection")
     else {
         panic!("expected relational projection");
@@ -3851,25 +5305,19 @@ fn date_timestamp_value_comparison_uses_the_cross_type_predicate_operator() {
     assert!(matches!(
         select.as_slice(),
         [FormalScalarSelectItem {
-            expr: FormalScalarExpr::Leaf {
-                term: FormalAggregateTerm::ScalarCall {
-                    operator: ScalarOperator::PredicateValue(
-                        FormalPredicate::DateLtTimestamp
-                    ),
-                    args,
-                },
-                ..
+            expr: FormalScalarExpr::BooleanValue {
+                expression,
             },
             ..
-        }] if args.len() == 2
+        }] if matches!(expression.as_ref(),
+            FormalScalarExpr::Predicate {
+                predicate: FormalPredicate::DateLtTimestamp,
+                args,
+            } if args.len() == 2)
     ));
 
     let module = emit_rocq_query_module_for_test(&query);
-    assert!(
-        module
-            .rocq_module
-            .contains("ScalarPredicateValue PredicateDateLtTimestamp")
-    );
+    assert!(module.rocq_module.contains("PredicateDateLtTimestamp"));
 }
 
 #[test]
@@ -3922,7 +5370,7 @@ fn complementary_text_order_rewrite_remains_fail_closed() {
         let mut context = LoweringContext::new(LoweringConfig::default(), None);
         assert!(
             context
-                .lower_formula_expr("predicate", &predicate, &scope)
+                .lower_scalar_boolean_expr("predicate", &predicate, &scope)
                 .is_none(),
             "{label}"
         );
@@ -3980,7 +5428,7 @@ fn complementary_text_order_rewrite_remains_fail_closed() {
     let mut context = LoweringContext::new(LoweringConfig::default(), None);
     assert!(
         context
-            .lower_formula_expr("predicate", &two_references, &text_scope)
+            .lower_scalar_boolean_expr("predicate", &two_references, &text_scope)
             .is_none()
     );
     assert!(
@@ -4097,7 +5545,7 @@ fn lowers_mixed_integer_bigint_comparison_predicate() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let FormalQueryExpr::ScalarSelection {
+    let FormalQueryExpr::Selection {
         predicate: FormalScalarExpr::Predicate { predicate, .. },
         ..
     } = lowered_query_expr(&lowered).unwrap()
@@ -4179,7 +5627,7 @@ fn lowers_double_sum_with_representative_order_semantics() {
             "diagnostics: {:#?}",
             lowered.diagnostics
         );
-        let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+        let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
             panic!("floating SUM should lower as an explicit logical Group");
         };
         let expected_quantifier = if distinct {
@@ -4237,7 +5685,7 @@ fn lowers_real_average_as_double_precision() {
         "diagnostics: {:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("REAL AVG should lower as an explicit logical Group");
     };
     assert!(matches!(
@@ -4434,8 +5882,7 @@ fn lowers_filtered_aggregates_through_lazy_case_projection() {
         "diagnostics: {:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarGroup { input, select, .. }) = lowered.query_expr.as_ref()
-    else {
+    let Some(FormalQueryExpr::Group { input, select, .. }) = lowered.query_expr.as_ref() else {
         panic!("global aggregate should use exact query-expression grouping");
     };
     let FormalQueryExpr::Projection {
@@ -4445,14 +5892,8 @@ fn lowers_filtered_aggregates_through_lazy_case_projection() {
         panic!("FILTER must materialize lazy CASE arguments in one projection");
     };
     assert_eq!(projected.len(), 4);
-    assert!(matches!(
-        projected[2].expr,
-        FormalAggregateTerm::Case { .. }
-    ));
-    assert!(matches!(
-        projected[3].expr,
-        FormalAggregateTerm::Case { .. }
-    ));
+    assert!(matches!(projected[2].expr, FormalScalarExpr::Case { .. }));
+    assert!(matches!(projected[3].expr, FormalScalarExpr::Case { .. }));
     assert!(matches!(
         select[0].expr,
         FormalScalarExpr::Leaf {
@@ -4478,7 +5919,7 @@ fn lowers_filtered_aggregates_through_lazy_case_projection() {
         lowered.query_expr.as_ref().expect("query expression"),
         lowered.query_expr.as_ref().expect("query expression"),
     );
-    assert!(module.rocq_module.contains("AScalarCall ScalarCase"));
+    assert!(module.rocq_module.contains("@SExpr_Case TNull relname"));
     assert!(
         module
             .rocq_module
@@ -4953,7 +6394,7 @@ fn lowers_global_aggregate_over_potentially_empty_input_to_exact_group() {
         lowered.diagnostics
     );
     let module = emit_rocq_query_module_for_test(&query);
-    let Some(FormalQueryExpr::ScalarGroup {
+    let Some(FormalQueryExpr::Group {
         group_by, input, ..
     }) = lowered.query_expr
     else {
@@ -4961,7 +6402,7 @@ fn lowers_global_aggregate_over_potentially_empty_input_to_exact_group() {
     };
     assert!(group_by.is_empty());
     assert!(matches!(*input, FormalQueryExpr::Table { .. }));
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert_no_physical_plan_constructs(&module);
 }
 
@@ -5112,7 +6553,7 @@ fn lowers_grouped_text_minmax_as_key_identity_with_authoritative_type() {
             .count(),
         2
     );
-    let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("expected grouped query");
     };
     let expected_type = FormalAttributeType::String {
@@ -5416,36 +6857,24 @@ fn lowers_case_expression_as_structured_branches() {
         .as_ref()
         .expect("query expression should lower")
     {
-        FormalQueryExpr::ScalarProjection { select, .. } => {
-            let FormalScalarExpr::Leaf { term, .. } = &select[0].expr else {
-                panic!("expected leaf CASE scalar, got {:?}", select[0].expr);
-            };
-            term
-        }
+        FormalQueryExpr::Projection { select, .. } => &select[0].expr,
         other => panic!("expected projection query, got {other:?}"),
     };
-    let FormalAggregateTerm::Case { branches, .. } = project else {
-        panic!("expected CASE aggregate term, got {project:?}");
+    let FormalScalarExpr::Case { condition, .. } = project else {
+        panic!("expected canonical CASE scalar, got {project:?}");
     };
     assert!(matches!(
-        &branches[0].when,
-        FormalAggregateTerm::ScalarCall {
-            operator: ScalarOperator::Boolean(ScalarBooleanOperator::And),
-            args,
-        } if args.len() == 2
-                && matches!(
-                    &args[0],
-                    FormalAggregateTerm::ScalarCall {
-                        operator: ScalarOperator::Boolean(ScalarBooleanOperator::And),
-                        args,
-                    } if args.len() == 2
-                )
+        condition.as_ref(),
+        FormalScalarExpr::And { operands, insertion_sites }
+            if operands.len() == 3
+                && insertion_sites.iter().map(Vec::len).collect::<Vec<_>>() == vec![0, 1, 2]
     ));
-    assert!(module.rocq_module.contains("AScalarCall ScalarCase"));
+    assert!(module.rocq_module.contains("@SExpr_Case TNull relname"));
+    assert!(module.rocq_module.contains("@SExpr_ConjList TNull relname"));
     assert!(
         module
             .rocq_module
-            .contains("ScalarPredicateValue PredicateIsNull")
+            .contains("@SExpr_Pred TNull relname (PredicateIsNull")
     );
 }
 
@@ -5503,10 +6932,51 @@ fn preserves_postgres_case_string_typmods() {
         explicit_char_literal("NULL"),
         SqlType::character(2),
     ));
-    assert_eq!(typmodless.status, LoweringStatus::Lowered);
-    assert_eq!(constrained.status, LoweringStatus::Lowered);
+    let stale_constrained = lower_query(&case_query(
+        ScalarAst::Literal {
+            raw: "NULL".to_owned(),
+        },
+        SqlType::character(2),
+    ));
+    assert_eq!(
+        typmodless.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        typmodless.diagnostics
+    );
+    assert_eq!(
+        constrained.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        constrained.diagnostics
+    );
+    assert_eq!(
+        stale_constrained.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        stale_constrained.diagnostics
+    );
+    let Some(FormalQueryExpr::Projection {
+        select: stale_select,
+        ..
+    }) = stale_constrained.query_expr.as_ref()
+    else {
+        panic!("expected source-derived typmodless CASE projection");
+    };
+    assert_eq!(
+        stale_select[0].alias_ty,
+        FormalAttributeType::String {
+            typmod: SqlStringType::Bpchar,
+        }
+    );
+    assert!(
+        stale_constrained
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "calcite_case_string_typmod_overridden" })
+    );
 
-    let Some(FormalQueryExpr::ScalarProjection {
+    let Some(FormalQueryExpr::Projection {
         select: typmodless_select,
         ..
     }) = typmodless.query_expr.as_ref()
@@ -5519,36 +6989,37 @@ fn preserves_postgres_case_string_typmods() {
             typmod: SqlStringType::Bpchar,
         }
     );
-    let FormalScalarExpr::Leaf {
-        term: FormalAggregateTerm::Case {
-            branches,
-            else_expr,
-        },
+    let FormalScalarExpr::Case {
+        then_expr,
+        else_expr,
         ..
     } = &typmodless_select[0].expr
     else {
         panic!("expected typmodless CASE term");
     };
     assert!(matches!(
-        &branches[0].then_expr,
-        FormalAggregateTerm::ScalarCall {
+        then_expr.as_ref(),
+        FormalScalarExpr::Call {
             operator: ScalarOperator::Cast(ScalarCast::StringImplicit),
             ..
         }
     ));
     assert!(matches!(
         else_expr.as_ref(),
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant {
-                ty: Some(FormalAttributeType::String {
-                    typmod: SqlStringType::Bpchar
-                }),
-                ..
-            }
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    ty: Some(FormalAttributeType::String {
+                        typmod: SqlStringType::Bpchar
+                    }),
+                    ..
+                }
+            },
+            ..
         }
     ));
 
-    let Some(FormalQueryExpr::ScalarProjection {
+    let Some(FormalQueryExpr::Projection {
         select: constrained_select,
         ..
     }) = constrained.query_expr.as_ref()
@@ -5561,16 +7032,12 @@ fn preserves_postgres_case_string_typmods() {
             typmod: SqlStringType::Char { length: 2 },
         }
     );
-    let FormalScalarExpr::Leaf {
-        term: FormalAggregateTerm::Case { branches, .. },
-        ..
-    } = &constrained_select[0].expr
-    else {
+    let FormalScalarExpr::Case { then_expr, .. } = &constrained_select[0].expr else {
         panic!("expected constrained CASE term");
     };
     assert!(!matches!(
-        &branches[0].then_expr,
-        FormalAggregateTerm::ScalarCall {
+        then_expr.as_ref(),
+        FormalScalarExpr::Call {
             operator: ScalarOperator::Cast(ScalarCast::StringImplicit),
             ..
         }
@@ -5624,18 +7091,16 @@ fn lowers_postgres_string_concat_as_text() {
             .as_slice()
         )
     );
-    let FormalQueryExpr::ScalarProjection { select, .. } =
+    let FormalQueryExpr::Projection { select, .. } =
         lowered_query_expr(&lowered).expect("concat query")
     else {
         panic!("expected projection");
     };
     assert!(matches!(
         &select[0].expr,
-        FormalScalarExpr::Leaf {
-            term: FormalAggregateTerm::ScalarCall {
-                operator: ScalarOperator::StringConcat,
-                args,
-            },
+        FormalScalarExpr::Call {
+            operator: ScalarOperator::StringConcat,
+            args,
             ..
         } if args.len() == 2
     ));
@@ -5782,11 +7247,7 @@ fn lowers_exact_literal_like_prefix_in_predicate_and_case_contexts() {
     );
     assert!(filter_module.rocq_module.contains("PredicateLikePrefix"));
     assert!(filter_module.rocq_module.contains("\"PROMO\""));
-    assert!(
-        project_module
-            .rocq_module
-            .contains("ScalarPredicateValue PredicateLikePrefix")
-    );
+    assert!(project_module.rocq_module.contains("PredicateLikePrefix"));
 }
 
 #[test]
@@ -6868,21 +8329,25 @@ fn resolves_mixed_numeric_case_to_typmodless_numeric() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("expected projection");
     };
     assert_eq!(select[0].alias_ty, FormalAttributeType::Numeric);
     assert!(matches!(
         &select[0].expr,
-        FormalScalarExpr::Leaf {
+        FormalScalarExpr::Case {
             result_ty: FormalAttributeType::Numeric,
-            term: FormalAggregateTerm::Case { else_expr, .. },
+            else_expr,
+            ..
         } if matches!(else_expr.as_ref(),
-            FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant {
-                    ty: Some(FormalAttributeType::Numeric),
-                    ..
-                }
+            FormalScalarExpr::Leaf {
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        ty: Some(FormalAttributeType::Numeric),
+                        ..
+                    }
+                },
+                ..
             })
     ));
     let module = emit_rocq_query_module_for_test(&query);
@@ -6945,8 +8410,7 @@ fn numeric_case_does_not_trust_null_or_literal_derived_typmods() {
             "{:#?}",
             lowered.diagnostics
         );
-        let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref()
-        else {
+        let Some(FormalQueryExpr::Projection { select, .. }) = lowered.query_expr.as_ref() else {
             panic!("expected projection");
         };
         assert_eq!(select[0].alias_ty, FormalAttributeType::Numeric);
@@ -8167,7 +9631,7 @@ fn wrapped_constant_numeric_to_int32_overflow() -> ScalarAst {
 }
 
 #[test]
-fn boolean_subquery_projection_preserves_wrapped_constant_cast_error_natively() {
+fn boolean_subquery_projection_rejects_wrapped_constant_planner_error() {
     let input_output = vec![column("seed")];
     let query = Query {
         source_sql: None,
@@ -8198,24 +9662,12 @@ fn boolean_subquery_projection_preserves_wrapped_constant_cast_error_natively() 
     };
 
     let lowered = lower_query(&query);
-    assert_eq!(
-        lowered.status,
-        LoweringStatus::Lowered,
-        "{:#?}",
-        lowered.diagnostics
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "boolean_planner_constant_error_not_supported"
+        })
     );
-    let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref() else {
-        panic!("mixed scalar/EXISTS SELECT must use one native scalar projection");
-    };
-    assert!(matches!(
-        select[1].expr,
-        FormalScalarExpr::BooleanValue { ref expression }
-            if matches!(expression.as_ref(), FormalScalarExpr::Exists { .. })
-    ));
-    let module = emit_rocq_query_module_for_test(&query);
-    assert!(module.rocq_module.contains("ScalarCastNumericToInt32"));
-    assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(!module.rocq_module.contains("QExpr_Set Union"));
 }
 
 #[test]
@@ -9419,7 +10871,6 @@ fn overrides_calcite_fixed_decimal_avg_output_with_postgres_numeric() {
     );
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("AttrNumeric \"avg_amount\""));
-    assert!(!module.rocq_module.contains("DecimalColumn \"avg_amount\""));
 }
 
 #[test]
@@ -9533,7 +10984,7 @@ fn preserves_unconstrained_numeric_through_calcite_fixed_projection() {
     );
     assert!(matches!(
         lowered.query_expr,
-        Some(FormalQueryExpr::ScalarProjection { ref select, .. })
+        Some(FormalQueryExpr::Projection { ref select, .. })
             if matches!(select.as_slice(), [FormalScalarSelectItem {
                 alias_ty: FormalAttributeType::Numeric,
                 ..
@@ -9800,7 +11251,7 @@ fn lowers_date_to_timestamp_cast() {
     assert!(
         module
             .rocq_module
-            .contains("ScalarCall (ScalarCast ScalarCastDateToTimestamp)")
+            .contains("ScalarCast ScalarCastDateToTimestamp")
     );
 }
 
@@ -9840,7 +11291,7 @@ fn lowers_timestamp_to_date_cast() {
     assert!(
         module
             .rocq_module
-            .contains("ScalarCall (ScalarCast ScalarCastTimestampToDate)")
+            .contains("ScalarCast ScalarCastTimestampToDate")
     );
 }
 
@@ -10128,11 +11579,14 @@ fn emits_source_and_target_query_rocq_module() {
         columns: vec![formal_attribute("EMPNO", FormalAttributeType::Z)],
     };
     let target = FormalQueryExpr::Projection {
-        select: vec![FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: "EMPNO".to_owned(),
-                    ty: FormalAttributeType::Z,
+        select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Z,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute {
+                        name: "EMPNO".to_owned(),
+                        ty: FormalAttributeType::Z,
+                    },
                 },
             },
             alias: "EMPNO".to_owned(),
@@ -10159,7 +11613,7 @@ fn emits_source_and_target_query_rocq_module() {
     assert!(!graph_json.contains("\"EMP\""));
     assert_eq!(
         emitted_definition_shape(&module, "target_query_expr"),
-        "QExpr_Project(@select_list_0,QExpr_Table{columns=1})"
+        "QExpr_Project(@scalar_select_list_0,QExpr_Table{columns=1})"
     );
 
     assert!(module.rocq_module.starts_with(
@@ -10186,7 +11640,11 @@ fn emits_source_and_target_query_rocq_module() {
             .contains("Definition target_query : Query :=")
     );
     assert!(module.rocq_module.contains("QExpr_Table"));
-    assert!(module.rocq_module.contains("QExpr_Project (select_list_0)"));
+    assert!(
+        module
+            .rocq_module
+            .contains("QExpr_Project (scalar_select_list_0)")
+    );
     assert!(
         module
             .rocq_module
@@ -10198,11 +11656,8 @@ fn emits_source_and_target_query_rocq_module() {
             .contains("@QExpr_Table TNull relname ([AttrZ \"EMPNO\"]) (Rel \"EMP\")")
     );
     for certificate in [
-        "source_query_expr_typed_native_scalar_admissible_with_outputs_generated_schema",
-        "target_query_expr_typed_native_scalar_admissible_with_outputs_generated_schema",
         "source_query_expr_admissible_with_outputs_generated_schema",
-        "source_query_expr_admissible_generated_schema",
-        "source_query_expr_outputs_generated_schema",
+        "target_query_expr_admissible_with_outputs_generated_schema",
         "source_query_expr_admissible",
         "source_query_program_admissible_generated_schema",
         "source_query_program_admissible",
@@ -10216,7 +11671,7 @@ fn emits_source_and_target_query_rocq_module() {
     assert!(
         module
             .rocq_module
-            .contains("apply TNullQueryExprTypedNativeScalarAdmissibleWithOutputs_is_admissible.")
+            .contains("eapply TNullQueryExprAdmissibleWithOutputs_intro.")
     );
     assert!(module.rocq_module.contains(
         "query_expr_admissible_database_schema_transport\n    Schema.generated_schema Schema.generated_schema_constraints db"
@@ -10229,13 +11684,110 @@ fn emits_source_and_target_query_rocq_module() {
 }
 
 #[test]
+fn reuses_exact_scalar_select_list_prefix_definitions_and_certificates() {
+    let parent_select = vec![z_select_item("a"), z_select_item("b"), z_select_item("c")];
+    let child_select = parent_select[..2].to_vec();
+    let query = FormalQueryExpr::Projection {
+        select: child_select,
+        input: Box::new(FormalQueryExpr::Projection {
+            select: parent_select,
+            input: Box::new(FormalQueryExpr::Table {
+                relation: "t".to_owned(),
+                columns: vec![
+                    formal_attribute("a", FormalAttributeType::Z),
+                    formal_attribute("b", FormalAttributeType::Z),
+                    formal_attribute("c", FormalAttributeType::Z),
+                ],
+            }),
+        }),
+    };
+
+    let module = emit_rocq_query_module(&query.clone(), &query);
+    let parent_definition = module
+        .rocq_module
+        .find("Definition scalar_select_list_1")
+        .expect("parent select-list definition");
+    let child_definition = module
+        .rocq_module
+        .find("Definition scalar_select_list_0")
+        .expect("child select-list definition");
+    assert!(parent_definition < child_definition);
+    assert!(
+        module
+            .rocq_module
+            .contains("firstn (2%nat) (scalar_select_list_1)")
+    );
+    assert!(
+        module
+            .rocq_module
+            .contains("cbn [prop_forall fst snd firstn app]")
+    );
+
+    let parent_certificate = module
+        .rocq_module
+        .find("Lemma scalar_select_list_1_admissible_row_select_generated_schema")
+        .expect("parent select-list certificate");
+    let child_certificate = module
+        .rocq_module
+        .find("Lemma scalar_select_list_0_admissible_row_select_generated_schema")
+        .expect("child select-list certificate");
+    assert!(parent_certificate < child_certificate);
+    let child_certificate_tail = &module.rocq_module[child_certificate..];
+    let child_certificate_body = &child_certificate_tail[..child_certificate_tail
+        .find("\nQed.")
+        .expect("child select-list certificate end")];
+    assert!(child_certificate_body.contains("eapply (@prop_forall_firstn"));
+    assert!(
+        child_certificate_body
+            .contains("exact (scalar_select_list_1_admissible_row_select_generated_schema).")
+    );
+}
+
+#[test]
+fn chunks_wide_scalar_select_list_definitions_and_certificates() {
+    let names = (0..96).map(|index| format!("c{index}")).collect::<Vec<_>>();
+    let query = FormalQueryExpr::Projection {
+        select: names.iter().map(|name| z_select_item(name)).collect(),
+        input: Box::new(FormalQueryExpr::Table {
+            relation: "wide".to_owned(),
+            columns: names
+                .iter()
+                .map(|name| formal_attribute(name, FormalAttributeType::Z))
+                .collect(),
+        }),
+    };
+
+    let module = emit_rocq_query_module(&query.clone(), &query);
+    for chunk_index in 0..3 {
+        assert!(module.rocq_module.contains(&format!(
+            "Definition scalar_select_list_0_chunk_{chunk_index}"
+        )));
+        assert!(module.rocq_module.contains(&format!(
+            "Lemma scalar_select_list_0_chunk_{chunk_index}_admissible_row_select_generated_schema"
+        )));
+    }
+    assert!(!module.rocq_module.contains("scalar_select_list_0_chunk_3"));
+    assert!(module.rocq_module.contains(
+        "scalar_select_list_0_chunk_0 ++ (scalar_select_list_0_chunk_1 ++ (scalar_select_list_0_chunk_2))"
+    ));
+    assert!(
+        module
+            .rocq_module
+            .contains("eapply (@prop_forall_app _ _ (scalar_select_list_0_chunk_0) _).")
+    );
+}
+
+#[test]
 fn timestamp_default_precision_identity_select_matches_explicit_six() {
     let query = FormalQueryExpr::Projection {
-        select: vec![FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: "ts".to_owned(),
-                    ty: FormalAttributeType::Timestamp { precision: None },
+        select: vec![FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                result_ty: FormalAttributeType::Timestamp { precision: Some(6) },
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute {
+                        name: "ts".to_owned(),
+                        ty: FormalAttributeType::Timestamp { precision: None },
+                    },
                 },
             },
             alias: "ts".to_owned(),
@@ -10253,12 +11805,7 @@ fn timestamp_default_precision_identity_select_matches_explicit_six() {
 
     let module = emit_rocq_query_module(&query.clone(), &query);
 
-    assert!(module.rocq_module.contains("TimestampColumn \"ts\" 6"));
-    assert!(
-        !module
-            .rocq_module
-            .contains("SelectAs (DotTimestamp \"ts\" 6)")
-    );
+    assert!(module.rocq_module.contains("DotTimestamp \"ts\" 6"));
 }
 
 #[test]
@@ -10272,7 +11819,7 @@ fn suppresses_nested_shared_queries_covered_by_larger_shared_query() {
         }),
     };
     let shared = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::True,
+        predicate: FormalScalarExpr::True,
         input: Box::new(FormalQueryExpr::CrossJoin {
             left: Box::new(FormalQueryExpr::Table {
                 relation: "DEPT".to_owned(),
@@ -10288,7 +11835,7 @@ fn suppresses_nested_shared_queries_covered_by_larger_shared_query() {
     let target = FormalQueryExpr::Projection {
         select,
         input: Box::new(FormalQueryExpr::Selection {
-            predicate: FormalFormulaExpr::True,
+            predicate: FormalScalarExpr::True,
             input: Box::new(shared),
         }),
     };
@@ -10307,15 +11854,15 @@ fn suppresses_nested_shared_queries_covered_by_larger_shared_query() {
     );
     assert_eq!(
         emitted_definition_shape(&module, "source_query_expr"),
-        "QExpr_Project(@select_list_0,@shared_query_expr_0)"
+        "QExpr_Project(@scalar_select_list_0,@shared_query_expr_0)"
     );
     let shared_shape = emitted_definition_shape(&module, "shared_query_expr_0");
-    assert!(shared_shape.starts_with("QExpr_Filter(@formula_expr_predicate_0,QExpr_CrossJoin("));
-    assert!(shared_shape.contains("QExpr_Project(@select_list_0,QExpr_Table{columns=1})"));
+    assert!(shared_shape.starts_with("QExpr_Filter(@scalar_expr_predicate_0,QExpr_CrossJoin("));
+    assert!(shared_shape.contains("QExpr_Project(@scalar_select_list_0,QExpr_Table{columns=1})"));
     assert!(!shared_shape.contains("@shared_query_expr_0"));
     assert_eq!(
         module.definition_graph.opaque_helper_symbols,
-        ["select_list_0"]
+        ["scalar_select_list_0"]
     );
     assert_eq!(
         module.definition_graph.source_statements[0].statement_index,
@@ -10338,7 +11885,7 @@ fn keeps_nested_shared_query_when_it_is_used_independently() {
         }),
     };
     let parent = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::True,
+        predicate: FormalScalarExpr::True,
         input: Box::new(nested.clone()),
     };
     let source = FormalQueryExpr::Set {
@@ -10388,7 +11935,7 @@ fn shared_query_expr_cse_leaf(relation: &str) -> FormalQueryExpr {
 #[test]
 fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
     let leaf = shared_query_expr_cse_leaf("EMP");
-    let parent = FormalQueryExpr::ScalarSelection {
+    let parent = FormalQueryExpr::Selection {
         predicate: FormalScalarExpr::True,
         input: Box::new(leaf.clone()),
     };
@@ -10419,11 +11966,11 @@ fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
     );
     assert_eq!(
         emitted_definition_shape(&module, "shared_query_expr_0"),
-        "QExpr_ScalarFilter(@scalar_expr_predicate_0,@shared_query_expr_1)"
+        "QExpr_Filter(@scalar_expr_predicate_0,@shared_query_expr_1)"
     );
     assert_eq!(
         emitted_definition_shape(&module, "shared_query_expr_1"),
-        "QExpr_Project(@select_list_0,QExpr_Table{columns=1})"
+        "QExpr_Project(@scalar_select_list_0,QExpr_Table{columns=1})"
     );
     assert_eq!(
         emitted_definition_shape(&module, "source_query_expr"),
@@ -10462,8 +12009,7 @@ fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
         .expect("source root definition");
     let parent_definition = &module.rocq_module[parent_position..source_position];
     assert!(
-        parent_definition
-            .contains("QExpr_ScalarFilter (scalar_expr_predicate_0) (shared_query_expr_1)"),
+        parent_definition.contains("QExpr_Filter (scalar_expr_predicate_0) (shared_query_expr_1)"),
         "{parent_definition}"
     );
     assert!(!parent_definition.contains("QExpr_Project"));
@@ -10480,12 +12026,6 @@ fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
         .rocq_module
         .find("Lemma shared_query_expr_0_admissible_with_outputs_generated_schema")
         .expect("parent admissibility certificate");
-    let parent_typed_certificate = module
-        .rocq_module
-        .find(
-            "Lemma shared_query_expr_0_typed_native_scalar_admissible_with_outputs_generated_schema",
-        )
-        .expect("parent typed admissibility certificate");
     let source_certificate = module
         .rocq_module
         .find("Lemma source_query_expr_admissible_with_outputs_generated_schema")
@@ -10493,12 +12033,10 @@ fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
     assert!(scalar_certificate < leaf_certificate);
     assert!(leaf_certificate < parent_certificate);
     assert!(parent_certificate < source_certificate);
-    assert!(parent_typed_certificate < parent_certificate);
-    let parent_certificate_body = &module.rocq_module[parent_typed_certificate..parent_certificate];
-    assert!(
-        parent_certificate_body
-            .contains("apply (shared_query_expr_1_admissible_with_outputs_generated_schema).")
-    );
+    let parent_certificate_body = &module.rocq_module[parent_certificate..source_certificate];
+    assert!(parent_certificate_body.contains(
+        "exact (proj1 (proj1 (shared_query_expr_1_admissible_with_outputs_generated_schema)))."
+    ));
     assert!(
         parent_certificate_body
             .contains("apply (scalar_expr_predicate_0_admissible_where_generated_schema)."),
@@ -10510,7 +12048,7 @@ fn factors_exact_nested_shared_query_exprs_in_dependency_order() {
 fn shared_query_expr_cse_rejects_structural_near_misses() {
     let exact_leaf = shared_query_expr_cse_leaf("EMP");
     let parent = FormalQueryExpr::Selection {
-        predicate: FormalFormulaExpr::True,
+        predicate: FormalScalarExpr::True,
         input: Box::new(exact_leaf),
     };
     let source = FormalQueryExpr::Set {
@@ -10611,7 +12149,6 @@ fn keeps_pure_outer_joins_in_native_unified_formal_queries() {
                 .contains(&format!("QExpr_Join {emitted_kind}"))
         );
         assert!(!module.rocq_module.contains("QExpr_Set Union"));
-        assert!(!module.rocq_module.contains("FExpr_Exists"));
         assert!(module.rocq_module.contains("NullInt32"));
         assert_no_physical_plan_constructs(&module);
     }
@@ -10657,8 +12194,6 @@ fn keeps_pure_semi_and_anti_join_in_unified_formal_queries() {
     assert_eq!(*join_kind, FormalQueryJoinKind::Anti);
     assert!(semi_module.rocq_module.contains("QExpr_Join QueryJoinSemi"));
     assert!(anti_module.rocq_module.contains("QExpr_Join QueryJoinAnti"));
-    assert!(!semi_module.rocq_module.contains("FExpr_Exists"));
-    assert!(!anti_module.rocq_module.contains("FExpr_Exists"));
 }
 
 #[test]
@@ -10723,19 +12258,20 @@ fn native_existence_join_uses_lowered_numeric_scope_and_provenance() {
         left_select.first().unwrap(),
     ] {
         assert_eq!(item.alias_ty, FormalAttributeType::Numeric);
-        let FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Attribute { ty, .. },
+        let FormalScalarExpr::Leaf {
+            term:
+                FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute { ty, .. },
+                },
+            ..
         } = &item.expr
         else {
             panic!("existence output should be an identity scope projection");
         };
         assert_eq!(*ty, FormalAttributeType::Numeric);
     }
-    let FormalFormulaExpr::Scalar { expression } = predicate else {
-        panic!("expected equality predicate");
-    };
-    let FormalScalarExpr::Predicate { args, .. } = expression.as_ref() else {
-        panic!("expected native scalar equality predicate");
+    let FormalScalarExpr::Predicate { args, .. } = predicate else {
+        panic!("expected typed scalar equality predicate");
     };
     assert!(args.iter().all(|arg| matches!(
         arg,
@@ -10938,7 +12474,7 @@ fn emits_typed_query_observation_proof_obligations() {
     assert!(
         module
             .rocq_module
-            .contains("query_expr_equiv_of_ordered_observations")
+            .contains("@query_expr_possible_equiv TNull relname")
     );
     assert!(module.rocq_module.contains("generated_query_program_equiv"));
     assert!(
@@ -10969,7 +12505,11 @@ fn emits_typed_query_observation_proof_obligations() {
     assert!(module.rocq_module.contains(
         "generated_query_program_admissible\n        db (target_query_program generated_numeric_exp_model) /\\"
     ));
-    assert!(module.rocq_module.contains("query_program_equiv_cons"));
+    assert!(
+        module
+            .rocq_module
+            .contains("@query_program_possible_equiv TNull relname")
+    );
     assert!(!module.rocq_module.contains("Abort."));
 }
 
@@ -11168,7 +12708,7 @@ fn lowers_project_over_nested_sort_fetch_to_recursive_query_expr() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarProjection { input, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { input, .. }) = lowered.query_expr.as_ref() else {
         panic!("projection should remain above the order-sensitive child");
     };
     let FormalQueryExpr::Fetch { input, .. } = input.as_ref() else {
@@ -11180,7 +12720,7 @@ fn lowers_project_over_nested_sort_fetch_to_recursive_query_expr() {
         lowered.query_expr.as_ref().expect("query expression"),
         lowered.query_expr.as_ref().expect("query expression"),
     );
-    assert!(module.rocq_module.contains("QExpr_ScalarProject"));
+    assert!(module.rocq_module.contains("QExpr_Project"));
     assert!(module.rocq_module.contains("QExpr_Fetch"));
     assert!(module.rocq_module.contains("QExpr_OrderBy"));
     assert!(module.rocq_module.contains("QExpr_Table"));
@@ -11713,8 +13253,8 @@ fn calcite_wrapper_fetch_over_division_uses_declarative_list_semantics() {
     };
     assert!(matches!(
         select.as_slice(),
-        [FormalSelectItem {
-            expr: FormalAggregateTerm::ScalarCall {
+        [FormalScalarSelectItem {
+            expr: FormalScalarExpr::Call {
                 operator: ScalarOperator::Divide(ScalarNumericKind::Int32),
                 ..
             },
@@ -11898,10 +13438,10 @@ fn calcite_wrapper_row_in_reaches_exact_componentwise_formula() {
     let FormalQueryExpr::Selection { predicate, .. } = input.as_ref() else {
         panic!("expected exact row-IN selection");
     };
-    let FormalFormulaExpr::In { select, .. } = predicate else {
-        panic!("expected exact componentwise IN formula");
+    let FormalScalarExpr::In { args, .. } = predicate else {
+        panic!("expected exact componentwise IN predicate");
     };
-    assert_eq!(select.len(), 2);
+    assert_eq!(args.len(), 2);
 
     let module = emit_rocq_query_module(
         lowered.query_expr.as_ref().expect("query expression"),
@@ -11915,7 +13455,7 @@ fn calcite_wrapper_row_in_reaches_exact_componentwise_formula() {
 }
 
 #[test]
-fn lowers_exists_with_nested_sort_fetch_to_recursive_formula_expr() {
+fn lowers_exists_with_nested_sort_fetch_to_recursive_scalar_expr() {
     let outer_output = vec![column("a")];
     let subquery_output = vec![column("b")];
     let subquery = RelExpr::Sort {
@@ -11973,7 +13513,7 @@ fn lowers_exists_with_nested_sort_fetch_to_recursive_formula_expr() {
     );
     assert!(module.rocq_module.contains("SExpr_Exists"));
     assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(module.rocq_module.contains("QExpr_ScalarFilter"));
+    assert!(module.rocq_module.contains("QExpr_Filter"));
     assert_eq!(
         emitted_definition_shape(&module, "source_query_expr"),
         "@shared_query_expr_0"
@@ -11981,7 +13521,7 @@ fn lowers_exists_with_nested_sort_fetch_to_recursive_formula_expr() {
     let shared_shape = emitted_definition_shape(&module, "shared_query_expr_0");
     assert!(shared_shape.starts_with("QExpr_Project("), "{shared_shape}");
     assert!(
-        shared_shape.contains("QExpr_ScalarFilter(@scalar_expr_predicate_0,"),
+        shared_shape.contains("QExpr_Filter(@scalar_expr_predicate_0,"),
         "{shared_shape}"
     );
     assert!(
@@ -12036,8 +13576,8 @@ fn lowers_select_in_to_one_nullable_boolean_scalar_projection() {
 
     let lowered = lower_query(&query);
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref() else {
-        panic!("three-valued IN projection should use one native scalar projection");
+    let Some(FormalQueryExpr::Projection { select, .. }) = lowered.query_expr.as_ref() else {
+        panic!("three-valued IN projection should use one typed scalar projection");
     };
     assert!(matches!(
         select.as_slice(),
@@ -12055,18 +13595,29 @@ fn lowers_select_in_to_one_nullable_boolean_scalar_projection() {
     assert!(module.rocq_module.contains("SExpr_In"));
     let nested_select = module
         .rocq_module
-        .find("Definition scalar_select_list_1")
-        .expect("native IN subquery select-list definition");
+        .find("Definition scalar_select_list_0")
+        .expect("typed IN subquery select-list definition");
     let containing_select = module
         .rocq_module
-        .find("Definition scalar_select_list_0")
-        .expect("containing native IN select-list definition");
+        .find("Definition scalar_select_list_1")
+        .expect("containing typed IN select-list definition");
     assert!(
         nested_select < containing_select,
         "nested scalar select lists must be emitted before their containers"
     );
+    let nested_certificate = module
+        .rocq_module
+        .find("Lemma scalar_select_list_0_admissible_row_select_generated_schema")
+        .expect("typed IN subquery select-list certificate");
+    let containing_certificate = module
+        .rocq_module
+        .find("Lemma scalar_select_list_1_admissible_row_select_generated_schema")
+        .expect("containing typed IN select-list certificate");
+    assert!(
+        nested_certificate < containing_certificate,
+        "nested scalar select-list certificates must precede their users"
+    );
     assert!(!module.rocq_module.contains("QExpr_Set Union"));
-    assert!(!module.rocq_module.contains("FExpr_In"));
 }
 
 #[test]
@@ -12131,7 +13682,7 @@ fn lowers_select_not_in_once_inside_nullable_boolean_scalar_projection() {
         "{:?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("three-valued NOT IN projection should use one scalar projection");
     };
     assert!(matches!(
@@ -12182,8 +13733,8 @@ fn lowers_select_exists_once_to_boolean_scalar_projection() {
 
     let lowered = lower_query(&query);
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarProjection { select, .. }) = lowered.query_expr.as_ref() else {
-        panic!("EXISTS projection should use one native scalar projection");
+    let Some(FormalQueryExpr::Projection { select, .. }) = lowered.query_expr.as_ref() else {
+        panic!("EXISTS projection should use one typed scalar projection");
     };
     assert!(matches!(
         select.as_slice(),
@@ -12257,14 +13808,14 @@ fn lowers_boolean_subquery_projection_over_inner_join_without_wrapper() {
     );
     assert!(matches!(
         lowered.query_expr.as_ref(),
-        Some(FormalQueryExpr::ScalarProjection { .. })
+        Some(FormalQueryExpr::Projection { .. })
     ));
     let module = emit_rocq_query_module(
         lowered.query_expr.as_ref().expect("query expression"),
         lowered.query_expr.as_ref().expect("query expression"),
     );
     assert!(module.rocq_module.contains("QExpr_CrossJoin"));
-    assert!(module.rocq_module.contains("QExpr_ScalarFilter"));
+    assert!(module.rocq_module.contains("QExpr_Filter"));
     assert!(module.rocq_module.contains("SExpr_Exists"));
     assert!(!module.rocq_module.contains("QExpr_Set Union"));
     assert!(!module.rocq_module.contains("QExpr_Unordered"));
@@ -12315,8 +13866,7 @@ fn lowers_join_over_nested_order_to_permutation_closed_result() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarSelection { input: joined, .. }) = lowered.query_expr.as_ref()
-    else {
+    let Some(FormalQueryExpr::Selection { input: joined, .. }) = lowered.query_expr.as_ref() else {
         panic!("theta join should filter the cartesian product");
     };
     let FormalQueryExpr::CrossJoin { left, right } = joined.as_ref() else {
@@ -12409,7 +13959,6 @@ fn lowers_semi_join_over_ordered_input_with_one_shared_child() {
         lowered.query_expr.as_ref().expect("query expression"),
     );
     assert!(module.rocq_module.contains("QExpr_Join QueryJoinSemi"));
-    assert!(!module.rocq_module.contains("FExpr_Exists"));
     assert!(module.rocq_module.contains("QExpr_Fetch"));
 
     let mut anti_query = query.clone();
@@ -13308,7 +14857,7 @@ fn outer_join_preserves_fixed_numeric_scale_for_downstream_division() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { input, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { input, .. }) = lowered.query_expr.as_ref() else {
         panic!("expected ratio projection");
     };
     let FormalQueryExpr::Join {
@@ -13415,7 +14964,7 @@ fn lowers_group_over_top_k_input_to_permutation_closed_group() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarGroup { input, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { input, .. }) = lowered.query_expr.as_ref() else {
         panic!("grouping should remain an explicit permutation-closing operator");
     };
     assert!(matches!(input.as_ref(), FormalQueryExpr::Fetch { .. }));
@@ -13423,7 +14972,7 @@ fn lowers_group_over_top_k_input_to_permutation_closed_group() {
         lowered.query_expr.as_ref().expect("query expression"),
         lowered.query_expr.as_ref().expect("query expression"),
     );
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(module.rocq_module.contains("QExpr_Fetch"));
 }
 
@@ -13470,21 +15019,27 @@ fn lowers_grouping_sets_with_one_shared_child_and_typed_absent_key_nulls() {
     assert_eq!(partial.group_by.len(), 1);
     assert!(matches!(
         &full.select[1].expr,
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Attribute {
-                ty: FormalAttributeType::Int64,
-                ..
-            }
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Attribute {
+                    ty: FormalAttributeType::Int64,
+                    ..
+                }
+            },
+            ..
         }
     ));
     assert_eq!(partial.select[1].alias_ty, FormalAttributeType::Int64);
     assert!(matches!(
         &partial.select[1].expr,
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant {
-                raw,
-                ty: Some(FormalAttributeType::Int64),
-            }
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw,
+                    ty: Some(FormalAttributeType::Int64),
+                }
+            },
+            ..
         } if raw == "NULL"
     ));
 
@@ -13493,9 +15048,8 @@ fn lowers_grouping_sets_with_one_shared_child_and_typed_absent_key_nulls() {
     assert!(
         module
             .rocq_module
-            .contains("unfold query_grouping_sets_phase_admissible.")
+            .contains("eapply query_expr_admissible_with_outputs_grouping_sets.")
     );
-    assert!(module.rocq_module.contains("select_list_phase_admissible."));
     assert!(!module.rocq_module.contains("QExpr_Set Union"));
     assert!(!module.rocq_module.contains("QExpr_Distinct"));
 }
@@ -13540,16 +15094,22 @@ fn empty_grouping_set_over_empty_input_uses_exact_global_group_semantics() {
     assert!(matches!(input.as_ref(), FormalQueryExpr::Empty { .. }));
     assert!(matches!(
         &empty_set.select[0].expr,
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant {
-                raw,
-                ty: Some(FormalAttributeType::Int32),
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw,
+                    ty: Some(FormalAttributeType::Int32),
+                },
             },
+            ..
         } if raw == "NULL"
     ));
     assert!(matches!(
         empty_set.select[1].expr,
-        FormalAggregateTerm::CountStar
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::CountStar,
+            ..
+        }
     ));
 
     let module = emit_rocq_query_module_for_test(&query);
@@ -13618,11 +15178,14 @@ fn lowers_multiple_grouping_sets_over_nondeterministic_child_with_one_shared_inp
     ));
     assert!(matches!(
         &grouping_sets[1].select[0].expr,
-        FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant {
-                raw,
-                ty: Some(FormalAttributeType::Int32),
-            }
+        FormalScalarExpr::Leaf {
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant {
+                    raw,
+                    ty: Some(FormalAttributeType::Int32),
+                }
+            },
+            ..
         } if raw == "NULL"
     ));
 
@@ -13746,10 +15309,14 @@ fn generic_grouping_mask_query() -> Query {
 
 #[test]
 fn source_attested_grouping_lowers_to_postgres_int4_branch_masks() {
-    fn collect_select_mask(select: &[FormalSelectItem], masks: &mut Vec<String>) {
+    fn collect_select_mask(select: &[FormalScalarSelectItem], masks: &mut Vec<String>) {
         let item = select.iter().find(|item| item.alias == "g").unwrap();
-        let FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Constant { raw, ty },
+        let FormalScalarExpr::Leaf {
+            term:
+                FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant { raw, ty },
+                },
+            ..
         } = &item.expr
         else {
             panic!("GROUPING must lower to a branch-local constant")
@@ -14140,7 +15707,7 @@ fn lowers_count_star_as_explicit_aggregate() {
             .iter()
             .any(|diagnostic| diagnostic.code == "count_star_argument_encoded")
     );
-    let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("global aggregate should lower as an explicit logical Group");
     };
     assert!(matches!(
@@ -14231,7 +15798,7 @@ fn lowers_distinct_aggregate_as_explicit_aggregate() {
     let lowered = lower_query(&query);
 
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("global aggregate should lower as an explicit logical Group");
     };
     assert!(matches!(
@@ -14479,12 +16046,11 @@ fn lowers_predicate_in_subquery_to_native_in() {
         .expect("IN subquery should lower");
     assert!(
         query_expr_output_signature(&lowered).is_some(),
-        "native IN must retain an ordered output signature: {lowered:#?}"
+        "typed IN must retain an ordered output signature: {lowered:#?}"
     );
     let module = emit_rocq_query_module(&lowered.clone(), &lowered);
 
     assert!(module.rocq_module.contains("SExpr_In"));
-    assert!(!module.rocq_module.contains("FExpr_Exists"));
     assert!(!module.rocq_module.contains("__logos_in_"));
     assert!(!module.rocq_module.contains("QExpr_Set Union"));
 }
@@ -15040,12 +16606,27 @@ fn query005_generated_admissibility_certificates_stay_compact_and_compile_quickl
                 .query_expr
                 .as_ref()
                 .expect("query005 target query expression");
-            let query_module = emit_rocq_query_module(source, target);
-            assert!(
-                query_module.rocq_module.len() <= 160 * 1024,
-                "query005 Queries.v grew to {} bytes",
-                query_module.rocq_module.len()
-            );
+            let source_signature = lowered_queries[0]
+                .output_signature
+                .as_deref()
+                .expect("query005 source output signature");
+            let target_signature = lowered_queries[1]
+                .output_signature
+                .as_deref()
+                .expect("query005 target output signature");
+            let query_module = emit_rocq_bound_query_program_module_with_signatures(
+                &[(
+                    source,
+                    source_signature,
+                    lowered_queries[0].bindings.as_slice(),
+                )],
+                &[(
+                    target,
+                    target_signature,
+                    lowered_queries[1].bindings.as_slice(),
+                )],
+            )
+            .expect("query005 bound query program module");
 
             let lowered_schema =
                 lower_schema_with_config(schema.as_ref().expect("query005 schema"), &config);
@@ -15066,6 +16647,12 @@ fn query005_generated_admissibility_certificates_stay_compact_and_compile_quickl
             fs::write(temp.join("Schema.v"), schema_module).expect("write query005 Schema.v");
             fs::write(temp.join("Queries.v"), &query_module.rocq_module)
                 .expect("write query005 Queries.v");
+            assert!(
+                query_module.rocq_module.len() <= 160 * 1024,
+                "query005 Queries.v grew to {} bytes; retained at {}",
+                query_module.rocq_module.len(),
+                temp.join("Queries.v").display()
+            );
 
             let rocq = repo.join(".opam-rocq/_opam/bin/rocq");
             for (module, timeout_seconds) in [("Schema.v", "15"), ("Queries.v", "30")] {
@@ -15244,7 +16831,7 @@ fn in_renaming_uses_actual_lowered_numeric_scope() {
         panic!("expected relational selection");
     };
     let FormalScalarExpr::In { args, query } = predicate else {
-        panic!("expected native IN");
+        panic!("expected typed IN");
     };
     assert_eq!(args[0].value_type(), Some(FormalAttributeType::Numeric));
     assert_eq!(
@@ -15254,7 +16841,7 @@ fn in_renaming_uses_actual_lowered_numeric_scope() {
 }
 
 #[test]
-fn lowers_in_subquery_with_nested_fetch_to_formula_expr_in() {
+fn lowers_in_subquery_with_nested_fetch_to_scalar_expr_in() {
     let scalar_output = vec![column("VALUE")];
     let sorted_output = vec![column("VALUE"), column("TIE_KEY")];
     let subquery = RelExpr::Project {
@@ -15313,7 +16900,7 @@ fn lowers_in_subquery_with_nested_fetch_to_formula_expr_in() {
     };
     assert_eq!(args.len(), 1);
     assert_eq!(args[0].value_type(), Some(FormalAttributeType::Int32));
-    let FormalQueryExpr::ScalarProjection { input, .. } = query.as_ref() else {
+    let FormalQueryExpr::Projection { input, .. } = query.as_ref() else {
         panic!("expected original subquery projection");
     };
     assert!(matches!(input.as_ref(), FormalQueryExpr::Fetch { .. }));
@@ -15324,7 +16911,6 @@ fn lowers_in_subquery_with_nested_fetch_to_formula_expr_in() {
     );
     assert!(module.rocq_module.contains("SExpr_In"));
     assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(!module.rocq_module.contains("FExpr_Exists"));
 }
 
 #[test]
@@ -15409,12 +16995,12 @@ fn lowers_scalar_value_subquery_with_native_cardinality_semantics() {
         "{:#?}",
         lowered.diagnostics
     );
-    let FormalQueryExpr::ScalarProjection { select, .. } = lowered
+    let FormalQueryExpr::Projection { select, .. } = lowered
         .query_expr
         .as_ref()
-        .expect("native scalar projection")
+        .expect("typed scalar projection")
     else {
-        panic!("scalar subquery SELECT must use ScalarProjection");
+        panic!("scalar subquery SELECT must use the canonical Projection");
     };
     assert!(matches!(
         select.as_slice(),
@@ -15425,7 +17011,6 @@ fn lowers_scalar_value_subquery_with_native_cardinality_semantics() {
     ));
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Subquery"));
-    assert!(!module.rocq_module.contains("FExpr_Quant Exists_F"));
 }
 
 // Singleton scalar-subquery comparison has a deliberately separate boundary
@@ -15713,7 +17298,7 @@ fn lowers_exact_scaled_numeric_singleton_subquery_by_projecting_over_its_result(
         panic!("expected query-expression selection");
     };
     let FormalScalarExpr::Predicate { args, .. } = predicate else {
-        panic!("scaled singleton comparison must use the native scalar predicate");
+        panic!("scaled singleton comparison must use the typed scalar predicate");
     };
     let FormalScalarExpr::Call {
         operator: ScalarOperator::Multiply(ScalarNumericKind::Numeric),
@@ -15724,18 +17309,14 @@ fn lowers_exact_scaled_numeric_singleton_subquery_by_projecting_over_its_result(
         panic!("scale multiplication must contain the scalar subquery once");
     };
     let FormalScalarExpr::Subquery { query: child, .. } = &multiply_args[1] else {
-        panic!("expected one native scalar subquery operand");
+        panic!("expected one typed scalar subquery operand");
     };
-    assert!(matches!(
-        child.as_ref(),
-        FormalQueryExpr::ScalarGroup { .. }
-    ));
+    assert!(matches!(child.as_ref(), FormalQueryExpr::Group { .. }));
 
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Subquery"));
     assert!(module.rocq_module.contains("ScalarDivide ScalarNumeric"));
     assert!(module.rocq_module.contains("ScalarMultiply ScalarNumeric"));
-    assert!(!module.rocq_module.contains("FExpr_Quant Exists_F"));
     assert!(!module.rocq_module.contains("cast_numeric_to_decimal"));
 }
 
@@ -15800,7 +17381,7 @@ fn lowers_singleton_global_aggregate_scalar_comparison_to_quantified_predicate()
         panic!("expected query-expression filter");
     };
     let FormalScalarExpr::Predicate { predicate, args } = predicate else {
-        panic!("expected native scalar-subquery comparison");
+        panic!("expected typed scalar-subquery comparison");
     };
     assert_eq!(*predicate, FormalPredicate::Eq);
     assert_eq!(args.len(), 2);
@@ -15808,12 +17389,9 @@ fn lowers_singleton_global_aggregate_scalar_comparison_to_quantified_predicate()
         query: subquery, ..
     } = &args[1]
     else {
-        panic!("comparison must contain one native scalar subquery");
+        panic!("comparison must contain one typed scalar subquery");
     };
-    assert!(matches!(
-        subquery.as_ref(),
-        FormalQueryExpr::ScalarGroup { .. }
-    ));
+    assert!(matches!(subquery.as_ref(), FormalQueryExpr::Group { .. }));
 
     let module = emit_rocq_query_module(
         lowered.query_expr.as_ref().unwrap(),
@@ -15825,7 +17403,6 @@ fn lowers_singleton_global_aggregate_scalar_comparison_to_quantified_predicate()
             .rocq_module
             .contains("AAggregate AggregateMaxInt32 AggregateAll")
     );
-    assert!(!module.rocq_module.contains("FExpr_Exists"));
 }
 
 #[test]
@@ -15861,7 +17438,7 @@ fn scales_singleton_numeric_subquery_inside_quantified_comparison() {
     assert!(matches!(
         &multiply_args[1],
         FormalScalarExpr::Subquery { query, .. }
-            if matches!(query.as_ref(), FormalQueryExpr::ScalarGroup { .. })
+            if matches!(query.as_ref(), FormalQueryExpr::Group { .. })
     ));
 
     let module = emit_rocq_query_module(
@@ -15877,7 +17454,7 @@ fn scales_singleton_numeric_subquery_inside_quantified_comparison() {
 
 #[test]
 fn scaled_scalar_subquery_preserves_runtime_errors_and_exact_cardinality() {
-    for divisor in ["0.0", "0.1"] {
+    for divisor in ["0.1", "100.0"] {
         let query = scaled_numeric_scalar_subquery_filter_query(
             numeric_scale_factor(divisor),
             singleton_max_numeric_subquery(),
@@ -15894,6 +17471,17 @@ fn scaled_scalar_subquery_preserves_runtime_errors_and_exact_cardinality() {
         assert!(module.rocq_module.contains("ScalarMultiply ScalarNumeric"));
         assert_no_physical_plan_constructs(&module);
     }
+
+    let planner_error = lower_query(&scaled_numeric_scalar_subquery_filter_query(
+        numeric_scale_factor("0.0"),
+        singleton_max_numeric_subquery(),
+    ));
+    assert_eq!(planner_error.status, LoweringStatus::Blocked);
+    assert!(
+        planner_error.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "boolean_planner_constant_error_not_supported"
+        })
+    );
 
     let dynamic_factor = ScalarAst::Call {
         operator: "/".to_owned(),
@@ -16380,7 +17968,7 @@ fn source_attested_numeric_rewrite_uses_visible_name_after_scope_barrier() {
 }
 
 #[test]
-fn inner_join_subquery_condition_isolates_scope_but_outer_join_fails_closed() {
+fn inner_and_outer_join_subquery_conditions_isolate_their_row_scopes() {
     let exists = || ScalarAst::Call {
         operator: "EXISTS".to_owned(),
         op: ScalarOp::Exists,
@@ -16424,10 +18012,13 @@ fn inner_join_subquery_condition_isolates_scope_but_outer_join_fails_closed() {
     assert!(inner_module.rocq_module.contains("__logos_scope_0_0"));
 
     let outer = lower_query(&make_join(JoinType::Left));
-    assert_eq!(outer.status, LoweringStatus::Blocked);
-    assert!(outer.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "outer_join_subquery_scope_barrier_not_supported"
-    }));
+    assert_eq!(outer.status, LoweringStatus::Lowered, "{outer:#?}");
+    let outer_module = emit_rocq_query_module(
+        outer.query_expr.as_ref().unwrap(),
+        outer.query_expr.as_ref().unwrap(),
+    );
+    assert!(outer_module.rocq_module.contains("QExpr_Join"));
+    assert!(outer_module.rocq_module.contains("__logos_scope_0_0"));
 
     let semi = lower_query(&Query {
         source_sql: None,
@@ -16454,7 +18045,7 @@ fn inner_join_subquery_condition_isolates_scope_but_outer_join_fails_closed() {
 }
 
 #[test]
-fn native_having_subquery_fails_closed_even_for_hidden_group_bindings() {
+fn native_having_subquery_capture_isolates_hidden_group_bindings() {
     let hidden_input = "__logos_filtered_aggregate_0";
     let aggregate_output = vec![column("outer_max")];
     let aggregate = RelExpr::Aggregate {
@@ -16495,13 +18086,11 @@ fn native_having_subquery_fails_closed_even_for_hidden_group_bindings() {
     };
 
     let lowered = lower_query(&query);
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| { diagnostic.code == "having_subquery_scope_barrier_not_supported" })
-    );
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    let debug = format!("{:?}", lowered.query_expr);
+    assert!(debug.contains("Group"));
+    assert!(debug.contains("Exists"));
+    assert!(debug.contains("__logos_scope_"));
 }
 
 #[test]
@@ -16648,19 +18237,16 @@ fn native_risky_outer_operand_lowers_but_unbound_scalar_correlation_is_rejected(
         .as_ref()
         .and_then(selection_under_optional_output_restore)
     else {
-        panic!("risky outer operand must share one native scalar evaluation");
+        panic!("risky outer operand must share one typed scalar evaluation");
     };
     assert!(
         matches!(
             args.as_slice(),
-            [FormalScalarExpr::Leaf {
-                term: FormalAggregateTerm::ScalarCall {
-                    operator: ScalarOperator::Divide(ScalarNumericKind::Int32),
-                    ..
-                },
+            [FormalScalarExpr::Call {
+                operator: ScalarOperator::Divide(ScalarNumericKind::Int32),
                 ..
             }, FormalScalarExpr::Subquery { query, .. }]
-                if matches!(query.as_ref(), FormalQueryExpr::ScalarGroup { .. })
+                if matches!(query.as_ref(), FormalQueryExpr::Group { .. })
         ),
         "{args:#?}"
     );
@@ -16702,7 +18288,7 @@ fn native_risky_outer_operand_lowers_but_unbound_scalar_correlation_is_rejected(
 }
 
 #[test]
-fn native_having_scalar_subquery_fails_closed_before_specialized_rewrites() {
+fn native_having_scalar_subquery_uses_the_generic_scalar_group_path() {
     fn numeric_zero() -> ScalarAst {
         ScalarAst::TypeAnnotation {
             expr: Box::new(ScalarAst::Call {
@@ -16832,13 +18418,10 @@ fn native_having_scalar_subquery_fails_closed_before_specialized_rewrites() {
     }
 
     let lowered = lower_query(&query());
-    assert_eq!(lowered.status, LoweringStatus::Blocked);
-    assert!(
-        lowered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| { diagnostic.code == "having_subquery_scope_barrier_not_supported" })
-    );
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    let debug = format!("{:?}", lowered.query_expr);
+    assert!(debug.contains("Group"));
+    assert!(debug.contains("Subquery"));
 }
 
 #[test]
@@ -16901,11 +18484,6 @@ fn lowers_exists_subquery_to_exists_formula() {
     let module = emit_rocq_query_module(&lowered.clone(), &lowered);
 
     assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(
-        !module
-            .rocq_module
-            .contains("formula_operator_not_supported")
-    );
 }
 
 #[test]
@@ -17499,7 +19077,7 @@ fn declarative_exists_preserves_error_capable_target_and_logical_filter() {
     );
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(module.rocq_module.contains("QExpr_ScalarFilter"));
+    assert!(module.rocq_module.contains("QExpr_Filter"));
     assert!(module.rocq_module.contains("DotInt32 \"KEEP\""));
     assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
     assert!(!module.rocq_module.contains("QExpr_Pg"));
@@ -17564,10 +19142,7 @@ fn declarative_exists_preserves_error_capable_target_under_row_slicing() {
     let FormalQueryExpr::OrderBy { input, .. } = input.as_ref() else {
         panic!("EXISTS target should retain declarative ORDER BY explicitly");
     };
-    assert!(matches!(
-        input.as_ref(),
-        FormalQueryExpr::ScalarProjection { .. }
-    ));
+    assert!(matches!(input.as_ref(), FormalQueryExpr::Projection { .. }));
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
     assert!(module.rocq_module.contains("QExpr_OrderBy"));
@@ -17818,7 +19393,7 @@ fn exists_preserves_having_runtime_expression() {
     );
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(module.rocq_module.contains("ScalarDivide ScalarInt64"));
 }
 
@@ -17907,7 +19482,7 @@ fn declarative_exists_preserves_error_capable_all_column_grouping() {
     else {
         panic!("outer filter should retain its declarative EXISTS predicate");
     };
-    let FormalQueryExpr::ScalarGroup {
+    let FormalQueryExpr::Group {
         select,
         group_by,
         input,
@@ -17918,14 +19493,11 @@ fn declarative_exists_preserves_error_capable_all_column_grouping() {
     };
     assert_eq!(select.len(), 1);
     assert_eq!(group_by.len(), 1);
-    assert!(matches!(
-        input.as_ref(),
-        FormalQueryExpr::ScalarProjection { .. }
-    ));
+    assert!(matches!(input.as_ref(), FormalQueryExpr::Projection { .. }));
 
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
     assert!(!module.rocq_module.contains("QExpr_Pg"));
     assert!(
@@ -17976,14 +19548,14 @@ fn declarative_exists_preserves_source_distinct_as_native_distinct() {
     };
     assert!(
         matches!(exists.as_ref(), FormalQueryExpr::Distinct { input }
-        if matches!(input.as_ref(), FormalQueryExpr::ScalarProjection { .. }))
+        if matches!(input.as_ref(), FormalQueryExpr::Projection { .. }))
     );
 
     let module = emit_rocq_query_module_for_test(&query);
     assert!(module.rocq_module.contains("SExpr_Exists"));
     assert!(module.rocq_module.contains("QExpr_Distinct"));
     assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
-    assert!(!module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(!module.rocq_module.contains("QExpr_Group"));
 }
 
 #[test]
@@ -18286,11 +19858,6 @@ fn lowers_correlated_exists_by_binding_index_not_field_name() {
 
     assert!(module.rocq_module.contains("__logos_cor_cor0_0"));
     assert!(module.rocq_module.contains("PredicateEq"));
-    assert!(
-        !module
-            .rocq_module
-            .contains("FExpr_Pred PredicateEq ([DotInt32 \"DEPTNO\"; DotInt32 \"DEPTNO\"])")
-    );
 }
 
 #[test]
@@ -18564,9 +20131,6 @@ fn lowers_correlated_join_output_after_calcite_renaming() {
 
     assert!(module.rocq_module.contains("__logos_cor_cor0_2"));
     assert!(module.rocq_module.contains("PredicateEq"));
-    assert!(!module.rocq_module.contains(
-        "FExpr_Exists (QExpr_Filter (FExpr_Pred PredicateEq ([DotInt32 \"id\"; DotInt32 \"id0\"])"
-    ));
 }
 
 #[test]
@@ -19110,7 +20674,7 @@ fn case_predicates_select_exact_query_semantics_without_pair_normalization() {
     assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
     assert!(matches!(
         lowered.query_expr,
-        Some(FormalQueryExpr::ScalarSelection {
+        Some(FormalQueryExpr::Selection {
             input,
             ..
         }) if matches!(input.as_ref(), FormalQueryExpr::Table { .. })
@@ -19349,7 +20913,7 @@ fn paired_root_analysis_errors_survive_output_normalization_and_emit_modules() {
     assert!(
         query_module
             .rocq_module
-            .contains("typed_native_scalar_admissible_with_outputs")
+            .contains("TNullQueryExprAdmissibleWithOutputs")
     );
     assert!(report.proof_module.is_some());
 }
@@ -19761,9 +21325,9 @@ fn lowers_untyped_null_values_filter_without_static_empty_rewrite() {
     assert_eq!(lowered.status, LoweringStatus::Lowered);
     assert!(matches!(
         lowered_query_expr(&lowered),
-        Some(FormalQueryExpr::ScalarSelection { .. })
+        Some(FormalQueryExpr::Selection { .. })
     ));
-    assert!(module.rocq_module.contains("QExpr_ScalarFilter"));
+    assert!(module.rocq_module.contains("QExpr_Filter"));
     assert!(module.rocq_module.contains("NullString"));
     assert!(module.rocq_module.contains("AttrString \"A\""));
     assert!(!module.rocq_module.contains("EmptyRelation"));
@@ -20064,7 +21628,7 @@ fn attested_substring_group_key_with_complete_sort_forces_all_aggregate_groups()
     assert_eq!(keys[3].null_direction, FormalNullDirection::First);
     assert!(matches!(
         input.as_ref(),
-        FormalQueryExpr::ScalarGroup { .. } | FormalQueryExpr::ScalarProjection { .. }
+        FormalQueryExpr::Group { .. } | FormalQueryExpr::Projection { .. }
     ));
     let module = emit_rocq_query_module(
         lowered.query_expr.as_ref().expect("query expression"),
@@ -20580,7 +22144,7 @@ fn calcite_wrapper_exact_dsb_018_uses_source_attested_rollup_full_sort() {
             ..
         } = input.as_ref()
         else {
-            panic!("{sql_name}: expected native grouping-sets Aggregate")
+            panic!("{sql_name}: expected grouping-sets Aggregate")
         };
         assert_eq!(group_keys, &[0, 1, 2, 3]);
         assert_eq!(
@@ -21529,7 +23093,7 @@ fn set_common_type_uses_child_numeric_types_and_models_typmod_erasure() {
     assert!(
         module
             .rocq_module
-            .contains("ScalarCall (ScalarCast (ScalarCastToNumeric ScalarSourceNumeric))")
+            .contains("ScalarCast (ScalarCastToNumeric ScalarSourceNumeric)")
     );
 }
 
@@ -22615,7 +24179,7 @@ fn lowers_attested_plain_group_key_having_with_positional_alias_substitution() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarGroup { having, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { having, .. }) = lowered.query_expr.as_ref() else {
         panic!("attested ordinary HAVING should install in the logical Group");
     };
     let FormalScalarExpr::Predicate { args, .. } = having else {
@@ -22680,21 +24244,17 @@ fn derived_group_outer_where_stays_a_logical_selection() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { input, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { input, .. }) = lowered.query_expr.as_ref() else {
         panic!("expected outer projection");
     };
-    let FormalQueryExpr::ScalarSelection { input, .. } = input.as_ref() else {
+    let FormalQueryExpr::Selection { input, .. } = input.as_ref() else {
         panic!("the derived-table outer WHERE must remain a logical Selection");
     };
-    assert!(matches!(
-        input.as_ref(),
-        FormalQueryExpr::ScalarGroup { .. }
-    ));
+    assert!(matches!(input.as_ref(), FormalQueryExpr::Group { .. }));
     let module = emit_rocq_query_module_for_test(&query);
-    assert!(module.rocq_module.contains("QExpr_ScalarFilter"));
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Filter"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(!module.rocq_module.contains("QExpr_Pg"));
-    assert!(!module.rocq_module.contains("FExpr_Pg"));
 }
 
 #[test]
@@ -22796,14 +24356,14 @@ fn declarative_having_accepts_aggregate_and_compound_predicates() {
         );
         assert!(matches!(
             lowered.query_expr,
-            Some(FormalQueryExpr::ScalarGroup { .. })
+            Some(FormalQueryExpr::Group { .. })
         ));
         assert!(!format!("{:?}", lowered.query_expr).contains("PgGroup"));
     }
 }
 
 #[test]
-fn native_having_fails_closed_for_general_nonordinary_grouping_sets() {
+fn native_having_filters_nonordinary_grouping_set_outputs() {
     let output = vec![
         column("grouped_key"),
         typed_column("row_count", SqlType::BigInt),
@@ -22828,16 +24388,11 @@ fn native_having_fails_closed_for_general_nonordinary_grouping_sets() {
             output.clone(),
         );
         let lowered = lower_query(&query);
-        assert_eq!(
-            lowered.status,
-            LoweringStatus::Blocked,
-            "{:#?}",
-            lowered.diagnostics
-        );
-        assert!(lowered.query_expr.is_none());
-        assert!(lowered.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "grouping_sets_having_scalar_phase_not_supported"
-        }));
+        assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+        assert!(matches!(
+            lowered.query_expr,
+            Some(FormalQueryExpr::Selection { .. })
+        ));
     }
 }
 
@@ -22908,7 +24463,7 @@ fn declarative_having_does_not_require_pushdown_safe_group_key_provenance() {
         );
         assert!(matches!(
             lowered.query_expr,
-            Some(FormalQueryExpr::ScalarGroup { .. })
+            Some(FormalQueryExpr::Group { .. })
         ));
     }
 
@@ -23056,7 +24611,7 @@ fn declarative_having_accepts_a_runtime_risky_aggregate_child() {
     );
     assert!(matches!(
         lowered.query_expr,
-        Some(FormalQueryExpr::ScalarGroup { .. })
+        Some(FormalQueryExpr::Group { .. })
     ));
     assert!(format!("{:?}", lowered.query_expr).contains("Divide(Int32)"));
 }
@@ -23108,14 +24663,14 @@ fn declarative_native_having_is_a_logical_group_below_its_target_projection() {
         "{:#?}",
         lowered.diagnostics
     );
-    let FormalQueryExpr::ScalarProjection {
+    let FormalQueryExpr::Projection {
         select: target_select,
         input,
     } = lowered.query_expr.as_ref().unwrap()
     else {
         panic!("the source target list must remain a logical post-HAVING projection");
     };
-    let FormalQueryExpr::ScalarGroup { select, having, .. } = input.as_ref() else {
+    let FormalQueryExpr::Group { select, having, .. } = input.as_ref() else {
         panic!("ordinary source HAVING must be installed in one logical Group");
     };
     assert_eq!(target_select.len(), 1);
@@ -23129,10 +24684,9 @@ fn declarative_native_having_is_a_logical_group_below_its_target_projection() {
     ));
     assert!(format!("{having:?}").contains("CountStar"));
     let module = emit_rocq_query_module_for_test(&query);
-    assert!(module.rocq_module.contains("QExpr_ScalarProject"));
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Project"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(!module.rocq_module.contains("QExpr_Pg"));
-    assert!(!module.rocq_module.contains("FExpr_Pg"));
 }
 
 #[test]
@@ -23229,10 +24783,10 @@ fn calcite_148_mixed_having_reaches_logical_group_without_having_pushdown() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { input, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Projection { input, .. }) = lowered.query_expr.as_ref() else {
         panic!("calcite-148 must retain its post-HAVING target projection");
     };
-    let FormalQueryExpr::ScalarGroup { having, input, .. } = input.as_ref() else {
+    let FormalQueryExpr::Group { having, input, .. } = input.as_ref() else {
         panic!("calcite-148 must lower to one logical Group");
     };
     let having_debug = format!("{having:?}");
@@ -23245,9 +24799,8 @@ fn calcite_148_mixed_having_reaches_logical_group_without_having_pushdown() {
         lowered.query_expr.as_ref().expect("query expression"),
         lowered.query_expr.as_ref().expect("query expression"),
     );
-    assert!(module.rocq_module.contains("QExpr_ScalarGroup"));
+    assert!(module.rocq_module.contains("QExpr_Group"));
     assert!(!module.rocq_module.contains("QExpr_Pg"));
-    assert!(!module.rocq_module.contains("FExpr_Pg"));
 
     fs::remove_dir_all(&temp).expect("remove wrapper test directory");
 }
@@ -23328,12 +24881,11 @@ fn declarative_native_having_keeps_target_evaluation_after_the_group() {
         "{:#?}",
         lowered.diagnostics
     );
-    let FormalQueryExpr::ScalarProjection { select, input } = lowered.query_expr.as_ref().unwrap()
-    else {
+    let FormalQueryExpr::Projection { select, input } = lowered.query_expr.as_ref().unwrap() else {
         panic!("the target expression must remain a logical projection after HAVING");
     };
     assert_eq!(select.len(), 1);
-    let FormalQueryExpr::ScalarGroup {
+    let FormalQueryExpr::Group {
         select: aggregate_select,
         ..
     } = input.as_ref()
@@ -23421,8 +24973,7 @@ fn native_having_preserves_logical_project_composition() {
         "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::ScalarProjection { select, input }) = lowered.query_expr.as_ref()
-    else {
+    let Some(FormalQueryExpr::Projection { select, input }) = lowered.query_expr.as_ref() else {
         panic!("the final target must remain a logical Projection")
     };
     assert_eq!(select.len(), 1);
@@ -23483,30 +25034,26 @@ fn native_having_allows_a_logical_post_group_correlation_scope() {
     );
     assert!(matches!(
         lowered.query_expr,
-        Some(FormalQueryExpr::ScalarProjection { .. })
+        Some(FormalQueryExpr::Projection { .. })
     ));
     assert!(!format!("{:?}", lowered.query_expr).contains("PgGroup"));
 }
 
 #[test]
-fn native_grouping_sets_having_fails_closed_at_the_scalar_phase_boundary() {
+fn native_grouping_sets_having_filters_the_shared_aggregate_output() {
     let query = generic_grouping_sets_native_having_query();
 
     let lowered = lower_query(&query);
-    assert_eq!(
-        lowered.status,
-        LoweringStatus::Blocked,
-        "{:#?}",
-        lowered.diagnostics
-    );
-    assert!(lowered.query_expr.is_none());
-    assert!(lowered.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "grouping_sets_having_scalar_phase_not_supported"
-    }));
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    assert!(matches!(
+        lowered.query_expr,
+        Some(FormalQueryExpr::Selection { input, .. })
+            if matches!(*input, FormalQueryExpr::GroupingSets { .. })
+    ));
 }
 
 #[test]
-fn grouping_sets_native_having_fail_closed_is_shape_independent() {
+fn grouping_sets_native_having_accepts_other_typed_key_predicates() {
     let mut query = generic_grouping_sets_native_having_query();
     let RelExpr::NativeHaving { predicate, .. } = &mut query.rel else {
         unreachable!()
@@ -23519,16 +25066,11 @@ fn grouping_sets_native_having_fail_closed_is_shape_independent() {
     };
 
     let lowered = lower_query(&query);
-    assert_eq!(
-        lowered.status,
-        LoweringStatus::Blocked,
-        "{:#?}",
-        lowered.diagnostics
-    );
-    assert!(lowered.query_expr.is_none());
-    assert!(lowered.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "grouping_sets_having_scalar_phase_not_supported"
-    }));
+    assert_eq!(lowered.status, LoweringStatus::Lowered, "{lowered:#?}");
+    assert!(matches!(
+        lowered.query_expr,
+        Some(FormalQueryExpr::Selection { .. })
+    ));
 }
 
 fn generic_grouping_sets_native_having_query() -> Query {
@@ -23727,13 +25269,16 @@ fn lowers_any_value_integer_as_exact_arbitrary_nonnull_choice() {
     assert!(matches!(
         right.as_ref(),
         FormalQueryExpr::Projection { input, .. }
-            if matches!(input.as_ref(), FormalQueryExpr::ScalarSelection { .. })
+            if matches!(input.as_ref(), FormalQueryExpr::Selection { .. })
     ));
     assert!(matches!(
         left_select.as_slice(),
-        [FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Constant { raw, ty: Some(FormalAttributeType::Int32) }
+        [FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant { raw, ty: Some(FormalAttributeType::Int32) }
+                },
+                ..
             },
             ..
         }] if raw.eq_ignore_ascii_case("NULL")
@@ -23753,7 +25298,7 @@ fn lowers_single_value_integer_with_cardinality_error_aggregate() {
 
     let lowered = lower_query(&query);
     assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let Some(FormalQueryExpr::ScalarGroup { select, .. }) = lowered.query_expr.as_ref() else {
+    let Some(FormalQueryExpr::Group { select, .. }) = lowered.query_expr.as_ref() else {
         panic!("SINGLE_VALUE must remain an error-aware global aggregate");
     };
     assert!(matches!(
@@ -23902,12 +25447,16 @@ fn singleton_constant_type(query: &FormalQueryExpr, raw: &str) -> Option<FormalA
     let [item] = select.as_slice() else {
         return None;
     };
-    let FormalAggregateTerm::Expr {
+    let FormalScalarExpr::Leaf {
         term:
-            FormalFunctionTerm::Constant {
-                raw: constant_raw,
-                ty: Some(ty),
+            FormalAggregateTerm::Expr {
+                term:
+                    FormalFunctionTerm::Constant {
+                        raw: constant_raw,
+                        ty: Some(ty),
+                    },
             },
+        ..
     } = &item.expr
     else {
         return None;
@@ -24422,12 +25971,15 @@ fn query_for_rel(rel: RelExpr, output: Vec<Column>) -> Query {
     }
 }
 
-fn z_select_item(name: &str) -> FormalSelectItem {
-    FormalSelectItem {
-        expr: FormalAggregateTerm::Expr {
-            term: FormalFunctionTerm::Attribute {
-                name: name.to_owned(),
-                ty: FormalAttributeType::Z,
+fn z_select_item(name: &str) -> FormalScalarSelectItem {
+    FormalScalarSelectItem {
+        expr: FormalScalarExpr::Leaf {
+            result_ty: FormalAttributeType::Z,
+            term: FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Attribute {
+                    name: name.to_owned(),
+                    ty: FormalAttributeType::Z,
+                },
             },
         },
         alias: name.to_owned(),

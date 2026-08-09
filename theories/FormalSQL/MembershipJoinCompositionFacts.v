@@ -10,7 +10,7 @@ From SQLFS Require Import
   SqlQuerySemantics SqlQuerySyntax Values.
 From Logos.FormalSQL Require Import
   GroupedFilterOutcomeFacts MembershipCompositionFacts OrderedQueryFacts
-  ProofAgentFacade RelationalAlgebraFacts SubqueryFacts TNullSyntax.
+  SubqueryFacts.
 
 Import ListNotations.
 Import Tuple.
@@ -34,27 +34,36 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
-Local Abbreviation formula_exact :=
-  (@formula_acceptance_exact_at T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
+Local Abbreviation scalar_exact :=
+  (@scalar_expr_acceptance_exact_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
-Theorem formula_in_distinct_acceptance_exact_of_inner :
-  forall env select_items input accepted,
-    formula_exact env (FExpr_In select_items input) accepted ->
-    formula_exact env
-      (FExpr_In select_items (QExpr_Distinct input)) accepted.
+Theorem scalar_expr_in_distinct_acceptance_exact_of_inner :
+  forall env arguments input accepted,
+    (forall rows,
+      eval_query env input (SqlSuccess rows) ->
+      Forall
+        (query_row_has_outputs (query_expr_outputs input)) rows) ->
+    scalar_exact env (SExpr_In arguments input) accepted ->
+    scalar_exact env
+      (SExpr_In arguments (QExpr_Distinct input)) accepted.
 Proof.
-intros env select_items input accepted
+intros env arguments input accepted Houtputs
   [[truth [Htruth Haccepted]] [Hsuccess Herrors]].
-apply eval_formula_in_success_iff in Htruth.
-destruct Htruth as [input_rows [Harguments [Hinput Htruth]]].
+apply eval_scalar_boolean_in_success_iff in Htruth.
+destruct Htruth as
+  [values [input_rows [Harguments [Hinput Htruth]]]].
 subst truth.
 set (output :=
   Febag.elements (Fecol.CBag (CTuple T))
@@ -71,47 +80,60 @@ assert (Houtput :
   apply eval_query_expr_distinct_success_iff.
   exists input_rows; now split.
 }
-unfold formula_exact, formula_acceptance_exact_at.
+unfold scalar_exact, scalar_expr_acceptance_exact_at.
 split.
 - exists
-    (@in_rows_truth T unknown value_is_null env select_items output).
+    (@in_rows_truth T relname unknown value_is_null
+      values (QExpr_Distinct input) output).
   split.
-  + apply eval_formula_in_success_iff.
-    exists output; repeat split; try assumption; reflexivity.
-  + rewrite
+  + apply eval_scalar_boolean_in_success_iff.
+    exists values, output; repeat split; try assumption; reflexivity.
+  + change
+      (Bool.is_true (B T)
+        (@in_rows_truth T relname unknown value_is_null
+          values input output) = accepted).
+    rewrite
       (in_rows_acceptance_distinct
-        unknown value_is_null
-        env select_items input_rows (output := output) Houtput_bag).
+        unknown value_is_null values input
+        (Houtputs input_rows Hinput) Houtput_bag).
     exact Haccepted.
 - split.
   + intros observed Hobserved.
-    apply eval_formula_in_success_iff in Hobserved.
+    apply eval_scalar_boolean_in_success_iff in Hobserved.
     destruct Hobserved as
-      [output_rows [_ [Hdistinct Hobserved]]].
+      [observed_values [output_rows
+        [Hobserved_arguments [Hdistinct Hobserved]]]].
     subst observed.
     apply eval_query_expr_distinct_success_iff in Hdistinct.
     destruct Hdistinct as
       [observed_input [Hobserved_input Hobserved_bag]].
     assert (Hinner :
-      eval_formula env (FExpr_In select_items input)
+      eval_scalar_boolean env (SExpr_In arguments input)
         (SqlSuccess
-          (@in_rows_truth T unknown value_is_null
-            env select_items observed_input))).
+          (@in_rows_truth T relname unknown value_is_null
+            observed_values input observed_input))).
     {
-      apply eval_formula_in_success_iff.
-      exists observed_input; repeat split; try assumption; reflexivity.
+      apply eval_scalar_boolean_in_success_iff.
+      exists observed_values, observed_input.
+      repeat split; try assumption; reflexivity.
     }
+    change
+      (Bool.is_true (B T)
+        (@in_rows_truth T relname unknown value_is_null
+          observed_values input output_rows) = accepted).
     rewrite
       (in_rows_acceptance_distinct
-        unknown value_is_null
-        env select_items observed_input (output := output_rows) Hobserved_bag).
+        unknown value_is_null observed_values input
+        (Houtputs observed_input Hobserved_input) Hobserved_bag).
     exact (Hsuccess _ Hinner).
   + intros error Herror.
-    apply eval_formula_in_error_iff in Herror.
-    apply (Herrors error), eval_formula_in_error_iff.
-    destruct Herror as [Harguments_error | [Harguments_safe Hdistinct_error]].
+    apply eval_scalar_boolean_in_error_iff in Herror.
+    apply (Herrors error), eval_scalar_boolean_in_error_iff.
+    destruct Herror as
+      [Harguments_error |
+        [observed_values [Harguments_safe Hdistinct_error]]].
     * now left.
-    * right; split; [exact Harguments_safe|].
+    * right; exists observed_values; split; [exact Harguments_safe|].
       inversion Hdistinct_error; subst; assumption.
 Qed.
 
@@ -120,20 +142,23 @@ Qed.
     safety lemma is intentionally separate from the relational/bag laws below:
     successful bag equality alone cannot establish runtime-error equivalence. *)
 Theorem query_expr_project_filter_runtime_safe_exact :
-  forall env select_list formula input (keep : tuple T -> bool),
+  forall env select_list predicate input (keep : tuple T -> bool),
     (forall row,
-      formula_exact (env_t T env row) formula (keep row)) ->
+      scalar_exact (env_t T env row) predicate (keep row)) ->
     (forall row,
-      @eval_select_list_runtime_error T symbol_runtime_error
-        aggregate_runtime_error (env_t T env row) select_list = None) ->
+      @scalar_select_values_runtime_safe_at T relname
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null boolean_schedule
+        (env_t T env row) select_list) ->
     @query_expr_runtime_safe T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env input ->
+      boolean_schedule env input ->
     @query_expr_runtime_safe T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env (QExpr_Project select_list (QExpr_Filter formula input)).
+      boolean_schedule env
+      (QExpr_Project select_list (QExpr_Filter predicate input)).
 Proof.
-intros env select_list formula input keep Hformula Hproject Hinput.
+intros env select_list predicate input keep Hpredicate Hproject Hinput.
 apply query_expr_project_runtime_safe.
 - exact Hproject.
 - now apply query_expr_filter_runtime_safe_exact with (keep := keep).

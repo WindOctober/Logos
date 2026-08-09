@@ -22,6 +22,7 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 (** This wrapper models schema facts as predicates known only for rows in a
     representative of each successful input bag.  In particular, neither
@@ -41,7 +42,8 @@ Theorem left_join_functional_projection_from_representative_invariants :
       query_same_rows_as_bag right_rows right_bag ->
       @eval_join_conditions_outcome T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_rows right_rows (SqlSuccess matrix) ->
+        boolean_schedule env predicate left_rows right_rows
+        (SqlSuccess matrix) ->
       Forall
         (fun flags =>
           (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
@@ -52,23 +54,26 @@ Theorem left_join_functional_projection_from_representative_invariants :
     (forall right_rows,
       query_same_rows_as_bag right_rows right_bag ->
       Forall right_invariant right_rows) ->
-    (forall left right output,
+    (forall left right values,
       left_invariant left ->
       right_invariant right ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceMatched T (join_tuple T left right)) =
-      SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
-    (forall left output,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env (join_tuple T left right))
+        (map fst matched_select) (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row matched_select values)) (emit left) = Eq) ->
+    (forall left values,
       left_invariant left ->
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env matched_select left_select right_select
-        (JoinSourceLeft T left) = SqlSuccess output ->
-      Oeset.compare (OTuple T) (project output) (emit left) = Eq) ->
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule (env_t T env left) (map fst left_select)
+        (SqlSuccess values) ->
+      Oeset.compare (OTuple T)
+        (project (project_row left_select values)) (emit left) = Eq) ->
     @eval_join_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env QueryJoinLeft predicate matched_select left_select right_select
+      boolean_schedule env QueryJoinLeft predicate matched_select left_select right_select
       left_bag right_bag (SqlSuccess joined_bag) ->
     bag_eq T
       (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
@@ -82,18 +87,18 @@ intros env predicate matched_select left_select right_select project emit
   Hright_representatives Hmatched Hleft Heval.
 eapply query_join_left_functional_projection_bag_on_representatives;
   try eassumption.
-- intros left_rows right_rows left right output
+- intros left_rows right_rows left right values
     Hleft_bag Hright_bag Hleft_in Hright_in Hsource.
   pose proof (Hleft_representatives left_rows Hleft_bag) as Hleft_all.
   pose proof (Hright_representatives right_rows Hright_bag) as Hright_all.
   rewrite Forall_forall in Hleft_all, Hright_all.
-  exact (Hmatched left right output
+  exact (Hmatched left right values
     (Hleft_all left Hleft_in)
     (Hright_all right Hright_in) Hsource).
-- intros left_rows left output Hleft_bag Hleft_in Hsource.
+- intros left_rows left values Hleft_bag Hleft_in Hsource.
   pose proof (Hleft_representatives left_rows Hleft_bag) as Hleft_all.
   rewrite Forall_forall in Hleft_all.
-  exact (Hleft left output (Hleft_all left Hleft_in) Hsource).
+  exact (Hleft left values (Hleft_all left Hleft_in) Hsource).
 Qed.
 
 End LeftJoinFunctionalProjectionRegression.

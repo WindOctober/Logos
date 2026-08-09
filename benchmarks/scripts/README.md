@@ -1,6 +1,10 @@
 # Benchmark materialization and runs
 
-Run these commands from the `sql-logos-workflow` root after `direnv allow`.
+Run these commands from the `Logos` repository root after copying
+`.env.example` to `.env` and running `direnv allow`. For non-interactive or
+detached runs, invoke the runner as `direnv exec . benchmarks/scripts/run-logos
+...`; the Python runner does not parse `.env` itself. Complete the environment
+preflight in the root README before starting a multi-hour batch.
 
 ## Run the complete Logos pipeline
 
@@ -13,7 +17,7 @@ policy, SQL environment, and immutable Docker image:
 
 ```bash
 Logos/benchmarks/scripts/run-logos \
-  --input-root Logos/benchmarks/core/.generated/sqlsolver \
+  --input-root Logos/benchmarks/core/.generated/logos \
   --jobs 32 \
   --case-timeout 4h \
   --verification-mode outcome-unconditional \
@@ -39,7 +43,13 @@ argument. Selectors may still be used for controlled cohorts and local diagnosti
 
 Run one case, one source benchmark, or an explicit case batch with:
 
+Every actual execution, including a selected subset, requires either
+`--postgres-url` or `LOGOS_POSTGRES_URL`. `--list` only inspects inputs and does
+not require PostgreSQL or Codex configuration.
+
 ```bash
+export LOGOS_POSTGRES_URL=postgresql://logos@127.0.0.1:55490/postgres
+
 Logos/benchmarks/scripts/run-logos \
   --case nonwetune-flat__verieql-calcite__calcite-148
 
@@ -127,22 +137,32 @@ timed-out cases; a successful all-case lowering therefore additionally requires
 `counts.completed == counts.selected`.
 
 The runner performs an incremental `cargo build -p logos-solver` unless
-`--no-build` is given. Before scheduling any case it also runs
-`make logos-formal-sql-lemmas` once, preventing stale Rocq dependency digests
-from reaching proof agents. `--no-rocq-build` skips that trusted build only
-when the exact current closure has already been built. After the one-time Rust
+`--no-build` is given. Before scheduling any case it resolves an immutable,
+content-addressed Rocq runtime and FormalSQL/Logos authority closure. A cache
+miss forces a fresh source build; a hit verifies and reuses the same read-only
+bytes. `--no-rocq-build` is retained only for CLI compatibility and cannot
+bypass this resolution. After the one-time Rust
 build, the runner atomically copies `logos-solver` to the run-private,
 read-only `runtime/logos-solver` path. Every queued worker and every resume uses
 that exact snapshot; a later external `cargo build` cannot change the binary
 used by the campaign, while mutation of the snapshot itself still fails
 integrity verification. The runner likewise captures every admitted
-FormalSQL/Logos `.v` source and its matching `.vo` object into the physical,
-run-private `runtime/trusted-rocq-authority` tree before it starts any worker.
+FormalSQL/Logos `.v` source and its matching `.vo` object into one shared,
+content-addressed authority bundle before it starts any worker.
 Files are mode `0444`, directories are mode `0555`, hardlinks and symlinks are
 rejected, and a canonical manifest binds the exact path set, byte counts, and
 SHA-256 digests. Proof-agent staging, diagnostic compilation, and the final
-trusted checker all receive this directory as `--logos-repo-root`; a concurrent
+trusted checker all receive this directory as `--logos-repo-root`; per-run
+references bind its key and manifest digest, and a concurrent
 build in the working tree therefore cannot mix Rocq generations within a run.
+The checker also caches its minimal ELF closure by the exact `rocq`, `bwrap`,
+worker, native-helper, and OCaml-stub contents. The first diagnostic records
+the `ldd`/`readelf` result as an immutable digest-checked bundle; later cases
+mount that same bundle instead of repeating dependency discovery and copying
+system libraries. Generated `Schema.v`/`Queries.v`/`Witness.v` objects are
+cached separately by authority and source digests, and a successful problem
+diagnostic retains a prefix-bound `Problem.vo` for final certification. Every
+reuse path still performs its independent source/object and kernel checks.
 Capture performs a second live-closure scan and aborts if a build races the
 copy. Results go to a fresh
 timestamped directory under `Logos/var/logos-solver/benchmark-runs/`. Each case has its complete solver
@@ -207,7 +227,7 @@ An interrupted run can be continued in its original directory with `--resume`.
 The caller must supply the same input selection and exact configuration; a
 complete run, missing summary, changed case ID, jobs/timeout/mode/path/model,
 SQL environment, PostgreSQL URL, or solver argument is rejected. Resume loads
-the preserved run-private solver and validates and reuses the preserved Rocq
+the preserved run-private solver and validates and reuses the content-addressed Rocq
 authority snapshot without reading or rebuilding current FormalSQL sources;
 missing files, extra files, byte/permission/link drift, or a changed snapshot
 manifest fail before any worker starts. It also requires the same runner

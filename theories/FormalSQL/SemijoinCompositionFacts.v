@@ -31,10 +31,12 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Theorem query_expr_join_no_error_of_acceptance_projection_exact :
   forall env kind predicate matched_select left_select right_select
@@ -45,12 +47,13 @@ Theorem query_expr_join_no_error_of_acceptance_projection_exact :
     (forall left_row right_row,
       @join_condition_acceptance_exact_at T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env predicate left_row right_row (accepted left_row right_row)) ->
+        boolean_schedule env predicate left_row right_row
+        (accepted left_row right_row)) ->
     (forall source,
-      @project_join_source_outcome T symbol_runtime_error
-        aggregate_runtime_error env
-        matched_select left_select right_select source =
-      SqlSuccess (emit source)) ->
+      @join_source_projection_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select source
+        (emit source)) ->
     forall error,
       ~ eval_query env
           (QExpr_Join kind predicate matched_select left_select right_select
@@ -69,7 +72,7 @@ destruct Herror as
 - pose proof
     (@eval_join_bag_safe_of_acceptance_projection_exact
       T relname basesort instance unknown symbol_runtime_error
-      aggregate_runtime_error value_is_null env kind predicate
+      aggregate_runtime_error value_is_null boolean_schedule env kind predicate
       matched_select left_select right_select accepted emit
       (query_rows_bag left_rows) (query_rows_bag right_rows)
       Hconditions Hprojection) as [_ Hjoin_safe].

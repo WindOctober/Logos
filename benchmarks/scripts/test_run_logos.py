@@ -72,6 +72,7 @@ TRUSTED_CHECKER_ENVIRONMENT_POLICY = {
         "LOGOS_PROOF_WORKDIR",
         "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
         "LOGOS_ROCQ_OPAM_SWITCH",
+        "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR",
     ],
     "unlistedEnvironmentPolicy": "excluded_by_env_clear_before_process_start",
     "explicitlyExcludedVariables": TRUSTED_LAUNCH_EXCLUDED_VARIABLES,
@@ -764,6 +765,25 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                     f"expected exactly one literal solver {name} report contract",
                 )
                 self.assertEqual(self.runner[name], declarations[0])
+
+    def test_trusted_checker_environment_policy_matches_solver_contract(self) -> None:
+        proof_stage = (
+            RUNNER.parents[2] / "crates/logos-solver/src/engine/proof_stage.rs"
+        ).read_text(encoding="utf-8")
+        declaration = re.search(
+            r"const TRUSTED_CHECKER_EXPLICIT_ENVIRONMENT: &\[&str\] = &\[(.*?)\];",
+            proof_stage,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(declaration)
+        solver_contract = re.findall(r'"([A-Z0-9_]+)"', declaration.group(1))
+        runner_contract = self.runner[
+            "trusted_checker_environment_policy_record"
+        ]()["explicitContractVariables"]
+        self.assertEqual(runner_contract, solver_contract)
+        self.assertIn(
+            "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR", runner_contract
+        )
 
     def test_dynamic_trusted_cache_binds_ordered_modules_and_final_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -4238,6 +4258,7 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             "readlink",
             "stat",
             "id",
+            "flock",
         ]
         self.assertEqual(list(self.runner["TRUSTED_HOST_TOOL_NAMES"]), expected)
         checker = (
@@ -6260,6 +6281,10 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             "--no-rocq-build",
             "--proof-rocq-opam-switch",
             str(self.fake_rocq_switch),
+            "--trusted-rocq-cache-dir",
+            str(self.root / "trusted-rocq-cache"),
+            "--postgres-url",
+            "postgresql://logos@127.0.0.1:55489/postgres",
         ]
 
     def mark_interrupted(self, run_dir: Path) -> dict:
@@ -6446,7 +6471,8 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             (run_dir / "runtime/logos-solver").resolve(),
         )
         authority_index = solver_argv.index("--logos-repo-root")
-        authority_root = run_dir / "runtime/trusted-rocq-authority"
+        authority = summary["configuration"]["rocqAuthoritySnapshot"]
+        authority_root = (RUNNER.parents[3] / authority["root"]).resolve()
         self.assertEqual(
             Path(solver_argv[authority_index + 1]).resolve(),
             authority_root.resolve(),
@@ -6493,10 +6519,9 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             ],
             isolation,
         )
-        authority = summary["configuration"]["rocqAuthoritySnapshot"]
         self.assertEqual(
             authority["policy"],
-            "run-private-forced-source-build-closure-v2",
+            "content-addressed-forced-source-build-closure-v3",
         )
         self.assertEqual(
             (RUNNER.parents[3] / authority["root"]).resolve(),
@@ -6598,6 +6623,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             ],
             3,
         )
+
         self.assertEqual(
             configuration["solverBinary"]["sha256"],
             hashlib.sha256(self.fake_solver.read_bytes()).hexdigest(),
@@ -6621,7 +6647,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(trusted_stack["rocqRuntimeConfigurationCount"], 2)
         self.assertEqual(trusted_stack["trustedExecutableCount"], 5)
         self.assertGreater(trusted_stack["dynamicRuntimeFileCount"], 0)
-        self.assertEqual(trusted_stack["trustedHostToolCount"], 25)
+        self.assertEqual(trusted_stack["trustedHostToolCount"], 26)
         self.assertGreater(trusted_stack["trustedHostDynamicRuntimeFileCount"], 0)
         self.assertEqual(
             trusted_stack["trustedInspectionEnvironmentPolicy"],
@@ -6675,14 +6701,15 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             trusted_document["executables"]["bwrap"]["selectedPath"],
             str(
                 (
-                    run_dir
-                    / "runtime/trusted-rocq-switch/_opam/bin/bwrap"
+                    RUNNER.parents[3]
+                    / summary["configuration"]["rocqRuntimeSnapshot"]["root"]
+                    / "_opam/bin/bwrap"
                 ).resolve()
             ),
         )
         self.assertEqual(
             trusted_document["executables"]["bwrap"]["selectionPolicy"],
-            "exact-run-private-switch-path-v1",
+            "exact-content-addressed-switch-path-v1",
         )
         self.assertEqual(
             trusted_document["executables"]["bwrap"][
@@ -6730,6 +6757,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 "readlink",
                 "stat",
                 "id",
+                "flock",
             ],
         )
         host_tools = trusted_document["trustedHostTools"]
@@ -6872,8 +6900,20 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             DEFAULT_COUNTEREXAMPLE_RESUME_COMMAND,
         )
         postgres_profile = configuration["postgresServerProfile"]
-        self.assertFalse(postgres_profile["configured"])
-        self.assertIsNone(postgres_profile["profile"])
+        self.assertTrue(postgres_profile["configured"])
+        self.assertEqual(
+            postgres_profile["profile"],
+            {
+                "serverVersion": "17.4",
+                "serverVersionNum": "170004",
+                "databaseCollation": "C",
+                "databaseCharacterClassification": "C",
+                "localeProvider": "libc",
+                "serverEncoding": "UTF8",
+                "timeZone": "UTC",
+                "maxConnections": "96",
+            },
+        )
         result = summary["results"][0]
         self.assertEqual(
             result["inputFiles"]["source"]["sha256"],
@@ -6915,7 +6955,13 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             {"memoryLimitMiB": 6144, "storageLimitMiB": 2048, "cpuLimit": None},
         )
         self.assertEqual(
-            effective["postgresUrl"], {"configured": False, "sha256": None}
+            effective["postgresUrl"],
+            {
+                "configured": True,
+                "sha256": hashlib.sha256(
+                    b"postgresql://logos@127.0.0.1:55489/postgres"
+                ).hexdigest(),
+            },
         )
         self.assertEqual(
             effective["frontendStackManifestSha256"],
@@ -6954,6 +7000,97 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(metrics["finalProofCheckElapsedMs"], 1)
         self.assertTrue(metrics["proofSource"]["present"])
         self.assertTrue(summary["integrityVerification"]["verified"])
+
+    def test_fresh_runs_reuse_content_addressed_rocq_runtime_and_authority(self) -> None:
+        self.make_case("cohort", "cache", "bench-a", "cache", "bench-a__cache")
+        first_run = self.root / "cache-run-one"
+        second_run = self.root / "cache-run-two"
+        first = self.invoke(*self.common_args(first_run))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        first_summary = json.loads((first_run / "runner-summary.json").read_text())
+        runtime = first_summary["configuration"]["rocqRuntimeSnapshot"]
+        authority = first_summary["configuration"]["rocqAuthoritySnapshot"]
+        build_log = (
+            Path(authority["root"]).parent.parent
+            / "trusted-rocq-authority-build.log"
+        )
+        build_log_mtime = build_log.stat().st_mtime_ns
+
+        second = self.invoke(*self.common_args(second_run))
+        self.assertEqual(second.returncode, 0, second.stderr)
+        second_summary = json.loads((second_run / "runner-summary.json").read_text())
+        self.assertEqual(
+            second_summary["configuration"]["rocqRuntimeSnapshot"]["root"],
+            runtime["root"],
+        )
+        self.assertEqual(
+            second_summary["configuration"]["rocqAuthoritySnapshot"]["root"],
+            authority["root"],
+        )
+        self.assertEqual(build_log.stat().st_mtime_ns, build_log_mtime)
+        self.assertTrue((first_run / "trusted-rocq-runtime-ref.json").is_file())
+        self.assertTrue((second_run / "trusted-rocq-authority-ref.json").is_file())
+
+    def test_execution_requires_postgres_before_creating_run_directory(self) -> None:
+        self.make_case("cohort", "one", "bench-a", "one", "bench-a__one")
+        run_dir = self.root / "missing-postgres"
+        args = self.common_args(run_dir)
+        postgres_index = args.index("--postgres-url")
+        del args[postgres_index : postgres_index + 2]
+        inherited = self.environment.get("LOGOS_POSTGRES_URL")
+        inherited_present = "LOGOS_POSTGRES_URL" in self.environment
+        # An explicit empty value must shadow the repository-local .env value so
+        # this subprocess genuinely exercises the missing-PostgreSQL preflight.
+        self.environment["LOGOS_POSTGRES_URL"] = ""
+        try:
+            completed = self.invoke(*args)
+        finally:
+            if inherited_present:
+                self.environment["LOGOS_POSTGRES_URL"] = inherited
+            else:
+                self.environment.pop("LOGOS_POSTGRES_URL", None)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("PostgreSQL validation is required", completed.stderr)
+        self.assertFalse(run_dir.exists())
+
+    def test_codex_treatment_is_validated_before_creating_run_directory(self) -> None:
+        self.make_case("cohort", "one", "bench-a", "one", "bench-a__one")
+        config = self.fake_codex_home / "config.toml"
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                'model_reasoning_effort = "medium"',
+                'model_reasoning_effort = "low"',
+            ),
+            encoding="utf-8",
+        )
+        run_dir = self.root / "wrong-codex-treatment"
+        completed = self.invoke(*self.common_args(run_dir))
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("frozen model/provider treatment", completed.stderr)
+        self.assertFalse(run_dir.exists())
+
+    def test_codex_cli_is_validated_before_creating_run_directory(self) -> None:
+        self.make_case("cohort", "one", "bench-a", "one", "bench-a__one")
+        self.fake_codex.unlink()
+        run_dir = self.root / "missing-codex-cli"
+        original_path = self.environment["PATH"]
+        self.environment["PATH"] = str(self.fake_bin)
+        try:
+            completed = self.invoke(*self.common_args(run_dir))
+        finally:
+            self.environment["PATH"] = original_path
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("host Codex CLI is unavailable", completed.stderr)
+        self.assertFalse(run_dir.exists())
+
+    def test_postgres_profile_is_validated_before_creating_run_directory(self) -> None:
+        self.make_case("cohort", "one", "bench-a", "one", "bench-a__one")
+        self.fake_psql.write_text("#!/bin/sh\nexit 2\n", encoding="utf-8")
+        run_dir = self.root / "invalid-postgres-profile"
+        completed = self.invoke(*self.common_args(run_dir))
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("PostgreSQL server-profile probe", completed.stderr)
+        self.assertFalse(run_dir.exists())
 
     def test_catalog_guidance_option_is_not_exposed(self) -> None:
         namespace = runpy.run_path(str(RUNNER))
@@ -7011,8 +7148,25 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             if isinstance(call, ast.Call)
             and isinstance(call.func, ast.Name)
             and call.func.id
-            in {"framework_source_tree_record", "build_solver", "prepare_frontend_stack"}
+            in {
+                "required_postgres_url",
+                "validate_frozen_full_launch_request",
+                "capture_codex_provider_environment",
+                "postgres_profile_document",
+                "prepare_run_dir",
+                "framework_source_tree_record",
+                "build_solver",
+                "prepare_frontend_stack",
+            }
         }
+        for preflight in (
+            "required_postgres_url",
+            "validate_frozen_full_launch_request",
+            "capture_codex_provider_environment",
+            "postgres_profile_document",
+        ):
+            self.assertLess(call_lines[preflight], call_lines["prepare_run_dir"])
+            self.assertLess(call_lines[preflight], call_lines["build_solver"])
         self.assertLess(
             call_lines["framework_source_tree_record"], call_lines["build_solver"]
         )
@@ -7781,7 +7935,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 {},
                 {
                     "manifestSha256": "r" * 64,
-                    "policy": "run-private-forced-source-build-closure-v2",
+                    "policy": "content-addressed-forced-source-build-closure-v3",
                 },
                 {"manifestSha256": "t" * 64},
                 {"manifestSha256": "u" * 64},

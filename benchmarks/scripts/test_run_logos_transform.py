@@ -238,6 +238,12 @@ class TransformRunnerTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.fake_solver.chmod(0o755)
+        fake_rocq_bin = self.root / "_opam/bin"
+        fake_rocq_bin.mkdir(parents=True)
+        (self.root / "_opam/lib/coq").mkdir(parents=True)
+        self.fake_rocq = fake_rocq_bin / "rocq"
+        self.fake_rocq.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.fake_rocq.chmod(0o755)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -341,6 +347,25 @@ class TransformRunnerTests(unittest.TestCase):
         )
         selected = self.runner["select_cases"](cases, args)
         self.assertEqual([case.case_id for case in selected], ["rbot-tpch__two"])
+
+    def test_integrity_source_accepts_only_case_manifest_authorities(self) -> None:
+        metadata = self.root / "metadata.json"
+        sidecar = self.root / "constraints.json"
+        unrelated = self.root / "other.json"
+        for path in (metadata, sidecar, unrelated):
+            path.write_text("{}\n", encoding="utf-8")
+
+        matches = self.runner["integrity_source_matches_case"]
+        canonical = {
+            "metadata": metadata.resolve(),
+            "semanticSidecar": sidecar.resolve(),
+        }
+        self.assertTrue(matches(canonical, str(metadata.resolve())))
+        self.assertTrue(matches(canonical, str(sidecar.resolve())))
+        self.assertFalse(matches(canonical, str(unrelated.resolve())))
+        self.assertFalse(
+            matches({"metadata": metadata.resolve()}, str(sidecar.resolve()))
+        )
 
     def test_atomic_complete_summary_binds_every_input_and_workspace(self) -> None:
         first = self.make_case("rbot-dsb", "one", "rbot-dsb", "one")

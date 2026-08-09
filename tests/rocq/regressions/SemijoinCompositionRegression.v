@@ -60,15 +60,17 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Variable env : Env.env T.
 Variable kind : query_join_kind.
-Variable predicate : formula_expr T relname.
-Variables matched_select left_select right_select : @_select_list T.
+Variable predicate : scalar_expr T relname ScalarResultBoolean.
+Variables matched_select left_select right_select : @query_select_list T relname.
 Variables left right : query_expr T relname.
 Variable accepted : tuple T -> tuple T -> bool.
 Variable emit : query_join_source T -> tuple T.
@@ -81,13 +83,14 @@ Hypothesis conditions_exact :
   forall left_row right_row,
     @join_condition_acceptance_exact_at T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env predicate left_row right_row (accepted left_row right_row).
+      boolean_schedule env predicate left_row right_row
+      (accepted left_row right_row).
 Hypothesis projection_exact :
   forall source,
-    @project_join_source_outcome T symbol_runtime_error
-      aggregate_runtime_error env
-      matched_select left_select right_select source =
-    SqlSuccess (emit source).
+    @join_source_projection_exact_at T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env matched_select left_select right_select source
+      (emit source).
 
 Example exact_join_safety_regression : forall error,
   ~ eval_query env

@@ -8,6 +8,8 @@ This focused catalog contains 43 declarations routed at declaration granularity 
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:37`](../BitwiseFacts.v#L37)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_from_twos_complement_as_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -26,6 +28,8 @@ Lemma int32_from_twos_complement_as_word : forall z,
 ## `int64_from_twos_complement_as_word`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:47`](../BitwiseFacts.v#L47)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
@@ -46,6 +50,8 @@ Lemma int64_from_twos_complement_as_word : forall z,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:57`](../BitwiseFacts.v#L57)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 from twos complement value law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_from_twos_complement_value` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -65,6 +71,8 @@ Lemma int32_from_twos_complement_value : forall x,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:68`](../BitwiseFacts.v#L68)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int64 from twos complement value law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_from_twos_complement_value` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -83,6 +91,8 @@ Lemma int64_from_twos_complement_value : forall x,
 ## `bits_of_Z_land`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:79`](../BitwiseFacts.v#L79)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the bits of z land law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
@@ -105,6 +115,8 @@ Lemma bits_of_Z_land : forall n x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:99`](../BitwiseFacts.v#L99)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the bits of z lor law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `bits_of_Z_lor` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -126,6 +138,8 @@ Lemma bits_of_Z_lor : forall n x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:119`](../BitwiseFacts.v#L119)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_as_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -145,6 +159,8 @@ Lemma int32_bit_and_as_word : forall x y,
 ## `int32_bit_or_as_word`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:132`](../BitwiseFacts.v#L132)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
@@ -166,6 +182,8 @@ Lemma int32_bit_or_as_word : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:145`](../BitwiseFacts.v#L145)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_as_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -185,6 +203,8 @@ Lemma int64_bit_and_as_word : forall x y,
 ## `int64_bit_or_as_word`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:158`](../BitwiseFacts.v#L158)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Bridges the two displayed representations of bitwise scalar and aggregate semantics.
 
@@ -206,6 +226,8 @@ Lemma int64_bit_or_as_word : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:171`](../BitwiseFacts.v#L171)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes associativity for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_associative` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -225,6 +247,8 @@ Lemma int32_bit_and_associative : forall x y z,
 ## `int32_bit_or_associative`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:179`](../BitwiseFacts.v#L179)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared bitwise scalar and aggregate semantics operator.
 
@@ -246,6 +270,8 @@ Lemma int32_bit_or_associative : forall x y z,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:187`](../BitwiseFacts.v#L187)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes associativity for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_associative` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -265,6 +291,8 @@ Lemma int64_bit_and_associative : forall x y z,
 ## `int64_bit_or_associative`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:195`](../BitwiseFacts.v#L195)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared bitwise scalar and aggregate semantics operator.
 
@@ -286,6 +314,8 @@ Lemma int64_bit_or_associative : forall x y z,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:203`](../BitwiseFacts.v#L203)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes commutativity for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_commutative` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -304,6 +334,8 @@ Lemma int32_bit_and_commutative : forall x y,
 ## `int32_bit_or_commutative`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:210`](../BitwiseFacts.v#L210)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared bitwise scalar and aggregate semantics operator.
 
@@ -324,6 +356,8 @@ Lemma int32_bit_or_commutative : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:217`](../BitwiseFacts.v#L217)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes commutativity for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_commutative` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -342,6 +376,8 @@ Lemma int64_bit_and_commutative : forall x y,
 ## `int64_bit_or_commutative`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:224`](../BitwiseFacts.v#L224)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared bitwise scalar and aggregate semantics operator.
 
@@ -362,6 +398,8 @@ Lemma int64_bit_or_commutative : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:231`](../BitwiseFacts.v#L231)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes idempotence for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_idempotent` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -379,6 +417,8 @@ Lemma int32_bit_and_idempotent : forall x, int32_bit_and x x = x.
 ## `int32_bit_or_idempotent`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:237`](../BitwiseFacts.v#L237)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes idempotence for the declared bitwise scalar and aggregate semantics operator.
 
@@ -398,6 +438,8 @@ Lemma int32_bit_or_idempotent : forall x, int32_bit_or x x = x.
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:243`](../BitwiseFacts.v#L243)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes idempotence for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_idempotent` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -416,6 +458,8 @@ Lemma int64_bit_and_idempotent : forall x, int64_bit_and x x = x.
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:249`](../BitwiseFacts.v#L249)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes idempotence for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_idempotent` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -433,6 +477,8 @@ Lemma int64_bit_or_idempotent : forall x, int64_bit_or x x = x.
 ## `int32_bit_and_closed`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:255`](../BitwiseFacts.v#L255)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed closure property for bitwise scalar and aggregate semantics.
 
@@ -453,6 +499,8 @@ Lemma int32_bit_and_closed : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:259`](../BitwiseFacts.v#L259)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed closure property for bitwise scalar and aggregate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_or_closed` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -471,6 +519,8 @@ Lemma int32_bit_or_closed : forall x y,
 ## `int64_bit_and_closed`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:263`](../BitwiseFacts.v#L263)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed closure property for bitwise scalar and aggregate semantics.
 
@@ -491,6 +541,8 @@ Lemma int64_bit_and_closed : forall x y,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:267`](../BitwiseFacts.v#L267)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed closure property for bitwise scalar and aggregate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_or_closed` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -509,6 +561,8 @@ Lemma int64_bit_or_closed : forall x y,
 ## `combine_nullable_state_associative`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:280`](../BitwiseFacts.v#L280)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared bitwise scalar and aggregate semantics operator.
 
@@ -532,6 +586,8 @@ Lemma combine_nullable_state_associative : forall A (op : A -> A -> A),
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:290`](../BitwiseFacts.v#L290)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes commutativity for the declared bitwise scalar and aggregate semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `combine_nullable_state_commutative` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -552,6 +608,8 @@ Lemma combine_nullable_state_commutative : forall A (op : A -> A -> A),
 ## `fold_nullable_state_partition`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:299`](../BitwiseFacts.v#L299)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the fold nullable state partition law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
@@ -576,6 +634,8 @@ Lemma fold_nullable_state_partition : forall A (op : A -> A -> A),
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:319`](../BitwiseFacts.v#L319)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the declared bitwise scalar and aggregate semantics result is invariant under input permutation.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bitwise scalar and aggregate semantics.
@@ -598,6 +658,8 @@ Lemma fold_nullable_state_permutation : forall A (op : A -> A -> A),
 ## `fold_nullable_state_adjacent_duplicate`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:341`](../BitwiseFacts.v#L341)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the fold nullable state adjacent duplicate law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
 
@@ -622,6 +684,8 @@ Lemma fold_nullable_state_adjacent_duplicate : forall A (op : A -> A -> A),
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:362`](../BitwiseFacts.v#L362)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates the fold or transition state to the displayed bitwise scalar and aggregate semantics result.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_fold_partition` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -643,6 +707,8 @@ Lemma int32_bit_and_fold_partition : forall left right,
 ## `int32_bit_or_fold_partition`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:369`](../BitwiseFacts.v#L369)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the fold or transition state to the displayed bitwise scalar and aggregate semantics result.
 
@@ -666,6 +732,8 @@ Lemma int32_bit_or_fold_partition : forall left right,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:376`](../BitwiseFacts.v#L376)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates the fold or transition state to the displayed bitwise scalar and aggregate semantics result.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_fold_partition` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -687,6 +755,8 @@ Lemma int64_bit_and_fold_partition : forall left right,
 ## `int64_bit_or_fold_partition`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:383`](../BitwiseFacts.v#L383)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the fold or transition state to the displayed bitwise scalar and aggregate semantics result.
 
@@ -710,6 +780,8 @@ Lemma int64_bit_or_fold_partition : forall left right,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:390`](../BitwiseFacts.v#L390)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the declared bitwise scalar and aggregate semantics result is invariant under input permutation.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bitwise scalar and aggregate semantics.
@@ -730,6 +802,8 @@ Lemma int32_bit_and_fold_permutation : forall left right,
 ## `int32_bit_or_fold_permutation`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:399`](../BitwiseFacts.v#L399)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Shows that the declared bitwise scalar and aggregate semantics result is invariant under input permutation.
 
@@ -752,6 +826,8 @@ Lemma int32_bit_or_fold_permutation : forall left right,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:408`](../BitwiseFacts.v#L408)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the declared bitwise scalar and aggregate semantics result is invariant under input permutation.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about bitwise scalar and aggregate semantics.
@@ -772,6 +848,8 @@ Lemma int64_bit_and_fold_permutation : forall left right,
 ## `int64_bit_or_fold_permutation`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:417`](../BitwiseFacts.v#L417)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Shows that the declared bitwise scalar and aggregate semantics result is invariant under input permutation.
 
@@ -794,6 +872,8 @@ Lemma int64_bit_or_fold_permutation : forall left right,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:426`](../BitwiseFacts.v#L426)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Preserves the declared bitwise scalar and aggregate semantics result across the indicated transformation.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_bit_and_fold_distinct_invariant` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -813,6 +893,8 @@ Lemma int32_bit_and_fold_distinct_invariant : forall prefix suffix x,
 ## `int32_bit_or_fold_distinct_invariant`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:434`](../BitwiseFacts.v#L434)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Preserves the declared bitwise scalar and aggregate semantics result across the indicated transformation.
 
@@ -834,6 +916,8 @@ Lemma int32_bit_or_fold_distinct_invariant : forall prefix suffix x,
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:442`](../BitwiseFacts.v#L442)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Preserves the declared bitwise scalar and aggregate semantics result across the indicated transformation.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_bit_and_fold_distinct_invariant` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
@@ -853,6 +937,8 @@ Lemma int64_bit_and_fold_distinct_invariant : forall prefix suffix x,
 ## `int64_bit_or_fold_distinct_invariant`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:450`](../BitwiseFacts.v#L450)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Preserves the declared bitwise scalar and aggregate semantics result across the indicated transformation.
 

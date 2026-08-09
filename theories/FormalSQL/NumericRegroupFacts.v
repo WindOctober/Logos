@@ -1136,20 +1136,32 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule :
+  SqlQuerySyntax.boolean_site -> SqlQuerySyntax.boolean_evaluation_order.
 
 Theorem eval_group_bag_global_success_duplicate_free :
   forall env select_list having input_bag output_bag,
     @eval_group_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env select_list [] having input_bag (SqlSuccess output_bag) ->
+      boolean_schedule env select_list [] having input_bag
+      (SqlSuccess output_bag) ->
     query_bag_duplicate_free output_bag.
 Proof.
 intros env select_list having input_bag output_bag Heval.
 inversion Heval; subst.
+match goal with
+| Hkeys : SqlQuerySyntax.scalar_group_key_terms [] = Some ?group_terms |- _ =>
+    cbn [SqlQuerySyntax.scalar_group_key_terms] in Hkeys;
+    inversion Hkeys; subst group_terms
+end.
 eapply query_bag_duplicate_free_transport.
 - apply query_same_rows_as_bag_iff_bag_eq; eassumption.
 - apply query_bag_duplicate_free_of_rows_NoDupA.
-  eapply eval_groups_global_success_NoDupA; eassumption.
+  eapply (@eval_groups_global_success_NoDupA T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null boolean_schedule
+    (fun first second =>
+      Oeset.compare (OTuple T) first second = Eq)); eassumption.
 Qed.
 
 End GlobalGroupDuplicateFree.

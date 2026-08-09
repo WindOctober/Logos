@@ -54,26 +54,29 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 Variable env : Env.env T.
-Variable formula : formula_expr T relname.
+Variable formula : scalar_expr T relname ScalarResultBoolean.
 Variable row : tuple T.
 Variable expected : sql_runtime_error.
 
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_filter_rows :=
   (@eval_filter_rows_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Hypothesis row_errors :
-  eval_formula (env_t T env row) formula (SqlError expected).
+  eval_scalar_boolean (env_t T env row) formula (SqlError expected).
 Hypothesis row_has_no_success :
   forall truth,
-    ~ eval_formula (env_t T env row) formula (SqlSuccess truth).
+    ~ eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth).
 Hypothesis row_error_category_exact :
   forall observed,
-    eval_formula (env_t T env row) formula (SqlError observed) ->
+    eval_scalar_boolean (env_t T env row) formula (SqlError observed) ->
     observed = expected.
 
 (** The first schedule comes from two accepted left occurrences joined to one
@@ -163,7 +166,8 @@ Qed.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Variable first_query second_query : query_expr T relname.
 Hypothesis exact_error_outputs :
@@ -188,7 +192,7 @@ Hypothesis second_query_error_category :
 Example exact_error_only_query_lift_regression :
   @query_expr_outcome_equiv T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null
-    env first_query second_query.
+    boolean_schedule env first_query second_query.
 Proof.
 eapply query_expr_outcome_equiv_of_shared_exact_error; eassumption.
 Qed.

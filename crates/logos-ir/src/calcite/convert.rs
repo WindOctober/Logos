@@ -24,11 +24,11 @@ use crate::integrity::{
 };
 use crate::ir::{
     AggregateCall, AggregateModifiers, Column, CorrelationBinding, JoinType, LogosIrFile,
-    PostgresAmbiguousColumnOutputEvidence, Query, QueryAnalysisError, RelExpr, ScalarAst,
-    ScalarExpr, ScalarOp, ScalarSourceClauseOwnership, ScalarSourceProvenance, Schema, SetOp,
-    SortDirection, SortKey, SortNullDirection, SourceAnalysisErrorProvenance, SourceClauseKind,
-    SourceGroupingProvenance, SqlStringType, SqlType, Table, WindowAst, WindowFrameAst,
-    WindowFrameBoundAst, WindowFrameUnits, WindowOrderKey,
+    PostgresAmbiguousColumnOutputEvidence, Query, QueryAnalysisError, QueryBinding, RelExpr,
+    ScalarAst, ScalarExpr, ScalarOp, ScalarSourceClauseOwnership, ScalarSourceProvenance, Schema,
+    SetOp, SortDirection, SortKey, SortNullDirection, SourceAnalysisErrorProvenance,
+    SourceClauseKind, SourceGroupingProvenance, SqlStringType, SqlType, Table, WindowAst,
+    WindowFrameAst, WindowFrameBoundAst, WindowFrameUnits, WindowOrderKey,
 };
 
 const POSTGRES_IN_SUBQUERY_LOST_ORDER_BY: &str = "POSTGRES_IN_SUBQUERY_LOST_ORDER_BY";
@@ -156,9 +156,8 @@ pub fn convert_raw_file(raw: CalciteFile) -> Result<LogosIrFile> {
             analysis_errors.push(ambiguous_column_error.analysis_error);
         }
         validate_rel_root_query_block_authority(&rel)?;
-        validate_no_multiply_referenced_lexical_ctes(&rel)?;
         let raw_rel_for_query_shape = rel.clone();
-        let rel = convert_rel(rel, &schema_index)?;
+        let rel = convert_rel_with_shared_query_bindings(rel, &schema_index)?;
         super::query_shape::validate_query_shape_bijection_with_terminal_error(
             &raw_rel_for_query_shape,
             Some(&source_sql),
@@ -1437,43 +1436,51 @@ fn validate_rel_root_query_block_authority(root: &CalciteRel) -> Result<()> {
     walk(root, expected)
 }
 
-/// Calcite represents every lexical CTE reference by cloning the definition's
-/// relational tree.  `RelExpr` currently has no let/reference constructor, so
-/// converting two references to one definition would evaluate those clones as
-/// independent SQL observations.  Close that exact semantic boundary until a
-/// native shared-query binding is available.
-///
-/// The wrapper deliberately repeats one lexical CTE edge in several local
-/// attestations (the general input edge, a Join-local edge, and projected
-/// scalar expansion metadata).  Those copies have the same relation/reference
-/// identity and are counted once.  Distinct lexical references are grouped by
-/// the definition's complete WITH/item/query identity.
-fn validate_no_multiply_referenced_lexical_ctes(root: &CalciteRel) -> Result<()> {
-    type DefinitionIdentity = (String, String, String);
-    type ReferenceIdentity = (String, String);
-    type DefinitionReferences = BTreeMap<DefinitionIdentity, (String, BTreeSet<ReferenceIdentity>)>;
+type CteDefinitionIdentity = (String, String, String);
+type CteReferenceIdentity = (String, String);
 
-    fn record(
-        cte_use: &crate::calcite::CalciteSourceCteUse,
-        definitions: &mut DefinitionReferences,
-    ) {
-        let definition = (
-            cte_use.definition_with_node_id.clone(),
-            cte_use.definition_item_node_id.clone(),
-            cte_use.definition_query_node_id.clone(),
-        );
-        let reference = (
-            cte_use.relation_node_id.clone(),
-            cte_use.reference_node_id.clone(),
-        );
-        definitions
-            .entry(definition)
-            .or_insert_with(|| (cte_use.definition_name_text.clone(), BTreeSet::new()))
-            .1
-            .insert(reference);
+#[derive(Default)]
+struct CteReferenceRecord {
+    source_name: String,
+    definition_body_ids: BTreeSet<String>,
+    references: BTreeSet<CteReferenceIdentity>,
+}
+
+type CteReferenceIndex = BTreeMap<CteDefinitionIdentity, CteReferenceRecord>;
+
+fn cte_definition_identity(cte_use: &crate::calcite::CalciteSourceCteUse) -> CteDefinitionIdentity {
+    (
+        cte_use.definition_with_node_id.clone(),
+        cte_use.definition_item_node_id.clone(),
+        cte_use.definition_query_node_id.clone(),
+    )
+}
+
+fn cte_reference_identity(cte_use: &crate::calcite::CalciteSourceCteUse) -> CteReferenceIdentity {
+    (
+        cte_use.relation_node_id.clone(),
+        cte_use.reference_node_id.clone(),
+    )
+}
+
+/// Collect exact lexical CTE identities. The wrapper deliberately repeats one
+/// edge in general, Join-local, and scalar attestations; the reference set
+/// collapses those copies while retaining genuinely distinct source uses.
+fn lexical_cte_reference_index(root: &CalciteRel) -> CteReferenceIndex {
+    fn record(cte_use: &crate::calcite::CalciteSourceCteUse, definitions: &mut CteReferenceIndex) {
+        let definition = cte_definition_identity(cte_use);
+        let reference = cte_reference_identity(cte_use);
+        let entry = definitions.entry(definition).or_default();
+        if entry.source_name.is_empty() {
+            entry.source_name = cte_use.definition_name_text.clone();
+        }
+        entry
+            .definition_body_ids
+            .insert(cte_use.definition_body_node_id.clone());
+        entry.references.insert(reference);
     }
 
-    fn visit_rex(rex: &CalciteRex, definitions: &mut DefinitionReferences) {
+    fn visit_rex(rex: &CalciteRex, definitions: &mut CteReferenceIndex) {
         if let Some(cte_use) = rex
             .source_expansion
             .as_ref()
@@ -1508,7 +1515,7 @@ fn validate_no_multiply_referenced_lexical_ctes(root: &CalciteRel) -> Result<()>
         }
     }
 
-    fn visit_rel(rel: &CalciteRel, definitions: &mut DefinitionReferences) {
+    fn visit_rel(rel: &CalciteRel, definitions: &mut CteReferenceIndex) {
         for cte_use in rel.source_input_cte_uses.iter().flatten() {
             record(cte_use, definitions);
         }
@@ -1539,17 +1546,611 @@ fn validate_no_multiply_referenced_lexical_ctes(root: &CalciteRel) -> Result<()>
         }
     }
 
-    let mut definitions = DefinitionReferences::new();
+    let mut definitions = CteReferenceIndex::new();
     visit_rel(root, &mut definitions);
-    if let Some(((with_node_id, item_node_id, query_node_id), (name, references))) = definitions
-        .iter()
-        .find(|(_, (_, references))| references.len() > 1)
-    {
-        return Err(Error::InvalidRelSourceProvenance(format!(
-            "multiply referenced lexical CTE {name:?} cannot be converted without a native shared-query binding: definitionWithNodeId={with_node_id:?}, definitionItemNodeId={item_node_id:?}, definitionQueryNodeId={query_node_id:?}, distinctReferenceEdges={references:?}; independent RelExpr clones would replay one SQL observation"
-        )));
+    definitions
+}
+
+#[derive(Default)]
+struct SharedCteOccurrences {
+    source_name: String,
+    definitions: Vec<CalciteRel>,
+    reference_outputs: Vec<Vec<Column>>,
+    seen_references: BTreeSet<CteReferenceIdentity>,
+}
+
+fn mark_shared_cte_references(
+    root: &mut CalciteRel,
+    shared_ids: &BTreeMap<CteDefinitionIdentity, String>,
+    occurrences: &mut BTreeMap<CteDefinitionIdentity, SharedCteOccurrences>,
+) -> Result<()> {
+    fn visit_rex(
+        rex: &mut CalciteRex,
+        shared_ids: &BTreeMap<CteDefinitionIdentity, String>,
+        occurrences: &mut BTreeMap<CteDefinitionIdentity, SharedCteOccurrences>,
+    ) -> Result<()> {
+        if let Some(reference) = rex.reference_expr.as_deref_mut() {
+            visit_rex(reference, shared_ids, occurrences)?;
+        }
+        for operand in &mut rex.operands {
+            visit_rex(operand, shared_ids, occurrences)?;
+        }
+        if let Some(window) = rex.window.as_deref_mut() {
+            for partition in &mut window.partition_keys {
+                visit_rex(partition, shared_ids, occurrences)?;
+            }
+            for order in &mut window.order_keys {
+                visit_rex(&mut order.expr, shared_ids, occurrences)?;
+            }
+            for bound in [
+                window.lower_bound.as_deref_mut(),
+                window.upper_bound.as_deref_mut(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if let Some(offset) = bound.offset.as_deref_mut() {
+                    visit_rex(offset, shared_ids, occurrences)?;
+                }
+            }
+        }
+        if let Some(subquery) = rex.subquery_rel.as_deref_mut() {
+            visit_rel(subquery, shared_ids, occurrences)?;
+        }
+        Ok(())
     }
-    Ok(())
+
+    fn visit_rel(
+        rel: &mut CalciteRel,
+        shared_ids: &BTreeMap<CteDefinitionIdentity, String>,
+        occurrences: &mut BTreeMap<CteDefinitionIdentity, SharedCteOccurrences>,
+    ) -> Result<()> {
+        for rex in rel
+            .project_rex
+            .iter_mut()
+            .chain(rel.condition_rex.iter_mut())
+            .chain(rel.fetch_rex.iter_mut())
+            .chain(rel.offset_rex.iter_mut())
+        {
+            visit_rex(rex, shared_ids, occurrences)?;
+        }
+        if let Some(rows) = rel.tuples.as_mut() {
+            for rex in rows.iter_mut().flatten() {
+                visit_rex(rex, shared_ids, occurrences)?;
+            }
+        }
+
+        for input in &mut rel.inputs {
+            visit_rel(input, shared_ids, occurrences)?;
+        }
+
+        if !rel.source_input_cte_uses.is_empty()
+            && rel.source_input_cte_uses.len() != rel.inputs.len()
+        {
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "{} has {} inputs but {} source CTE-use slots",
+                rel.rel_type,
+                rel.inputs.len(),
+                rel.source_input_cte_uses.len()
+            )));
+        }
+        for (index, cte_use) in rel.source_input_cte_uses.iter().enumerate() {
+            let Some(cte_use) = cte_use.as_ref() else {
+                continue;
+            };
+            let identity = cte_definition_identity(cte_use);
+            let Some(binding) = shared_ids.get(&identity) else {
+                continue;
+            };
+            let input = rel.inputs.get_mut(index).ok_or_else(|| {
+                Error::InvalidRelSourceProvenance(
+                    "source CTE-use input index is outside its relational node".to_owned(),
+                )
+            })?;
+            let output = convert_scan_row_type(input.row_type.clone())?;
+            let mut definition = input.clone();
+            definition.shared_query_ref = None;
+            let entry = occurrences.entry(identity).or_default();
+            if entry.source_name.is_empty() {
+                entry.source_name = cte_use.definition_name_text.clone();
+            }
+            entry.definitions.push(definition);
+            entry.reference_outputs.push(output.clone());
+            entry
+                .seen_references
+                .insert(cte_reference_identity(cte_use));
+            input.shared_query_ref = Some(crate::calcite::CalciteSharedQueryRef {
+                binding: binding.clone(),
+                output,
+            });
+        }
+        Ok(())
+    }
+
+    visit_rel(root, shared_ids, occurrences)
+}
+
+fn calcite_shared_query_dependencies(root: &CalciteRel) -> BTreeSet<String> {
+    fn visit_rex(rex: &CalciteRex, dependencies: &mut BTreeSet<String>) {
+        if let Some(reference) = rex.reference_expr.as_deref() {
+            visit_rex(reference, dependencies);
+        }
+        for operand in &rex.operands {
+            visit_rex(operand, dependencies);
+        }
+        if let Some(window) = rex.window.as_deref() {
+            for partition in &window.partition_keys {
+                visit_rex(partition, dependencies);
+            }
+            for order in &window.order_keys {
+                visit_rex(&order.expr, dependencies);
+            }
+            for offset in [window.lower_bound.as_deref(), window.upper_bound.as_deref()]
+                .into_iter()
+                .flatten()
+                .filter_map(|bound| bound.offset.as_deref())
+            {
+                visit_rex(offset, dependencies);
+            }
+        }
+        if let Some(subquery) = rex.subquery_rel.as_deref() {
+            visit_rel(subquery, dependencies);
+        }
+    }
+
+    fn visit_rel(rel: &CalciteRel, dependencies: &mut BTreeSet<String>) {
+        if let Some(reference) = rel.shared_query_ref.as_ref() {
+            dependencies.insert(reference.binding.clone());
+            return;
+        }
+        for rex in rel
+            .project_rex
+            .iter()
+            .chain(rel.condition_rex.iter())
+            .chain(rel.fetch_rex.iter())
+            .chain(rel.offset_rex.iter())
+        {
+            visit_rex(rex, dependencies);
+        }
+        if let Some(rows) = rel.tuples.as_ref() {
+            for rex in rows.iter().flatten() {
+                visit_rex(rex, dependencies);
+            }
+        }
+        for input in &rel.inputs {
+            visit_rel(input, dependencies);
+        }
+    }
+
+    let mut dependencies = BTreeSet::new();
+    visit_rel(root, &mut dependencies);
+    dependencies
+}
+
+fn update_calcite_shared_query_output(root: &mut CalciteRel, binding: &str, output: &[Column]) {
+    fn visit_rex(rex: &mut CalciteRex, binding: &str, output: &[Column]) {
+        if let Some(reference) = rex.reference_expr.as_deref_mut() {
+            visit_rex(reference, binding, output);
+        }
+        for operand in &mut rex.operands {
+            visit_rex(operand, binding, output);
+        }
+        if let Some(window) = rex.window.as_deref_mut() {
+            for partition in &mut window.partition_keys {
+                visit_rex(partition, binding, output);
+            }
+            for order in &mut window.order_keys {
+                visit_rex(&mut order.expr, binding, output);
+            }
+            for bound in [
+                window.lower_bound.as_deref_mut(),
+                window.upper_bound.as_deref_mut(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if let Some(offset) = bound.offset.as_deref_mut() {
+                    visit_rex(offset, binding, output);
+                }
+            }
+        }
+        if let Some(subquery) = rex.subquery_rel.as_deref_mut() {
+            visit_rel(subquery, binding, output);
+        }
+    }
+
+    fn visit_rel(rel: &mut CalciteRel, binding: &str, output: &[Column]) {
+        if let Some(reference) = rel.shared_query_ref.as_mut()
+            && reference.binding == binding
+        {
+            reference.output = output.to_vec();
+            return;
+        }
+        for rex in rel
+            .project_rex
+            .iter_mut()
+            .chain(rel.condition_rex.iter_mut())
+            .chain(rel.fetch_rex.iter_mut())
+            .chain(rel.offset_rex.iter_mut())
+        {
+            visit_rex(rex, binding, output);
+        }
+        if let Some(rows) = rel.tuples.as_mut() {
+            for rex in rows.iter_mut().flatten() {
+                visit_rex(rex, binding, output);
+            }
+        }
+        for input in &mut rel.inputs {
+            visit_rel(input, binding, output);
+        }
+    }
+
+    visit_rel(root, binding, output);
+}
+
+fn cte_reference_output_compatible(reference: &[Column], definition: &[Column]) -> bool {
+    reference.len() == definition.len()
+        && reference
+            .iter()
+            .zip(definition)
+            .all(|(reference, definition)| reference.name == definition.name)
+}
+
+fn collect_rel_query_refs(rel: &RelExpr, references: &mut BTreeSet<String>) {
+    fn collect_ast(ast: &ScalarAst, references: &mut BTreeSet<String>) {
+        match ast {
+            ScalarAst::Call { args, .. } => {
+                for argument in args {
+                    collect_ast(argument, references);
+                }
+            }
+            ScalarAst::TypeAnnotation { expr, .. } => collect_ast(expr, references),
+            ScalarAst::Window { parsed } => {
+                for argument in &parsed.args {
+                    collect_ast(argument, references);
+                }
+                for partition in &parsed.partition_by {
+                    collect_ast(partition, references);
+                }
+                for order in &parsed.order_by {
+                    collect_ast(&order.expr, references);
+                }
+                if let Some(frame) = parsed.frame.as_ref() {
+                    for offset in frame.offset_exprs() {
+                        collect_ast(offset, references);
+                    }
+                }
+            }
+            ScalarAst::RelSubquery { rel } => collect_rel_query_refs(rel, references),
+            ScalarAst::InputRef { .. }
+            | ScalarAst::CorrelatedRef { .. }
+            | ScalarAst::Literal { .. }
+            | ScalarAst::Flag { .. } => {}
+        }
+    }
+
+    let mut collect_scalar = |scalar: &ScalarExpr| collect_ast(&scalar.parsed, references);
+    match rel {
+        RelExpr::Bindings { bindings, body, .. } => {
+            for binding in bindings {
+                collect_rel_query_refs(&binding.rel, references);
+            }
+            collect_rel_query_refs(body, references);
+        }
+        RelExpr::QueryRef { binding, .. } => {
+            references.insert(binding.clone());
+        }
+        RelExpr::TableScan { .. } | RelExpr::Values { .. } => {}
+        RelExpr::Project { input, exprs, .. } => {
+            for expression in exprs {
+                collect_scalar(expression);
+            }
+            collect_rel_query_refs(input, references);
+        }
+        RelExpr::Filter {
+            input, predicate, ..
+        }
+        | RelExpr::NativeHaving {
+            input, predicate, ..
+        } => {
+            collect_scalar(predicate);
+            collect_rel_query_refs(input, references);
+        }
+        RelExpr::Join {
+            left,
+            right,
+            condition,
+            ..
+        } => {
+            collect_scalar(condition);
+            collect_rel_query_refs(left, references);
+            collect_rel_query_refs(right, references);
+        }
+        RelExpr::Aggregate {
+            input, agg_calls, ..
+        } => {
+            for call in agg_calls {
+                for argument in &call.args {
+                    collect_scalar(argument);
+                }
+                if let Some(filter) = call.filter.as_ref() {
+                    collect_scalar(filter);
+                }
+            }
+            collect_rel_query_refs(input, references);
+        }
+        RelExpr::Distinct { input, .. } => collect_rel_query_refs(input, references),
+        RelExpr::Sort {
+            input,
+            fetch,
+            offset,
+            ..
+        } => {
+            if let Some(fetch) = fetch.as_ref() {
+                collect_scalar(fetch);
+            }
+            if let Some(offset) = offset.as_deref() {
+                collect_scalar(offset);
+            }
+            collect_rel_query_refs(input, references);
+        }
+        RelExpr::Set { inputs, .. } => {
+            for input in inputs {
+                collect_rel_query_refs(input, references);
+            }
+        }
+    }
+}
+
+fn topologically_order_query_bindings(
+    mut bindings: BTreeMap<String, QueryBinding>,
+    lexical_order: &BTreeMap<String, usize>,
+) -> Result<Vec<QueryBinding>> {
+    let known = bindings.keys().cloned().collect::<BTreeSet<_>>();
+    let mut ordered = Vec::with_capacity(bindings.len());
+    let mut available = BTreeSet::new();
+    while !bindings.is_empty() {
+        let next = bindings
+            .iter()
+            .filter_map(|(id, binding)| {
+                let mut dependencies = BTreeSet::new();
+                collect_rel_query_refs(&binding.rel, &mut dependencies);
+                dependencies.is_subset(&available).then_some(id)
+            })
+            .min_by_key(|id| {
+                lexical_order
+                    .get(id.as_str())
+                    .copied()
+                    .unwrap_or(usize::MAX)
+            })
+            .cloned();
+        let Some(next) = next else {
+            let unresolved = bindings
+                .iter()
+                .map(|(id, binding)| {
+                    let mut dependencies = BTreeSet::new();
+                    collect_rel_query_refs(&binding.rel, &mut dependencies);
+                    let unknown = dependencies.difference(&known).cloned().collect::<Vec<_>>();
+                    let pending = dependencies
+                        .difference(&available)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    format!("{id}: pending={pending:?}, unknown={unknown:?}")
+                })
+                .collect::<Vec<_>>();
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "query-local CTE bindings are recursive or have unresolved dependencies: {unresolved:?}"
+            )));
+        };
+        let binding = bindings.remove(&next).expect("selected binding exists");
+        available.insert(next);
+        ordered.push(binding);
+    }
+    Ok(ordered)
+}
+
+/// Reconstruct one relation-valued binding for every multiply referenced
+/// lexical CTE. Calcite clones CTE definitions into a tree; accepting those
+/// clones independently would replay one SQL observation. All clones must
+/// convert to the same structured IR before they may share a binding.
+fn convert_rel_with_shared_query_bindings(
+    mut root: CalciteRel,
+    schema_index: &SchemaColumnIndex,
+) -> Result<RelExpr> {
+    let reference_index = lexical_cte_reference_index(&root);
+    let mut shared_positions = reference_index
+        .iter()
+        .filter(|(_, record)| record.references.len() > 1)
+        .map(|(identity, _)| {
+            let span = parse_source_span_id(&identity.1)
+                .filter(|span| span.is_real())
+                .ok_or_else(|| {
+                    Error::InvalidRelSourceProvenance(format!(
+                        "multiply referenced lexical CTE has no exact definition-item position: {:?}",
+                        identity.1
+                    ))
+                })?;
+            Ok((span.start, identity.clone()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if shared_positions.is_empty() {
+        return convert_rel(root, schema_index);
+    }
+    shared_positions.sort_unstable_by_key(|(position, _)| *position);
+    if shared_positions
+        .windows(2)
+        .any(|pair| pair[0].0 == pair[1].0)
+    {
+        return Err(Error::InvalidRelSourceProvenance(
+            "multiply referenced lexical CTE definitions have a duplicate source start position"
+                .to_owned(),
+        ));
+    }
+    let shared_entries = shared_positions
+        .into_iter()
+        .enumerate()
+        .map(|(index, (_, identity))| (identity, format!("cte_binding_{index}"), index))
+        .collect::<Vec<_>>();
+    let shared = shared_entries
+        .iter()
+        .map(|(identity, binding, _)| (identity.clone(), binding.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let binding_lexical_order = shared_entries
+        .iter()
+        .map(|(_, binding, index)| (binding.clone(), *index))
+        .collect::<BTreeMap<_, _>>();
+
+    let root_query_block_id = root.source_root_query_block_id.as_deref().ok_or_else(|| {
+        Error::InvalidRelSourceProvenance(
+            "multiply referenced lexical CTEs require an exact statement-root query-block identity"
+                .to_owned(),
+        )
+    })?;
+    for identity in shared.keys() {
+        let record = reference_index
+            .get(identity)
+            .expect("shared identity came from the reference index");
+        let root_is_exact_body = record.definition_body_ids.len() == 1
+            && record.definition_body_ids.contains(root_query_block_id);
+        let root_is_exact_with_owner = identity.0 == root_query_block_id;
+        if !root_is_exact_body && !root_is_exact_with_owner {
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {:?} is nested below the statement root and cannot be hoisted into a statement-local binding: rootQueryBlockId={root_query_block_id:?}, definitionWithNodeId={:?}, definitionBodyNodeIds={:?}",
+                record.source_name, identity.0, record.definition_body_ids
+            )));
+        }
+    }
+
+    let mut occurrences = BTreeMap::new();
+    mark_shared_cte_references(&mut root, &shared, &mut occurrences)?;
+    let known_bindings = shared.values().cloned().collect::<BTreeSet<_>>();
+    let mut available_bindings = BTreeSet::new();
+    let mut pending = shared.keys().cloned().collect::<BTreeSet<_>>();
+    let mut converted = BTreeMap::new();
+    while !pending.is_empty() {
+        let next = pending.iter().find_map(|identity| {
+            let occurrence = occurrences.get(identity)?;
+            let definition = occurrence.definitions.first()?;
+            calcite_shared_query_dependencies(definition)
+                .is_subset(&available_bindings)
+                .then_some(identity.clone())
+        });
+        let Some(identity) = next else {
+            let unresolved = pending
+                .iter()
+                .map(|identity| {
+                    let dependencies = occurrences
+                        .get(identity)
+                        .and_then(|occurrence| occurrence.definitions.first())
+                        .map(calcite_shared_query_dependencies)
+                        .unwrap_or_default();
+                    let unknown = dependencies
+                        .difference(&known_bindings)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let waiting = dependencies
+                        .difference(&available_bindings)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    format!("{identity:?}: waiting={waiting:?}, unknown={unknown:?}")
+                })
+                .collect::<Vec<_>>();
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "query-local CTE definitions are recursive or have unresolved generated dependencies: {unresolved:?}"
+            )));
+        };
+        let binding_id = shared
+            .get(&identity)
+            .expect("pending identity came from the shared map");
+        let reference_record = reference_index
+            .get(&identity)
+            .expect("shared identity came from the reference index");
+        let source_name = &reference_record.source_name;
+        let expected_references = &reference_record.references;
+        let occurrence = occurrences.get(&identity).ok_or_else(|| {
+            Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {source_name:?} has no exact relational input edge"
+            ))
+        })?;
+        if &occurrence.seen_references != expected_references {
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {source_name:?} has incomplete relational edges: expected={expected_references:?}, actual={:?}",
+                occurrence.seen_references
+            )));
+        }
+        let mut definitions = occurrence.definitions.iter().cloned();
+        let first_raw = definitions.next().ok_or_else(|| {
+            Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {source_name:?} has no definition clone"
+            ))
+        })?;
+        let first = convert_rel(first_raw, schema_index)?;
+        for candidate_raw in definitions {
+            let candidate = convert_rel(candidate_raw, schema_index)?;
+            if candidate != first {
+                return Err(Error::InvalidRelSourceProvenance(format!(
+                    "multiply referenced lexical CTE {source_name:?} has nonidentical converted definition clones"
+                )));
+            }
+        }
+        if occurrence
+            .reference_outputs
+            .windows(2)
+            .any(|pair| pair[0] != pair[1])
+        {
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {source_name:?} has inconsistent generated reference schemas: {:?}",
+                occurrence.reference_outputs
+            )));
+        }
+        // The independently validated CTE edge fixes the public ordinal
+        // namespace. Its complete converted definition is the type authority:
+        // Calcite 1.42 can retain INTEGER aggregate types or CHAR literal-union
+        // coercions on every clone even when PostgreSQL resolves the definition
+        // to NUMERIC or TEXT. Clone metadata may therefore check names and
+        // arity, but must not override the source-attested definition type.
+        if occurrence
+            .reference_outputs
+            .iter()
+            .any(|output| !cte_reference_output_compatible(output.as_slice(), first.output()))
+        {
+            return Err(Error::InvalidRelSourceProvenance(format!(
+                "multiply referenced lexical CTE {source_name:?} reference schema differs from its complete definition: references={:?}, definition={:?}",
+                occurrence.reference_outputs,
+                first.output()
+            )));
+        }
+        converted.insert(
+            binding_id.clone(),
+            QueryBinding {
+                id: binding_id.clone(),
+                source_name: source_name.clone(),
+                rel: first,
+            },
+        );
+        let canonical_output = converted
+            .get(binding_id)
+            .expect("binding was inserted above")
+            .rel
+            .output()
+            .to_vec();
+        update_calcite_shared_query_output(&mut root, binding_id, &canonical_output);
+        for occurrence in occurrences.values_mut() {
+            for definition in &mut occurrence.definitions {
+                update_calcite_shared_query_output(definition, binding_id, &canonical_output);
+            }
+        }
+        available_bindings.insert(binding_id.clone());
+        pending.remove(&identity);
+    }
+    let bindings = topologically_order_query_bindings(converted, &binding_lexical_order)?;
+    let body = convert_rel(root, schema_index)?;
+    let output = body.output().to_vec();
+    Ok(RelExpr::Bindings {
+        bindings,
+        body: Box::new(body),
+        output,
+    })
 }
 
 fn convert_rel(raw: CalciteRel, schema_index: &SchemaColumnIndex) -> Result<RelExpr> {
@@ -1561,6 +2162,12 @@ fn convert_rel_with_synthetic_no_from_values(
     allow_source_values_dummy: bool,
     schema_index: &SchemaColumnIndex,
 ) -> Result<RelExpr> {
+    if let Some(reference) = raw.shared_query_ref {
+        return Ok(RelExpr::QueryRef {
+            binding: reference.binding,
+            output: reference.output,
+        });
+    }
     validate_join_source_association(&raw)?;
     if raw.rel_type != "LogicalFilter" && raw.source_where.is_some() {
         return Err(Error::InvalidRelSourceProvenance(format!(
@@ -9055,7 +9662,14 @@ fn exact_wildcard_project_matches_segment(
                 && rex_type_matches_field(rex, input_field)
                 && same_calcite_field_type(input_field, expected)
                 && same_calcite_field_type(output, expected)
-                && output.name == visible_name
+                // A join row may already contain Calcite's deterministic
+                // collision-disambiguated label (for example DEPTNO0 for the
+                // right DEPTNO of SELECT *).  The ordered direct-input refs
+                // and exact field types above are the value-lineage proof;
+                // accept either that generated input-row label or the
+                // independently attested source-visible label used by table
+                // alias column lists.
+                && (output.name == visible_name || output.name == input_field.name)
         })
 }
 
@@ -26039,6 +26653,7 @@ fn rel_output_is_provably_nonnull(rel: &RelExpr, index: usize) -> bool {
         return false;
     }
     match rel {
+        RelExpr::Bindings { body, .. } => rel_output_is_provably_nonnull(body, index),
         RelExpr::Project { input, exprs, .. } => {
             let Some(expr) = exprs.get(index) else {
                 return false;
@@ -26127,7 +26742,10 @@ fn rel_output_is_provably_nonnull(rel: &RelExpr, index: usize) -> bool {
                     .iter()
                     .all(|input| rel_output_is_provably_nonnull(input, index))
         }
-        RelExpr::TableScan { .. } | RelExpr::Join { .. } | RelExpr::Values { .. } => false,
+        RelExpr::TableScan { .. }
+        | RelExpr::QueryRef { .. }
+        | RelExpr::Join { .. }
+        | RelExpr::Values { .. } => false,
     }
 }
 
@@ -30441,6 +31059,9 @@ fn exact_non_identifier_source_at_rel_output(
         return false;
     }
     match rel {
+        RelExpr::Bindings { body, .. } => {
+            exact_non_identifier_source_at_rel_output(body, index, source)
+        }
         RelExpr::Aggregate {
             input,
             group_keys,
@@ -30464,6 +31085,7 @@ fn exact_non_identifier_source_at_rel_output(
             exact_non_identifier_source_at_rel_output(input, index, source)
         }
         RelExpr::TableScan { .. }
+        | RelExpr::QueryRef { .. }
         | RelExpr::Project { .. }
         | RelExpr::Join { .. }
         | RelExpr::Set { .. }
@@ -33297,25 +33919,21 @@ mod tests {
             right_cte_use: Some(right),
         });
 
-        validate_no_multiply_referenced_lexical_ctes(&root).unwrap();
+        let index = lexical_cte_reference_index(&root);
+        assert!(index.values().all(|record| record.references.len() == 1));
     }
 
     #[test]
-    fn cte_replay_boundary_rejects_distinct_references_to_one_definition() {
+    fn cte_reference_index_distinguishes_references_to_one_definition() {
         let root = cte_replay_boundary_rel(vec![
             Some(cte_replay_boundary_use("shared", "first")),
             Some(cte_replay_boundary_use("shared", "second")),
         ]);
-
-        let error = validate_no_multiply_referenced_lexical_ctes(&root).unwrap_err();
-        let Error::InvalidRelSourceProvenance(message) = error else {
-            panic!("unexpected error: {error}");
-        };
-        assert!(message.contains("multiply referenced lexical CTE \"shared\""));
-        assert!(message.contains("native shared-query binding"));
-        assert!(message.contains("reference:first"));
-        assert!(message.contains("reference:second"));
-        assert!(message.contains("independent RelExpr clones would replay"));
+        let index = lexical_cte_reference_index(&root);
+        let references = &index.values().next().expect("shared definition").references;
+        assert_eq!(references.len(), 2);
+        assert!(references.iter().any(|(_, id)| id == "reference:first"));
+        assert!(references.iter().any(|(_, id)| id == "reference:second"));
     }
 
     #[test]
@@ -33330,12 +33948,27 @@ mod tests {
         .unwrap();
         root.project_rex.push(rex);
 
-        let error = validate_no_multiply_referenced_lexical_ctes(&root).unwrap_err();
+        let index = lexical_cte_reference_index(&root);
+        let references = &index.values().next().expect("shared definition").references;
+        assert_eq!(references.len(), 2);
+        assert!(references.iter().any(|(_, id)| id == "reference:outer"));
+        assert!(references.iter().any(|(_, id)| id == "reference:subquery"));
+    }
+
+    #[test]
+    fn nested_multiply_referenced_cte_is_not_hoisted_to_the_statement_root() {
+        let mut first = cte_replay_boundary_use("shared", "first");
+        first.definition_item_node_id = "2:1-2:10".to_owned();
+        let mut second = cte_replay_boundary_use("shared", "second");
+        second.definition_item_node_id = first.definition_item_node_id.clone();
+        let mut root = cte_replay_boundary_rel(vec![Some(first), Some(second)]);
+        root.source_root_query_block_id = Some("outer-query-block".to_owned());
+        let error = convert_rel_with_shared_query_bindings(root, &SchemaColumnIndex::new())
+            .expect_err("nested CTE binding must fail closed");
         assert!(matches!(
             error,
             Error::InvalidRelSourceProvenance(message)
-                if message.contains("reference:outer")
-                    && message.contains("reference:subquery")
+                if message.contains("is nested below the statement root")
         ));
     }
 

@@ -5,22 +5,23 @@ From SQLFS Require Import
 From Logos.FormalSQL Require Import
   GroupingRewriteFacts GroupedFilterOutcomeFacts RelationalAlgebraFacts
   OrderedQueryFacts SubqueryFacts.
-From Stdlib Require Import Bool List NArith.
+From Stdlib Require Import Bool List NArith String.
 
 Import ListNotations.
 Import Tuple.
+Open Scope string_scope.
 
 (** Lock the two-valued acceptance operation used only at filter/HAVING
     boundaries.  These equations do not equate SQL FALSE with UNKNOWN. *)
-Example acceptance_interp_conj_truth_table :
-  acceptance_interp_conj And_F true true = true /\
-  acceptance_interp_conj And_F true false = false /\
-  acceptance_interp_conj And_F false true = false /\
-  acceptance_interp_conj And_F false false = false /\
-  acceptance_interp_conj Or_F true true = true /\
-  acceptance_interp_conj Or_F true false = true /\
-  acceptance_interp_conj Or_F false true = true /\
-  acceptance_interp_conj Or_F false false = false.
+Example scalar_acceptance_combine_truth_table :
+  scalar_acceptance_combine And_F true true = true /\
+  scalar_acceptance_combine And_F true false = false /\
+  scalar_acceptance_combine And_F false true = false /\
+  scalar_acceptance_combine And_F false false = false /\
+  scalar_acceptance_combine Or_F true true = true /\
+  scalar_acceptance_combine Or_F true false = true /\
+  scalar_acceptance_combine Or_F false true = true /\
+  scalar_acceptance_combine Or_F false false = false.
 Proof. repeat split; reflexivity. Qed.
 
 Example rows_empty_decision_regression :
@@ -28,7 +29,7 @@ Example rows_empty_decision_regression :
   rows_empty_decision [0%nat] = false.
 Proof. split; reflexivity. Qed.
 
-Section ExactFormulaAndGroupInterfaces.
+Section ExactScalarAndGroupInterfaces.
 
 Context {T : Tuple.Rcd} {relname : Type}.
 
@@ -44,42 +45,47 @@ Variable aggregate_runtime_error :
   list (option sql_runtime_error * Tuple.value T) ->
   option sql_runtime_error.
 Variable value_is_null : Tuple.value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
-Local Abbreviation formula_exact :=
-  (@formula_acceptance_exact_at T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation scalar_exact :=
+  (@scalar_expr_acceptance_exact_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_exists :=
   (@eval_query_exists_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_groups :=
   (@eval_groups_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation eval_group_bag :=
   (@eval_group_bag_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
-(** One public theorem covers both eager connectives.  The same right exactness
-    premise is retained for AND and OR, matching FormalSQL evaluation order. *)
-Theorem eager_formula_conj_acceptance_regression :
-  forall env left right left_accepted right_accepted,
-    formula_exact env left left_accepted ->
-    formula_exact env right right_accepted ->
-    formula_exact env (FExpr_Conj And_F left right)
-      (Datatypes.andb left_accepted right_accepted) /\
-    formula_exact env (FExpr_Conj Or_F left right)
-      (Datatypes.orb left_accepted right_accepted).
+(** Flattened Boolean operands retain exact TRUE/non-TRUE acceptance under
+    every statement schedule.  The contract also excludes every scalar-local
+    runtime error, including errors reached through subqueries or lazy CASE
+    arms selected by an operand. *)
+Theorem eager_scalar_conj_list_acceptance_regression :
+  forall site_rows env expressions decide,
+    (forall expression,
+      In expression expressions ->
+      scalar_exact env expression (decide expression)) ->
+    scalar_exact env (SExpr_ConjList site_rows And_F expressions)
+      (scalar_acceptance_fold And_F (map decide expressions)) /\
+    scalar_exact env (SExpr_ConjList site_rows Or_F expressions)
+      (scalar_acceptance_fold Or_F (map decide expressions)).
 Proof.
-  intros env left right left_accepted right_accepted Hleft Hright.
+  intros site_rows env expressions decide Hexact.
   split.
-  - change (formula_exact env (FExpr_Conj And_F left right)
-      (acceptance_interp_conj And_F left_accepted right_accepted)).
-    now apply formula_conj_acceptance_exact.
-  - change (formula_exact env (FExpr_Conj Or_F left right)
-      (acceptance_interp_conj Or_F left_accepted right_accepted)).
-    now apply formula_conj_acceptance_exact.
+  - now apply scalar_expr_conj_list_acceptance_exact.
+  - now apply scalar_expr_conj_list_acceptance_exact.
 Qed.
 
 (** Native existential observations need only agree on the two-valued result.
@@ -91,83 +97,42 @@ Theorem exists_acceptance_exact_regression :
       eval_exists env subquery (SqlSuccess truth) ->
       truth = exists_truth_from_empty empty) ->
     (forall error, ~ eval_exists env subquery (SqlError error)) ->
-    formula_exact env (FExpr_Exists subquery) (Datatypes.negb empty).
+    scalar_exact env (SExpr_Exists subquery) (Datatypes.negb empty).
 Proof.
   intros env subquery empty Hsuccess Hempty Herror.
-  eapply formula_exists_acceptance_exact; eassumption.
+  eapply scalar_expr_exists_acceptance_exact; eassumption.
 Qed.
 
-Local Definition regression_group_env
-    (env : Env.env T) (group_terms : list (@aggterm T))
-    (group : list (tuple T)) : Env.env T :=
-  env_g T env (@Group_By T group_terms) group.
-
-(** Exercise the complete accepted-group interface with its four distinct
-    runtime/exactness premises and literal ordered projection map. *)
-Theorem accepted_groups_exact_regression :
-  forall env select_list group_terms having groups,
-    (forall group,
-      In group groups ->
-      @eval_select_list_aggregate_runtime_error T
-        symbol_runtime_error aggregate_runtime_error
-        (regression_group_env env group_terms group) select_list = None /\
-      @eval_formula_expr_aggregate_runtime_error T relname
-        symbol_runtime_error aggregate_runtime_error
-        (regression_group_env env group_terms group) having = None /\
-      formula_exact
-        (regression_group_env env group_terms group) having true /\
-      @eval_select_list_runtime_error T
-        symbol_runtime_error aggregate_runtime_error
-        (regression_group_env env group_terms group) select_list = None) ->
-    forall outcome,
-      eval_groups env select_list group_terms having groups outcome <->
-      outcome = SqlSuccess
-        (map (group_projection env select_list group_terms) groups).
+(** Typed projection may be relational and schedule-dependent.  The global
+    grouping shape nevertheless emits at most one ordered row, independently
+    of the successful scalar values chosen for that row. *)
+Theorem global_group_success_shape_regression :
+  forall env select_list having rows output,
+    eval_groups env select_list [] having
+      (query_make_groups env rows []) (SqlSuccess output) ->
+    (List.length output <= 1)%nat /\
+    SetoidList.NoDupA (@eq (tuple T)) output.
 Proof.
-  intros env select_list group_terms having groups Hsafe outcome.
-  apply eval_groups_true_outcome_exact.
-  intros group Hin.
-  exact (Hsafe group Hin).
-Qed.
-
-(** Exercise the arbitrary-acceptance interface: rejected groups do not need
-    scalar SELECT safety, while retained group order and duplicates are exact. *)
-Theorem filtered_groups_exact_regression :
-  forall env select_list group_terms having groups keep,
-    (forall group,
-      In group groups ->
-      @eval_select_list_aggregate_runtime_error T
-        symbol_runtime_error aggregate_runtime_error
-        (regression_group_env env group_terms group) select_list = None /\
-      @eval_formula_expr_aggregate_runtime_error T relname
-        symbol_runtime_error aggregate_runtime_error
-        (regression_group_env env group_terms group) having = None /\
-      formula_exact
-        (regression_group_env env group_terms group) having (keep group) /\
-      (keep group = true ->
-        @eval_select_list_runtime_error T
-          symbol_runtime_error aggregate_runtime_error
-          (regression_group_env env group_terms group) select_list = None)) ->
-    forall outcome,
-      eval_groups env select_list group_terms having groups outcome <->
-      outcome = SqlSuccess
-        (map (group_projection env select_list group_terms)
-          (filter keep groups)).
-Proof.
-  intros env select_list group_terms having groups keep Hsafe outcome.
-  apply eval_groups_acceptance_outcome_exact.
-  intros group Hin.
-  exact (Hsafe group Hin).
+  intros env select_list having rows output Heval.
+  split.
+  - exact (eval_groups_global_success_length_le_one
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule env select_list having rows output Heval).
+  - exact (eval_groups_global_success_NoDupA
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule (@eq (tuple T)) env select_list having
+      rows output Heval).
 Qed.
 
 (** Exercise the reset boundary without selecting a privileged input-bag
     representative or requiring literal equality of the emitted row lists. *)
 Theorem exact_group_bag_reset_regression :
-  forall env select_list group_terms left_having right_having
+  forall env select_list group_keys group_terms left_having right_having
       (left_bag right_bag :
         Febag.bag (Fecol.CBag (Tuple.CTuple T)))
       (left_rows right_rows :
         list (list (tuple T)) -> list (tuple T)),
+    scalar_group_key_terms group_keys = Some group_terms ->
     (forall representative,
       query_same_rows_as_bag representative left_bag ->
       let groups := query_make_groups env representative group_terms in
@@ -195,25 +160,23 @@ Theorem exact_group_bag_reset_regression :
         (right_rows
           (query_make_groups env right_representative group_terms))) ->
     forall outcome,
-      eval_group_bag env select_list group_terms left_having left_bag outcome <->
-      eval_group_bag env select_list group_terms right_having right_bag outcome.
+      eval_group_bag env select_list group_keys left_having left_bag outcome <->
+      eval_group_bag env select_list group_keys right_having right_bag outcome.
 Proof.
-  intros env select_list group_terms left_having right_having
+  intros env select_list group_keys group_terms left_having right_having
     left_bag right_bag left_rows right_rows
-    Hleft Hright Hpermut outcome.
+    Hgroup_keys Hleft Hright Hpermut outcome.
   eapply eval_group_bag_exact_rows_permut_equiv; eassumption.
 Qed.
 
-(** The exact output expression retains two equal group occurrences. *)
+(** Exact ordered observations retain two equal group occurrences before the
+    separately proved bag abstraction forgets their list positions. *)
 Example accepted_group_projection_keeps_occurrences :
-  forall (env : Env.env T) (select_list : _select_list T)
-      (group_terms : list (@aggterm T)) (group : list (tuple T)),
-    map (group_projection env select_list group_terms) [group; group] =
-    [group_projection env select_list group_terms group;
-     group_projection env select_list group_terms group].
+  forall (emit : list (tuple T) -> tuple T) group,
+    map emit [group; group] = [emit group; emit group].
 Proof. reflexivity. Qed.
 
-End ExactFormulaAndGroupInterfaces.
+End ExactScalarAndGroupInterfaces.
 
 Section ExactQueryFilterInterfaces.
 
@@ -231,16 +194,20 @@ Variable aggregate_runtime_error :
   list (option sql_runtime_error * Tuple.value T) ->
   option sql_runtime_error.
 Variable value_is_null : Tuple.value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Abbreviation eval_query :=
   (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 Local Abbreviation success_bags :=
   (@query_success_bags T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
-Local Abbreviation formula_exact :=
-  (@formula_acceptance_exact_at T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
+Local Abbreviation scalar_exact :=
+  (@scalar_expr_acceptance_exact_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 (** Lock the multiplicity-preserving query-level bridge independently of any
     concrete schema or expression syntax. *)
@@ -250,7 +217,7 @@ Theorem exact_query_filter_success_bags_regression :
       Oeset.compare (OTuple T) left right = Eq ->
       keep left = keep right) ->
     (forall row,
-      formula_exact (env_t T env row) formula (keep row)) ->
+      scalar_exact (env_t T env row) formula (keep row)) ->
     rel_equiv
       (success_bags env (QExpr_Filter formula input))
       (fun output =>
@@ -272,7 +239,7 @@ Theorem exact_query_filter_error_regression :
     (forall input_rows row,
       eval_query env input (SqlSuccess input_rows) ->
       In row input_rows ->
-      formula_exact (env_t T env row) formula (keep row)) ->
+      scalar_exact (env_t T env row) formula (keep row)) ->
     forall error,
       eval_query env (QExpr_Filter formula input) (SqlError error) <->
       eval_query env input (SqlError error).
@@ -280,7 +247,7 @@ Proof.
 intros env formula input keep Hexact error.
 exact
   (@query_filter_error_iff_exact T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null
+    symbol_runtime_error aggregate_runtime_error value_is_null boolean_schedule
     env formula input keep Hexact error).
 Qed.
 

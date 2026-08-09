@@ -388,7 +388,8 @@ Qed.
 
 Definition unique_key_rows_conformb
     (key : list (attribute TNull)) (rows : list (tuple TNull)) : bool :=
-  no_relatedb sql_key_equal_trueb (map (project_row key) rows).
+  no_relatedb sql_key_equal_trueb
+    (map (SchemaConstraints.project_row key) rows).
 
 Lemma unique_key_rows_conformb_sound :
   forall key rows,

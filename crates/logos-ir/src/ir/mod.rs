@@ -831,10 +831,37 @@ impl Query {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QueryBinding {
+    /// Opaque statement-local identity. Consumers must not infer SQL names or
+    /// scopes from this value.
+    pub id: String,
+    /// Original lexical name retained only for diagnostics.
+    pub source_name: String,
+    /// The complete relation-valued definition evaluated once before its
+    /// references are scanned.
+    pub rel: RelExpr,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum RelExpr {
+    /// Query-local relation definitions reconstructed from exact lexical CTE
+    /// provenance. This is a query-program wrapper, not a row-level relational
+    /// algebra operator; lowering removes it before producing FormalSQL terms.
+    Bindings {
+        bindings: Vec<QueryBinding>,
+        body: Box<RelExpr>,
+        output: Vec<Column>,
+    },
     TableScan {
         table: Vec<String>,
+        output: Vec<Column>,
+    },
+    /// Reference to one query-local relation binding. This is a relation
+    /// source leaf, not a relational algebra operator and not a base table.
+    QueryRef {
+        binding: String,
         output: Vec<Column>,
     },
     Project {
@@ -906,7 +933,9 @@ pub enum RelExpr {
 impl RelExpr {
     pub fn output(&self) -> &[Column] {
         match self {
-            RelExpr::TableScan { output, .. }
+            RelExpr::Bindings { output, .. }
+            | RelExpr::TableScan { output, .. }
+            | RelExpr::QueryRef { output, .. }
             | RelExpr::Project { output, .. }
             | RelExpr::Filter { output, .. }
             | RelExpr::NativeHaving { output, .. }

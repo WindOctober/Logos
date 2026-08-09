@@ -165,7 +165,7 @@ Qed.
 
 End GenericSchedulerRegression.
 
-Section ExactFormulaRegression.
+Section ExactScalarRegression.
 
 Context {T : Tuple.Rcd} {relname : Type}.
 Context (basesort : relname -> Fset.set (A T)).
@@ -178,32 +178,34 @@ Context
   (aggregate_runtime_error :
     aggregate T ->
     list (option sql_runtime_error * value T) -> option sql_runtime_error)
-  (value_is_null : value T -> bool).
+  (value_is_null : value T -> bool)
+  (boolean_schedule : boolean_site -> boolean_evaluation_order).
 
-Local Abbreviation eval_formula :=
-  (@eval_formula_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+Local Abbreviation eval_scalar_boolean :=
+  (@eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
-(** Exact formula transport fixes the same Bool3 carrier value.  In
+(** Exact typed Boolean transport fixes the same Bool3 carrier value.  In
     particular it cannot replace FALSE with UNKNOWN as an acceptance-only
     filter contract could. *)
-Example renaming_exact_formula_bool3_regression :
+Example renaming_exact_scalar_bool3_regression :
   forall environment_relation left right left_env right_env,
-    @query_formula_outcome_rename_compatible T relname
+    @query_scalar_expr_outcome_rename_compatible T relname
       basesort instance unknown symbol_runtime_error
-      aggregate_runtime_error value_is_null
+      aggregate_runtime_error value_is_null boolean_schedule
       environment_relation left right ->
     environment_relation left_env right_env ->
     forall truth,
-      (eval_formula left_env left (SqlSuccess truth) <->
-       eval_formula right_env right (SqlSuccess truth)).
+      (eval_scalar_boolean left_env left (SqlSuccess truth) <->
+       eval_scalar_boolean right_env right (SqlSuccess truth)).
 Proof.
-exact (@query_formula_outcome_rename_compatible_success_iff
+exact (@query_scalar_expr_outcome_rename_compatible_success_iff
   T relname basesort instance unknown symbol_runtime_error
-  aggregate_runtime_error value_is_null).
+  aggregate_runtime_error value_is_null boolean_schedule).
 Qed.
 
-End ExactFormulaRegression.
+End ExactScalarRegression.
 
 (** The concrete query facade accepts only a textual name map.  Its lifted
     attribute map therefore cannot alter any TNull type or typmod field. *)
@@ -248,6 +250,6 @@ Print Assumptions renaming_mapped_bag_source_regression.
 Print Assumptions renaming_error_outcome_regression.
 Print Assumptions renaming_binary_scheduler_regression.
 Print Assumptions renaming_row_map_callback_scheduler_regression.
-Print Assumptions renaming_exact_formula_bool3_regression.
+Print Assumptions renaming_exact_scalar_bool3_regression.
 Print Assumptions renaming_tnull_name_only_schema_regression.
 Print Assumptions renaming_arbitrary_context_chain_regression.

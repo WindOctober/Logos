@@ -145,12 +145,16 @@ Definition tnull_query_rename_transport_under
     (environment_relation : Env.env TNull -> Env.env TNull -> Prop)
     (rename_name : string -> string)
     (left right : QueryExpr) : Prop :=
-  @query_rename_transport_under TNull relname
-    (@_basesort TNull db) (@_instance TNull db) unknown3
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error
-    NullValues.is_null_value
-    environment_relation (rename_tnull_attribute_name rename_name) left right.
+  forall boolean_schedule : boolean_site -> boolean_evaluation_order,
+    @query_rename_transport_under TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value boolean_schedule
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool
+      environment_relation (rename_tnull_attribute_name rename_name)
+      left right.
 
 (** Exact mapped-schema observations are useful at proof boundaries but are
     not themselves a full query alpha-renaming certificate: an output-only
@@ -160,12 +164,16 @@ Definition tnull_query_mapped_schema_outcome_equiv
     (db : db_state) (left_env right_env : Env.env TNull)
     (rename_name : string -> string)
     (left right : QueryExpr) : Prop :=
-  @query_mapped_schema_outcome_equiv TNull relname
-    (@_basesort TNull db) (@_instance TNull db) unknown3
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error
-    NullValues.is_null_value
-    left_env right_env (rename_tnull_attribute_name rename_name) left right.
+  forall boolean_schedule : boolean_site -> boolean_evaluation_order,
+    @query_mapped_schema_outcome_equiv TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value boolean_schedule
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool
+      left_env right_env (rename_tnull_attribute_name rename_name)
+      left right.
 
 Lemma tnull_query_mapped_schema_outcome_equiv_mapped_schema :
   forall db left_env right_env (rename_name : string -> string) left right,
@@ -176,11 +184,14 @@ Lemma tnull_query_mapped_schema_outcome_equiv_mapped_schema :
       query_expr_outputs right.
 Proof.
 intros db left_env right_env rename_name left right Hmapped.
+specialize (Hmapped (fun _ => BooleanLeftFirst)).
 exact (@query_mapped_schema_outcome_equiv_mapped_schema TNull relname
   (@_basesort TNull db) (@_instance TNull db) unknown3
   NullValues.interp_scalar_operator_runtime_error
   NullValues.interp_aggregate_runtime_error
-  NullValues.is_null_value
+  NullValues.is_null_value (fun _ => BooleanLeftFirst)
+  TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+  type_int64 type_bool
   left_env right_env (rename_tnull_attribute_name rename_name)
   left right Hmapped).
 Qed.
@@ -190,13 +201,16 @@ Definition tnull_query_rename_context_compatible
     (environment_relation : Env.env TNull -> Env.env TNull -> Prop)
     (rename_name : string -> string)
     (left_context right_context : query_expr_context TNull relname) : Prop :=
-  @query_rename_context_compatible TNull relname
-    (@_basesort TNull db) (@_instance TNull db) unknown3
-    NullValues.interp_scalar_operator_runtime_error
-    NullValues.interp_aggregate_runtime_error
-    NullValues.is_null_value
-    environment_relation (rename_tnull_attribute_name rename_name)
-    left_context right_context.
+  forall boolean_schedule : boolean_site -> boolean_evaluation_order,
+    @query_rename_context_compatible TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value boolean_schedule
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool
+      environment_relation (rename_tnull_attribute_name rename_name)
+      left_context right_context.
 
 (** Proof-agent entry point for arbitrary nested projection, join, grouping,
     window, ordering, and slicing contexts.  Each context pair must first be
@@ -218,11 +232,31 @@ Theorem tnull_query_renaming_context_chain_transport :
 Proof.
 intros db environment_relation rename_name
   left_contexts right_contexts Hcontexts left right Htransport.
+intro boolean_schedule.
+assert (Hcontexts_scheduled :
+  Forall2
+    (@query_rename_context_compatible TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value boolean_schedule
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool
+      environment_relation (rename_tnull_attribute_name rename_name))
+    left_contexts right_contexts).
+{
+  induction Hcontexts; constructor.
+  - now apply H.
+  - exact IHHcontexts.
+}
 exact (@query_rename_context_chain_transport TNull relname
   (@_basesort TNull db) (@_instance TNull db) unknown3
   NullValues.interp_scalar_operator_runtime_error
   NullValues.interp_aggregate_runtime_error
-  NullValues.is_null_value
+  NullValues.is_null_value boolean_schedule
+  TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+  type_int64 type_bool
   environment_relation (rename_tnull_attribute_name rename_name)
-  left_contexts right_contexts Hcontexts left right Htransport).
+  left_contexts right_contexts Hcontexts_scheduled
+  left right (Htransport boolean_schedule)).
 Qed.

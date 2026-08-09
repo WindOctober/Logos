@@ -56,6 +56,7 @@ logos-formal-sql-lemmas: formal-sql
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/OrderedQueryFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/OrderedObservationTransportFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/RenameTransportFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/PossibleOutcomeFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/ProofAgentFacade.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/SubqueryFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/MembershipCompositionFacts.v
@@ -65,8 +66,12 @@ logos-formal-sql-lemmas: formal-sql
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/CorrelatedMembershipFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/MembershipJoinCompositionFacts.v
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/FilterFkEliminationFacts.v
+	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/QueryBindingSemantics.v
 
 logos-formal-sql-checks: logos-formal-sql-lemmas
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleOutcomeInterfacesRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleBagContextLiftingRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/QueryBindingRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/BitwiseRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AcceptanceGroupInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ScalarPredicateAcceptanceRegression.v
@@ -106,6 +111,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/InSemijoinAcceptanceRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SemijoinCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/RenamingTransportRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofAgentFacadeOnlyRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofAgentFacadeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofSelectorAuthorityRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/CountermodelFactsRegression.v

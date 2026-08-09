@@ -8,6 +8,8 @@ This focused catalog contains 76 declarations routed at declaration granularity 
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:12`](../StringTemporalFacts.v#L12)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Proves the stated cast or representation round trip for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `string_typmod_descriptor_roundtrip` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -32,6 +34,8 @@ Lemma string_typmod_descriptor_roundtrip : forall typmod,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:33`](../StringTemporalFacts.v#L33)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates string semantics to the exact list length or bag cardinality shown below.
 
 Applicability: Use when the goal or a hypothesis matches the `string_fits_bounded_typmod_from_length` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -53,6 +57,8 @@ Lemma string_fits_bounded_typmod_from_length :
 ## `string_fits_unbounded_typmod_from_length`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:43`](../StringTemporalFacts.v#L43)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates string semantics to the exact list length or bag cardinality shown below.
 
@@ -76,6 +82,8 @@ Lemma string_fits_unbounded_typmod_from_length :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:56`](../StringTemporalFacts.v#L56)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -98,6 +106,8 @@ Lemma string_assignment_coerce_textual_success_iff :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:77`](../StringTemporalFacts.v#L77)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -119,6 +129,8 @@ Lemma string_assignment_coerce_bpchar_success_iff :
 ## `string_assignment_coerce_varchar_n_success_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:91`](../StringTemporalFacts.v#L91)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -145,6 +157,8 @@ Lemma string_assignment_coerce_varchar_n_success_iff :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:115`](../StringTemporalFacts.v#L115)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -170,6 +184,8 @@ Lemma string_assignment_coerce_char_success_iff :
 ## `interp_string_cast_and_coercion_nonnull`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:140`](../StringTemporalFacts.v#L140)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp string cast and coercion nonnull law for string semantics, in the exact direction displayed by the declaration.
 
@@ -201,6 +217,8 @@ Lemma interp_string_cast_and_coercion_nonnull :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:159`](../StringTemporalFacts.v#L159)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_string_cast_and_coercion_null` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -228,6 +246,8 @@ Lemma interp_string_cast_and_coercion_null :
 ## `interp_string_cast_invalid_descriptor`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:176`](../StringTemporalFacts.v#L176)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp string cast invalid descriptor law for string semantics, in the exact direction displayed by the declaration.
 
@@ -257,6 +277,8 @@ Lemma interp_string_cast_invalid_descriptor :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:194`](../StringTemporalFacts.v#L194)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -276,6 +298,8 @@ Lemma string_cast_and_coercion_local_runtime_safe : forall cast values,
 ## `string_to_int32_cast_success`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:201`](../StringTemporalFacts.v#L201)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for string semantics.
 
@@ -303,6 +327,8 @@ Lemma string_to_int32_cast_success : forall source input result,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:218`](../StringTemporalFacts.v#L218)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Inverts or constructs the successful evaluation branch for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `string_to_int64_cast_success` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -329,6 +355,8 @@ Lemma string_to_int64_cast_success : forall source input result,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:235`](../StringTemporalFacts.v#L235)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the string to int32 cast invalid law for string semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -352,6 +380,8 @@ Lemma string_to_int32_cast_invalid : forall source input,
 ## `string_to_int64_cast_invalid`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:249`](../StringTemporalFacts.v#L249)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the string to int64 cast invalid law for string semantics, in the exact direction displayed by the declaration.
 
@@ -377,6 +407,8 @@ Lemma string_to_int64_cast_invalid : forall source input,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:263`](../StringTemporalFacts.v#L263)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Connects the displayed range/representability premise to string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -401,6 +433,8 @@ Lemma string_to_int32_cast_out_of_range : forall source input,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:277`](../StringTemporalFacts.v#L277)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Connects the displayed range/representability premise to string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -424,6 +458,8 @@ Lemma string_to_int64_cast_out_of_range : forall source input,
 ## `string_to_integer_casts_preserve_null`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:291`](../StringTemporalFacts.v#L291)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
@@ -453,6 +489,8 @@ Lemma string_to_integer_casts_preserve_null : forall source,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:306`](../StringTemporalFacts.v#L306)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `string_concat_payload_empty` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -471,6 +509,8 @@ Lemma string_concat_payload_empty :
 ## `string_concat_payload_nonnull_cons_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:310`](../StringTemporalFacts.v#L310)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -496,6 +536,8 @@ Lemma string_concat_payload_nonnull_cons_iff :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:328`](../StringTemporalFacts.v#L328)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `string_concat_payload_null_cons` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -514,6 +556,8 @@ Lemma string_concat_payload_null_cons : forall typmod rest,
 ## `interp_string_concat_nonnull_cons`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:332`](../StringTemporalFacts.v#L332)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp string concat nonnull cons law for string semantics, in the exact direction displayed by the declaration.
 
@@ -540,6 +584,8 @@ Lemma interp_string_concat_nonnull_cons :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:350`](../StringTemporalFacts.v#L350)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_string_concat_null_cons` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -560,6 +606,8 @@ Lemma interp_string_concat_null_cons : forall typmod rest,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:355`](../StringTemporalFacts.v#L355)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -578,6 +626,8 @@ Lemma string_concat_local_runtime_safe : forall values,
 ## `string_map_append`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:359`](../StringTemporalFacts.v#L359)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the string map append law for string semantics, in the exact direction displayed by the declaration.
 
@@ -599,6 +649,8 @@ Lemma string_map_append : forall mapping left right,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:369`](../StringTemporalFacts.v#L369)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates string semantics to the exact list length or bag cardinality shown below.
 
 Applicability: Use when the goal or a hypothesis matches the `string_map_length` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -617,6 +669,8 @@ Lemma string_map_length : forall mapping value,
 ## `interp_string_case_nonnull`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:378`](../StringTemporalFacts.v#L378)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp string case nonnull law for string semantics, in the exact direction displayed by the declaration.
 
@@ -646,6 +700,8 @@ Lemma interp_string_case_nonnull : forall operation typmod value,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:393`](../StringTemporalFacts.v#L393)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_string_case_null` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -667,6 +723,8 @@ Lemma interp_string_case_null : forall operation typmod,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:401`](../StringTemporalFacts.v#L401)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -687,6 +745,8 @@ Lemma string_case_local_runtime_safe : forall operation values,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:408`](../StringTemporalFacts.v#L408)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes reflexivity for string semantics.
 
 Applicability: Use to orient, transport, or compose a semantic relation about string semantics.
@@ -706,6 +766,8 @@ Lemma string_prefix_refl : forall value,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:419`](../StringTemporalFacts.v#L419)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes reflexivity for string semantics.
 
 Applicability: Use to orient, transport, or compose a semantic relation about string semantics.
@@ -724,6 +786,8 @@ Lemma string_like_prefix_physical_refl : forall typmod value,
 ## `interp_like_prefix_true_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:426`](../StringTemporalFacts.v#L426)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -748,6 +812,8 @@ Lemma interp_like_prefix_true_iff :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:442`](../StringTemporalFacts.v#L442)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -770,6 +836,8 @@ Lemma interp_like_prefix_false_iff :
 ## `interp_like_percent_true_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:458`](../StringTemporalFacts.v#L458)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -794,6 +862,8 @@ Lemma interp_like_percent_true_iff :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:474`](../StringTemporalFacts.v#L474)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -816,6 +886,8 @@ Lemma interp_like_percent_false_iff :
 ## `interp_substring_nonnegative_valid`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:490`](../StringTemporalFacts.v#L490)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp substring nonnegative valid law for string semantics, in the exact direction displayed by the declaration.
 
@@ -846,6 +918,8 @@ Lemma interp_substring_nonnegative_valid : forall typmod input start count,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:512`](../StringTemporalFacts.v#L512)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for string semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_substring_nonnegative_null` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -866,6 +940,8 @@ Lemma interp_substring_nonnegative_null : forall typmod start count,
 ## `interp_substring_nonnegative_invalid`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:520`](../StringTemporalFacts.v#L520)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp substring nonnegative invalid law for string semantics, in the exact direction displayed by the declaration.
 
@@ -890,6 +966,8 @@ Lemma interp_substring_nonnegative_invalid : forall typmod input start count,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:537`](../StringTemporalFacts.v#L537)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for string semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for string semantics.
@@ -908,6 +986,8 @@ Lemma substring_nonnegative_local_runtime_safe : forall values,
 ## `string_comparison_values_swap`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:541`](../StringTemporalFacts.v#L541)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the string comparison values swap law for string semantics, in the exact direction displayed by the declaration.
 
@@ -932,6 +1012,8 @@ Lemma string_comparison_values_swap :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:552`](../StringTemporalFacts.v#L552)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
 Applicability: Use in either direction to invert or construct a goal about string semantics.
@@ -954,6 +1036,8 @@ Lemma sql_string_compare_eq_iff_semantic_values :
 ## `sql_string_eqb_true_iff_semantic_values`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:569`](../StringTemporalFacts.v#L569)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for string semantics.
 
@@ -978,6 +1062,8 @@ Lemma sql_string_eqb_true_iff_semantic_values :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:587`](../StringTemporalFacts.v#L587)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the sql string compare opposite law for string semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `sql_string_compare_opposite` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -999,6 +1085,8 @@ Lemma sql_string_compare_opposite :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:602`](../StringTemporalFacts.v#L602)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Reverses a proved string semantics relation.
 
 Applicability: Use when the goal or a hypothesis matches the `sql_string_eqb_symmetric` direction for string semantics; do not reverse or strengthen the displayed conclusion.
@@ -1019,6 +1107,8 @@ Lemma sql_string_eqb_symmetric :
 ## `order_value_compare_string_nonnull`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:614`](../StringTemporalFacts.v#L614)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the order value compare string nonnull law for string semantics, in the exact direction displayed by the declaration.
 
@@ -1043,6 +1133,8 @@ Lemma order_value_compare_string_nonnull :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:624`](../StringTemporalFacts.v#L624)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
 Applicability: Use in either direction to invert or construct a goal about temporal semantics.
@@ -1062,6 +1154,8 @@ Lemma date_checked_some_iff : forall date,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:632`](../StringTemporalFacts.v#L632)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
 Applicability: Use in either direction to invert or construct a goal about temporal semantics.
@@ -1080,6 +1174,8 @@ Lemma date_checked_none_iff : forall date,
 ## `timestamp_checked_some_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:640`](../StringTemporalFacts.v#L640)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1101,6 +1197,8 @@ Lemma timestamp_checked_some_iff : forall timestamp,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:649`](../StringTemporalFacts.v#L649)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
 Applicability: Use in either direction to invert or construct a goal about temporal semantics.
@@ -1120,6 +1218,8 @@ Lemma timestamp_checked_none_iff : forall timestamp,
 ## `order_value_compare_date_nonnull`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:658`](../StringTemporalFacts.v#L658)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the order value compare date nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1142,6 +1242,8 @@ Lemma order_value_compare_date_nonnull : forall left right,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:666`](../StringTemporalFacts.v#L666)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the order value compare time nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `order_value_compare_time_nonnull` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1162,6 +1264,8 @@ Lemma order_value_compare_time_nonnull : forall left right,
 ## `order_value_compare_timestamp_nonnull`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:674`](../StringTemporalFacts.v#L674)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the order value compare timestamp nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1184,6 +1288,8 @@ Lemma order_value_compare_timestamp_nonnull : forall left right,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:682`](../StringTemporalFacts.v#L682)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the order value compare timestamptz nonnull law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `order_value_compare_timestamptz_nonnull` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1204,6 +1310,8 @@ Lemma order_value_compare_timestamptz_nonnull : forall left right,
 ## `cast_date_to_timestamp_checked_finite`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:690`](../StringTemporalFacts.v#L690)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the cast date to timestamp checked finite law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1227,6 +1335,8 @@ Lemma cast_date_to_timestamp_checked_finite : forall date,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:702`](../StringTemporalFacts.v#L702)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the cast timestamp to date checked finite law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `cast_timestamp_to_date_checked_finite` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1248,6 +1358,8 @@ Lemma cast_timestamp_to_date_checked_finite : forall timestamp,
 ## `scalar_cast_date_to_timestamp_success_safe`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:714`](../StringTemporalFacts.v#L714)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1271,6 +1383,8 @@ Lemma scalar_cast_date_to_timestamp_success_safe : forall date timestamp,
 ## `scalar_cast_timestamp_to_date_success_safe`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:728`](../StringTemporalFacts.v#L728)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1296,6 +1410,8 @@ Lemma scalar_cast_timestamp_to_date_success_safe : forall timestamp date,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:743`](../StringTemporalFacts.v#L743)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for temporal semantics.
@@ -1320,6 +1436,8 @@ Lemma scalar_cast_date_to_timestamp_failure_overflow : forall date,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:758`](../StringTemporalFacts.v#L758)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for temporal semantics.
@@ -1343,6 +1461,8 @@ Lemma scalar_cast_timestamp_to_date_failure_overflow : forall timestamp,
 ## `scalar_temporal_casts_null_safe`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:773`](../StringTemporalFacts.v#L773)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
@@ -1370,6 +1490,8 @@ Lemma scalar_temporal_casts_null_safe :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:784`](../StringTemporalFacts.v#L784)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the indicated operator preserves the displayed temporal semantics property.
 
 Applicability: Use when the goal or a hypothesis matches the `checked_temporal_casts_preserve_infinities` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1396,6 +1518,8 @@ Lemma checked_temporal_casts_preserve_infinities :
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:817`](../StringTemporalFacts.v#L817)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp extract year date finite law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_extract_year_date_finite` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1417,6 +1541,8 @@ Lemma interp_extract_year_date_finite : forall date,
 ## `interp_extract_year_date_infinity`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:827`](../StringTemporalFacts.v#L827)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp extract year date infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
@@ -1440,6 +1566,8 @@ Lemma interp_extract_year_date_infinity : forall date result,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:842`](../StringTemporalFacts.v#L842)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp extract month date finite law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_extract_month_date_finite` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1461,6 +1589,8 @@ Lemma interp_extract_month_date_finite : forall date,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:851`](../StringTemporalFacts.v#L851)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp extract month date infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_extract_month_date_infinity` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1480,6 +1610,8 @@ Lemma interp_extract_month_date_infinity : forall date,
 ## `interp_extract_date_null`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:859`](../StringTemporalFacts.v#L859)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for temporal semantics.
 
@@ -1501,6 +1633,8 @@ Lemma interp_extract_date_null : forall part,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:866`](../StringTemporalFacts.v#L866)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for temporal semantics.
@@ -1519,6 +1653,8 @@ Lemma extract_date_local_runtime_safe : forall part values,
 ## `interp_date_lt_timestamp_true_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:872`](../StringTemporalFacts.v#L872)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1541,6 +1677,8 @@ Lemma interp_date_lt_timestamp_true_iff : forall date timestamp,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:884`](../StringTemporalFacts.v#L884)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
 Applicability: Use in either direction to invert or construct a goal about temporal semantics.
@@ -1561,6 +1699,8 @@ Lemma interp_date_lte_timestamp_true_iff : forall date timestamp,
 ## `interp_date_gt_timestamp_true_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:896`](../StringTemporalFacts.v#L896)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
@@ -1583,6 +1723,8 @@ Lemma interp_date_gt_timestamp_true_iff : forall date timestamp,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:908`](../StringTemporalFacts.v#L908)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
 
 Applicability: Use in either direction to invert or construct a goal about temporal semantics.
@@ -1603,6 +1745,8 @@ Lemma interp_date_gte_timestamp_true_iff : forall date timestamp,
 ## `timestamp_scalar_add_checked_success`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:932`](../StringTemporalFacts.v#L932)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for temporal semantics.
 
@@ -1627,6 +1771,8 @@ Lemma timestamp_scalar_add_checked_success : forall unit timestamp amount result
 ## `timestamp_scalar_add_checked_failure`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:946`](../StringTemporalFacts.v#L946)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for temporal semantics.
 
@@ -1653,6 +1799,8 @@ Lemma timestamp_scalar_add_checked_failure : forall unit timestamp amount,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:961`](../StringTemporalFacts.v#L961)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for temporal semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for temporal semantics.
@@ -1676,6 +1824,8 @@ Lemma timestamp_scalar_add_null_safe : forall unit timestamp amount,
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:973`](../StringTemporalFacts.v#L973)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the timestamp checked operation infinity law for temporal semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `timestamp_checked_operation_infinity` direction for temporal semantics; do not reverse or strengthen the displayed conclusion.
@@ -1695,6 +1845,8 @@ Lemma timestamp_checked_operation_infinity : forall unit timestamp amount,
 ## `timestamp_scalar_add_preserves_infinity`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:989`](../StringTemporalFacts.v#L989)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Shows that the indicated operator preserves the displayed temporal semantics property.
 

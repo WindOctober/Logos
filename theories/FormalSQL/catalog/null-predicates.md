@@ -8,6 +8,8 @@ This focused catalog contains 99 declarations routed at declaration granularity 
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:33`](../ScalarPredicateFacts.v#L33)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -28,6 +30,8 @@ Lemma andb3_unknown_iff : forall left right,
 ## `orb3_unknown_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:69`](../ScalarPredicateFacts.v#L69)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -50,6 +54,8 @@ Lemma orb3_unknown_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:105`](../ScalarPredicateFacts.v#L105)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -68,6 +74,8 @@ Lemma negb3_true_iff : forall value,
 ## `negb3_false_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:112`](../ScalarPredicateFacts.v#L112)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -88,6 +96,8 @@ Lemma negb3_false_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:119`](../ScalarPredicateFacts.v#L119)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -106,6 +116,8 @@ Lemma negb3_unknown_iff : forall value,
 ## `value_bool_to_bool3_roundtrip`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:126`](../ScalarPredicateFacts.v#L126)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Proves the stated cast or representation round trip for scalar-predicate semantics.
 
@@ -126,6 +138,8 @@ Lemma value_bool_to_bool3_roundtrip : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:132`](../ScalarPredicateFacts.v#L132)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Recovers source equality from the declared scalar-predicate semantics representation.
 
 Applicability: Use when the goal or a hypothesis matches the `bool3_to_value_bool_injective` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -145,6 +159,8 @@ Lemma bool3_to_value_bool_injective : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:139`](../ScalarPredicateFacts.v#L139)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -163,6 +179,8 @@ Lemma bool3_to_value_bool_is_null_iff : forall value,
 ## `value_bool_to_bool3_true_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:146`](../ScalarPredicateFacts.v#L146)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -184,6 +202,8 @@ Lemma value_bool_to_bool3_true_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:157`](../ScalarPredicateFacts.v#L157)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -203,6 +223,8 @@ Lemma value_bool_to_bool3_false_iff : forall value,
 ## `value_bool_to_bool3_unknown_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:168`](../ScalarPredicateFacts.v#L168)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -225,6 +247,8 @@ Lemma value_bool_to_bool3_unknown_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:183`](../ScalarPredicateFacts.v#L183)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `default_value_is_typed_null` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -244,6 +268,8 @@ Lemma default_value_is_typed_null : forall value_type,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:189`](../ScalarPredicateFacts.v#L189)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the indicated operator preserves the displayed scalar-predicate semantics property.
 
 Applicability: Use when the goal or a hypothesis matches the `default_value_preserves_type` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -262,6 +288,8 @@ Lemma default_value_preserves_type : forall value_type,
 ## `interp_bool_and_bool3`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:195`](../ScalarPredicateFacts.v#L195)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp bool and bool3 law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -283,6 +311,8 @@ Lemma interp_bool_and_bool3 : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:203`](../ScalarPredicateFacts.v#L203)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp bool or bool3 law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_bool_or_bool3` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -303,6 +333,8 @@ Lemma interp_bool_or_bool3 : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:211`](../ScalarPredicateFacts.v#L211)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp bool not bool3 law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_bool_not_bool3` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -322,6 +354,8 @@ Lemma interp_bool_not_bool3 : forall value,
 ## `interp_bool_and_true_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:219`](../ScalarPredicateFacts.v#L219)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -344,6 +378,8 @@ Lemma interp_bool_and_true_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:235`](../ScalarPredicateFacts.v#L235)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -364,6 +400,8 @@ Lemma interp_bool_and_false_iff : forall left right,
 ## `interp_bool_and_unknown_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:251`](../ScalarPredicateFacts.v#L251)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -388,6 +426,8 @@ Lemma interp_bool_and_unknown_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:276`](../ScalarPredicateFacts.v#L276)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -409,6 +449,8 @@ Lemma interp_bool_or_true_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:292`](../ScalarPredicateFacts.v#L292)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -429,6 +471,8 @@ Lemma interp_bool_or_false_iff : forall left right,
 ## `interp_bool_or_unknown_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:308`](../ScalarPredicateFacts.v#L308)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -453,6 +497,8 @@ Lemma interp_bool_or_unknown_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:333`](../ScalarPredicateFacts.v#L333)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -472,6 +518,8 @@ Lemma interp_bool_not_true_iff : forall value,
 ## `interp_bool_not_false_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:348`](../ScalarPredicateFacts.v#L348)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -493,6 +541,8 @@ Lemma interp_bool_not_false_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:363`](../ScalarPredicateFacts.v#L363)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -513,6 +563,8 @@ Lemma interp_bool_not_unknown_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:378`](../ScalarPredicateFacts.v#L378)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp bool and wrong arity law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_bool_and_wrong_arity` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -531,6 +583,8 @@ Lemma interp_bool_and_wrong_arity : forall values,
 ## `interp_bool_or_wrong_arity`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:389`](../ScalarPredicateFacts.v#L389)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp bool or wrong arity law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -551,6 +605,8 @@ Lemma interp_bool_or_wrong_arity : forall values,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:400`](../ScalarPredicateFacts.v#L400)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp bool not wrong arity law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_bool_not_wrong_arity` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -569,6 +625,8 @@ Lemma interp_bool_not_wrong_arity : forall values,
 ## `interp_bool_and_bool3_congr`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:410`](../ScalarPredicateFacts.v#L410)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
@@ -591,6 +649,8 @@ Lemma interp_bool_and_bool3_congr : forall left1 right1 left2 right2,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:419`](../ScalarPredicateFacts.v#L419)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about scalar-predicate semantics.
@@ -612,6 +672,8 @@ Lemma interp_bool_or_bool3_congr : forall left1 right1 left2 right2,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:428`](../ScalarPredicateFacts.v#L428)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
 Applicability: Use to orient, transport, or compose a semantic relation about scalar-predicate semantics.
@@ -631,6 +693,8 @@ Lemma interp_bool_not_bool3_congr : forall left right,
 ## `is_null_value_true_elim`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:436`](../ScalarPredicateFacts.v#L436)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -664,6 +728,8 @@ Lemma is_null_value_true_elim : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:474`](../ScalarPredicateFacts.v#L474)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `strict_binary_predicate_null_left` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -684,6 +750,8 @@ Lemma strict_binary_predicate_null_left : forall predicate left right,
 ## `strict_binary_predicate_null_right`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:487`](../ScalarPredicateFacts.v#L487)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -706,6 +774,8 @@ Lemma strict_binary_predicate_null_right : forall predicate left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:504`](../ScalarPredicateFacts.v#L504)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the strict binary predicate has arity two law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `strict_binary_predicate_has_arity_two` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -725,6 +795,8 @@ Lemma strict_binary_predicate_has_arity_two : forall predicate,
 ## `strict_binary_predicate_nonunknown_operands_nonnull`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:513`](../ScalarPredicateFacts.v#L513)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the strict binary predicate nonunknown operands nonnull law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -748,6 +820,8 @@ Lemma strict_binary_predicate_nonunknown_operands_nonnull :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:529`](../ScalarPredicateFacts.v#L529)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_wrong_arity_unknown` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -767,6 +841,8 @@ Lemma interp_predicate_wrong_arity_unknown : forall predicate values,
 ## `interp_predicate_is_null_true_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:555`](../ScalarPredicateFacts.v#L555)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -788,6 +864,8 @@ Lemma interp_predicate_is_null_true_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:565`](../ScalarPredicateFacts.v#L565)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -807,6 +885,8 @@ Lemma interp_predicate_is_not_null_true_iff : forall value,
 ## `interp_predicate_is_null_false_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:575`](../ScalarPredicateFacts.v#L575)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
@@ -828,6 +908,8 @@ Lemma interp_predicate_is_null_false_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:585`](../ScalarPredicateFacts.v#L585)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for SQL NULL and three-valued behavior.
 
 Applicability: Use in either direction to invert or construct a goal about SQL NULL and three-valued behavior.
@@ -847,6 +929,8 @@ Lemma interp_predicate_is_not_null_false_iff : forall value,
 ## `interp_predicate_is_not_null_dual`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:595`](../ScalarPredicateFacts.v#L595)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -868,6 +952,8 @@ Lemma interp_predicate_is_not_null_dual : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:604`](../ScalarPredicateFacts.v#L604)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_is_null_never_unknown` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -887,6 +973,8 @@ Lemma interp_predicate_is_null_never_unknown : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:612`](../ScalarPredicateFacts.v#L612)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_is_not_null_never_unknown` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -905,6 +993,8 @@ Lemma interp_predicate_is_not_null_never_unknown : forall value,
 ## `interp_predicate_eq_true_is_true_acceptance`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:624`](../ScalarPredicateFacts.v#L624)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate equality true is true acceptance law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -929,6 +1019,8 @@ Lemma interp_predicate_eq_true_is_true_acceptance : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:643`](../ScalarPredicateFacts.v#L643)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate is true bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_is_true_bool3` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -948,6 +1040,8 @@ Lemma interp_predicate_is_true_bool3 : forall value,
 ## `interp_predicate_is_not_true_bool3`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:650`](../ScalarPredicateFacts.v#L650)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate is not true bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -969,6 +1063,8 @@ Lemma interp_predicate_is_not_true_bool3 : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:657`](../ScalarPredicateFacts.v#L657)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate is false bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_is_false_bool3` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -988,6 +1084,8 @@ Lemma interp_predicate_is_false_bool3 : forall value,
 ## `interp_predicate_is_not_false_bool3`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:664`](../ScalarPredicateFacts.v#L664)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate is not false bool3 law for SQL NULL and three-valued behavior, in the exact direction displayed by the declaration.
 
@@ -1009,6 +1107,8 @@ Lemma interp_predicate_is_not_false_bool3 : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:671`](../ScalarPredicateFacts.v#L671)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1028,6 +1128,8 @@ Lemma interp_predicate_is_true_true_iff : forall value,
 ## `interp_predicate_is_not_true_true_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:679`](../ScalarPredicateFacts.v#L679)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1049,6 +1151,8 @@ Lemma interp_predicate_is_not_true_true_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:687`](../ScalarPredicateFacts.v#L687)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1069,6 +1173,8 @@ Lemma interp_predicate_is_false_true_iff : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:695`](../ScalarPredicateFacts.v#L695)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1088,6 +1194,8 @@ Lemma interp_predicate_is_not_false_true_iff : forall value,
 ## `interp_predicate_is_not_true_dual`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:703`](../ScalarPredicateFacts.v#L703)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate is not true dual law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1110,6 +1218,8 @@ Lemma interp_predicate_is_not_true_dual : forall value,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:713`](../ScalarPredicateFacts.v#L713)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate is not false dual law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_is_not_false_dual` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1130,6 +1240,8 @@ Lemma interp_predicate_is_not_false_dual : forall value,
 ## `interp_is_not_distinct_from_both_null`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:723`](../ScalarPredicateFacts.v#L723)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -1152,6 +1264,8 @@ Lemma interp_is_not_distinct_from_both_null : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:733`](../ScalarPredicateFacts.v#L733)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_is_not_distinct_from_exactly_one_null` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -1173,6 +1287,8 @@ Lemma interp_is_not_distinct_from_exactly_one_null : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:743`](../ScalarPredicateFacts.v#L743)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_is_not_distinct_from_never_unknown` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
@@ -1192,6 +1308,8 @@ Lemma interp_is_not_distinct_from_never_unknown : forall left right,
 ## `interp_is_not_distinct_from_true_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:754`](../ScalarPredicateFacts.v#L754)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1215,6 +1333,8 @@ Lemma interp_is_not_distinct_from_true_iff : forall left right,
 ## `interp_is_not_distinct_from_false_iff`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:769`](../ScalarPredicateFacts.v#L769)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1240,6 +1360,8 @@ Lemma interp_is_not_distinct_from_false_iff : forall left right,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:808`](../ScalarPredicateFacts.v#L808)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for scalar-predicate semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_case_values_empty` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1259,6 +1381,8 @@ Lemma interp_case_values_empty :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:814`](../ScalarPredicateFacts.v#L814)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp case values else law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_case_values_else` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1277,6 +1401,8 @@ Lemma interp_case_values_else : forall else_value,
 ## `interp_case_values_true_branch`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:820`](../ScalarPredicateFacts.v#L820)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp case values true branch law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1298,6 +1424,8 @@ Lemma interp_case_values_true_branch : forall then_value rest,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:827`](../ScalarPredicateFacts.v#L827)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp case values true branch if law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_case_values_true_branch_if` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1317,6 +1445,8 @@ Lemma interp_case_values_true_branch_if : forall condition then_value rest,
 ## `interp_case_is_not_null_identity`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:837`](../ScalarPredicateFacts.v#L837)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
 
@@ -1342,6 +1472,8 @@ Lemma interp_case_is_not_null_identity : forall value fallback,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:855`](../ScalarPredicateFacts.v#L855)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp case values skip nontrue law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_case_values_skip_nontrue` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1363,6 +1495,8 @@ Lemma interp_case_values_skip_nontrue : forall condition then_value rest,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:868`](../ScalarPredicateFacts.v#L868)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp case values skip prefix law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_case_values_skip_prefix` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1382,6 +1516,8 @@ Lemma interp_case_values_skip_prefix : forall prefix suffix,
 ## `interp_case_values_first_true`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:879`](../ScalarPredicateFacts.v#L879)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp case values first true law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1406,6 +1542,8 @@ Lemma interp_case_values_first_true :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1425,6 +1563,8 @@ Lemma case_runtime_error_empty :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:897`](../ScalarPredicateFacts.v#L897)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1443,6 +1583,8 @@ Lemma case_runtime_error_else : forall else_error else_value,
 ## `case_runtime_error_condition_error`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:903`](../ScalarPredicateFacts.v#L903)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1465,6 +1607,8 @@ Lemma case_runtime_error_condition_error : forall error condition then_error
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:911`](../ScalarPredicateFacts.v#L911)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1485,6 +1629,8 @@ Lemma case_runtime_error_true_branch : forall condition then_error then_value re
 ## `case_runtime_error_is_not_null_identity`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:920`](../ScalarPredicateFacts.v#L920)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for SQL NULL and three-valued behavior.
 
@@ -1512,6 +1658,8 @@ Lemma case_runtime_error_is_not_null_identity :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:940`](../ScalarPredicateFacts.v#L940)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1533,6 +1681,8 @@ Lemma case_runtime_error_skip_nontrue : forall condition then_error then_value r
 ## `case_runtime_error_skipped_arm_irrelevant`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:954`](../ScalarPredicateFacts.v#L954)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1558,6 +1708,8 @@ Lemma case_runtime_error_skipped_arm_irrelevant :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:968`](../ScalarPredicateFacts.v#L968)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1577,6 +1729,8 @@ Lemma case_runtime_error_skip_prefix : forall prefix suffix,
 ## `case_runtime_error_first_true`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:979`](../ScalarPredicateFacts.v#L979)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1602,6 +1756,8 @@ Lemma case_runtime_error_first_true :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1623,6 +1779,8 @@ Lemma case_runtime_error_some_member : forall observations error,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1018`](../ScalarPredicateFacts.v#L1018)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -1643,6 +1801,8 @@ Lemma case_runtime_error_none_of_all_none : forall observations,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1032`](../ScalarPredicateFacts.v#L1032)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp scalar case values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_scalar_case_values` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1661,6 +1821,8 @@ Lemma interp_scalar_case_values : forall values,
 ## `interp_scalar_case_runtime_error`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1038`](../ScalarPredicateFacts.v#L1038)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
@@ -1681,6 +1843,8 @@ Lemma interp_scalar_case_runtime_error : forall observations,
 ## `interp_predicate_lt_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate strict-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1703,6 +1867,8 @@ Lemma interp_predicate_lt_of_order_compare : forall left right ordering,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate lte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_lte_of_order_compare` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1723,6 +1889,8 @@ Lemma interp_predicate_lte_of_order_compare : forall left right ordering,
 ## `interp_predicate_gt_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate strict-lower-bound of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1745,6 +1913,8 @@ Lemma interp_predicate_gt_of_order_compare : forall left right ordering,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1075`](../ScalarPredicateFacts.v#L1075)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate gte of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_gte_of_order_compare` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1765,6 +1935,8 @@ Lemma interp_predicate_gte_of_order_compare : forall left right ordering,
 ## `interp_predicate_eq_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1085`](../ScalarPredicateFacts.v#L1085)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate equality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1787,6 +1959,8 @@ Lemma interp_predicate_eq_of_order_compare : forall left right ordering,
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1095`](../ScalarPredicateFacts.v#L1095)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate disequality of order compare law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_neq_of_order_compare` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1807,6 +1981,8 @@ Lemma interp_predicate_neq_of_order_compare : forall left right ordering,
 ## `interp_predicate_eq_neq_dual_on_ordered_values`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1105`](../ScalarPredicateFacts.v#L1105)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp predicate equality disequality dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
@@ -1829,6 +2005,8 @@ Lemma interp_predicate_eq_neq_dual_on_ordered_values : forall left right orderin
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1849,6 +2027,8 @@ Lemma interp_predicate_lt_true_iff_of_order_compare : forall left right ordering
 ## `interp_predicate_lte_true_iff_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1871,6 +2051,8 @@ Lemma interp_predicate_lte_true_iff_of_order_compare : forall left right orderin
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1891,6 +2073,8 @@ Lemma interp_predicate_gt_true_iff_of_order_compare : forall left right ordering
 ## `interp_predicate_gte_true_iff_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1146`](../ScalarPredicateFacts.v#L1146)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1913,6 +2097,8 @@ Lemma interp_predicate_gte_true_iff_of_order_compare : forall left right orderin
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1156`](../ScalarPredicateFacts.v#L1156)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
 Applicability: Use in either direction to invert or construct a goal about scalar-predicate semantics.
@@ -1933,6 +2119,8 @@ Lemma interp_predicate_eq_true_iff_of_order_compare : forall left right ordering
 ## `interp_predicate_neq_true_iff_of_order_compare`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1166`](../ScalarPredicateFacts.v#L1166)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for scalar-predicate semantics.
 
@@ -1955,6 +2143,8 @@ Lemma interp_predicate_neq_true_iff_of_order_compare : forall left right orderin
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1176`](../ScalarPredicateFacts.v#L1176)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate strict-bound gte dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_lt_gte_dual_on_ordered_values` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1976,6 +2166,8 @@ Lemma interp_predicate_lt_gte_dual_on_ordered_values : forall left right orderin
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1187`](../ScalarPredicateFacts.v#L1187)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp predicate lte strict-lower-bound dual on ordered values law for scalar-predicate semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_predicate_lte_gt_dual_on_ordered_values` direction for scalar-predicate semantics; do not reverse or strengthen the displayed conclusion.
@@ -1996,6 +2188,8 @@ Lemma interp_predicate_lte_gt_dual_on_ordered_values : forall left right orderin
 ## `interp_ordered_comparison_congr`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1198`](../ScalarPredicateFacts.v#L1198)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports or composes scalar-predicate semantics across the declared equivalence.
 
@@ -2021,6 +2215,8 @@ Lemma interp_ordered_comparison_congr :
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1213`](../ScalarPredicateFacts.v#L1213)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
@@ -2041,6 +2237,8 @@ Lemma scalar_predicate_runtime_error_is_children : forall predicate observations
 ## `scalar_boolean_runtime_error_is_children`
 
 Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1223`](../ScalarPredicateFacts.v#L1223)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for scalar-predicate semantics.
 

@@ -406,8 +406,9 @@ done
 # The source must be regular, the object must be regular/nonempty, and the
 # object must not predate its source.  Source-less objects, .glob/.aux/.cache,
 # build trees, Examples, catalogs, guides, and retained run artifacts are never
-# staged.  The resulting read-only mount contains only these pairs plus a
-# SHA-256 manifest named AUTHORITY-CLOSURE.txt.
+# admitted. LOGOS_REPO_ROOT is already the runner's immutable authority
+# snapshot, so the exact tree is mounted read-only instead of copied for every
+# agent round. AUTHORITY-CLOSURE.txt remains an independently recorded binding.
 is_excluded_authority_source() {
   local relative="$1"
   local base="${relative##*/}"
@@ -425,10 +426,9 @@ is_excluded_authority_source() {
 }
 
 authority_source_count=0
-stage_source_object_pair() {
+validate_source_object_pair() {
   local source="$1"
   local source_root="$2"
-  local destination_root="$3"
   local relative="${source#"$source_root"/}"
   local object="${source%.v}.vo"
 
@@ -449,28 +449,24 @@ stage_source_object_pair() {
     exit 2
   fi
 
-  install -D -m 444 "$source" "$destination_root/$relative"
-  install -D -m 444 "$object" "$destination_root/${relative%.v}.vo"
+  if [[ "$(stat -c '%a' "$source")" != 444 || "$(stat -c '%a' "$object")" != 444 ]]; then
+    echo "authority source/object pair is not immutable: $source" >&2
+    exit 2
+  fi
   authority_source_count=$((authority_source_count + 1))
 }
 
 while IFS= read -r -d '' source; do
   relative="${source#"$VENDOR_SOURCE_ROOT"/}"
   if ! is_excluded_authority_source "$relative"; then
-    stage_source_object_pair \
-      "$source" \
-      "$VENDOR_SOURCE_ROOT" \
-      "$AUTHORITY_STAGE/vendor/FormalSQL/src"
+    validate_source_object_pair "$source" "$VENDOR_SOURCE_ROOT"
   fi
 done < <(find "$VENDOR_SOURCE_ROOT" -type f -name '*.v' -print0 | LC_ALL=C sort -z)
 
 while IFS= read -r -d '' source; do
   relative="${source#"$LOGOS_SOURCE_ROOT"/}"
   if ! is_excluded_authority_source "$relative"; then
-    stage_source_object_pair \
-      "$source" \
-      "$LOGOS_SOURCE_ROOT" \
-      "$AUTHORITY_STAGE/theories/FormalSQL"
+    validate_source_object_pair "$source" "$LOGOS_SOURCE_ROOT"
   fi
 done < <(find "$LOGOS_SOURCE_ROOT" -maxdepth 1 -type f -name '*.v' -print0 | LC_ALL=C sort -z)
 
@@ -489,7 +485,7 @@ closure_tmp="$AUTHORITY_STAGE/.AUTHORITY-CLOSURE.txt.tmp"
   echo '# sha256  workspace-relative-path'
   echo '# Only source-backed non-Example .v/.vo pairs are present.'
   (
-    cd "$AUTHORITY_STAGE"
+    cd "$LOGOS_REPO_ROOT"
     while IFS= read -r -d '' relative; do
       sha256sum "$relative"
     done < <(
@@ -658,7 +654,7 @@ docker_args=(
   -e LOGOS_PROOF_AGENT_GID="$HOST_GID"
   -e HOME=/workspace/home
   -e TMPDIR=/workspace/tmp
-  -v "$AUTHORITY_STAGE":/workspace/logos:ro
+  -v "$LOGOS_REPO_ROOT":/workspace/logos:ro
   -v "$DIAGNOSTIC_SOCKET_DIR":/seed/diagnostic:ro
   -v "$AGENT_STAGE":/seed/problem:ro
   -v "$WORKDIR":/seed/context:ro
@@ -685,8 +681,9 @@ for env_name in OPENAI_API_KEY CODEX_API_KEY; do
   fi
 done
 
-# The container never receives the trusted checker, a Rocq switch, a broad
-# repository mount, or an agent-writable host bind. Its root is read-only and
+# The container never receives the trusted checker, a Rocq switch, the mutable
+# repository, or an agent-writable host bind. It receives only the runner's
+# manifest-bound immutable authority snapshot. Its root is read-only and
 # all mutable agent state (Problem.v, ProofModules, scratch, Codex state, HOME, TMPDIR, and
 # captured output) shares one kernel-enforced tmpfs quota. Context and prior
 # state enter through read-only seeds. The sole writable host mount is one

@@ -1,37 +1,324 @@
 # Query syntax and projection bridges
 
-Route here for: query-level nullable syntax adapters, tuple projection, attribute lookup.
+Route here for: query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup.
 
-This focused catalog contains 60 declarations routed at declaration granularity from `QueryTNullSyntax.v`, `TNullSyntax.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 55 declarations routed at declaration granularity from `QueryBindingSemantics.v`, `QueryTNullSyntax.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
-## `TNullQueryExprTypedNativeScalarAdmissible_is_admissible`
+## `eval_local_query_bindings_with_schedule_decompose`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:433`](../QueryTNullSyntax.v#L433)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:262`](../QueryBindingSemantics.v#L262)
 
-Purpose/direction: States the tnull query expr typed native scalar admissible is admissible law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use when the goal or a hypothesis matches the `TNullQueryExprTypedNativeScalarAdmissible_is_admissible` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+Purpose/direction: States the eval local query bindings with schedule decompose law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
 
-Cross-index: primary card only
+Important premises: do not erase or identify runtime errors with NULL/empty success.
 
-Search aliases: `query syntax bridge`, `schema conformance`, `typing`
+Cross-index: `runtime`
+
+Search aliases: `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
-Lemma TNullQueryExprTypedNativeScalarAdmissible_is_admissible :
-  forall basesort query,
-    TNullQueryExprTypedNativeScalarAdmissible basesort query ->
-    @query_expr_admissible TNull relname basesort query.
+Lemma eval_local_query_bindings_with_schedule_decompose :
+  forall schedule env bindings db body outcome,
+    eval_local_query_bindings_with_schedule schedule env db bindings
+      body outcome <->
+    (exists error,
+      outcome = SqlError error /\
+      local_query_bindings_error_with_schedule schedule env
+        db bindings error) \/
+    (exists reached,
+      local_query_bindings_reachable_with_schedule schedule env
+        db bindings reached /\
+      eval_query_expr_with_schedule reached schedule env body outcome).
 ```
 
-## `TNullQueryExprTypedNativeScalarAdmissibleWithOutputs_is_admissible`
+## `eval_bound_query_possible_outcome_decompose`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:441`](../QueryTNullSyntax.v#L441)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:314`](../QueryBindingSemantics.v#L314)
 
-Purpose/direction: States the tnull query expr typed native scalar admissible with outputs is admissible law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
-Applicability: Use when the goal or a hypothesis matches the `TNullQueryExprTypedNativeScalarAdmissibleWithOutputs_is_admissible` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+Purpose/direction: States the eval bound query possible outcome decompose law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Lemma eval_bound_query_possible_outcome_decompose :
+  forall db schemas env query outcome,
+    eval_bound_query_possible_outcome db schemas env query outcome <->
+    (exists schedule error,
+      outcome = SqlError error /\
+      local_query_bindings_error_with_schedule schedule env
+        (declare_local_query_schemas db schemas)
+        (bound_query_bindings query) error) \/
+    eval_bound_query_body_possible_outcome db schemas env query outcome.
+```
+
+## `bound_query_body_possible_outcome_lift_refl`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:360`](../QueryBindingSemantics.v#L360)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Establishes reflexivity for projection and tuple-syntax bridging.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_body_possible_outcome_lift_refl :
+  forall db schemas env query,
+    (exists outcome,
+      eval_bound_query_body_possible_outcome
+        db schemas env query outcome) ->
+    bound_query_body_possible_outcome_lift
+      db schemas env query query.
+```
+
+## `bound_query_body_possible_outcome_lift_sound`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:376`](../QueryBindingSemantics.v#L376)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the bound query body possible outcome lift sound law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_body_possible_outcome_lift_sound :
+  forall db schemas env left right,
+    bound_query_body_possible_outcome_lift
+      db schemas env left right ->
+    bound_query_possible_outcome_equiv db schemas env left right.
+```
+
+## `bound_query_possible_equiv_implies_possible_outcome_equiv`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:457`](../QueryBindingSemantics.v#L457)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_possible_equiv_implies_possible_outcome_equiv :
+  forall db schemas env left right,
+    bound_query_possible_equiv db schemas env left right ->
+    bound_query_possible_outcome_equiv db schemas env left right.
+```
+
+## `bound_query_program_body_possible_outcome_lift_sound`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:510`](../QueryBindingSemantics.v#L510)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the bound query program body possible outcome lift sound law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_program_body_possible_outcome_lift_sound :
+  forall db schemas env left right,
+    bound_query_program_body_possible_outcome_lift
+      db schemas env left right ->
+    bound_query_program_possible_outcome_equiv
+      db schemas env left right.
+```
+
+## `bound_query_program_body_possible_outcome_lift_demand_safe`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:561`](../QueryBindingSemantics.v#L561)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for projection and tuple-syntax bridging.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_program_body_possible_outcome_lift_demand_safe :
+  forall db schemas env left right,
+    bound_query_program_body_possible_outcome_lift
+      db schemas env left right ->
+    bound_query_program_materialization_safe db schemas env left ->
+    bound_query_program_materialization_safe db schemas env right ->
+    bound_query_program_demand_safe_outcome_equiv
+      db schemas env left right.
+```
+
+## `bound_query_possible_equiv_runtime_safe`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:576`](../QueryBindingSemantics.v#L576)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_possible_equiv_runtime_safe :
+  forall db schemas env left right,
+    bound_query_possible_equiv db schemas env left right ->
+    bound_query_runtime_safe db schemas env left /\
+    bound_query_runtime_safe db schemas env right.
+```
+
+## `bound_query_program_possible_equiv_materialization_safe`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:595`](../QueryBindingSemantics.v#L595)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_program_possible_equiv_materialization_safe :
+  forall db schemas env left right,
+    bound_query_program_possible_equiv db schemas env left right ->
+    bound_query_program_materialization_safe db schemas env left /\
+    bound_query_program_materialization_safe db schemas env right.
+```
+
+## `bound_query_program_possible_equiv_implies_possible_outcome_equiv`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:618`](../QueryBindingSemantics.v#L618)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_program_possible_equiv_implies_possible_outcome_equiv :
+  forall db schemas env left right,
+    bound_query_program_possible_equiv db schemas env left right ->
+    bound_query_program_possible_outcome_equiv db schemas env left right.
+```
+
+## `bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:631`](../QueryBindingSemantics.v#L631)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv :
+  forall db schemas env left right,
+    bound_query_program_possible_equiv db schemas env left right ->
+    bound_query_program_demand_safe_outcome_equiv
+      db schemas env left right.
+```
+
+## `declare_local_query_schemas_basesort_extensional`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:684`](../QueryBindingSemantics.v#L684)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the declare local query schemas basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `declare_local_query_schemas_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `query syntax bridge`, `schema conformance`, `typing`
+
+```rocq
+Lemma declare_local_query_schemas_basesort_extensional :
+  forall schemas first second,
+    (forall relation,
+      @_basesort TNull first relation =S=
+      @_basesort TNull second relation) ->
+    forall relation,
+      @_basesort TNull (declare_local_query_schemas first schemas) relation =S=
+      @_basesort TNull (declare_local_query_schemas second schemas) relation.
+```
+
+## `bound_query_admissible_database_shape_extensional`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:704`](../QueryBindingSemantics.v#L704)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the bound query admissible database shape extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `bound_query_admissible_database_shape_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
 
@@ -40,17 +327,124 @@ Cross-index: primary card only
 Search aliases: `query syntax bridge`, `schema conformance`, `typing`
 
 ```rocq
-Lemma TNullQueryExprTypedNativeScalarAdmissibleWithOutputs_is_admissible :
+Lemma bound_query_admissible_database_shape_extensional :
+  forall schemas first second query,
+    @_relnames TNull first = @_relnames TNull second ->
+    (forall relation,
+      @_basesort TNull first relation =S=
+      @_basesort TNull second relation) ->
+    bound_query_admissible first schemas query ->
+    bound_query_admissible second schemas query.
+```
+
+## `bound_query_program_admissible_database_shape_extensional`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:754`](../QueryBindingSemantics.v#L754)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the bound query program admissible database shape extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `bound_query_program_admissible_database_shape_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: primary card only
+
+Search aliases: `query syntax bridge`, `schema conformance`, `typing`
+
+```rocq
+Lemma bound_query_program_admissible_database_shape_extensional :
+  forall schemas first second program,
+    @_relnames TNull first = @_relnames TNull second ->
+    (forall relation,
+      @_basesort TNull first relation =S=
+      @_basesort TNull second relation) ->
+    bound_query_program_admissible first schemas program ->
+    bound_query_program_admissible second schemas program.
+```
+
+## `bound_query_program_admissible_database_schema_transport`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:771`](../QueryBindingSemantics.v#L771)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for projection and tuple-syntax bridging.
+
+Applicability: Use when the goal or a hypothesis matches the `bound_query_program_admissible_database_schema_transport` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: primary card only
+
+Search aliases: `query syntax bridge`, `schema conformance`, `typing`
+
+```rocq
+Lemma bound_query_program_admissible_database_schema_transport :
+  forall expected constraints actual schemas program,
+    database_conforms_schema expected constraints actual ->
+    bound_query_program_admissible expected schemas program ->
+    bound_query_program_admissible actual schemas program.
+```
+
+## `eval_bound_query_without_bindings`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:792`](../QueryBindingSemantics.v#L792)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the eval bound query without bindings law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `eval_bound_query_without_bindings` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `possible`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`
+
+```rocq
+Lemma eval_bound_query_without_bindings :
+  forall db env query outcome,
+    eval_bound_query_possible_outcome db nil env
+      (MakeBoundQuery nil query) outcome <->
+    eval_query_expr_outcome_in_env db env query outcome.
+```
+
+## `TNullQueryExprAdmissibleWithOutputs_intro`
+
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:462`](../QueryTNullSyntax.v#L462)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull query expr admissible with outputs intro law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `TNullQueryExprAdmissibleWithOutputs_intro` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: primary card only
+
+Search aliases: `query syntax bridge`
+
+```rocq
+Lemma TNullQueryExprAdmissibleWithOutputs_intro :
   forall basesort query expected_outputs,
-    TNullQueryExprTypedNativeScalarAdmissibleWithOutputs
-      basesort query expected_outputs ->
-    @query_expr_admissible TNull relname basesort query /\
-    query_expr_outputs query = expected_outputs.
+    (@query_expr_admissible TNull relname basesort
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool NullValues.is_null_value query /\
+     query_expr_outputs query = expected_outputs) ->
+    query_expr_analysis_error_well_placed query ->
+    query_expr_boolean_sites_well_formed query ->
+    TNullQueryExprAdmissibleWithOutputs basesort query expected_outputs.
 ```
 
 ## `NumericExpOutputRow_labels`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:589`](../QueryTNullSyntax.v#L589)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:617`](../QueryTNullSyntax.v#L617)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric exp output row labels law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -77,7 +471,9 @@ Lemma NumericExpOutputRow_labels :
 
 ## `NumericExpRowAdapter_well_sorted`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:604`](../QueryTNullSyntax.v#L604)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:632`](../QueryTNullSyntax.v#L632)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric exp row adapter well sorted law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -104,7 +500,9 @@ Lemma NumericExpRowAdapter_well_sorted :
 
 ## `NumericExpRowMapExpr_admissible`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:628`](../QueryTNullSyntax.v#L628)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:656`](../QueryTNullSyntax.v#L656)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric exp row map expr admissible law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -120,11 +518,12 @@ Search aliases: `query syntax bridge`, `NUMERIC`, `DECIMAL`
 Lemma NumericExpRowMapExpr_admissible :
   forall basesort passthrough avg_value_attribute avg_dscale_attribute
          output_numeric_attribute output_dscale_attribute model input,
-    @query_expr_admissible TNull relname basesort input ->
+    TNullQueryExprAdmissible basesort input ->
+    query_expr_contains_analysis_error input = false ->
     @query_output_attributes_unique TNull
       (NumericExpOutputAttributes passthrough
         output_numeric_attribute output_dscale_attribute) ->
-    @query_expr_admissible TNull relname basesort
+    TNullQueryExprAdmissible basesort
       (NumericExpRowMapExpr passthrough avg_value_attribute
         avg_dscale_attribute output_numeric_attribute
         output_dscale_attribute model input).
@@ -132,7 +531,9 @@ Lemma NumericExpRowMapExpr_admissible :
 
 ## `NumericExpRowAdapter_null`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:646`](../QueryTNullSyntax.v#L646)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:684`](../QueryTNullSyntax.v#L684)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for projection and tuple-syntax bridging.
 
@@ -158,7 +559,9 @@ Lemma NumericExpRowAdapter_null :
 
 ## `NumericExpRowAdapter_success`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:659`](../QueryTNullSyntax.v#L659)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:697`](../QueryTNullSyntax.v#L697)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for projection and tuple-syntax bridging.
 
@@ -192,7 +595,9 @@ Lemma NumericExpRowAdapter_success :
 
 ## `NumericExpRowAdapter_invalid_success`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:680`](../QueryTNullSyntax.v#L680)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:718`](../QueryTNullSyntax.v#L718)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for projection and tuple-syntax bridging.
 
@@ -223,7 +628,9 @@ Lemma NumericExpRowAdapter_invalid_success :
 
 ## `NumericExpRowAdapter_out_of_range`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:698`](../QueryTNullSyntax.v#L698)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:736`](../QueryTNullSyntax.v#L736)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Connects the displayed range/representability premise to projection and tuple-syntax bridging.
 
@@ -252,7 +659,9 @@ Lemma NumericExpRowAdapter_out_of_range :
 
 ## `NumericExpSuccessValid_invalid_scale`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:714`](../QueryTNullSyntax.v#L714)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:752`](../QueryTNullSyntax.v#L752)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric exp success valid invalid scale law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -273,7 +682,9 @@ Lemma NumericExpSuccessValid_invalid_scale :
 
 ## `NumericExpSuccessValid_nonfinite`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:723`](../QueryTNullSyntax.v#L723)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:761`](../QueryTNullSyntax.v#L761)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric exp success valid nonfinite law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -295,7 +706,9 @@ Lemma NumericExpSuccessValid_nonfinite :
 
 ## `eval_query_expr_row_map_child_error`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:746`](../QueryTNullSyntax.v#L746)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:784`](../QueryTNullSyntax.v#L784)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for projection and tuple-syntax bridging.
 
@@ -303,9 +716,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for projecti
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `runtime`
+Cross-index: `possible`, `outcome`, `runtime`
 
-Search aliases: `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma eval_query_expr_row_map_child_error :
@@ -315,113 +728,15 @@ Lemma eval_query_expr_row_map_child_error :
       (RowMapExpr output_attributes row_map input) (SqlError error).
 ```
 
-## `prop_forall_list_all_transport`
+## `query_scalar_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:856`](../QueryTNullSyntax.v#L856)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1272`](../QueryTNullSyntax.v#L1272)
 
-Purpose/direction: Transports the displayed hypotheses and conclusion for projection and tuple-syntax bridging.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use when the goal or a hypothesis matches the `prop_forall_list_all_transport` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+Purpose/direction: States the query scalar expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma prop_forall_list_all_transport {A : Type}
-    (recursive_property source_property target_property : A -> Prop) :
-  (forall value,
-    recursive_property value -> source_property value -> target_property value) ->
-  forall values,
-    list_all A recursive_property values ->
-    prop_forall source_property values ->
-    prop_forall target_property values.
-```
-
-## `scalar_expr_list_all_admissible_transport`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:880`](../QueryTNullSyntax.v#L880)
-
-Purpose/direction: Transports the displayed hypotheses and conclusion for projection and tuple-syntax bridging.
-
-Applicability: Use when the goal or a hypothesis matches the `scalar_expr_list_all_admissible_transport` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma scalar_expr_list_all_admissible_transport :
-  forall expressions :
-      list (@scalar_expr T generic_relname ScalarResultValue),
-    list_all _
-      (fun expression => forall phase,
-        @scalar_expr_admissible T generic_relname first_basesort
-          phase ScalarResultValue expression ->
-        @scalar_expr_admissible T generic_relname second_basesort
-          phase ScalarResultValue expression)
-      expressions ->
-    forall phase,
-      prop_forall
-        (@scalar_expr_admissible T generic_relname first_basesort
-          phase ScalarResultValue) expressions ->
-      prop_forall
-        (@scalar_expr_admissible T generic_relname second_basesort
-          phase ScalarResultValue) expressions.
-```
-
-## `scalar_select_list_all_admissible_transport`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:905`](../QueryTNullSyntax.v#L905)
-
-Purpose/direction: Transports the displayed hypotheses and conclusion for projection and tuple-syntax bridging.
-
-Applicability: Use when the goal or a hypothesis matches the `scalar_select_list_all_admissible_transport` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma scalar_select_list_all_admissible_transport :
-  forall select_list : list
-      (@scalar_expr T generic_relname ScalarResultValue * attribute T),
-    list_all _
-      (prod_all _
-        (fun expression => forall phase,
-          @scalar_expr_admissible T generic_relname first_basesort
-            phase ScalarResultValue expression ->
-          @scalar_expr_admissible T generic_relname second_basesort
-            phase ScalarResultValue expression)
-        _ (fun _ => unit)) select_list ->
-    forall phase,
-      prop_forall
-        (fun item =>
-          @scalar_expr_admissible T generic_relname first_basesort
-            phase ScalarResultValue (fst item) /\
-          scalar_expr_type (fst item) = type_of_attribute T (snd item))
-        select_list ->
-      prop_forall
-        (fun item =>
-          @scalar_expr_admissible T generic_relname second_basesort
-            phase ScalarResultValue (fst item) /\
-          scalar_expr_type (fst item) = type_of_attribute T (snd item))
-        select_list.
-```
-
-## `query_formula_scalar_expr_admissible_basesort_extensional`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:939`](../QueryTNullSyntax.v#L939)
-
-Purpose/direction: States the query formula scalar expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_formula_scalar_expr_admissible_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+Applicability: Use when the goal or a hypothesis matches the `query_scalar_expr_admissible_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
 
 Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
 
@@ -430,47 +745,28 @@ Cross-index: primary card only
 Search aliases: `query syntax bridge`
 
 ```rocq
-Lemma query_formula_scalar_expr_admissible_basesort_extensional :
+Lemma query_scalar_expr_admissible_basesort_extensional :
   (forall query,
-    @query_expr_admissible T generic_relname first_basesort query ->
-    @query_expr_admissible T generic_relname second_basesort query) /\
-  (forall formula phase,
-    @formula_expr_admissible_at T generic_relname first_basesort phase formula ->
-    @formula_expr_admissible_at T generic_relname second_basesort phase formula) /\
+    @query_expr_admissible T generic_relname first_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null query ->
+    @query_expr_admissible T generic_relname second_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null query) /\
   (forall kind (expression : @scalar_expr T generic_relname kind) phase,
     @scalar_expr_admissible T generic_relname first_basesort
-      phase kind expression ->
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null phase kind expression ->
     @scalar_expr_admissible T generic_relname second_basesort
-      phase kind expression).
-```
-
-## `query_formula_expr_admissible_basesort_extensional`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:993`](../QueryTNullSyntax.v#L993)
-
-Purpose/direction: States the query formula expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_formula_expr_admissible_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma query_formula_expr_admissible_basesort_extensional :
-  (forall query,
-    @query_expr_admissible T generic_relname first_basesort query ->
-    @query_expr_admissible T generic_relname second_basesort query) /\
-  (forall formula,
-    @formula_expr_admissible T generic_relname first_basesort formula ->
-    @formula_expr_admissible T generic_relname second_basesort formula).
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null phase kind expression).
 ```
 
 ## `query_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1010`](../QueryTNullSyntax.v#L1010)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1334`](../QueryTNullSyntax.v#L1334)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -485,17 +781,23 @@ Search aliases: `query syntax bridge`
 ```rocq
 Theorem query_expr_admissible_basesort_extensional :
   forall query,
-    @query_expr_admissible T generic_relname first_basesort query ->
-    @query_expr_admissible T generic_relname second_basesort query.
+    @query_expr_admissible T generic_relname first_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null query ->
+    @query_expr_admissible T generic_relname second_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null query.
 ```
 
-## `formula_expr_admissible_basesort_extensional`
+## `scalar_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1018`](../QueryTNullSyntax.v#L1018)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1346`](../QueryTNullSyntax.v#L1346)
 
-Purpose/direction: States the formula expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_admissible_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+Purpose/direction: States the scalar expr admissible basesort extensional law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `scalar_expr_admissible_basesort_extensional` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
@@ -504,15 +806,21 @@ Cross-index: primary card only
 Search aliases: `query syntax bridge`
 
 ```rocq
-Theorem formula_expr_admissible_basesort_extensional :
-  forall formula,
-    @formula_expr_admissible T generic_relname first_basesort formula ->
-    @formula_expr_admissible T generic_relname second_basesort formula.
+Theorem scalar_expr_admissible_basesort_extensional :
+  forall kind (expression : @scalar_expr T generic_relname kind) phase,
+    @scalar_expr_admissible T generic_relname first_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null phase kind expression ->
+    @scalar_expr_admissible T generic_relname second_basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null phase kind expression.
 ```
 
 ## `query_expr_admissible_of_with_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1043`](../QueryTNullSyntax.v#L1043)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1381`](../QueryTNullSyntax.v#L1381)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible of with outputs law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -528,12 +836,16 @@ Search aliases: `query syntax bridge`
 Lemma query_expr_admissible_of_with_outputs :
   forall query expected_outputs,
     query_expr_admissible_with_outputs query expected_outputs ->
-    @query_expr_admissible T generic_relname basesort query.
+    @query_expr_admissible T generic_relname basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null query.
 ```
 
 ## `query_expr_admissible_with_outputs_change`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1051`](../QueryTNullSyntax.v#L1051)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1391`](../QueryTNullSyntax.v#L1391)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs change law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -555,7 +867,9 @@ Lemma query_expr_admissible_with_outputs_change :
 
 ## `query_output_attributes_unique_from_all_diff`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1062`](../QueryTNullSyntax.v#L1062)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1401`](../QueryTNullSyntax.v#L1401)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for projection and tuple-syntax bridging.
 
@@ -576,7 +890,9 @@ Lemma query_output_attributes_unique_from_all_diff :
 
 ## `query_sort_keys_in_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1075`](../QueryTNullSyntax.v#L1075)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1414`](../QueryTNullSyntax.v#L1414)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query sort keys in outputs law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -591,15 +907,15 @@ Search aliases: `query syntax bridge`
 ```rocq
 Lemma query_sort_keys_in_outputs :
   forall (outputs : list (attribute T)) keys,
-    Forall
-      (fun key => In (sort_key_attribute key) outputs)
-      keys ->
+    Forall (fun key => In (sort_key_attribute key) outputs) keys ->
     query_sort_keys_in_scope (@query_outputs_sort T outputs) keys.
 ```
 
 ## `query_attribute_not_in_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1088`](../QueryTNullSyntax.v#L1088)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1425`](../QueryTNullSyntax.v#L1425)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query attribute not in outputs law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -620,7 +936,9 @@ Lemma query_attribute_not_in_outputs :
 
 ## `query_expr_admissible_with_outputs_error`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1099`](../QueryTNullSyntax.v#L1099)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1436`](../QueryTNullSyntax.v#L1436)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for projection and tuple-syntax bridging.
 
@@ -642,7 +960,9 @@ Lemma query_expr_admissible_with_outputs_error :
 
 ## `query_expr_admissible_with_outputs_values`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1108`](../QueryTNullSyntax.v#L1108)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1445`](../QueryTNullSyntax.v#L1445)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs values law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -665,7 +985,9 @@ Lemma query_expr_admissible_with_outputs_values :
 
 ## `query_expr_admissible_with_outputs_empty_tuple`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1121`](../QueryTNullSyntax.v#L1121)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1455`](../QueryTNullSyntax.v#L1455)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the exact empty-input or empty-result law for projection and tuple-syntax bridging.
 
@@ -686,7 +1008,9 @@ Lemma query_expr_admissible_with_outputs_empty_tuple :
 
 ## `query_expr_admissible_with_outputs_table`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1148`](../QueryTNullSyntax.v#L1148)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1482`](../QueryTNullSyntax.v#L1482)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs table law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -709,7 +1033,9 @@ Lemma query_expr_admissible_with_outputs_table :
 
 ## `query_expr_admissible_with_outputs_set`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1158`](../QueryTNullSyntax.v#L1158)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1492`](../QueryTNullSyntax.v#L1492)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs set law for SQL bag/set operations, in the exact direction displayed by the declaration.
 
@@ -733,7 +1059,9 @@ Lemma query_expr_admissible_with_outputs_set :
 
 ## `query_expr_admissible_with_outputs_natural_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1175`](../QueryTNullSyntax.v#L1175)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1509`](../QueryTNullSyntax.v#L1509)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs natural join law for join semantics, in the exact direction displayed by the declaration.
 
@@ -757,7 +1085,9 @@ Lemma query_expr_admissible_with_outputs_natural_join :
 
 ## `query_expr_admissible_with_outputs_cross_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1190`](../QueryTNullSyntax.v#L1190)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1524`](../QueryTNullSyntax.v#L1524)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs cross join law for join semantics, in the exact direction displayed by the declaration.
 
@@ -784,7 +1114,9 @@ Lemma query_expr_admissible_with_outputs_cross_join :
 
 ## `query_expr_admissible_with_outputs_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1210`](../QueryTNullSyntax.v#L1210)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1544`](../QueryTNullSyntax.v#L1544)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs join law for outer/semi/anti-join semantics, in the exact direction displayed by the declaration.
 
@@ -800,28 +1132,119 @@ Search aliases: `query syntax bridge`, `outer join`, `LEFT OUTER JOIN`, `RIGHT O
 Lemma query_expr_admissible_with_outputs_join :
   forall kind predicate matched_select left_select right_select
       left right left_outputs right_outputs,
-    @formula_expr_admissible_at T generic_relname basesort
-      ScalarPhaseOn predicate ->
+    @scalar_expr_admissible T generic_relname basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null
+      ScalarPhaseOn ScalarResultBoolean predicate ->
     query_expr_admissible_with_outputs left left_outputs ->
     query_expr_admissible_with_outputs right right_outputs ->
     query_join_projection_sorts_compatible
       kind matched_select left_select right_select ->
     query_join_projections_unique
       kind matched_select left_select right_select ->
-    query_join_projections_phase_admissible
-      kind matched_select left_select right_select ->
+    (match kind with
+     | QueryJoinInner =>
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           matched_select
+     | QueryJoinLeft =>
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           matched_select /\
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           left_select
+     | QueryJoinRight =>
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           matched_select /\
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           right_select
+     | QueryJoinFull =>
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           matched_select /\
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           left_select /\
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           right_select
+     | QueryJoinSemi | QueryJoinAnti =>
+         prop_forall
+           (fun item =>
+             @scalar_expr_admissible T generic_relname basesort
+               leaf_has_type call_has_type predicate_has_types
+               rank_type boolean_type value_is_null
+               ScalarPhaseRowSelect ScalarResultValue (fst item) /\
+             scalar_expr_type (fst item) =
+               type_of_attribute T (snd item))
+           left_select
+     end) ->
     query_expr_admissible_with_outputs
       (@QExpr_Join T generic_relname kind predicate
         matched_select left_select right_select left right)
       (match kind with
-       | QueryJoinSemi | QueryJoinAnti => select_list_outputs left_select
-       | _ => select_list_outputs matched_select
+       | QueryJoinSemi | QueryJoinAnti =>
+           scalar_select_outputs left_select
+       | _ => scalar_select_outputs matched_select
        end).
 ```
 
 ## `query_expr_admissible_with_outputs_project`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1239`](../QueryTNullSyntax.v#L1239)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1662`](../QueryTNullSyntax.v#L1662)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs project law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -838,45 +1261,24 @@ Lemma query_expr_admissible_with_outputs_project :
   forall select_list input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
     query_select_list_outputs_unique select_list ->
-    select_list_phase_admissible ScalarPhaseRowSelect select_list ->
-    query_expr_admissible_with_outputs
-      (@QExpr_Project T generic_relname select_list input)
-      (select_list_outputs select_list).
-```
-
-## `query_expr_admissible_with_outputs_scalar_project`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1252`](../QueryTNullSyntax.v#L1252)
-
-Purpose/direction: States the query expr admissible with outputs scalar project law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_expr_admissible_with_outputs_scalar_project` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `projection`, `SELECT list`
-
-```rocq
-Lemma query_expr_admissible_with_outputs_scalar_project :
-  forall select_list input input_outputs,
-    query_expr_admissible_with_outputs input input_outputs ->
-    @query_output_attributes_unique T (scalar_select_outputs select_list) ->
-    Forall
+    prop_forall
       (fun item =>
         @scalar_expr_admissible T generic_relname basesort
+          leaf_has_type call_has_type predicate_has_types
+          rank_type boolean_type value_is_null
           ScalarPhaseRowSelect ScalarResultValue (fst item) /\
         scalar_expr_type (fst item) = type_of_attribute T (snd item))
       select_list ->
     query_expr_admissible_with_outputs
-      (@QExpr_ScalarProject T generic_relname select_list input)
+      (@QExpr_Project T generic_relname select_list input)
       (scalar_select_outputs select_list).
 ```
 
 ## `query_expr_admissible_with_outputs_row_map`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1276`](../QueryTNullSyntax.v#L1276)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1682`](../QueryTNullSyntax.v#L1682)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs row map law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -900,7 +1302,9 @@ Lemma query_expr_admissible_with_outputs_row_map :
 
 ## `query_expr_admissible_with_outputs_filter`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1288`](../QueryTNullSyntax.v#L1288)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1694`](../QueryTNullSyntax.v#L1694)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs filter law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -916,85 +1320,19 @@ Search aliases: `query syntax bridge`, `filter`, `WHERE`
 Lemma query_expr_admissible_with_outputs_filter :
   forall predicate input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
-    @formula_expr_admissible_at T generic_relname basesort
-      ScalarPhaseWhere predicate ->
+    @scalar_expr_admissible T generic_relname basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null
+      ScalarPhaseWhere ScalarResultBoolean predicate ->
     query_expr_admissible_with_outputs
       (@QExpr_Filter T generic_relname predicate input) input_outputs.
 ```
 
-## `query_expr_admissible_with_outputs_scalar_filter`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1303`](../QueryTNullSyntax.v#L1303)
-
-Purpose/direction: States the query expr admissible with outputs scalar filter law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_expr_admissible_with_outputs_scalar_filter` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `filter`, `WHERE`
-
-```rocq
-Lemma query_expr_admissible_with_outputs_scalar_filter :
-  forall predicate input input_outputs,
-    query_expr_admissible_with_outputs input input_outputs ->
-    @scalar_expr_admissible T generic_relname basesort
-      ScalarPhaseWhere ScalarResultBoolean predicate ->
-    query_expr_admissible_with_outputs
-      (@QExpr_ScalarFilter T generic_relname predicate input) input_outputs.
-```
-
-## `formula_expr_scalar_admissible_at`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1318`](../QueryTNullSyntax.v#L1318)
-
-Purpose/direction: States the formula expr scalar admissible at law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_scalar_admissible_at` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma formula_expr_scalar_admissible_at :
-  forall phase predicate,
-    @scalar_expr_admissible T generic_relname basesort
-      phase ScalarResultBoolean predicate ->
-    @formula_expr_admissible_at T generic_relname basesort phase
-      (@FExpr_Scalar T generic_relname predicate).
-```
-
-## `formula_expr_scalar_admissible`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1328`](../QueryTNullSyntax.v#L1328)
-
-Purpose/direction: States the formula expr scalar admissible law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_scalar_admissible` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma formula_expr_scalar_admissible :
-  forall predicate,
-    @scalar_expr_admissible T generic_relname basesort
-      ScalarPhaseHaving ScalarResultBoolean predicate ->
-    @formula_expr_admissible T generic_relname basesort
-      (@FExpr_Scalar T generic_relname predicate).
-```
-
 ## `query_expr_admissible_with_outputs_group`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1338`](../QueryTNullSyntax.v#L1338)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1710`](../QueryTNullSyntax.v#L1710)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs group law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1008,58 +1346,38 @@ Search aliases: `query syntax bridge`, `GROUP BY`
 
 ```rocq
 Lemma query_expr_admissible_with_outputs_group :
-  forall select_list group_terms having input input_outputs,
-    query_expr_admissible_with_outputs input input_outputs ->
-    @formula_expr_admissible T generic_relname basesort having ->
-    query_select_list_outputs_unique select_list ->
-    select_list_phase_admissible ScalarPhaseSelect select_list ->
-    prop_forall (aggterm_phase_admissible ScalarPhaseGroupBy) group_terms ->
-    query_expr_admissible_with_outputs
-      (@QExpr_Group T generic_relname
-        select_list group_terms having input)
-      (select_list_outputs select_list).
-```
-
-## `query_expr_admissible_with_outputs_scalar_group`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1355`](../QueryTNullSyntax.v#L1355)
-
-Purpose/direction: States the query expr admissible with outputs scalar group law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `query_expr_admissible_with_outputs_scalar_group` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `GROUP BY`
-
-```rocq
-Lemma query_expr_admissible_with_outputs_scalar_group :
   forall select_list group_keys group_terms having input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
     @query_output_attributes_unique T (scalar_select_outputs select_list) ->
-    Forall
+    prop_forall
       (fun item =>
         @scalar_expr_admissible T generic_relname basesort
+          leaf_has_type call_has_type predicate_has_types
+          rank_type boolean_type value_is_null
           ScalarPhaseSelect ScalarResultValue (fst item) /\
         scalar_expr_type (fst item) = type_of_attribute T (snd item))
       select_list ->
     @scalar_expr_admissible T generic_relname basesort
+      leaf_has_type call_has_type predicate_has_types
+      rank_type boolean_type value_is_null
       ScalarPhaseHaving ScalarResultBoolean having ->
-    Forall
+    prop_forall
       (@scalar_expr_admissible T generic_relname basesort
+        leaf_has_type call_has_type predicate_has_types
+        rank_type boolean_type value_is_null
         ScalarPhaseGroupBy ScalarResultValue) group_keys ->
     scalar_group_key_terms group_keys = Some group_terms ->
     query_expr_admissible_with_outputs
-      (@QExpr_ScalarGroup T generic_relname
+      (@QExpr_Group T generic_relname
         select_list group_keys having input)
       (scalar_select_outputs select_list).
 ```
 
 ## `query_expr_admissible_with_outputs_grouping_sets`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1390`](../QueryTNullSyntax.v#L1390)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1745`](../QueryTNullSyntax.v#L1745)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs grouping sets law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1076,7 +1394,26 @@ Lemma query_expr_admissible_with_outputs_grouping_sets :
   forall grouping_sets input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
     query_grouping_sets_well_formed grouping_sets ->
-    query_grouping_sets_phase_admissible grouping_sets ->
+    prop_forall
+      (fun grouping_set =>
+        prop_forall
+          (fun item =>
+            @scalar_expr_admissible T generic_relname basesort
+              leaf_has_type call_has_type predicate_has_types
+              rank_type boolean_type value_is_null
+              ScalarPhaseSelect ScalarResultValue (fst item) /\
+            scalar_expr_type (fst item) =
+              type_of_attribute T (snd item))
+          (fst grouping_set) /\
+        prop_forall
+          (@scalar_expr_admissible T generic_relname basesort
+            leaf_has_type call_has_type predicate_has_types
+            rank_type boolean_type value_is_null
+            ScalarPhaseGroupBy ScalarResultValue)
+          (snd grouping_set) /\
+        exists group_terms,
+          scalar_group_key_terms (snd grouping_set) = Some group_terms)
+      grouping_sets ->
     query_expr_admissible_with_outputs
       (@QExpr_GroupingSets T generic_relname grouping_sets input)
       (query_grouping_sets_outputs grouping_sets).
@@ -1084,7 +1421,9 @@ Lemma query_expr_admissible_with_outputs_grouping_sets :
 
 ## `query_expr_admissible_with_outputs_rank`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1403`](../QueryTNullSyntax.v#L1403)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1777`](../QueryTNullSyntax.v#L1777)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs rank law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1101,6 +1440,7 @@ Lemma query_expr_admissible_with_outputs_rank :
   forall partition_keys order_keys rank_attribute embed_rank
       input input_outputs,
     query_expr_admissible_with_outputs input input_outputs ->
+    type_of_attribute T rank_attribute = rank_type ->
     query_sort_keys_in_scope
       (@query_outputs_sort T input_outputs) partition_keys ->
     query_sort_keys_in_scope
@@ -1114,7 +1454,9 @@ Lemma query_expr_admissible_with_outputs_rank :
 
 ## `query_expr_admissible_with_outputs_window`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1427`](../QueryTNullSyntax.v#L1427)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1802`](../QueryTNullSyntax.v#L1802)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs window law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1138,6 +1480,19 @@ Lemma query_expr_admissible_with_outputs_window :
       (fun item =>
         ~ qwi_attribute item inS (@query_outputs_sort T input_outputs))
       items ->
+    prop_forall
+      (fun item =>
+        match item with
+        | QueryWindowItem output function =>
+            match function with
+            | QueryWindowRowNumber _ =>
+                type_of_attribute T output = rank_type
+            | QueryWindowAggregate term
+            | QueryWindowFullPartitionAggregate term =>
+                leaf_has_type (type_of_attribute T output) term
+            end
+        end)
+      items ->
     length (map (@qwi_attribute T) items) =
       Fset.cardinal (A T)
         (Fset.mk_set (A T) (map (@qwi_attribute T) items)) ->
@@ -1148,7 +1503,9 @@ Lemma query_expr_admissible_with_outputs_window :
 
 ## `query_expr_admissible_with_outputs_distinct`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1456`](../QueryTNullSyntax.v#L1456)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1846`](../QueryTNullSyntax.v#L1846)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs distinct law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1170,7 +1527,9 @@ Lemma query_expr_admissible_with_outputs_distinct :
 
 ## `query_expr_admissible_with_outputs_order_by`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1466`](../QueryTNullSyntax.v#L1466)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1856`](../QueryTNullSyntax.v#L1856)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs order by law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1193,7 +1552,9 @@ Lemma query_expr_admissible_with_outputs_order_by :
 
 ## `query_expr_admissible_with_outputs_offset`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1480`](../QueryTNullSyntax.v#L1480)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1870`](../QueryTNullSyntax.v#L1870)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs offset law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1215,7 +1576,9 @@ Lemma query_expr_admissible_with_outputs_offset :
 
 ## `query_expr_admissible_with_outputs_fetch`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1490`](../QueryTNullSyntax.v#L1490)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1880`](../QueryTNullSyntax.v#L1880)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the query expr admissible with outputs fetch law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
 
@@ -1235,242 +1598,11 @@ Lemma query_expr_admissible_with_outputs_fetch :
       (@QExpr_Fetch T generic_relname count input) input_outputs.
 ```
 
-## `formula_expr_not_admissible`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1500`](../QueryTNullSyntax.v#L1500)
-
-Purpose/direction: States the formula expr not admissible law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_not_admissible` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma formula_expr_not_admissible :
-  forall formula,
-    @formula_expr_admissible T generic_relname basesort formula ->
-    @formula_expr_admissible T generic_relname basesort
-      (@FExpr_Not T generic_relname formula).
-```
-
-## `formula_expr_not_admissible_at`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1511`](../QueryTNullSyntax.v#L1511)
-
-Purpose/direction: States the formula expr not admissible at law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_not_admissible_at` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma formula_expr_not_admissible_at :
-  forall phase formula,
-    @formula_expr_admissible_at T generic_relname basesort phase formula ->
-    @formula_expr_admissible_at T generic_relname basesort phase
-      (@FExpr_Not T generic_relname formula).
-```
-
-## `formula_expr_quant_admissible_at_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1520`](../QueryTNullSyntax.v#L1520)
-
-Purpose/direction: States the formula expr quant admissible at from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_quant_admissible_at_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `quantified predicate`, `ANY/ALL`
-
-```rocq
-Lemma formula_expr_quant_admissible_at_from_outputs :
-  forall phase quantifier predicate arguments subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    prop_forall (aggterm_phase_admissible phase) arguments ->
-    length arguments = 1%nat ->
-    length expected_outputs = 1%nat ->
-    (length arguments + length expected_outputs)%nat =
-      predicate_arity T predicate ->
-    @formula_expr_admissible_at T generic_relname basesort phase
-      (@FExpr_Quant T generic_relname
-        quantifier predicate arguments subquery).
-```
-
-## `formula_expr_in_admissible_at_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1538`](../QueryTNullSyntax.v#L1538)
-
-Purpose/direction: States the formula expr in admissible at from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_in_admissible_at_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `IN`
-
-```rocq
-Lemma formula_expr_in_admissible_at_from_outputs :
-  forall phase (select_items : list (@select T)) subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    select_list_phase_admissible phase (@_Select_List T select_items) ->
-    query_in_positionally_aligned
-      (@_Select_List T select_items) expected_outputs ->
-    @formula_expr_admissible_at T generic_relname basesort phase
-      (@FExpr_In T generic_relname select_items subquery).
-```
-
-## `formula_expr_exists_admissible_at_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1561`](../QueryTNullSyntax.v#L1561)
-
-Purpose/direction: States the formula expr exists admissible at from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_exists_admissible_at_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `EXISTS`
-
-```rocq
-Lemma formula_expr_exists_admissible_at_from_outputs :
-  forall phase subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    @formula_expr_admissible_at T generic_relname basesort phase
-      (@FExpr_Exists T generic_relname subquery).
-```
-
-## `aggterm_phase_admissible_having`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1570`](../QueryTNullSyntax.v#L1570)
-
-Purpose/direction: States the aggterm phase admissible having law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `aggterm_phase_admissible_having` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma aggterm_phase_admissible_having :
-  forall term : @aggterm T,
-    aggterm_phase_admissible ScalarPhaseHaving term.
-```
-
-## `select_list_phase_admissible_having`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1577`](../QueryTNullSyntax.v#L1577)
-
-Purpose/direction: States the select list phase admissible having law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `select_list_phase_admissible_having` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`
-
-```rocq
-Lemma select_list_phase_admissible_having :
-  forall select_items : list (@select T),
-    select_list_phase_admissible ScalarPhaseHaving
-      (@_Select_List T select_items).
-```
-
-## `formula_expr_quant_admissible_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1588`](../QueryTNullSyntax.v#L1588)
-
-Purpose/direction: States the formula expr quant admissible from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_quant_admissible_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `quantified predicate`, `ANY/ALL`
-
-```rocq
-Lemma formula_expr_quant_admissible_from_outputs :
-  forall quantifier predicate arguments subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    length arguments = 1%nat ->
-    length expected_outputs = 1%nat ->
-    (length arguments + length expected_outputs)%nat =
-      predicate_arity T predicate ->
-    @formula_expr_admissible T generic_relname basesort
-      (@FExpr_Quant T generic_relname
-        quantifier predicate arguments subquery).
-```
-
-## `formula_expr_in_admissible_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1611`](../QueryTNullSyntax.v#L1611)
-
-Purpose/direction: States the formula expr in admissible from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_in_admissible_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `IN`
-
-```rocq
-Lemma formula_expr_in_admissible_from_outputs :
-  forall (select_items : list (@select T)) subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    query_in_positionally_aligned
-      (@_Select_List T select_items) expected_outputs ->
-    @formula_expr_admissible T generic_relname basesort
-      (@FExpr_In T generic_relname select_items subquery).
-```
-
-## `formula_expr_exists_admissible_from_outputs`
-
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1627`](../QueryTNullSyntax.v#L1627)
-
-Purpose/direction: States the formula expr exists admissible from outputs law for predicate-subquery evaluation, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `formula_expr_exists_admissible_from_outputs` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: primary card only
-
-Search aliases: `query syntax bridge`, `subquery`, `EXISTS`
-
-```rocq
-Lemma formula_expr_exists_admissible_from_outputs :
-  forall subquery expected_outputs,
-    query_expr_admissible_with_outputs subquery expected_outputs ->
-    @formula_expr_admissible T generic_relname basesort
-      (@FExpr_Exists T generic_relname subquery).
-```
-
 ## `query_expr_admissible_database_schema_transport`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1641`](../QueryTNullSyntax.v#L1641)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1894`](../QueryTNullSyntax.v#L1894)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Transports the displayed hypotheses and conclusion for projection and tuple-syntax bridging.
 
@@ -1486,28 +1618,6 @@ Search aliases: `query syntax bridge`, `schema conformance`, `typing`
 Theorem query_expr_admissible_database_schema_transport :
   forall expected constraints actual query,
     database_conforms_schema expected constraints actual ->
-    @query_expr_admissible TNull relname (@_basesort TNull expected) query ->
-    @query_expr_admissible TNull relname (@_basesort TNull actual) query.
-```
-
-## `direct_projection_preserves_attr`
-
-Source: [`theories/FormalSQL/TNullSyntax.v:85`](../TNullSyntax.v#L85)
-
-Purpose/direction: Shows that the indicated operator preserves the displayed projection and tuple-syntax bridging property.
-
-Applicability: Use when the goal or a hypothesis matches the `direct_projection_preserves_attr` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `projection`
-
-Search aliases: `query syntax bridge`, `projection`, `SELECT list`
-
-```rocq
-Lemma direct_projection_preserves_attr :
-  forall env select_list attribute,
-    select_list_directly_selects_attr select_list attribute ->
-    select_list_has_unique_outputs select_list ->
-    projection_preserves_attr env select_list attribute.
+    TNullQueryExprAdmissible (@_basesort TNull expected) query ->
+    TNullQueryExprAdmissible (@_basesort TNull actual) query.
 ```

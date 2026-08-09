@@ -28,19 +28,36 @@ closure certificate when their required properness contracts hold, so
 order; OFFSET and FETCH consume it. Ties remain relational rather than
 following a physical order.
 
-## Outcomes and equivalence
+## Outcomes, Boolean schedules, and equivalence
 
-`eval_query_expr_outcome env query outcome` is a relation, not a function. An
-outcome is either `SqlSuccess rows` or `SqlError category`. A query can have
+`eval_query_expr_outcome schedule env query outcome` is the pointwise,
+scheduled relation used inside proofs. The public SQL observation is
+`eval_query_expr_possible_outcome env query outcome`, which holds when some
+legal query-wide Boolean schedule produces that success or error. A theorem
+for one fixed schedule does not imply public equivalence; use an all-schedules
+theorem, explicit bidirectional schedule transport, or proved schedule
+independence. These Boolean schedules do not abstract row order: ordered
+operators still observe exact lists.
+
+Scalar expression replacement is kind-indexed. Compose
+`scalar_expr_*_uniform_global_congr` through calls, CASE, predicates, NOT, and
+flattened AND/OR lists, then finish with the public short-named Project,
+Filter, or Group possible-outcome theorem. `SExpr_In`,
+`SExpr_Quant`, and `SExpr_Subquery` require uniform exact typed subquery
+outcomes; `SExpr_Exists` instead requires the separate uniform EXISTS-demand
+relation. Group additionally exposes equality of SELECT/HAVING
+aggregate-finalization errors before ordinary scalar evaluation.
+
+An outcome is either `SqlSuccess rows` or `SqlError category`. A query can have
 multiple legal successful row lists, particularly around bag resets and ORDER
-BY ties.
+BY ties, and can expose different errors under different Boolean schedules.
 
 For exact successful observations, `ordered_rows_equiv` preserves row order and
 multiplicity and quotients only the hidden Rocq representation of corresponding
 tuples. It is stronger than bag equality and weaker than Leibniz equality of
 tuple records.
 
-Error-preserving `query_expr_outcome_equiv` requires:
+Public error-preserving `query_expr_possible_outcome_equiv` requires:
 
 - identical ordered output signatures;
 - an inhabited outcome relation on each side;
@@ -58,9 +75,30 @@ order. Success-only query equivalence additionally proves that neither side can
 error. It may be lifted to error-preserving equivalence only after Rocq proves
 that safety; the selected verification mode is not a safety oracle.
 
+The safe public relation `query_expr_possible_equiv` also ranges over all
+Boolean schedules. Its introduction rules require a possible success and
+exclude every possible error on both sides. Converting a proved possible
+outcome equivalence back to this stronger safe relation therefore requires
+both explicit safety premises and a successful outcome. Read-only program
+equivalence is pointwise over these public relations, with one existential
+schedule local to each statement.
+
+Multiply referenced statement-root CTEs may appear as `BoundQuery` programs.
+Each definition is represented once and repeated references share its one
+successful bag. The current composition evaluator materializes definitions
+eagerly, while PostgreSQL may skip an undemanded CTE. Therefore trusted
+outcome equivalence and bound-query countermodels require materialization
+safety exactly for statements with local bindings. Binding-free statements
+use the canonical evaluator directly and retain their exact error outcomes. A
+common error obtained only from eager CTE evaluation is neither an EQ proof nor
+an NEQ witness.
+
 The core definitions are in
 `vendor/FormalSQL/src/data/sql/SqlOutcome.v`,
-`SqlBagAbstraction.v`, and `SqlQuerySemantics.v`.
+`SqlBagAbstraction.v`, and `SqlQuerySemantics.v`. Public possible-outcome and
+schedule-transport laws are in
+`theories/FormalSQL/PossibleOutcomeFacts.v`; fixed-schedule context laws remain
+internal foundations in `SqlQueryContexts.v`.
 
 ## Observation certificates and countermodels
 
@@ -123,10 +161,13 @@ declared precision (infinities remain valid). These are part of
 `value_conforms_attribute`; a FormalSQL countermodel may not exploit a larger
 mathematical carrier than PostgreSQL can store.
 
-`query_expr_admissible` is a separate static obligation covering output-label
-uniqueness, predicate arity, sort compatibility, positional IN alignment,
-grouping-set shape, and key scope. Admissibility is not semantic equivalence,
-runtime safety, or outcome totality. Its definition is in
+`TNullQueryExprAdmissible` is the canonical static obligation. It combines the
+parameterized structural/type recursion (`query_expr_admissible`) with
+statement-root analysis-error placement and statement-wide nonempty, unique
+Boolean schedule sites. It covers output-label uniqueness, predicate arity,
+sort compatibility, positional subquery alignment, grouping-set shape, and key
+scope. Admissibility is not semantic equivalence, runtime safety, or outcome
+totality. Its definitions are in `theories/FormalSQL/QueryTNullSyntax.v` and
 `vendor/FormalSQL/src/data/sql/SqlQueryWellFormed.v`; the schema contract is in
 `vendor/FormalSQL/src/data/proof_of_concept/SchemaConstraints.v`.
 

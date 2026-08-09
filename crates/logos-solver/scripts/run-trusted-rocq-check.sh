@@ -23,6 +23,7 @@ usage: bash run-trusted-rocq-check.sh
        bash run-trusted-rocq-check.sh --problem-diagnostic --timeout-seconds <positive>
        bash run-trusted-rocq-check.sh --module-diagnostic --candidate ProofModules/Name.v --timeout-seconds <positive>
        bash run-trusted-rocq-check.sh --preflight
+       bash run-trusted-rocq-check.sh --witness-preflight
 EOF
 }
 
@@ -33,11 +34,14 @@ case "$#" in
   0)
     ;;
   1)
-    if [[ "$1" != "--preflight" ]]; then
+    if [[ "$1" == "--preflight" ]]; then
+      mode=preflight
+    elif [[ "$1" == "--witness-preflight" ]]; then
+      mode=witness-preflight
+    else
       usage
       exit 64
     fi
-    mode=preflight
     ;;
   3)
     if [[ "$1" != "--problem-diagnostic" || "$2" != "--timeout-seconds" ]]; then
@@ -193,6 +197,38 @@ if [[ "$CACHE_PARENT" != "$CACHE_PARENT_INPUT" ]]; then
   trusted_environment_failure "diagnostic-cache-location" 2
 fi
 TRUSTED_CACHE="$CACHE_PARENT/$CACHE_NAME"
+PROBLEM_CACHE="$CACHE_PARENT/problem-compile-cache"
+SHARED_PREFIX_CACHE_ROOT="${LOGOS_SHARED_ROCQ_PREFIX_CACHE_DIR:-}"
+SHARED_CHECKER_RUNTIME_CACHE_ROOT="${LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR:-}"
+SHARED_AUTHORITY_SHA256="${LOGOS_TRUSTED_ROCQ_AUTHORITY_SHA256:-}"
+SHARED_PREFIX_KEY=
+SHARED_PREFIX_HIT=false
+if [[ -n "$SHARED_PREFIX_CACHE_ROOT" || -n "$SHARED_AUTHORITY_SHA256" ]]; then
+  if [[ "$SHARED_PREFIX_CACHE_ROOT" != /* ||
+        ! "$SHARED_AUTHORITY_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "shared generated-prefix cache contract is malformed" >&2
+    trusted_environment_failure "shared-prefix-cache" 2
+  fi
+  mkdir -p "$SHARED_PREFIX_CACHE_ROOT" \
+    || trusted_environment_failure "shared-prefix-cache" "$?"
+  if [[ -L "$SHARED_PREFIX_CACHE_ROOT" || ! -d "$SHARED_PREFIX_CACHE_ROOT" ]]; then
+    echo "shared generated-prefix cache root is unsafe" >&2
+    trusted_environment_failure "shared-prefix-cache" 2
+  fi
+fi
+if [[ -n "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" ]]; then
+  if [[ "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" != /* ]]; then
+    echo "shared checker-runtime cache path must be absolute" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  mkdir -p "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" \
+    || trusted_environment_failure "shared-checker-runtime-cache" "$?"
+  if [[ -L "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" ||
+        ! -d "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" ]]; then
+    echo "shared checker-runtime cache root is unsafe" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+fi
 
 # Recover the only destructive window that cannot run the EXIT trap: an
 # uncatchable process death after the live cache was renamed aside but before
@@ -352,7 +388,7 @@ trap 'exit 143' TERM
 TRUSTEDDIR="$CHECKDIR/trusted"
 PROBLEMDIR="$CHECKDIR/problem"
 GOALDIR="$CHECKDIR/goal"
-AUTHORITYDIR="$CHECKDIR/authority"
+AUTHORITYDIR="$LOGOS_REPO_ROOT"
 OSLIBDIR="$CHECKDIR/os-libs"
 ROCQBINDIR="$CHECKDIR/rocq-bin"
 PROBLEMOUTDIR="$CHECKDIR/problem-output"
@@ -366,8 +402,6 @@ mkdir -p \
   "$HOSTHOMEDIR" \
   "$HOSTXDGDATAHOME" "$HOSTXDGDATADIRS" \
   "$GOALDIR/tmp" "$GOALDIR/ProofModules" \
-  "$AUTHORITYDIR/vendor/FormalSQL/src" \
-  "$AUTHORITYDIR/theories/FormalSQL" \
   "$OSLIBDIR" \
   "$ROCQBINDIR"
 chmod 700 "$HOSTHOMEDIR"
@@ -395,13 +429,12 @@ if [[ "$(realpath "$(command -v rocq)")" != "$(realpath "$ROCQ_BIN")" ]]; then
 fi
 for host_tool in \
   bash timeout cat realpath dirname basename mktemp rm mkdir chmod install \
-  find sort ldd awk readelf cp sha256sum cmp tee grep mv readlink stat id; do
+  find sort ldd awk readelf cp sha256sum cmp tee grep mv readlink stat id flock; do
   command -v "$host_tool" >/dev/null 2>&1 \
     || trusted_environment_failure "host-tool-$host_tool" 127
 done
 
 ROCQ_BIN="$(realpath "$ROCQ_BIN")"
-install -m 555 "$ROCQ_BIN" "$ROCQBINDIR/rocq"
 ROCQ_RUNTIME_DIR="$ROCQ_INSTALL_PREFIX/lib/rocq-runtime"
 ROCQ_STDLIB_DIR="$ROCQ_INSTALL_PREFIX/lib/coq"
 ROCQ_STUBLIBS_DIR="$ROCQ_INSTALL_PREFIX/lib/stublibs"
@@ -450,10 +483,10 @@ done
 # immutable prefix directly and is immediately followed by a problem-diagnostic
 # checkpoint in the proof workflow; copying this  source/object closure during
 # preflight was therefore pure duplicate I/O.
-if [[ "$mode" != preflight ]]; then
-# Build a host-created authority tree containing only source-backed,
-# non-example FormalSQL and Logos .v/.vo pairs.  The diagnostic sandbox mounts
-# this tree at /authority; the repository itself is never mounted.
+if [[ "$mode" != preflight && "$mode" != witness-preflight ]]; then
+# The runner already supplies a content-bound, read-only authority snapshot,
+# not the mutable repository. Validate its complete source/object closure and
+# mount it directly instead of copying the same closure for every diagnostic.
 is_excluded_authority_source() {
   local relative="${1,,}"
   case "/$relative/" in
@@ -465,10 +498,9 @@ is_excluded_authority_source() {
 }
 
 authority_source_count=0
-stage_source_object_pair() {
+validate_source_object_pair() {
   local source="$1"
   local source_root="$2"
-  local destination_root="$3"
   local relative="${source#"$source_root"/}"
   local object="${source%.v}.vo"
 
@@ -488,8 +520,10 @@ stage_source_object_pair() {
     echo "authority object predates its source; rebuild before checking: $object" >&2
     trusted_environment_failure "authority-closure" 2
   fi
-  install -D -m 444 "$source" "$destination_root/$relative"
-  install -D -m 444 "$object" "$destination_root/${relative%.v}.vo"
+  if [[ "$(stat -c '%a' "$source")" != 444 || "$(stat -c '%a' "$object")" != 444 ]]; then
+    echo "authority source/object pair is not immutable: $source" >&2
+    trusted_environment_failure "authority-closure" 2
+  fi
   authority_source_count=$((authority_source_count + 1))
 }
 
@@ -504,19 +538,13 @@ done
 while IFS= read -r -d '' source; do
   relative="${source#"$VENDOR_SOURCE_ROOT"/}"
   if ! is_excluded_authority_source "$relative"; then
-    stage_source_object_pair \
-      "$source" \
-      "$VENDOR_SOURCE_ROOT" \
-      "$AUTHORITYDIR/vendor/FormalSQL/src"
+    validate_source_object_pair "$source" "$VENDOR_SOURCE_ROOT"
   fi
 done < <(find "$VENDOR_SOURCE_ROOT" -type f -name '*.v' -print0 | LC_ALL=C sort -z)
 while IFS= read -r -d '' source; do
   relative="${source#"$LOGOS_SOURCE_ROOT"/}"
   if ! is_excluded_authority_source "$relative"; then
-    stage_source_object_pair \
-      "$source" \
-      "$LOGOS_SOURCE_ROOT" \
-      "$AUTHORITYDIR/theories/FormalSQL"
+    validate_source_object_pair "$source" "$LOGOS_SOURCE_ROOT"
   fi
 done < <(find "$LOGOS_SOURCE_ROOT" -maxdepth 1 -type f -name '*.v' -print0 | LC_ALL=C sort -z)
 if ((authority_source_count == 0)); then
@@ -528,11 +556,15 @@ fi
 # helper, and OCaml stubs.  Each staged file is mounted at the absolute path
 # reported by ldd, because the Rocq driver does not preserve LD_LIBRARY_PATH
 # when it starts rocqworker.  No host library directory is exposed.  The ELF
-# interpreter likewise retains its compiled absolute path.
+# interpreter likewise retains its compiled absolute path.  The resulting
+# closure is content-addressed and immutable, so later diagnostics do not
+# repeat ldd/readelf or copy the same runtime payload again.
 declare -A BWRAP_RUNTIME_DIRS=()
 declare -A BWRAP_RUNTIME_BIND_SOURCES=()
 BWRAP_RUNTIME_DIR_ARGS=()
 BWRAP_RUNTIME_BIND_ARGS=()
+CHECKER_RUNTIME_CACHE_KEY=
+CHECKER_RUNTIME_CACHE_HIT=false
 
 append_runtime_directory() {
   local directory="$1"
@@ -589,61 +621,280 @@ stage_elf_dependencies() {
     '
   )
 }
-stage_elf_dependencies "$ROCQ_BIN"
-stage_elf_dependencies "$BWRAP_BIN"
-stage_elf_dependencies "$ROCQ_RUNTIME_DIR/rocqworker"
-stage_elf_dependencies "$ROCQ_RUNTIME_DIR/rocqnative"
-while IFS= read -r -d '' stub; do
-  stage_elf_dependencies "$stub"
-done < <(
-  find "$ROCQ_STUBLIBS_DIR" "$ROCQ_OCAML_DIR/stublibs" \
-    -maxdepth 1 -type f -name '*.so' -print0 | LC_ALL=C sort -z
-)
 
-ROCQ_ELF_INTERPRETER="$({
-  readelf -l "$ROCQ_BIN" | awk -F': ' '/Requesting program interpreter/ {
-    value=$2; sub(/]$/, "", value); print value; exit
-  }'
-})"
-if [[ "$ROCQ_ELF_INTERPRETER" != /* ]]; then
-  echo "could not determine the absolute Rocq ELF interpreter" >&2
-  trusted_environment_failure "rocq-runtime-library" 127
-fi
-ROCQ_ELF_INTERPRETER_SOURCE="$(realpath "$ROCQ_ELF_INTERPRETER")"
-if [[ ! -s "$ROCQ_ELF_INTERPRETER_SOURCE" ]]; then
-  echo "Rocq ELF interpreter is missing: $ROCQ_ELF_INTERPRETER" >&2
-  trusted_environment_failure "rocq-runtime-library" 127
-fi
-append_runtime_directory "$(dirname "$ROCQ_ELF_INTERPRETER")"
-if [[ -z "${BWRAP_RUNTIME_BIND_SOURCES[$ROCQ_ELF_INTERPRETER]+set}" ]]; then
-  BWRAP_RUNTIME_BIND_SOURCES["$ROCQ_ELF_INTERPRETER"]="$ROCQ_ELF_INTERPRETER_SOURCE"
-  BWRAP_RUNTIME_BIND_ARGS+=(
-    --ro-bind "$ROCQ_ELF_INTERPRETER_SOURCE" "$ROCQ_ELF_INTERPRETER"
+checker_runtime_input_key() {
+  {
+    printf '%s\n' 'logos-trusted-checker-runtime-closure-v1'
+    printf 'install-prefix=%s\n' "$ROCQ_INSTALL_PREFIX"
+    for executable in \
+      "$ROCQ_BIN" "$BWRAP_BIN" \
+      "$ROCQ_RUNTIME_DIR/rocqworker" "$ROCQ_RUNTIME_DIR/rocqnative"; do
+      printf 'consumer=%s\n' "$executable"
+      sha256sum "$executable"
+    done
+    while IFS= read -r -d '' stub; do
+      printf 'consumer=%s\n' "$stub"
+      sha256sum "$stub"
+    done < <(
+      find "$ROCQ_STUBLIBS_DIR" "$ROCQ_OCAML_DIR/stublibs" \
+        -maxdepth 1 -type f -name '*.so' -print0 | LC_ALL=C sort -z
+    )
+  } | sha256sum | awk '{print $1}'
+}
+
+write_checker_runtime_digests() {
+  local root="$1" output="$2" file
+  (
+    cd "$root"
+    {
+      sha256sum INPUT-KEY INTERPRETER DIRECTORIES BINDINGS rocq-bin/rocq
+      while IFS= read -r file; do
+        sha256sum "elf-interpreter/$file"
+      done < <(find elf-interpreter -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+      while IFS= read -r file; do
+        sha256sum "os-libs/$file"
+      done < <(find os-libs -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+    } >"$output"
   )
-fi
-ROCQ_ELF_INTERPRETER_DIR="$CHECKDIR/elf-interpreter"
-mkdir -p "$ROCQ_ELF_INTERPRETER_DIR"
-for dependency in "${!BWRAP_RUNTIME_BIND_SOURCES[@]}"; do
-  if [[ "$(dirname "$dependency")" == "$(dirname "$ROCQ_ELF_INTERPRETER")" ]]; then
-    install -m 555 \
-      "${BWRAP_RUNTIME_BIND_SOURCES[$dependency]}" \
-      "$ROCQ_ELF_INTERPRETER_DIR/${dependency##*/}"
+}
+
+load_checker_runtime_cache() {
+  local bundle="$1" expected_manifest="$CHECKDIR/checker-runtime.SHA256SUMS"
+  local entry target staged directory file
+  local -a top_entries=() rocq_entries=() interpreter_entries=() os_library_entries=()
+  if [[ ! -d "$bundle" || -L "$bundle" || "$(stat -c '%a' "$bundle")" != 555 ]]; then
+    return 1
   fi
-done
-BWRAP_ELF_INTERPRETER="$({
-  readelf -l "$BWRAP_BIN" | awk -F': ' '/Requesting program interpreter/ {
-    value=$2; sub(/]$/, "", value); print value; exit
-  }'
-})"
-if [[ "$BWRAP_ELF_INTERPRETER" != "$ROCQ_ELF_INTERPRETER" ]]; then
-  echo "Rocq and bwrap use different ELF interpreters" >&2
-  trusted_environment_failure "bwrap-runtime-library" 127
+  mapfile -t top_entries < <(
+    find "$bundle" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort
+  )
+  if [[ "${top_entries[*]}" != \
+        'BINDINGS DIRECTORIES INPUT-KEY INTERPRETER SHA256SUMS elf-interpreter os-libs rocq-bin' ]]; then
+    echo "shared checker-runtime cache file set drifted: $bundle" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  for directory in rocq-bin elf-interpreter os-libs; do
+    if [[ ! -d "$bundle/$directory" || -L "$bundle/$directory" ||
+          "$(stat -c '%a' "$bundle/$directory")" != 555 ]]; then
+      echo "shared checker-runtime cache directory is unsafe: $bundle/$directory" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+  done
+  for entry in INPUT-KEY INTERPRETER DIRECTORIES BINDINGS SHA256SUMS; do
+    if [[ ! -s "$bundle/$entry" || -L "$bundle/$entry" ||
+          "$(stat -c '%a' "$bundle/$entry")" != 444 ||
+          "$(stat -c '%h' "$bundle/$entry")" != 1 ]]; then
+      echo "shared checker-runtime cache control file is unsafe: $bundle/$entry" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+  done
+  if [[ "$(cat "$bundle/INPUT-KEY")" != "$CHECKER_RUNTIME_CACHE_KEY" ]]; then
+    echo "shared checker-runtime cache key drifted" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  if [[ ! -s "$bundle/rocq-bin/rocq" || -L "$bundle/rocq-bin/rocq" ||
+        "$(stat -c '%a' "$bundle/rocq-bin/rocq")" != 555 ||
+        "$(stat -c '%h' "$bundle/rocq-bin/rocq")" != 1 ||
+        ! -x "$bundle/rocq-bin/rocq" ]] ||
+     ! cmp -s "$ROCQ_BIN" "$bundle/rocq-bin/rocq"; then
+    echo "shared checker-runtime Rocq driver is unsafe" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  mapfile -t rocq_entries < <(
+    find "$bundle/rocq-bin" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
+  )
+  if [[ "${rocq_entries[*]}" != rocq ]]; then
+    echo "shared checker-runtime Rocq driver set drifted" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  ROCQ_ELF_INTERPRETER="$(cat "$bundle/INTERPRETER")"
+  if [[ "$ROCQ_ELF_INTERPRETER" != /* || "$ROCQ_ELF_INTERPRETER" == *$'\n'* ||
+        "${ROCQ_ELF_INTERPRETER##*/}" == *$'\t'* ]]; then
+    echo "shared checker-runtime interpreter target is invalid" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  mapfile -t interpreter_entries < <(
+    find "$bundle/elf-interpreter" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
+  )
+  if [[ "${interpreter_entries[*]}" != "${ROCQ_ELF_INTERPRETER##*/}" ||
+        ! -s "$bundle/elf-interpreter/${ROCQ_ELF_INTERPRETER##*/}" ||
+        -L "$bundle/elf-interpreter/${ROCQ_ELF_INTERPRETER##*/}" ||
+        "$(stat -c '%a' "$bundle/elf-interpreter/${ROCQ_ELF_INTERPRETER##*/}")" != 555 ||
+        "$(stat -c '%h' "$bundle/elf-interpreter/${ROCQ_ELF_INTERPRETER##*/}")" != 1 ]]; then
+    echo "shared checker-runtime interpreter is unsafe" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  mapfile -t os_library_entries < <(
+    find "$bundle/os-libs" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
+  )
+  if ((${#os_library_entries[@]} == 0)); then
+    echo "shared checker-runtime OS library closure is empty" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  for file in "${os_library_entries[@]}"; do
+    if [[ "$file" == *$'\t'* || "$file" == *$'\n'* ||
+          ! -s "$bundle/os-libs/$file" || -L "$bundle/os-libs/$file" ||
+          "$(stat -c '%a' "$bundle/os-libs/$file")" != 444 ||
+          "$(stat -c '%h' "$bundle/os-libs/$file")" != 1 ]]; then
+      echo "shared checker-runtime OS library is unsafe: $file" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+  done
+  while IFS= read -r directory || [[ -n "$directory" ]]; do
+    if [[ "$directory" != /* || "$directory" == *$'\t'* || "$directory" == *$'\n'* ]]; then
+      echo "shared checker-runtime directory target is invalid" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+    append_runtime_directory "$directory"
+  done <"$bundle/DIRECTORIES"
+  while IFS=$'\t' read -r target staged extra || [[ -n "$target$staged$extra" ]]; do
+    if [[ "$target" != /* || -n "$extra" || -z "$staged" || "$staged" == */* ||
+          "$staged" == '.' || "$staged" == '..' || "$staged" == *$'\n'* ||
+          ! -s "$bundle/os-libs/$staged" || -L "$bundle/os-libs/$staged" ||
+          "$(stat -c '%a' "$bundle/os-libs/$staged")" != 444 ]]; then
+      echo "shared checker-runtime binding is invalid" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+    if [[ -n "${BWRAP_RUNTIME_BIND_SOURCES[$target]+set}" ]]; then
+      echo "shared checker-runtime repeats a binding target: $target" >&2
+      trusted_environment_failure "shared-checker-runtime-cache" 2
+    fi
+    BWRAP_RUNTIME_BIND_SOURCES["$target"]="$bundle/os-libs/$staged"
+    BWRAP_RUNTIME_BIND_ARGS+=(--ro-bind "$bundle/os-libs/$staged" "$target")
+  done <"$bundle/BINDINGS"
+  write_checker_runtime_digests "$bundle" "$expected_manifest"
+  if ! cmp -s "$expected_manifest" "$bundle/SHA256SUMS"; then
+    echo "shared checker-runtime cache digest binding drifted" >&2
+    trusted_environment_failure "shared-checker-runtime-cache" 2
+  fi
+  OSLIBDIR="$bundle/os-libs"
+  ROCQBINDIR="$bundle/rocq-bin"
+  ROCQ_ELF_INTERPRETER_DIR="$bundle/elf-interpreter"
+  STAGED_ELF_INTERPRETER="$ROCQ_ELF_INTERPRETER_DIR/${ROCQ_ELF_INTERPRETER##*/}"
+  CHECKER_RUNTIME_CACHE_HIT=true
+  echo "LOGOS_TRUSTED_ROCQ_CHECKER_RUNTIME_CACHE hit=true key=$CHECKER_RUNTIME_CACHE_KEY" >&2
+}
+
+stage_checker_runtime() {
+  local dependency
+  install -m 555 "$ROCQ_BIN" "$ROCQBINDIR/rocq"
+  stage_elf_dependencies "$ROCQ_BIN"
+  stage_elf_dependencies "$BWRAP_BIN"
+  stage_elf_dependencies "$ROCQ_RUNTIME_DIR/rocqworker"
+  stage_elf_dependencies "$ROCQ_RUNTIME_DIR/rocqnative"
+  while IFS= read -r -d '' dependency; do
+    stage_elf_dependencies "$dependency"
+  done < <(
+    find "$ROCQ_STUBLIBS_DIR" "$ROCQ_OCAML_DIR/stublibs" \
+      -maxdepth 1 -type f -name '*.so' -print0 | LC_ALL=C sort -z
+  )
+
+  ROCQ_ELF_INTERPRETER="$({
+    readelf -l "$ROCQ_BIN" | awk -F': ' '/Requesting program interpreter/ {
+      value=$2; sub(/]$/, "", value); print value; exit
+    }'
+  })"
+  if [[ "$ROCQ_ELF_INTERPRETER" != /* ]]; then
+    echo "could not determine the absolute Rocq ELF interpreter" >&2
+    trusted_environment_failure "rocq-runtime-library" 127
+  fi
+  ROCQ_ELF_INTERPRETER_SOURCE="$(realpath "$ROCQ_ELF_INTERPRETER")"
+  if [[ ! -s "$ROCQ_ELF_INTERPRETER_SOURCE" ]]; then
+    echo "Rocq ELF interpreter is missing: $ROCQ_ELF_INTERPRETER" >&2
+    trusted_environment_failure "rocq-runtime-library" 127
+  fi
+  append_runtime_directory "$(dirname "$ROCQ_ELF_INTERPRETER")"
+  install -m 444 "$ROCQ_ELF_INTERPRETER_SOURCE" \
+    "$OSLIBDIR/${ROCQ_ELF_INTERPRETER_SOURCE##*/}"
+  if [[ -z "${BWRAP_RUNTIME_BIND_SOURCES[$ROCQ_ELF_INTERPRETER]+set}" ]]; then
+    BWRAP_RUNTIME_BIND_SOURCES["$ROCQ_ELF_INTERPRETER"]=\
+"$OSLIBDIR/${ROCQ_ELF_INTERPRETER_SOURCE##*/}"
+    BWRAP_RUNTIME_BIND_ARGS+=(
+      --ro-bind "$OSLIBDIR/${ROCQ_ELF_INTERPRETER_SOURCE##*/}" "$ROCQ_ELF_INTERPRETER"
+    )
+  fi
+  ROCQ_ELF_INTERPRETER_DIR="$CHECKDIR/elf-interpreter"
+  mkdir -p "$ROCQ_ELF_INTERPRETER_DIR"
+  for dependency in "${!BWRAP_RUNTIME_BIND_SOURCES[@]}"; do
+    if [[ "$(dirname "$dependency")" == "$(dirname "$ROCQ_ELF_INTERPRETER")" ]]; then
+      install -m 555 \
+        "${BWRAP_RUNTIME_BIND_SOURCES[$dependency]}" \
+        "$ROCQ_ELF_INTERPRETER_DIR/${dependency##*/}"
+    fi
+  done
+  BWRAP_ELF_INTERPRETER="$({
+    readelf -l "$BWRAP_BIN" | awk -F': ' '/Requesting program interpreter/ {
+      value=$2; sub(/]$/, "", value); print value; exit
+    }'
+  })"
+  if [[ "$BWRAP_ELF_INTERPRETER" != "$ROCQ_ELF_INTERPRETER" ]]; then
+    echo "Rocq and bwrap use different ELF interpreters" >&2
+    trusted_environment_failure "bwrap-runtime-library" 127
+  fi
+  STAGED_ELF_INTERPRETER="$ROCQ_ELF_INTERPRETER_DIR/${ROCQ_ELF_INTERPRETER##*/}"
+  if [[ ! -s "$STAGED_ELF_INTERPRETER" || ! -x "$STAGED_ELF_INTERPRETER" ]]; then
+    echo "staged outer ELF interpreter is missing" >&2
+    trusted_environment_failure "bwrap-runtime-library" 127
+  fi
+}
+
+publish_checker_runtime_cache() {
+  local bundle="$1" stage dependency directory source staged
+  bundle="$SHARED_CHECKER_RUNTIME_CACHE_ROOT/$CHECKER_RUNTIME_CACHE_KEY"
+  [[ ! -e "$bundle" && ! -L "$bundle" ]] || return 0
+  stage="$(mktemp -d "$SHARED_CHECKER_RUNTIME_CACHE_ROOT/.${CHECKER_RUNTIME_CACHE_KEY}.XXXXXX")"
+  mkdir "$stage/rocq-bin" "$stage/elf-interpreter" "$stage/os-libs"
+  install -m 555 "$ROCQBINDIR/rocq" "$stage/rocq-bin/rocq"
+  install -m 555 "$STAGED_ELF_INTERPRETER" \
+    "$stage/elf-interpreter/${ROCQ_ELF_INTERPRETER##*/}"
+  for source in "$OSLIBDIR"/*; do
+    [[ -f "$source" && ! -L "$source" ]] || continue
+    install -m 444 "$source" "$stage/os-libs/${source##*/}"
+  done
+  printf '%s\n' "$CHECKER_RUNTIME_CACHE_KEY" >"$stage/INPUT-KEY"
+  printf '%s\n' "$ROCQ_ELF_INTERPRETER" >"$stage/INTERPRETER"
+  for directory in "${!BWRAP_RUNTIME_DIRS[@]}"; do
+    printf '%s\n' "$directory"
+  done | LC_ALL=C sort >"$stage/DIRECTORIES"
+  for dependency in "${!BWRAP_RUNTIME_BIND_SOURCES[@]}"; do
+    source="${BWRAP_RUNTIME_BIND_SOURCES[$dependency]}"
+    staged="${source##*/}"
+    printf '%s\t%s\n' "$dependency" "$staged"
+  done | LC_ALL=C sort >"$stage/BINDINGS"
+  chmod 444 "$stage/INPUT-KEY" "$stage/INTERPRETER" \
+    "$stage/DIRECTORIES" "$stage/BINDINGS"
+  write_checker_runtime_digests "$stage" SHA256SUMS
+  chmod 444 "$stage/SHA256SUMS"
+  chmod 555 "$stage/rocq-bin" "$stage/elf-interpreter" "$stage/os-libs" "$stage"
+  if ! mv -T "$stage" "$bundle" 2>/dev/null; then
+    chmod -R u+w "$stage" 2>/dev/null || true
+    rm -rf -- "$stage"
+  fi
+}
+
+CHECKER_RUNTIME_CACHE_KEY="$(checker_runtime_input_key)"
+if [[ -n "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" ]]; then
+  CHECKER_RUNTIME_LOCK="$SHARED_CHECKER_RUNTIME_CACHE_ROOT/.${CHECKER_RUNTIME_CACHE_KEY}.lock"
+  exec {CHECKER_RUNTIME_LOCK_FD}>"$CHECKER_RUNTIME_LOCK"
+  flock "$CHECKER_RUNTIME_LOCK_FD"
+  if ! load_checker_runtime_cache \
+      "$SHARED_CHECKER_RUNTIME_CACHE_ROOT/$CHECKER_RUNTIME_CACHE_KEY"; then
+    stage_checker_runtime
+    publish_checker_runtime_cache \
+      "$SHARED_CHECKER_RUNTIME_CACHE_ROOT/$CHECKER_RUNTIME_CACHE_KEY"
+    BWRAP_RUNTIME_DIRS=()
+    BWRAP_RUNTIME_BIND_SOURCES=()
+    BWRAP_RUNTIME_DIR_ARGS=()
+    BWRAP_RUNTIME_BIND_ARGS=()
+    load_checker_runtime_cache \
+      "$SHARED_CHECKER_RUNTIME_CACHE_ROOT/$CHECKER_RUNTIME_CACHE_KEY"
+  fi
+  flock -u "$CHECKER_RUNTIME_LOCK_FD"
+  exec {CHECKER_RUNTIME_LOCK_FD}>&-
+else
+  stage_checker_runtime
 fi
-STAGED_ELF_INTERPRETER="$ROCQ_ELF_INTERPRETER_DIR/${ROCQ_ELF_INTERPRETER##*/}"
-if [[ ! -s "$STAGED_ELF_INTERPRETER" || ! -x "$STAGED_ELF_INTERPRETER" ]]; then
-  echo "staged outer ELF interpreter is missing" >&2
-  trusted_environment_failure "bwrap-runtime-library" 127
-fi
+
 BWRAP_LAUNCH=(
   "$STAGED_ELF_INTERPRETER"
   --library-path "$ROCQ_INSTALL_PREFIX/lib:$OSLIBDIR"
@@ -691,6 +942,7 @@ for file in \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/OrderedQueryFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/OrderedObservationTransportFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/RenameTransportFacts.vo" \
+  "$LOGOS_REPO_ROOT/theories/FormalSQL/PossibleOutcomeFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/ProofAgentFacade.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/SubqueryFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/MembershipCompositionFacts.vo" \
@@ -699,7 +951,8 @@ for file in \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/AggregateOutcomeBridgeFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/CorrelatedMembershipFacts.vo" \
   "$LOGOS_REPO_ROOT/theories/FormalSQL/MembershipJoinCompositionFacts.vo" \
-  "$LOGOS_REPO_ROOT/theories/FormalSQL/FilterFkEliminationFacts.vo"; do
+  "$LOGOS_REPO_ROOT/theories/FormalSQL/FilterFkEliminationFacts.vo" \
+  "$LOGOS_REPO_ROOT/theories/FormalSQL/QueryBindingSemantics.vo"; do
   if [[ ! -s "$file" ]]; then
     echo "missing or empty trusted Rocq object: $file" >&2
     echo "run 'make logos-formal-sql-lemmas' in LOGOS_REPO_ROOT before proof checking" >&2
@@ -785,7 +1038,8 @@ validate_trusted_cache() {
   fi
   if ! cmp -s "$WORKDIR/Schema.v" "$TRUSTED_CACHE/Schema.v" ||
      ! cmp -s "$WORKDIR/Queries.v" "$TRUSTED_CACHE/Queries.v" ||
-     ! cmp -s "$WORKDIR/Witness.v" "$TRUSTED_CACHE/Witness.v"; then
+     { [[ "$mode" != witness-preflight ]] &&
+       ! cmp -s "$WORKDIR/Witness.v" "$TRUSTED_CACHE/Witness.v"; }; then
     echo "trusted diagnostic cache source binding drifted" >&2
     trusted_environment_failure "diagnostic-cache-source" 2
   fi
@@ -827,6 +1081,57 @@ copy_trusted_cache_objects() {
   done
 }
 
+discard_problem_cache() {
+  if [[ -e "$PROBLEM_CACHE" || -L "$PROBLEM_CACHE" ]]; then
+    if [[ ! -d "$PROBLEM_CACHE" || -L "$PROBLEM_CACHE" ]]; then
+      echo "problem compile cache is unsafe: $PROBLEM_CACHE" >&2
+      trusted_environment_failure "problem-cache" 2
+    fi
+    rm -rf -- "$PROBLEM_CACHE" \
+      || trusted_environment_failure "problem-cache" "$?"
+  fi
+}
+
+publish_problem_cache() {
+  local stage cache_manifest_sha256
+  stage="$(mktemp -d "$CACHE_PARENT/.logos-problem-compile-cache.XXXXXX")"
+  chmod 700 "$stage"
+  cache_manifest_sha256="$(sha256sum "$TRUSTED_CACHE/SHA256SUMS" | awk '{print $1}')"
+  install -m 600 "$WORKDIR/Problem.v" "$PROBLEMOUTDIR/Problem.vo" "$stage/"
+  printf '%s\n' "$cache_manifest_sha256" >"$stage/PREFIX-SHA256"
+  (
+    cd "$stage"
+    sha256sum Problem.v Problem.vo PREFIX-SHA256 >SHA256SUMS
+  )
+  discard_problem_cache
+  mv -T "$stage" "$PROBLEM_CACHE" \
+    || trusted_environment_failure "problem-cache-publish" "$?"
+}
+
+reuse_problem_cache() {
+  local expected_manifest cache_manifest_sha256
+  [[ -d "$PROBLEM_CACHE" && ! -L "$PROBLEM_CACHE" ]] || return 1
+  for entry in Problem.v Problem.vo PREFIX-SHA256 SHA256SUMS; do
+    if [[ ! -s "$PROBLEM_CACHE/$entry" || -L "$PROBLEM_CACHE/$entry" ]]; then
+      echo "problem compile cache entry is unsafe: $entry" >&2
+      trusted_environment_failure "problem-cache" 2
+    fi
+  done
+  expected_manifest="$(cd "$PROBLEM_CACHE" && sha256sum Problem.v Problem.vo PREFIX-SHA256)"
+  if [[ "$(cat "$PROBLEM_CACHE/SHA256SUMS")" != "$expected_manifest" ]] ||
+     ! cmp -s "$WORKDIR/Problem.v" "$PROBLEM_CACHE/Problem.v"; then
+    echo "problem compile cache source/object binding drifted" >&2
+    trusted_environment_failure "problem-cache" 2
+  fi
+  cache_manifest_sha256="$(sha256sum "$TRUSTED_CACHE/SHA256SUMS" | awk '{print $1}')"
+  if [[ "$(cat "$PROBLEM_CACHE/PREFIX-SHA256")" != "$cache_manifest_sha256" ]]; then
+    return 1
+  fi
+  install -m 600 "$PROBLEM_CACHE/Problem.vo" "$PROBLEMOUTDIR/Problem.vo"
+  echo "LOGOS_TRUSTED_ROCQ_PROBLEM_CACHE hit=true" >&2
+  return 0
+}
+
 write_cache_manifest() {
   local cache="$1" file stem
   (
@@ -841,6 +1146,77 @@ write_cache_manifest() {
     } >SHA256SUMS
     chmod 600 SHA256SUMS
   )
+}
+
+shared_prefix_key() {
+  {
+    printf '%s\n' "$SHARED_AUTHORITY_SHA256"
+    sha256sum "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" "$WORKDIR/Witness.v"
+  } | sha256sum | awk '{print $1}'
+}
+
+validate_shared_prefix_bundle() {
+  local bundle="$1" expected
+  if [[ ! -d "$bundle" || -L "$bundle" ||
+        "$(stat -c '%a' "$bundle")" != 555 ]]; then
+    return 1
+  fi
+  for entry in Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo SHA256SUMS; do
+    if [[ ! -s "$bundle/$entry" || -L "$bundle/$entry" ||
+          "$(stat -c '%a' "$bundle/$entry")" != 444 ]]; then
+      echo "shared generated-prefix cache entry is unsafe: $bundle/$entry" >&2
+      trusted_environment_failure "shared-prefix-cache" 2
+    fi
+  done
+  expected="$(cd "$bundle" && sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo)"
+  if [[ "$(cat "$bundle/SHA256SUMS")" != "$expected" ]] ||
+     ! cmp -s "$WORKDIR/Schema.v" "$bundle/Schema.v" ||
+     ! cmp -s "$WORKDIR/Queries.v" "$bundle/Queries.v" ||
+     ! cmp -s "$WORKDIR/Witness.v" "$bundle/Witness.v"; then
+    echo "shared generated-prefix cache digest/source binding drifted" >&2
+    trusted_environment_failure "shared-prefix-cache" 2
+  fi
+}
+
+try_shared_prefix_cache() {
+  local bundle
+  [[ -n "$SHARED_PREFIX_CACHE_ROOT" ]] || return 1
+  SHARED_PREFIX_KEY="$(shared_prefix_key)"
+  bundle="$SHARED_PREFIX_CACHE_ROOT/$SHARED_PREFIX_KEY"
+  validate_shared_prefix_bundle "$bundle" || return 1
+  install -m 600 \
+    "$bundle/Schema.v" "$bundle/Schema.vo" \
+    "$bundle/Queries.v" "$bundle/Queries.vo" \
+    "$bundle/Witness.v" "$bundle/Witness.vo" \
+    "$TRUSTEDDIR/"
+  SHARED_PREFIX_HIT=true
+  echo "LOGOS_TRUSTED_ROCQ_PREFIX_CACHE hit=true key=$SHARED_PREFIX_KEY" >&2
+  return 0
+}
+
+publish_shared_prefix_cache() {
+  local bundle stage
+  [[ -n "$SHARED_PREFIX_CACHE_ROOT" ]] || return 0
+  [[ -n "$SHARED_PREFIX_KEY" ]] || SHARED_PREFIX_KEY="$(shared_prefix_key)"
+  bundle="$SHARED_PREFIX_CACHE_ROOT/$SHARED_PREFIX_KEY"
+  if [[ -e "$bundle" || -L "$bundle" ]]; then
+    validate_shared_prefix_bundle "$bundle"
+    return 0
+  fi
+  stage="$(mktemp -d "$SHARED_PREFIX_CACHE_ROOT/.${SHARED_PREFIX_KEY}.XXXXXX")"
+  install -m 444 \
+    "$TRUSTEDDIR/Schema.v" "$TRUSTEDDIR/Schema.vo" \
+    "$TRUSTEDDIR/Queries.v" "$TRUSTEDDIR/Queries.vo" \
+    "$TRUSTEDDIR/Witness.v" "$TRUSTEDDIR/Witness.vo" \
+    "$stage/"
+  (cd "$stage" && sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo >SHA256SUMS)
+  chmod 444 "$stage/SHA256SUMS"
+  chmod 555 "$stage"
+  if ! mv -T "$stage" "$bundle" 2>/dev/null; then
+    chmod 700 "$stage" 2>/dev/null || true
+    rm -rf -- "$stage"
+    validate_shared_prefix_bundle "$bundle"
+  fi
 }
 
 validate_final_workspace_modules() {
@@ -882,7 +1258,18 @@ if [[ "$mode" != preflight ]]; then
   # crash-recovery backups. Removing them here prevents two interrupted swaps
   # from accumulating ambiguous old-cache candidates.
   discard_superseded_cache_backups
-  if [[ "$mode" == problem-diagnostic ]]; then
+  if [[ "$mode" == witness-preflight ]]; then
+    if ! try_shared_prefix_cache; then
+      cp "$TRUSTED_CACHE/Schema.v" "$TRUSTED_CACHE/Schema.vo" \
+        "$TRUSTED_CACHE/Queries.v" "$TRUSTED_CACHE/Queries.vo" "$TRUSTEDDIR/"
+      cp "$WORKDIR/Witness.v" "$TRUSTEDDIR/"
+      "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+        -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+        -Q "$LOGOS_REPO_ROOT/theories" Logos \
+        -Q "$TRUSTEDDIR" LogosGenerated \
+        "$TRUSTEDDIR/Witness.v" || trusted_environment_failure "witness" "$?"
+    fi
+  elif [[ "$mode" == problem-diagnostic ]]; then
     cp "$TRUSTED_CACHE/Schema.vo" "$TRUSTED_CACHE/Queries.vo" \
       "$TRUSTED_CACHE/Witness.vo" "$PROBLEMOUTDIR/"
     for file in "${PROOF_MODULE_ORDER[@]}"; do
@@ -910,38 +1297,39 @@ if [[ "$mode" != preflight ]]; then
     copy_trusted_cache_objects "$PROBLEMOUTDIR"
     install -m 600 "$WORKDIR/$module_candidate" "$PROBLEMDIR/ProofModules/$candidate_name"
   else
-    # The cache is host-created during preflight, digest-bound to the exact
-    # generated sources above, and never mounted into the agent. Reuse these
-    # objects for final assembly; the final non-recursive kernel check below
-    # still independently checks Schema, Queries, and Witness themselves.
+    # The cache is host-created only after preflight kernel-checks these exact
+    # generated sources and objects, is digest-bound, and is never mounted into
+    # the agent. Reuse the checked prefix for final proof assembly.
     cp "$TRUSTED_CACHE/Schema.v" "$TRUSTED_CACHE/Schema.vo" \
       "$TRUSTED_CACHE/Queries.v" "$TRUSTED_CACHE/Queries.vo" \
       "$TRUSTED_CACHE/Witness.v" "$TRUSTED_CACHE/Witness.vo" "$TRUSTEDDIR/"
     validate_final_workspace_modules
   fi
 else
-  cp "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" "$WORKDIR/Witness.v" "$TRUSTEDDIR/"
+  if ! try_shared_prefix_cache; then
+    cp "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" "$WORKDIR/Witness.v" "$TRUSTEDDIR/"
 
-  "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
-    -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
-    -Q "$LOGOS_REPO_ROOT/theories" Logos \
-    -Q "$TRUSTEDDIR" LogosGenerated \
-    "$TRUSTEDDIR/Schema.v" || trusted_environment_failure "schema" "$?"
+    "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+      -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+      -Q "$LOGOS_REPO_ROOT/theories" Logos \
+      -Q "$TRUSTEDDIR" LogosGenerated \
+      "$TRUSTEDDIR/Schema.v" || trusted_environment_failure "schema" "$?"
 
-  "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
-    -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
-    -Q "$LOGOS_REPO_ROOT/theories" Logos \
-    -Q "$TRUSTEDDIR" LogosGenerated \
-    "$TRUSTEDDIR/Queries.v" || trusted_environment_failure "queries" "$?"
+    "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+      -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+      -Q "$LOGOS_REPO_ROOT/theories" Logos \
+      -Q "$TRUSTEDDIR" LogosGenerated \
+      "$TRUSTEDDIR/Queries.v" || trusted_environment_failure "queries" "$?"
 
-  "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
-    -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
-    -Q "$LOGOS_REPO_ROOT/theories" Logos \
-    -Q "$TRUSTEDDIR" LogosGenerated \
-    "$TRUSTEDDIR/Witness.v" || trusted_environment_failure "witness" "$?"
+    "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+      -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+      -Q "$LOGOS_REPO_ROOT/theories" Logos \
+      -Q "$TRUSTEDDIR" LogosGenerated \
+      "$TRUSTEDDIR/Witness.v" || trusted_environment_failure "witness" "$?"
+  fi
 fi
 
-if [[ "$mode" == preflight ]]; then
+if [[ "$mode" == preflight || "$mode" == witness-preflight ]]; then
   # Schema, Queries, and Witness are case-generated and therefore never enter
   # the manifest-bound trusted dependency exception. Check every generated module
   # explicitly; checking only the final/root module with [-norec] would admit
@@ -976,7 +1364,12 @@ if [[ "$mode" == preflight ]]; then
     fi
   done
 
-  if [[ -e "$TRUSTED_CACHE" || -L "$TRUSTED_CACHE" ]]; then
+  if [[ "$SHARED_PREFIX_HIT" != true ]]; then
+    publish_shared_prefix_cache
+  fi
+
+  if [[ "$mode" == preflight ]] && \
+     [[ -e "$TRUSTED_CACHE" || -L "$TRUSTED_CACHE" ]]; then
     echo "refusing to replace a pre-existing trusted diagnostic cache: $TRUSTED_CACHE" >&2
     trusted_environment_failure "diagnostic-cache-preexisting" 2
   fi
@@ -996,8 +1389,23 @@ if [[ "$mode" == preflight ]]; then
     "$CACHE_STAGE/"
   install -m 600 /dev/null "$CACHE_STAGE/ProofModules/ORDER"
   write_cache_manifest "$CACHE_STAGE"
-  mv -T "$CACHE_STAGE" "$TRUSTED_CACHE" \
-    || trusted_environment_failure "diagnostic-cache-publish" "$?"
+  if [[ "$mode" == witness-preflight ]]; then
+    CACHE_OLD="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache-old.XXXXXX")"
+    rm -rf -- "$CACHE_OLD"
+    mv -T "$TRUSTED_CACHE" "$CACHE_OLD" \
+      || trusted_environment_failure "diagnostic-cache-publish" "$?"
+    if ! mv -T "$CACHE_STAGE" "$TRUSTED_CACHE"; then
+      status="$?"
+      mv -T "$CACHE_OLD" "$TRUSTED_CACHE" || true
+      trusted_environment_failure "diagnostic-cache-publish" "$status"
+    fi
+    rm -rf -- "$CACHE_OLD"
+    CACHE_OLD=
+    discard_problem_cache
+  else
+    mv -T "$CACHE_STAGE" "$TRUSTED_CACHE" \
+      || trusted_environment_failure "diagnostic-cache-publish" "$?"
+  fi
   CACHE_STAGE=
   exit 0
 fi
@@ -1085,6 +1493,7 @@ if [[ "$mode" == module-diagnostic ]]; then
     "$CACHE_STAGE/ProofModules/$candidate_stem.vo"
   printf '%s\n' "$candidate_name" >>"$CACHE_STAGE/ProofModules/ORDER"
   write_cache_manifest "$CACHE_STAGE"
+  discard_problem_cache
 
   CACHE_OLD="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache-old.XXXXXX")"
   rm -rf -- "$CACHE_OLD"
@@ -1104,22 +1513,26 @@ if [[ "$mode" == module-diagnostic ]]; then
 fi
 
 if [[ "$mode" == final ]]; then
-  cp "$TRUSTEDDIR/Schema.vo" "$TRUSTEDDIR/Queries.vo" "$TRUSTEDDIR/Witness.vo" \
-    "$PROBLEMOUTDIR/"
-  for file in "${PROOF_MODULE_ORDER[@]}"; do
-    stem="${file%.v}"
-    install -m 600 "$WORKDIR/ProofModules/$file" "$PROBLEMDIR/ProofModules/$file"
-    sandbox_compile \
-      "$PROBLEMDIR" "$PROBLEMOUTDIR" "ProofModules/$file" \
-      "LogosGenerated.ProofModules.$stem" "ProofModules/$stem.vo"
-  done
+  # Every cached proof module was already compiled by the serialized host
+  # module diagnostic, atomically published with its exact source, and bound
+  # into ORDER/SHA256SUMS. validate_trusted_cache and
+  # validate_final_workspace_modules above recheck both bindings. Reuse that
+  # immutable checked prefix here; recompiling it made final-check latency
+  # proportional to all prior successful diagnostics without adding a new
+  # trust boundary. The kernel still checks every module explicitly below.
+  copy_trusted_cache_objects "$PROBLEMOUTDIR"
 fi
 
-sandbox_compile \
-  "$PROBLEMDIR" "$PROBLEMOUTDIR" Problem.v \
-  LogosGenerated.Problem Problem.vo
+if [[ "$mode" == final ]] && reuse_problem_cache; then
+  : # Reused exact Problem.vo from the latest digest-bound passing diagnostic.
+else
+  sandbox_compile \
+    "$PROBLEMDIR" "$PROBLEMOUTDIR" Problem.v \
+    LogosGenerated.Problem Problem.vo
+fi
 
 if [[ "$mode" == problem-diagnostic ]]; then
+  publish_problem_cache
   echo "LOGOS_TRUSTED_ROCQ_CHECK mode=problem-diagnostic requested_timeout_seconds=$requested_timeout_seconds" >&2
   exit 0
 fi
@@ -1145,13 +1558,14 @@ for file in "${PROOF_MODULE_ORDER[@]}"; do
   stem="${file%.v}"
   module_check_arguments+=( -norec "LogosGenerated.ProofModules.$stem" )
 done
+# Schema, Queries, and Witness were kernel-checked before the exact
+# source/object prefix was published into the immutable cache. The final
+# source-binding and cache-manifest checks above establish that these are the
+# same objects. Check only the newly added proof closure here.
 "$ROCQ_BIN" check -silent -o -coqlib "$ROCQ_STDLIB_DIR" \
   -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
   -Q "$LOGOS_REPO_ROOT/theories" Logos \
   -Q "$GOALDIR" LogosGenerated \
-  -norec LogosGenerated.Schema \
-  -norec LogosGenerated.Queries \
-  -norec LogosGenerated.Witness \
   "${module_check_arguments[@]}" \
   -norec LogosGenerated.Problem \
   -norec LogosGenerated.Goal 2>&1 | tee "$CHECK_CONTEXT"

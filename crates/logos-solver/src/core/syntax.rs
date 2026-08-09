@@ -55,6 +55,11 @@ pub struct LoweredSchema {
 #[serde(rename_all = "camelCase")]
 pub struct LoweredQuery {
     pub status: LoweringStatus,
+    /// Query-local relation definitions. Each definition and the final body
+    /// are ordinary FormalSQL query expressions; sharing is interpreted only
+    /// by the Logos query-program binding layer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bindings: Vec<FormalQueryBinding>,
     /// Authoritative normalized query syntax for the exact ordered-observation
     /// semantics. This is present for every successfully lowered query.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,6 +72,17 @@ pub struct LoweredQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_signature: Option<Vec<FormalAttribute>>,
     pub diagnostics: Vec<LoweringDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormalQueryBinding {
+    pub id: String,
+    pub source_name: String,
+    /// Fresh internal relation name used by ordinary FormalSQL table leaves.
+    pub relation: String,
+    pub output_signature: Vec<FormalAttribute>,
+    pub query_expr: FormalQueryExpr,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -140,8 +156,8 @@ pub struct FormalQueryDefinitionGraph {
     /// symbols makes every `@select_list_N` reference resolvable without
     /// duplicating scalar or attribute payloads.
     pub opaque_helper_symbols: Vec<String>,
-    /// Formula-expression and query-expression definitions in deterministic
-    /// Rocq emission order, followed by the source and target statement roots.
+    /// Scalar-expression and query-expression definitions in deterministic Rocq
+    /// emission order, followed by the source and target statement roots.
     pub definitions: Vec<FormalQueryShapeDefinition>,
     pub source_statements: Vec<FormalQueryStatementSymbols>,
     pub target_statements: Vec<FormalQueryStatementSymbols>,
@@ -158,7 +174,6 @@ pub struct FormalQueryShapeDefinition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormalQueryShapeKind {
-    FormulaExpr,
     ScalarExpr,
     QueryExpr,
 }
@@ -248,9 +263,9 @@ pub struct FormalUniqueIndexConstraint {
 /// Closed, row-local formula accepted in schema constraints.
 ///
 /// CHECK constraints and partial unique-index predicates cannot contain
-/// subqueries.  Keeping this type separate from query formulas makes that SQL
-/// restriction structural and avoids retaining a second relational AST only
-/// for schema emission.
+/// subqueries. Keeping this type separate from query scalar expressions makes
+/// that SQL restriction structural without introducing a second relational AST
+/// solely for schema emission.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum FormalConstraintFormula {
@@ -348,27 +363,22 @@ pub enum FormalQueryExpr {
         left: Box<FormalQueryExpr>,
         right: Box<FormalQueryExpr>,
     },
-    /// Native shared-child SQL join.  The exact denotation chooses one left
+    /// Exact shared-child SQL join. The denotation chooses one left
     /// and one right child outcome, evaluates one coherent condition matrix,
     /// then permutation-closes the projected result.
     Join {
         join_kind: FormalQueryJoinKind,
-        predicate: FormalFormulaExpr,
-        matched_select: Vec<FormalSelectItem>,
-        left_select: Vec<FormalSelectItem>,
-        right_select: Vec<FormalSelectItem>,
+        predicate: FormalScalarExpr,
+        matched_select: Vec<FormalScalarSelectItem>,
+        left_select: Vec<FormalScalarSelectItem>,
+        right_select: Vec<FormalScalarSelectItem>,
         left: Box<FormalQueryExpr>,
         right: Box<FormalQueryExpr>,
     },
-    /// Order-preserving row projection.
+    /// Order-preserving typed scalar projection. Every SQL value is represented
+    /// in the one exact-query scalar AST, including Boolean values and scalar
+    /// subqueries.
     Projection {
-        select: Vec<FormalSelectItem>,
-        input: Box<FormalQueryExpr>,
-    },
-    /// Native typed scalar projection.  Unlike the legacy flat aggregate-term
-    /// projection, every value is represented in the one exact-query scalar
-    /// AST and may contain Boolean values or scalar subqueries.
-    ScalarProjection {
         select: Vec<FormalScalarSelectItem>,
         input: Box<FormalQueryExpr>,
     },
@@ -379,35 +389,22 @@ pub enum FormalQueryExpr {
         adapter: FormalRowMapAdapter,
         input: Box<FormalQueryExpr>,
     },
-    /// Order-preserving row filtering with mutually recursive subqueries.
+    /// Order-preserving typed Boolean filtering with mutually recursive
+    /// subqueries. Context validation rejects aggregates at this query level.
     Selection {
-        predicate: FormalFormulaExpr,
-        input: Box<FormalQueryExpr>,
-    },
-    /// Native WHERE-style Boolean scalar filtering.  Context validation
-    /// rejects aggregates at this query level while retaining scalar
-    /// subqueries and their exact runtime outcomes.
-    ScalarSelection {
         predicate: FormalScalarExpr,
         input: Box<FormalQueryExpr>,
     },
-    /// Native grouped scalar evaluation.  One child observation is grouped
+    /// Typed grouped scalar evaluation. One child observation is grouped
     /// once; aggregate-capable scalar SELECT and HAVING expressions then
     /// share each finalized group environment.
-    ScalarGroup {
+    Group {
         select: Vec<FormalScalarSelectItem>,
         group_by: Vec<FormalScalarExpr>,
         having: FormalScalarExpr,
         input: Box<FormalQueryExpr>,
     },
-    /// Grouping/aggregation and permutation-closing observation boundary.
-    Group {
-        select: Vec<FormalSelectItem>,
-        group_by: Vec<FormalAggregateTerm>,
-        having: FormalFormulaExpr,
-        input: Box<FormalQueryExpr>,
-    },
-    /// Native PostgreSQL GROUPING SETS reset. Every set consumes the same one
+    /// Exact PostgreSQL GROUPING SETS reset. Every set consumes the same one
     /// successful child bag; branches are not independent query evaluations.
     GroupingSets {
         grouping_sets: Vec<FormalGroupingSet>,
@@ -463,23 +460,27 @@ impl FormalQueryExpr {
             }
             FormalQueryExpr::Join {
                 predicate,
+                matched_select,
+                left_select,
+                right_select,
                 left,
                 right,
                 ..
             } => {
-                formula_expr_requires_numeric_exp_model(predicate)
+                scalar_expr_requires_numeric_exp_model(predicate)
+                    || matched_select
+                        .iter()
+                        .chain(left_select)
+                        .chain(right_select)
+                        .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
                     || left.requires_numeric_exp_model()
                     || right.requires_numeric_exp_model()
             }
             FormalQueryExpr::Selection { predicate, input } => {
-                formula_expr_requires_numeric_exp_model(predicate)
-                    || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::ScalarSelection { predicate, input } => {
                 scalar_expr_requires_numeric_exp_model(predicate)
                     || input.requires_numeric_exp_model()
             }
-            FormalQueryExpr::ScalarGroup {
+            FormalQueryExpr::Group {
                 select,
                 group_by,
                 having,
@@ -492,24 +493,32 @@ impl FormalQueryExpr {
                     || scalar_expr_requires_numeric_exp_model(having)
                     || input.requires_numeric_exp_model()
             }
-            FormalQueryExpr::Group { having, input, .. } => {
-                formula_expr_requires_numeric_exp_model(having)
-                    || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Projection { input, .. }
-            | FormalQueryExpr::GroupingSets { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
-            | FormalQueryExpr::Window { input, .. }
-            | FormalQueryExpr::Distinct { input }
-            | FormalQueryExpr::OrderBy { input, .. }
-            | FormalQueryExpr::Offset { input, .. }
-            | FormalQueryExpr::Fetch { input, .. } => input.requires_numeric_exp_model(),
-            FormalQueryExpr::ScalarProjection { select, input } => {
+            FormalQueryExpr::Projection { select, input } => {
                 select
                     .iter()
                     .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
                     || input.requires_numeric_exp_model()
             }
+            FormalQueryExpr::GroupingSets {
+                grouping_sets,
+                input,
+            } => {
+                grouping_sets.iter().any(|set| {
+                    set.select
+                        .iter()
+                        .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
+                        || set
+                            .group_by
+                            .iter()
+                            .any(scalar_expr_requires_numeric_exp_model)
+                }) || input.requires_numeric_exp_model()
+            }
+            FormalQueryExpr::Rank { input, .. }
+            | FormalQueryExpr::Window { input, .. }
+            | FormalQueryExpr::Distinct { input }
+            | FormalQueryExpr::OrderBy { input, .. }
+            | FormalQueryExpr::Offset { input, .. }
+            | FormalQueryExpr::Fetch { input, .. } => input.requires_numeric_exp_model(),
             FormalQueryExpr::Error { .. }
             | FormalQueryExpr::Empty { .. }
             | FormalQueryExpr::EmptyTuple
@@ -552,25 +561,6 @@ impl FormalRowMapAdapter {
     }
 }
 
-pub(super) fn formula_expr_requires_numeric_exp_model(formula: &FormalFormulaExpr) -> bool {
-    match formula {
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            formula_expr_requires_numeric_exp_model(left)
-                || formula_expr_requires_numeric_exp_model(right)
-        }
-        FormalFormulaExpr::Not { formula } => formula_expr_requires_numeric_exp_model(formula),
-        FormalFormulaExpr::In { query, .. }
-        | FormalFormulaExpr::QuantifiedComparison { query, .. }
-        | FormalFormulaExpr::Exists { query } => query.requires_numeric_exp_model(),
-        FormalFormulaExpr::Scalar { expression } => {
-            scalar_expr_requires_numeric_exp_model(expression)
-        }
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => false,
-    }
-}
-
 pub(super) fn scalar_expr_requires_numeric_exp_model(expression: &FormalScalarExpr) -> bool {
     match expression {
         FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => false,
@@ -602,9 +592,8 @@ pub(super) fn scalar_expr_requires_numeric_exp_model(expression: &FormalScalarEx
         | FormalScalarExpr::Not { expression } => {
             scalar_expr_requires_numeric_exp_model(expression)
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_requires_numeric_exp_model(left)
-                || scalar_expr_requires_numeric_exp_model(right)
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+            operands.iter().any(scalar_expr_requires_numeric_exp_model)
         }
         FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
             query.requires_numeric_exp_model()
@@ -652,8 +641,8 @@ pub enum FormalQueryError {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormalGroupingSet {
-    pub select: Vec<FormalSelectItem>,
-    pub group_by: Vec<FormalAggregateTerm>,
+    pub select: Vec<FormalScalarSelectItem>,
+    pub group_by: Vec<FormalScalarExpr>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -699,16 +688,6 @@ pub enum FormalSetOp {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FormalSelectItem {
-    pub expr: FormalAggregateTerm,
-    pub alias: String,
-    pub alias_ty: FormalAttributeType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub numeric_dscale: Option<NumericDscaleProvenance>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct FormalScalarSelectItem {
     pub expr: FormalScalarExpr,
     pub alias: String,
@@ -731,7 +710,7 @@ pub enum FormalScalarQuantifier {
     Exists,
 }
 
-/// One typed scalar AST for every native exact-query scalar position.
+/// One typed scalar AST for every exact-query scalar position.
 ///
 /// The Rust enum mirrors FormalSQL's result-indexed [scalar_expr].  Value
 /// constructors carry their resolved SQL type, while Boolean constructors are
@@ -768,12 +747,12 @@ pub enum FormalScalarExpr {
         args: Vec<FormalScalarExpr>,
     },
     And {
-        left: Box<FormalScalarExpr>,
-        right: Box<FormalScalarExpr>,
+        insertion_sites: Vec<Vec<String>>,
+        operands: Vec<FormalScalarExpr>,
     },
     Or {
-        left: Box<FormalScalarExpr>,
-        right: Box<FormalScalarExpr>,
+        insertion_sites: Vec<Vec<String>>,
+        operands: Vec<FormalScalarExpr>,
     },
     Not {
         expression: Box<FormalScalarExpr>,
@@ -1173,57 +1152,6 @@ impl FormalPredicate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
-/// Formula language mutually recursive with [FormalQueryExpr], so EXISTS
-/// never collapses an order-sensitive child to one arbitrarily chosen bag.
-pub enum FormalFormulaExpr {
-    True,
-    False,
-    Predicate {
-        predicate: FormalPredicate,
-        args: Vec<FormalAggregateTerm>,
-    },
-    And {
-        left: Box<FormalFormulaExpr>,
-        right: Box<FormalFormulaExpr>,
-    },
-    Or {
-        left: Box<FormalFormulaExpr>,
-        right: Box<FormalFormulaExpr>,
-    },
-    Not {
-        formula: Box<FormalFormulaExpr>,
-    },
-    /// SQL scalar or row-valued IN over a full compositional subquery.  The
-    /// exact Rocq semantics compares aligned tuples componentwise in SQL
-    /// three-valued logic, so a definite mismatch dominates NULL while an
-    /// otherwise equal row containing NULL remains UNKNOWN.
-    In {
-        select: Vec<FormalSelectItem>,
-        query: Box<FormalQueryExpr>,
-    },
-    /// A comparison between already-evaluated scalar arguments and every row
-    /// of a query expression.  Lowering currently constructs this only for a
-    /// structurally singleton, one-column global-aggregate scalar subquery,
-    /// where PostgreSQL scalar-subquery comparison is exactly existential
-    /// quantification over that sole row (including SQL UNKNOWN and errors).
-    QuantifiedComparison {
-        predicate: FormalPredicate,
-        args: Vec<FormalAggregateTerm>,
-        query: Box<FormalQueryExpr>,
-    },
-    Exists {
-        query: Box<FormalQueryExpr>,
-    },
-    /// Native Boolean scalar bridge for ON/HAVING and compatibility predicate
-    /// positions that still use FormalSQL's legacy formula-bearing query
-    /// constructors.
-    Scalar {
-        expression: Box<FormalScalarExpr>,
-    },
-}
-
 impl ScalarOperator {
     /// Whether the operator's complete FormalSQL value interpretation accepts
     /// this argument count.  Keeping this table beside the closed operator
@@ -1306,7 +1234,7 @@ pub(super) fn validate_query_expr_scalar_operators(query: &FormalQueryExpr) -> R
     validate_query_expr_scalar_operators_at(query, "query")
 }
 
-fn formal_query_expr_contains_analysis_error(query: &FormalQueryExpr) -> bool {
+pub(super) fn formal_query_expr_contains_analysis_error(query: &FormalQueryExpr) -> bool {
     match query {
         FormalQueryExpr::Error { .. } => true,
         FormalQueryExpr::Empty { .. }
@@ -1318,38 +1246,33 @@ fn formal_query_expr_contains_analysis_error(query: &FormalQueryExpr) -> bool {
         }
         FormalQueryExpr::Join {
             predicate,
+            matched_select,
+            left_select,
+            right_select,
             left,
             right,
             ..
         } => {
-            formal_formula_expr_contains_analysis_error(predicate)
+            formal_scalar_expr_contains_analysis_error(predicate)
+                || matched_select
+                    .iter()
+                    .chain(left_select)
+                    .chain(right_select)
+                    .any(|item| formal_scalar_expr_contains_analysis_error(&item.expr))
                 || formal_query_expr_contains_analysis_error(left)
                 || formal_query_expr_contains_analysis_error(right)
         }
-        FormalQueryExpr::Projection { input, .. }
-        | FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::GroupingSets { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
-        | FormalQueryExpr::Window { input, .. }
-        | FormalQueryExpr::Distinct { input }
-        | FormalQueryExpr::OrderBy { input, .. }
-        | FormalQueryExpr::Offset { input, .. }
-        | FormalQueryExpr::Fetch { input, .. } => formal_query_expr_contains_analysis_error(input),
-        FormalQueryExpr::ScalarProjection { select, input } => {
+        FormalQueryExpr::Projection { select, input } => {
             select
                 .iter()
                 .any(|item| formal_scalar_expr_contains_analysis_error(&item.expr))
                 || formal_query_expr_contains_analysis_error(input)
         }
         FormalQueryExpr::Selection { predicate, input } => {
-            formal_formula_expr_contains_analysis_error(predicate)
-                || formal_query_expr_contains_analysis_error(input)
-        }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
             formal_scalar_expr_contains_analysis_error(predicate)
                 || formal_query_expr_contains_analysis_error(input)
         }
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having,
@@ -1364,29 +1287,27 @@ fn formal_query_expr_contains_analysis_error(query: &FormalQueryExpr) -> bool {
                 || formal_scalar_expr_contains_analysis_error(having)
                 || formal_query_expr_contains_analysis_error(input)
         }
-        FormalQueryExpr::Group { having, input, .. } => {
-            formal_formula_expr_contains_analysis_error(having)
-                || formal_query_expr_contains_analysis_error(input)
+        FormalQueryExpr::GroupingSets {
+            grouping_sets,
+            input,
+        } => {
+            grouping_sets.iter().any(|set| {
+                set.select
+                    .iter()
+                    .any(|item| formal_scalar_expr_contains_analysis_error(&item.expr))
+                    || set
+                        .group_by
+                        .iter()
+                        .any(formal_scalar_expr_contains_analysis_error)
+            }) || formal_query_expr_contains_analysis_error(input)
         }
-    }
-}
-
-fn formal_formula_expr_contains_analysis_error(formula: &FormalFormulaExpr) -> bool {
-    match formula {
-        FormalFormulaExpr::True
-        | FormalFormulaExpr::False
-        | FormalFormulaExpr::Predicate { .. } => false,
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            formal_formula_expr_contains_analysis_error(left)
-                || formal_formula_expr_contains_analysis_error(right)
-        }
-        FormalFormulaExpr::Not { formula } => formal_formula_expr_contains_analysis_error(formula),
-        FormalFormulaExpr::In { query, .. }
-        | FormalFormulaExpr::QuantifiedComparison { query, .. }
-        | FormalFormulaExpr::Exists { query } => formal_query_expr_contains_analysis_error(query),
-        FormalFormulaExpr::Scalar { expression } => {
-            formal_scalar_expr_contains_analysis_error(expression)
-        }
+        FormalQueryExpr::RowMap { input, .. }
+        | FormalQueryExpr::Rank { input, .. }
+        | FormalQueryExpr::Window { input, .. }
+        | FormalQueryExpr::Distinct { input }
+        | FormalQueryExpr::OrderBy { input, .. }
+        | FormalQueryExpr::Offset { input, .. }
+        | FormalQueryExpr::Fetch { input, .. } => formal_query_expr_contains_analysis_error(input),
     }
 }
 
@@ -1411,10 +1332,9 @@ fn formal_scalar_expr_contains_analysis_error(expression: &FormalScalarExpr) -> 
         | FormalScalarExpr::Not { expression } => {
             formal_scalar_expr_contains_analysis_error(expression)
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            formal_scalar_expr_contains_analysis_error(left)
-                || formal_scalar_expr_contains_analysis_error(right)
-        }
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => operands
+            .iter()
+            .any(formal_scalar_expr_contains_analysis_error),
         FormalScalarExpr::QuantifiedComparison { args, query, .. }
         | FormalScalarExpr::In { args, query } => {
             args.iter().any(formal_scalar_expr_contains_analysis_error)
@@ -1427,6 +1347,14 @@ fn formal_scalar_expr_contains_analysis_error(expression: &FormalScalarExpr) -> 
 }
 
 fn validate_scalar_call(operator: ScalarOperator, arity: usize, path: &str) -> Result<(), String> {
+    if matches!(
+        operator,
+        ScalarOperator::Boolean(ScalarBooleanOperator::And | ScalarBooleanOperator::Or)
+    ) {
+        return Err(format!(
+            "{path}: AND/OR must use the canonical scheduled Boolean expression"
+        ));
+    }
     if operator.accepts_arity(arity) {
         Ok(())
     } else {
@@ -1436,16 +1364,29 @@ fn validate_scalar_call(operator: ScalarOperator, arity: usize, path: &str) -> R
     }
 }
 
-fn validate_function_term_scalar_operators(
+fn validate_strict_function_term_scalar_operators(
     term: &FormalFunctionTerm,
     path: &str,
 ) -> Result<(), String> {
     match term {
         FormalFunctionTerm::Constant { .. } | FormalFunctionTerm::Attribute { .. } => Ok(()),
         FormalFunctionTerm::ScalarCall { operator, args } => {
+            if matches!(
+                operator,
+                ScalarOperator::Case
+                    | ScalarOperator::Boolean(_)
+                    | ScalarOperator::PredicateValue(_)
+            ) {
+                return Err(format!(
+                    "{path}: strict aggregate function terms reject CASE, Boolean, and predicate-value operators; use the canonical typed scalar nodes"
+                ));
+            }
             validate_scalar_call(*operator, args.len(), path)?;
             for (index, arg) in args.iter().enumerate() {
-                validate_function_term_scalar_operators(arg, &format!("{path}.args[{index}]"))?;
+                validate_strict_function_term_scalar_operators(
+                    arg,
+                    &format!("{path}.args[{index}]"),
+                )?;
             }
             Ok(())
         }
@@ -1458,7 +1399,7 @@ fn validate_aggregate_term_scalar_operators(
 ) -> Result<(), String> {
     match term {
         FormalAggregateTerm::Expr { term } | FormalAggregateTerm::Aggregate { arg: term, .. } => {
-            validate_function_term_scalar_operators(term, path)
+            validate_strict_function_term_scalar_operators(term, path)
         }
         FormalAggregateTerm::CountStar => Ok(()),
         FormalAggregateTerm::ScalarCall { operator, args } => {
@@ -1494,6 +1435,22 @@ fn validate_aggregate_term_scalar_operators(
             }
             validate_aggregate_term_scalar_operators(else_expr, &format!("{path}.else"))
         }
+    }
+}
+
+fn validate_scalar_leaf_term_shape(term: &FormalAggregateTerm, path: &str) -> Result<(), String> {
+    if matches!(
+        term,
+        FormalAggregateTerm::Expr {
+            term: FormalFunctionTerm::Constant { .. } | FormalFunctionTerm::Attribute { .. },
+        } | FormalAggregateTerm::Aggregate { .. }
+            | FormalAggregateTerm::CountStar
+    ) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{path}: scalar leaves admit only atomic constants/attributes and true aggregate/count leaves; ordinary calls and CASE require canonical typed nodes, and window items use the same leaf boundary"
+        ))
     }
 }
 
@@ -1542,17 +1499,16 @@ fn scalar_expr_contains_current_level_aggregate(expression: &FormalScalarExpr) -
         | FormalScalarExpr::Not { expression } => {
             scalar_expr_contains_current_level_aggregate(expression)
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_contains_current_level_aggregate(left)
-                || scalar_expr_contains_current_level_aggregate(right)
-        }
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => operands
+            .iter()
+            .any(scalar_expr_contains_current_level_aggregate),
         FormalScalarExpr::True
         | FormalScalarExpr::Exists { .. }
         | FormalScalarExpr::Subquery { .. } => false,
     }
 }
 
-fn scalar_expr_contains_subquery(expression: &FormalScalarExpr) -> bool {
+pub(super) fn scalar_expr_contains_subquery(expression: &FormalScalarExpr) -> bool {
     match expression {
         FormalScalarExpr::In { .. }
         | FormalScalarExpr::QuantifiedComparison { .. }
@@ -1575,8 +1531,8 @@ fn scalar_expr_contains_subquery(expression: &FormalScalarExpr) -> bool {
         FormalScalarExpr::BooleanValue { expression }
         | FormalScalarExpr::ValueBoolean { expression }
         | FormalScalarExpr::Not { expression } => scalar_expr_contains_subquery(expression),
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            scalar_expr_contains_subquery(left) || scalar_expr_contains_subquery(right)
+        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+            operands.iter().any(scalar_expr_contains_subquery)
         }
     }
 }
@@ -2168,6 +2124,7 @@ fn aggregate_term_type_class(term: &FormalAggregateTerm) -> Option<FormalValueTy
 fn validate_scalar_expr_structure(expression: &FormalScalarExpr, path: &str) -> Result<(), String> {
     match expression {
         FormalScalarExpr::Leaf { result_ty, term } => {
+            validate_scalar_leaf_term_shape(term, path)?;
             validate_aggregate_term_scalar_operators(term, &format!("{path}.term"))?;
             let actual = aggregate_term_type_class(term).ok_or_else(|| {
                 format!("{path}: cannot determine the FormalSQL value type of scalar leaf")
@@ -2191,9 +2148,14 @@ fn validate_scalar_expr_structure(expression: &FormalScalarExpr, path: &str) -> 
             operator,
             args,
         } => {
-            if *operator == ScalarOperator::Case {
+            if matches!(
+                operator,
+                ScalarOperator::Case
+                    | ScalarOperator::Boolean(_)
+                    | ScalarOperator::PredicateValue(_)
+            ) {
                 return Err(format!(
-                    "{path}: lazy SQL CASE must use FormalScalarExpr::Case"
+                    "{path}: control-flow and Boolean-value operators require their canonical dedicated scalar node"
                 ));
             }
             validate_scalar_call(*operator, args.len(), path)?;
@@ -2295,9 +2257,29 @@ fn validate_scalar_expr_structure(expression: &FormalScalarExpr, path: &str) -> 
             }
             Ok(())
         }
-        FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-            for (role, child) in [("left", left), ("right", right)] {
-                let child_path = format!("{path}.{role}");
+        FormalScalarExpr::And {
+            insertion_sites,
+            operands,
+        }
+        | FormalScalarExpr::Or {
+            insertion_sites,
+            operands,
+        } => {
+            if operands.is_empty() || insertion_sites.len() != operands.len() {
+                return Err(format!(
+                    "{path}: flattened AND/OR requires a non-empty triangular site matrix aligned with its operands"
+                ));
+            }
+            for (index, sites) in insertion_sites.iter().enumerate() {
+                if sites.len() != index {
+                    return Err(format!(
+                        "{path}.insertionSites[{index}]: expected {index} stable insertion sites, found {}",
+                        sites.len()
+                    ));
+                }
+            }
+            for (index, child) in operands.iter().enumerate() {
+                let child_path = format!("{path}.operands[{index}]");
                 require_scalar_kind(child, FormalScalarResultKind::Boolean, &child_path)?;
                 validate_scalar_expr_structure(child, &child_path)?;
             }
@@ -2440,30 +2422,6 @@ pub(crate) fn validate_scalar_expr_in_context(
     Ok(())
 }
 
-fn validate_select_scalar_operators(select: &[FormalSelectItem], path: &str) -> Result<(), String> {
-    for (index, item) in select.iter().enumerate() {
-        let item_path = format!("{path}[{index}]");
-        validate_aggregate_term_scalar_operators(&item.expr, &item_path)?;
-        let actual = aggregate_term_type_class(&item.expr).ok_or_else(|| {
-            format!("{item_path}: cannot determine the FormalSQL value type of select item")
-        })?;
-        let declared = formal_value_type_class(item.alias_ty);
-        if actual != declared {
-            return Err(format!(
-                "{item_path}: select item returns {actual:?} but its output alias declares {declared:?}"
-            ));
-        }
-        let numeric_shape = aggregate_term_numeric_result_shape(&item.expr);
-        if !numeric_result_shape_matches_type(numeric_shape, item.alias_ty) {
-            return Err(format!(
-                "{item_path}: select item declares {:?}, but its numeric typmod shape is {numeric_shape:?}",
-                item.alias_ty
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn validate_scalar_select_operators(
     select: &[FormalScalarSelectItem],
     context: FormalScalarContext,
@@ -2481,118 +2439,6 @@ fn validate_scalar_select_operators(
         }
     }
     Ok(())
-}
-
-fn validate_formula_expr_scalar_operators(
-    formula: &FormalFormulaExpr,
-    path: &str,
-    context: FormalScalarContext,
-) -> Result<(), String> {
-    match formula {
-        FormalFormulaExpr::True | FormalFormulaExpr::False => Ok(()),
-        FormalFormulaExpr::Predicate { predicate, args } => {
-            validate_predicate_call(*predicate, args.len(), path)?;
-            for (index, arg) in args.iter().enumerate() {
-                validate_aggregate_term_scalar_operators(arg, &format!("{path}.args[{index}]"))?;
-                if !context.permits_current_level_aggregates()
-                    && aggregate_term_contains_current_level_aggregate(arg)
-                {
-                    return Err(format!(
-                        "{path}.args[{index}]: {} rejects aggregates at this query level",
-                        context.name()
-                    ));
-                }
-            }
-            let argument_types = args
-                .iter()
-                .map(aggregate_term_type_class)
-                .collect::<Option<Vec<_>>>()
-                .ok_or_else(|| {
-                    format!("{path}: cannot determine a predicate aggregate-term type")
-                })?;
-            if !scalar_predicate_argument_types_are_valid(*predicate, &argument_types) {
-                return Err(format!(
-                    "{path}: predicate {predicate:?} rejects argument types {argument_types:?}"
-                ));
-            }
-            Ok(())
-        }
-        FormalFormulaExpr::And { left, right } | FormalFormulaExpr::Or { left, right } => {
-            validate_formula_expr_scalar_operators(left, &format!("{path}.left"), context)?;
-            validate_formula_expr_scalar_operators(right, &format!("{path}.right"), context)
-        }
-        FormalFormulaExpr::Not { formula } => {
-            validate_formula_expr_scalar_operators(formula, &format!("{path}.not"), context)
-        }
-        FormalFormulaExpr::In { select, query } => {
-            validate_select_scalar_operators(select, &format!("{path}.select"))?;
-            if !context.permits_current_level_aggregates()
-                && select
-                    .iter()
-                    .any(|item| aggregate_term_contains_current_level_aggregate(&item.expr))
-            {
-                return Err(format!(
-                    "{path}.select: {} rejects aggregates at this query level",
-                    context.name()
-                ));
-            }
-            validate_query_expr_scalar_operators_at(query, &format!("{path}.query"))
-        }
-        FormalFormulaExpr::QuantifiedComparison {
-            predicate,
-            args,
-            query,
-        } => {
-            if args.len() != 1 {
-                return Err(format!(
-                    "{path}: quantified comparison requires exactly one outer argument"
-                ));
-            }
-            validate_predicate_call(*predicate, args.len() + 1, path)?;
-            for (index, arg) in args.iter().enumerate() {
-                validate_aggregate_term_scalar_operators(arg, &format!("{path}.args[{index}]"))?;
-                if !context.permits_current_level_aggregates()
-                    && aggregate_term_contains_current_level_aggregate(arg)
-                {
-                    return Err(format!(
-                        "{path}.args[{index}]: {} rejects aggregates at this query level",
-                        context.name()
-                    ));
-                }
-            }
-            validate_query_expr_scalar_operators_at(query, &format!("{path}.query"))?;
-            if query_expr_output_signature(query).map(|signature| signature.len()) != Some(1) {
-                return Err(format!(
-                    "{path}: quantified comparison requires exactly one subquery output column"
-                ));
-            }
-            let mut argument_types = args
-                .iter()
-                .map(aggregate_term_type_class)
-                .collect::<Option<Vec<_>>>()
-                .ok_or_else(|| {
-                    format!("{path}: cannot determine a quantified predicate argument type")
-                })?;
-            argument_types.extend(
-                query_expr_output_signature(query)
-                    .expect("singleton output signature checked")
-                    .iter()
-                    .map(|output| formal_value_type_class(output.ty)),
-            );
-            if !scalar_predicate_argument_types_are_valid(*predicate, &argument_types) {
-                return Err(format!(
-                    "{path}: quantified predicate {predicate:?} rejects argument types {argument_types:?}"
-                ));
-            }
-            Ok(())
-        }
-        FormalFormulaExpr::Exists { query } => {
-            validate_query_expr_scalar_operators_at(query, &format!("{path}.query"))
-        }
-        FormalFormulaExpr::Scalar { expression } => {
-            validate_scalar_expr_in_context(expression, context, &format!("{path}.scalar"))
-        }
-    }
 }
 
 /// Authoritative ordered output signature derivation for compositional query
@@ -2619,29 +2465,24 @@ pub(crate) fn query_expr_output_signature(query: &FormalQueryExpr) -> Option<Vec
             matched_select,
             left_select,
             ..
-        } => Some(select_output_signature(match join_kind {
+        } => Some(scalar_select_output_signature(match join_kind {
             FormalQueryJoinKind::Semi | FormalQueryJoinKind::Anti => left_select,
             _ => matched_select,
         })),
         FormalQueryExpr::Projection { select, .. } | FormalQueryExpr::Group { select, .. } => {
-            Some(select_output_signature(select))
-        }
-        FormalQueryExpr::ScalarProjection { select, .. }
-        | FormalQueryExpr::ScalarGroup { select, .. } => {
             Some(scalar_select_output_signature(select))
         }
         FormalQueryExpr::RowMap { adapter, .. } => Some(adapter.output_attributes()),
         FormalQueryExpr::Selection { input, .. }
-        | FormalQueryExpr::ScalarSelection { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
         | FormalQueryExpr::Offset { input, .. }
         | FormalQueryExpr::Fetch { input, .. } => query_expr_output_signature(input),
         FormalQueryExpr::GroupingSets { grouping_sets, .. } => {
-            let first = select_output_signature(&grouping_sets.first()?.select);
+            let first = scalar_select_output_signature(&grouping_sets.first()?.select);
             grouping_sets
                 .iter()
-                .map(|grouping_set| select_output_signature(&grouping_set.select))
+                .map(|grouping_set| scalar_select_output_signature(&grouping_set.select))
                 .all(|signature| first == signature)
                 .then_some(first)
         }
@@ -2660,16 +2501,6 @@ pub(crate) fn query_expr_output_signature(query: &FormalQueryExpr) -> Option<Vec
             Some(signature)
         }
     }
-}
-
-fn select_output_signature(select: &[FormalSelectItem]) -> Vec<FormalAttribute> {
-    select
-        .iter()
-        .map(|item| FormalAttribute {
-            name: item.alias.clone(),
-            ty: item.alias_ty,
-        })
-        .collect()
 }
 
 fn scalar_select_output_signature(select: &[FormalScalarSelectItem]) -> Vec<FormalAttribute> {
@@ -2721,22 +2552,30 @@ fn validate_query_expr_scalar_operators_at(
             right,
             ..
         } => {
-            validate_formula_expr_scalar_operators(
+            validate_scalar_expr_in_context(
                 predicate,
-                &format!("{path}.predicate"),
                 FormalScalarContext::On,
+                &format!("{path}.predicate"),
             )?;
-            validate_select_scalar_operators(matched_select, &format!("{path}.matchedSelect"))?;
-            validate_select_scalar_operators(left_select, &format!("{path}.leftSelect"))?;
-            validate_select_scalar_operators(right_select, &format!("{path}.rightSelect"))?;
+            validate_scalar_select_operators(
+                matched_select,
+                FormalScalarContext::RowSelect,
+                &format!("{path}.matchedSelect"),
+            )?;
+            validate_scalar_select_operators(
+                left_select,
+                FormalScalarContext::RowSelect,
+                &format!("{path}.leftSelect"),
+            )?;
+            validate_scalar_select_operators(
+                right_select,
+                FormalScalarContext::RowSelect,
+                &format!("{path}.rightSelect"),
+            )?;
             validate_query_expr_scalar_operators_at(left, &format!("{path}.left"))?;
             validate_query_expr_scalar_operators_at(right, &format!("{path}.right"))
         }
         FormalQueryExpr::Projection { select, input } => {
-            validate_select_scalar_operators(select, &format!("{path}.select"))?;
-            validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
-        }
-        FormalQueryExpr::ScalarProjection { select, input } => {
             validate_scalar_select_operators(
                 select,
                 FormalScalarContext::RowSelect,
@@ -2748,14 +2587,6 @@ fn validate_query_expr_scalar_operators_at(
             validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
         }
         FormalQueryExpr::Selection { predicate, input } => {
-            validate_formula_expr_scalar_operators(
-                predicate,
-                &format!("{path}.predicate"),
-                FormalScalarContext::Where,
-            )?;
-            validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
-        }
-        FormalQueryExpr::ScalarSelection { predicate, input } => {
             validate_scalar_expr_in_context(
                 predicate,
                 FormalScalarContext::Where,
@@ -2763,7 +2594,7 @@ fn validate_query_expr_scalar_operators_at(
             )?;
             validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
         }
-        FormalQueryExpr::ScalarGroup {
+        FormalQueryExpr::Group {
             select,
             group_by,
             having,
@@ -2779,7 +2610,7 @@ fn validate_query_expr_scalar_operators_at(
                 validate_scalar_expr_in_context(term, FormalScalarContext::GroupBy, &key_path)?;
                 if !matches!(term, FormalScalarExpr::Leaf { .. }) {
                     return Err(format!(
-                        "{key_path}: native GROUP BY keys must use a typed scalar leaf"
+                        "{key_path}: GROUP BY keys must use a typed scalar leaf"
                     ));
                 }
             }
@@ -2790,58 +2621,23 @@ fn validate_query_expr_scalar_operators_at(
             )?;
             validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
         }
-        FormalQueryExpr::Group {
-            select,
-            group_by,
-            having,
-            input,
-        } => {
-            validate_select_scalar_operators(select, &format!("{path}.select"))?;
-            for (index, term) in group_by.iter().enumerate() {
-                validate_aggregate_term_scalar_operators(
-                    term,
-                    &format!("{path}.groupBy[{index}]"),
-                )?;
-                aggregate_term_type_class(term).ok_or_else(|| {
-                    format!(
-                        "{path}.groupBy[{index}]: cannot determine the FormalSQL value type of GROUP BY key"
-                    )
-                })?;
-                if aggregate_term_contains_current_level_aggregate(term) {
-                    return Err(format!(
-                        "{path}.groupBy[{index}]: GROUP BY rejects aggregates at this query level"
-                    ));
-                }
-            }
-            validate_formula_expr_scalar_operators(
-                having,
-                &format!("{path}.having"),
-                FormalScalarContext::Having,
-            )?;
-            validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
-        }
         FormalQueryExpr::GroupingSets {
             grouping_sets,
             input,
         } => {
             for (set_index, grouping_set) in grouping_sets.iter().enumerate() {
-                validate_select_scalar_operators(
+                validate_scalar_select_operators(
                     &grouping_set.select,
+                    FormalScalarContext::Select,
                     &format!("{path}.groupingSets[{set_index}].select"),
                 )?;
                 for (term_index, term) in grouping_set.group_by.iter().enumerate() {
-                    validate_aggregate_term_scalar_operators(
-                        term,
-                        &format!("{path}.groupingSets[{set_index}].groupBy[{term_index}]"),
-                    )?;
-                    aggregate_term_type_class(term).ok_or_else(|| {
-                        format!(
-                            "{path}.groupingSets[{set_index}].groupBy[{term_index}]: cannot determine the FormalSQL value type of GROUP BY key"
-                        )
-                    })?;
-                    if aggregate_term_contains_current_level_aggregate(term) {
+                    let key_path =
+                        format!("{path}.groupingSets[{set_index}].groupBy[{term_index}]");
+                    validate_scalar_expr_in_context(term, FormalScalarContext::GroupBy, &key_path)?;
+                    if !matches!(term, FormalScalarExpr::Leaf { .. }) {
                         return Err(format!(
-                            "{path}.groupingSets[{set_index}].groupBy[{term_index}]: GROUP BY rejects aggregates at this query level"
+                            "{key_path}: GROUPING SETS keys must use a typed scalar leaf"
                         ));
                     }
                 }
@@ -2853,6 +2649,7 @@ fn validate_query_expr_scalar_operators_at(
                 if let FormalWindowFunction::Aggregate { term }
                 | FormalWindowFunction::FullPartitionAggregate { term } = &item.function
                 {
+                    validate_scalar_leaf_term_shape(term, &format!("{path}.items[{index}]"))?;
                     validate_aggregate_term_scalar_operators(
                         term,
                         &format!("{path}.items[{index}]"),

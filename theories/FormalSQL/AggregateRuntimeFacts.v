@@ -1957,16 +1957,20 @@ Variable aggregate_runtime_error :
   list (option sql_runtime_error * Tuple.value T) ->
   option sql_runtime_error.
 Variable value_is_null : Tuple.value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
 
 Local Definition grouping_bag :=
   Febag.bag (Fecol.CBag (Tuple.CTuple T)).
 
 Local Abbreviation eval_group_bag :=
   (@eval_group_bag_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null).
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Local Abbreviation eval_grouping_sets_bag :=
-  (@eval_grouping_sets_bag_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null).
+  (@eval_grouping_sets_bag_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule).
 
 Lemma eval_grouping_sets_nil_outcome_iff : forall env input_bag outcome,
   eval_grouping_sets_bag env [] input_bag outcome <->
@@ -1984,7 +1988,7 @@ Lemma eval_grouping_sets_cons_success_iff :
       ((select_list, group_terms) :: grouping_sets) input_bag
       (SqlSuccess output_bag) <->
     exists head_bag tail_bag,
-      eval_group_bag env select_list group_terms FExpr_True input_bag
+      eval_group_bag env select_list group_terms SExpr_True input_bag
         (SqlSuccess head_bag) /\
       eval_grouping_sets_bag env grouping_sets input_bag
         (SqlSuccess tail_bag) /\
@@ -2001,10 +2005,10 @@ Lemma eval_grouping_sets_cons_error_iff :
     eval_grouping_sets_bag env
       ((select_list, group_terms) :: grouping_sets) input_bag
       (SqlError error) <->
-    eval_group_bag env select_list group_terms FExpr_True input_bag
+    eval_group_bag env select_list group_terms SExpr_True input_bag
       (SqlError error) \/
     exists head_bag,
-      eval_group_bag env select_list group_terms FExpr_True input_bag
+      eval_group_bag env select_list group_terms SExpr_True input_bag
         (SqlSuccess head_bag) /\
       eval_grouping_sets_bag env grouping_sets input_bag (SqlError error).
 Proof.
@@ -2018,19 +2022,19 @@ Qed.
 (** One grouping-set branch observed at an exact successful bag. *)
 Definition grouping_set_success_at
     (env : Env.env T) (input_bag : grouping_bag)
-    (spec : @query_grouping_set T)
+    (spec : @query_grouping_set T relname)
     (output_bag : grouping_bag) : Prop :=
   let '(select_list, group_terms) := spec in
-  eval_group_bag env select_list group_terms FExpr_True input_bag
+  eval_group_bag env select_list group_terms SExpr_True input_bag
     (SqlSuccess output_bag).
 
 (** One grouping-set branch observed at an exact runtime-error category. *)
 Definition grouping_set_error_at
     (env : Env.env T) (input_bag : grouping_bag)
-    (spec : @query_grouping_set T)
+    (spec : @query_grouping_set T relname)
     (error : sql_runtime_error) : Prop :=
   let '(select_list, group_terms) := spec in
-  eval_group_bag env select_list group_terms FExpr_True input_bag
+  eval_group_bag env select_list group_terms SExpr_True input_bag
     (SqlError error).
 
 (** Exact branch outcome agreement.  Keeping the output bag literal here is
@@ -2038,12 +2042,12 @@ Definition grouping_set_error_at
     and the original left-to-right error schedule. *)
 Definition grouping_set_exact_outcome_at
     (env : Env.env T) (input_bag : grouping_bag)
-    (left right : @query_grouping_set T) : Prop :=
+    (left right : @query_grouping_set T relname) : Prop :=
   forall outcome,
     let '(left_select, left_terms) := left in
     let '(right_select, right_terms) := right in
-    (eval_group_bag env left_select left_terms FExpr_True input_bag outcome <->
-     eval_group_bag env right_select right_terms FExpr_True input_bag outcome).
+    (eval_group_bag env left_select left_terms SExpr_True input_bag outcome <->
+     eval_group_bag env right_select right_terms SExpr_True input_bag outcome).
 
 (** Branchwise exact agreement lifts through an arbitrary grouping-set list.
     The [Forall2] order is significant: the proof never permutes branches and
@@ -2137,9 +2141,9 @@ Qed.
 Theorem eval_grouping_sets_error_prefix_iff :
   forall env input_bag grouping_sets error,
     eval_grouping_sets_bag env grouping_sets input_bag (SqlError error) <->
-    exists (prefix : list (@query_grouping_set T))
-        (current : @query_grouping_set T)
-        (suffix : list (@query_grouping_set T))
+    exists (prefix : list (@query_grouping_set T relname))
+        (current : @query_grouping_set T relname)
+        (suffix : list (@query_grouping_set T relname))
         (prefix_bags : list grouping_bag),
       grouping_sets = List.app prefix (current :: suffix) /\
       Forall2 (grouping_set_success_at env input_bag)

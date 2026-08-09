@@ -20,12 +20,12 @@ use sha2::{Digest, Sha256};
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::{
-    FormalAttribute, FormalAttributeType, FormalFormulaExpr, FormalProofModule,
-    FormalQueryDefinitionGraph, FormalQueryExpr, FormalQueryStatementSymbols, FormalScalarExpr,
-    FormalSchema, FormalSelectItem, LoweredProgram, LoweredQuery, LoweringConfig,
-    ObservationCertificateReport, ProofInputBindings, ProofLoweringReport, VerificationInput,
-    VerificationIr, VerificationMode, analyze_observation_certificates,
-    lower_verification_input_with_mode, query_expr_output_signature,
+    FormalAttribute, FormalAttributeType, FormalProofModule, FormalQueryDefinitionGraph,
+    FormalQueryExpr, FormalQueryStatementSymbols, FormalScalarExpr, FormalScalarSelectItem,
+    FormalSchema, LoweredProgram, LoweredQuery, LoweringConfig, ObservationCertificateReport,
+    ProofInputBindings, ProofLoweringReport, VerificationInput, VerificationIr, VerificationMode,
+    analyze_observation_certificates, lower_verification_input_with_mode,
+    query_expr_output_signature,
 };
 use crate::engine::config::Config;
 use crate::engine::now_ms_since_epoch;
@@ -81,6 +81,7 @@ const TRUSTED_CHECKER_EXPLICIT_ENVIRONMENT: &[&str] = &[
     "LOGOS_PROOF_WORKDIR",
     "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
     "LOGOS_ROCQ_OPAM_SWITCH",
+    "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR",
 ];
 const PROOF_AGENT_LAUNCHER_HOST_ENVIRONMENT_ALLOWLIST: &[&str] = &[
     "HOME",
@@ -470,6 +471,7 @@ struct TreeExpression {
 enum TrustedRocqCheckMode {
     Full,
     Preflight,
+    WitnessPreflight,
     ProblemDiagnostic {
         timeout_seconds: u64,
     },
@@ -1610,9 +1612,9 @@ pub(super) fn write_typed_witness_audit_workspace(
 
 fn formal_sql_goal_module(verification_mode: VerificationMode) -> String {
     let program_equivalence = match verification_mode {
-        VerificationMode::SafeUnconditional => "query_program_equiv",
+        VerificationMode::SafeUnconditional => "query_program_possible_equiv",
         VerificationMode::OutcomeUnconditional | VerificationMode::Conditional => {
-            "query_program_outcome_equiv"
+            "query_program_possible_outcome_equiv"
         }
     };
     let condition_parameter = match verification_mode {
@@ -1697,7 +1699,7 @@ Definition required_query_program_equiv
 Definition required_query_program_outcome_equiv
     (db : db_state)
     (left right : list QueryExpr) : Prop :=
-  @query_program_outcome_equiv TNull relname
+  @query_program_possible_outcome_equiv TNull relname
     (@_basesort TNull db)
     (@_instance TNull db)
     unknown3
@@ -1711,7 +1713,7 @@ Definition required_query_program_outcome_equiv
 Definition required_query_program_admissible
     (db : db_state) (program : list QueryExpr) : Prop :=
   Forall
-    (@query_expr_admissible TNull relname (@_basesort TNull db))
+    (TNullQueryExprAdmissible (@_basesort TNull db))
     program.
 
 Definition required_equivalence_statement{condition_parameter} : Prop :=
@@ -1733,6 +1735,135 @@ Definition required_equivalence_statement{condition_parameter} : Prop :=
       required_query_program_equiv db
         (Queries.source_query_program generated_numeric_exp_model)
         (Queries.target_query_program generated_numeric_exp_model)).
+
+{unconditional_claim_contract}
+
+From LogosGenerated Require Problem.
+{trusted_certificate}"
+    )
+}
+
+fn formal_sql_bound_goal_module(verification_mode: VerificationMode) -> String {
+    let program_equivalence = match verification_mode {
+        VerificationMode::SafeUnconditional => "bound_query_program_possible_equiv",
+        VerificationMode::OutcomeUnconditional | VerificationMode::Conditional => {
+            "bound_query_program_demand_safe_outcome_equiv"
+        }
+    };
+    let condition_parameter = match verification_mode {
+        VerificationMode::Conditional => "\n    (condition : verification_condition)",
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => "",
+    };
+    let condition_premise = match verification_mode {
+        VerificationMode::Conditional => "      verification_condition_holds db condition ->\n",
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => "",
+    };
+    let unconditional_claim_contract = match verification_mode {
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
+            "
+Definition required_countermodel_statement : Prop :=
+  Witness.generated_witness_available = true /\\
+  Schema.generated_schema_conforms Witness.generated_witness_db /\\
+  forall generated_numeric_exp_model : NumericExpModel,
+      required_query_program_admissible
+        Witness.generated_witness_db
+        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+      required_query_program_admissible
+        Witness.generated_witness_db
+        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+      required_query_program_materialization_safe
+        Witness.generated_witness_db
+        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+      required_query_program_materialization_safe
+        Witness.generated_witness_db
+        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+      ~ required_query_program_outcome_equiv Witness.generated_witness_db
+          (Queries.source_bound_query_program generated_numeric_exp_model)
+          (Queries.target_bound_query_program generated_numeric_exp_model).
+
+Definition required_verification_statement
+    (claim : verification_claim_kind) : Prop :=
+  verification_claim_goal
+    claim required_equivalence_statement required_countermodel_statement.
+"
+        }
+        VerificationMode::Conditional => "",
+    };
+    let trusted_certificate = match verification_mode {
+        VerificationMode::Conditional => {
+            "
+Theorem generated_precondition_certificate :
+  precondition_source_obligation
+    Schema.generated_schema
+    Schema.generated_schema_constraints
+    Problem.generated_precondition_source
+    Problem.generated_precondition.
+Proof.
+  exact Problem.generated_precondition_valid.
+Qed.
+
+Theorem generated_equivalence_certificate :
+  required_equivalence_statement Problem.generated_precondition.
+Proof.
+  exact Problem.generated_queries_equivalent.
+Qed.
+"
+        }
+        VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
+            "
+Theorem generated_verification_certificate :
+  required_verification_statement Problem.generated_verification_claim.
+Proof.
+  exact Problem.generated_queries_verified.
+Qed.
+"
+        }
+    };
+    format!(
+        "{FORMAL_SQL_GOAL_HEADER}
+From Logos Require Import FormalSQL.QueryBindingSemantics.
+
+Definition required_query_program_equiv
+    (db : db_state)
+    (left right : BoundQueryProgram) : Prop :=
+  {program_equivalence}
+    db Queries.generated_local_query_schemas nil left right.
+
+Definition required_query_program_outcome_equiv
+    (db : db_state)
+    (left right : BoundQueryProgram) : Prop :=
+  bound_query_program_possible_outcome_equiv
+    db Queries.generated_local_query_schemas nil left right.
+
+Definition required_query_program_materialization_safe
+    (db : db_state) (program : BoundQueryProgram) : Prop :=
+  bound_query_program_materialization_safe
+    db Queries.generated_local_query_schemas nil program.
+
+Definition required_query_program_admissible
+    (db : db_state) (program : BoundQueryProgram) : Prop :=
+  bound_query_program_admissible
+    db Queries.generated_local_query_schemas program.
+
+Definition required_equivalence_statement{condition_parameter} : Prop :=
+  forall generated_numeric_exp_model : NumericExpModel,
+    Queries.source_program_output_signatures =
+      map bound_query_outputs
+        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+    Queries.target_program_output_signatures =
+      map bound_query_outputs
+        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+    Queries.source_program_output_signatures =
+      Queries.target_program_output_signatures /\\
+    (forall db : db_state,
+      Schema.generated_schema_conforms db ->
+{condition_premise}      required_query_program_admissible
+        db (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+      required_query_program_admissible
+        db (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+      required_query_program_equiv db
+        (Queries.source_bound_query_program generated_numeric_exp_model)
+        (Queries.target_bound_query_program generated_numeric_exp_model)).
 
 {unconditional_claim_contract}
 
@@ -2275,11 +2406,8 @@ fn ordered_signature_operator_kind(query: &FormalQueryExpr) -> &'static str {
         FormalQueryExpr::CrossJoin { .. } => "CrossJoin",
         FormalQueryExpr::Join { .. } => "Join",
         FormalQueryExpr::Projection { .. } => "Projection",
-        FormalQueryExpr::ScalarProjection { .. } => "ScalarProjection",
         FormalQueryExpr::RowMap { .. } => "RowMap",
         FormalQueryExpr::Selection { .. } => "Selection",
-        FormalQueryExpr::ScalarSelection { .. } => "ScalarSelection",
-        FormalQueryExpr::ScalarGroup { .. } => "ScalarGroup",
         FormalQueryExpr::Group { .. } => "Group",
         FormalQueryExpr::GroupingSets { .. } => "GroupingSets",
         FormalQueryExpr::Rank { .. } => "Rank",
@@ -2381,13 +2509,16 @@ impl OrderedSignatureArtifactBuilder {
             }
             FormalQueryExpr::Join {
                 predicate,
+                matched_select,
+                left_select,
+                right_select,
                 left,
                 right,
                 ..
             } => {
                 add_relational_child(self, "left", left)?;
                 add_relational_child(self, "right", right)?;
-                self.add_formula_subqueries(
+                self.add_scalar_subqueries(
                     side,
                     side_prefix,
                     statement_index,
@@ -2398,10 +2529,27 @@ impl OrderedSignatureArtifactBuilder {
                     next_preorder,
                     &mut children,
                 )?;
+                for (list_role, select) in [
+                    ("matchedSelect", matched_select),
+                    ("leftSelect", left_select),
+                    ("rightSelect", right_select),
+                ] {
+                    for (index, item) in select.iter().enumerate() {
+                        self.add_scalar_subqueries(
+                            side,
+                            side_prefix,
+                            statement_index,
+                            &role_path,
+                            &format!("{list_role}[{index}]"),
+                            &node_id,
+                            &item.expr,
+                            next_preorder,
+                            &mut children,
+                        )?;
+                    }
+                }
             }
-            FormalQueryExpr::Projection { input, .. }
-            | FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::GroupingSets { input, .. }
+            FormalQueryExpr::RowMap { input, .. }
             | FormalQueryExpr::Rank { input, .. }
             | FormalQueryExpr::Window { input, .. }
             | FormalQueryExpr::Distinct { input }
@@ -2410,7 +2558,7 @@ impl OrderedSignatureArtifactBuilder {
             | FormalQueryExpr::Fetch { input, .. } => {
                 add_relational_child(self, "input", input)?;
             }
-            FormalQueryExpr::ScalarProjection { select, input } => {
+            FormalQueryExpr::Projection { select, input } => {
                 add_relational_child(self, "input", input)?;
                 for (index, item) in select.iter().enumerate() {
                     self.add_scalar_subqueries(
@@ -2428,20 +2576,6 @@ impl OrderedSignatureArtifactBuilder {
             }
             FormalQueryExpr::Selection { predicate, input } => {
                 add_relational_child(self, "input", input)?;
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    &role_path,
-                    "predicate",
-                    &node_id,
-                    predicate,
-                    next_preorder,
-                    &mut children,
-                )?;
-            }
-            FormalQueryExpr::ScalarSelection { predicate, input } => {
-                add_relational_child(self, "input", input)?;
                 self.add_scalar_subqueries(
                     side,
                     side_prefix,
@@ -2454,8 +2588,9 @@ impl OrderedSignatureArtifactBuilder {
                     &mut children,
                 )?;
             }
-            FormalQueryExpr::ScalarGroup {
+            FormalQueryExpr::Group {
                 select,
+                group_by,
                 having,
                 input,
                 ..
@@ -2474,6 +2609,19 @@ impl OrderedSignatureArtifactBuilder {
                         &mut children,
                     )?;
                 }
+                for (index, key) in group_by.iter().enumerate() {
+                    self.add_scalar_subqueries(
+                        side,
+                        side_prefix,
+                        statement_index,
+                        &role_path,
+                        &format!("groupBy[{index}]"),
+                        &node_id,
+                        key,
+                        next_preorder,
+                        &mut children,
+                    )?;
+                }
                 self.add_scalar_subqueries(
                     side,
                     side_prefix,
@@ -2486,19 +2634,39 @@ impl OrderedSignatureArtifactBuilder {
                     &mut children,
                 )?;
             }
-            FormalQueryExpr::Group { having, input, .. } => {
+            FormalQueryExpr::GroupingSets {
+                grouping_sets,
+                input,
+            } => {
                 add_relational_child(self, "input", input)?;
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    &role_path,
-                    "having",
-                    &node_id,
-                    having,
-                    next_preorder,
-                    &mut children,
-                )?;
+                for (set_index, grouping_set) in grouping_sets.iter().enumerate() {
+                    for (index, item) in grouping_set.select.iter().enumerate() {
+                        self.add_scalar_subqueries(
+                            side,
+                            side_prefix,
+                            statement_index,
+                            &role_path,
+                            &format!("groupingSets[{set_index}].select[{index}]"),
+                            &node_id,
+                            &item.expr,
+                            next_preorder,
+                            &mut children,
+                        )?;
+                    }
+                    for (index, key) in grouping_set.group_by.iter().enumerate() {
+                        self.add_scalar_subqueries(
+                            side,
+                            side_prefix,
+                            statement_index,
+                            &role_path,
+                            &format!("groupingSets[{set_index}].groupBy[{index}]"),
+                            &node_id,
+                            key,
+                            next_preorder,
+                            &mut children,
+                        )?;
+                    }
+                }
             }
             FormalQueryExpr::Error { .. }
             | FormalQueryExpr::Empty { .. }
@@ -2507,129 +2675,6 @@ impl OrderedSignatureArtifactBuilder {
         }
         self.nodes[record_index].artifact.children = children;
         Ok(node_id)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn add_formula_subqueries(
-        &mut self,
-        side: &'static str,
-        side_prefix: char,
-        statement_index: usize,
-        parent_role_path: &str,
-        formula_role: &str,
-        parent_node_id: &str,
-        formula: &FormalFormulaExpr,
-        next_preorder: &mut usize,
-        children: &mut Vec<OrderedSignatureChild>,
-    ) -> Result<()> {
-        match formula {
-            FormalFormulaExpr::And { left, right } => {
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    parent_role_path,
-                    &format!("{formula_role}.and.left"),
-                    parent_node_id,
-                    left,
-                    next_preorder,
-                    children,
-                )?;
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    parent_role_path,
-                    &format!("{formula_role}.and.right"),
-                    parent_node_id,
-                    right,
-                    next_preorder,
-                    children,
-                )
-            }
-            FormalFormulaExpr::Or { left, right } => {
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    parent_role_path,
-                    &format!("{formula_role}.or.left"),
-                    parent_node_id,
-                    left,
-                    next_preorder,
-                    children,
-                )?;
-                self.add_formula_subqueries(
-                    side,
-                    side_prefix,
-                    statement_index,
-                    parent_role_path,
-                    &format!("{formula_role}.or.right"),
-                    parent_node_id,
-                    right,
-                    next_preorder,
-                    children,
-                )
-            }
-            FormalFormulaExpr::Not { formula } => self.add_formula_subqueries(
-                side,
-                side_prefix,
-                statement_index,
-                parent_role_path,
-                &format!("{formula_role}.not"),
-                parent_node_id,
-                formula,
-                next_preorder,
-                children,
-            ),
-            FormalFormulaExpr::In { query, .. } => self.add_formula_query(
-                side,
-                side_prefix,
-                statement_index,
-                parent_role_path,
-                &format!("{formula_role}.in.query"),
-                parent_node_id,
-                query,
-                next_preorder,
-                children,
-            ),
-            FormalFormulaExpr::QuantifiedComparison { query, .. } => self.add_formula_query(
-                side,
-                side_prefix,
-                statement_index,
-                parent_role_path,
-                &format!("{formula_role}.quantifiedComparison.query"),
-                parent_node_id,
-                query,
-                next_preorder,
-                children,
-            ),
-            FormalFormulaExpr::Exists { query } => self.add_formula_query(
-                side,
-                side_prefix,
-                statement_index,
-                parent_role_path,
-                &format!("{formula_role}.exists.query"),
-                parent_node_id,
-                query,
-                next_preorder,
-                children,
-            ),
-            FormalFormulaExpr::Scalar { expression } => self.add_scalar_subqueries(
-                side,
-                side_prefix,
-                statement_index,
-                parent_role_path,
-                formula_role,
-                parent_node_id,
-                expression,
-                next_preorder,
-                children,
-            ),
-            FormalFormulaExpr::True
-            | FormalFormulaExpr::False
-            | FormalFormulaExpr::Predicate { .. } => Ok(()),
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2682,12 +2727,13 @@ impl OrderedSignatureArtifactBuilder {
             | FormalScalarExpr::Not { expression } => {
                 visit(self, format!("{scalar_role}.expression"), expression)
             }
-            FormalScalarExpr::And { left, right } | FormalScalarExpr::Or { left, right } => {
-                visit(self, format!("{scalar_role}.left"), left)?;
-                visit(self, format!("{scalar_role}.right"), right)
+            FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
+                for (index, operand) in operands.iter().enumerate() {
+                    visit(self, format!("{scalar_role}.operands[{index}]"), operand)?;
+                }
+                Ok(())
             }
-            FormalScalarExpr::QuantifiedComparison { args, query, .. }
-            | FormalScalarExpr::In { args, query } => {
+            FormalScalarExpr::QuantifiedComparison { args, query, .. } => {
                 for (index, arg) in args.iter().enumerate() {
                     visit(self, format!("{scalar_role}.args[{index}]"), arg)?;
                 }
@@ -2696,25 +2742,51 @@ impl OrderedSignatureArtifactBuilder {
                     side_prefix,
                     statement_index,
                     parent_role_path,
-                    &format!("{scalar_role}.query"),
+                    &format!("{scalar_role}.quantifiedComparison.query"),
                     parent_node_id,
                     query,
                     next_preorder,
                     children,
                 )
             }
-            FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => self
-                .add_scalar_query(
+            FormalScalarExpr::In { args, query } => {
+                for (index, arg) in args.iter().enumerate() {
+                    visit(self, format!("{scalar_role}.args[{index}]"), arg)?;
+                }
+                self.add_scalar_query(
                     side,
                     side_prefix,
                     statement_index,
                     parent_role_path,
-                    &format!("{scalar_role}.query"),
+                    &format!("{scalar_role}.in.query"),
                     parent_node_id,
                     query,
                     next_preorder,
                     children,
-                ),
+                )
+            }
+            FormalScalarExpr::Exists { query } => self.add_scalar_query(
+                side,
+                side_prefix,
+                statement_index,
+                parent_role_path,
+                &format!("{scalar_role}.exists.query"),
+                parent_node_id,
+                query,
+                next_preorder,
+                children,
+            ),
+            FormalScalarExpr::Subquery { query, .. } => self.add_scalar_query(
+                side,
+                side_prefix,
+                statement_index,
+                parent_role_path,
+                &format!("{scalar_role}.subquery.query"),
+                parent_node_id,
+                query,
+                next_preorder,
+                children,
+            ),
         }
     }
 
@@ -2743,36 +2815,6 @@ impl OrderedSignatureArtifactBuilder {
         children.push(OrderedSignatureChild {
             role: edge_role.to_owned(),
             edge_kind: "scalar_subquery",
-            node_id: child_id,
-        });
-        Ok(())
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn add_formula_query(
-        &mut self,
-        side: &'static str,
-        side_prefix: char,
-        statement_index: usize,
-        parent_role_path: &str,
-        edge_role: &str,
-        parent_node_id: &str,
-        query: &FormalQueryExpr,
-        next_preorder: &mut usize,
-        children: &mut Vec<OrderedSignatureChild>,
-    ) -> Result<()> {
-        let child_id = self.add_query_occurrence(
-            side,
-            side_prefix,
-            statement_index,
-            format!("{parent_role_path}.{edge_role}"),
-            Some(parent_node_id.to_owned()),
-            query,
-            next_preorder,
-        )?;
-        children.push(OrderedSignatureChild {
-            role: edge_role.to_owned(),
-            edge_kind: "formula_subquery",
             node_id: child_id,
         });
         Ok(())
@@ -3042,7 +3084,7 @@ fn build_ordered_signatures(source: &LoweredProgram, target: &LoweredProgram) ->
         schema_version: 2,
         authority: "navigation_only; exact SQL, generated Rocq, FormalSQL semantics, and Rocq kernel checking remain authoritative; no node, comparison, or frontier hint proves query equivalence",
         derivation: "host-derived from every occurrence in the successfully lowered FormalQueryExpr trees using the same query_expr_output_signature function that lowering validates",
-        occurrence_order: "deterministic preorder per side and one-based statement: visit the query node, then relational children in constructor order, then subqueries in predicate/having formula order; node IDs are S<statement>.N<preorder> and T<statement>.N<preorder>",
+        occurrence_order: "deterministic preorder per side and one-based statement: visit the query node, then relational children in constructor order, then subqueries in predicate/having scalar-expression order; node IDs are S<statement>.N<preorder> and T<statement>.N<preorder>",
         signature_identity: "signature IDs are interned by exact Rust Vec<FormalAttribute>::eq over ordered names and types; digests are not used for equality",
         comparison_policy: "comparisons pair only source and target occurrences with the same one-based statementIndex and exact rolePath; signatureEqual is exact ordered attribute equality and never semantic equivalence; mismatch.firstDifferingIndex is zero-based",
         frontier_policy: "a conservative navigation hint requires every aligned ancestor from root through the candidate to have the same operator kind and exact signature, while at least one aligned direct relational child is absent, differently shaped, or signature-incompatible; hints suggest where output layout is restored but prove nothing",
@@ -3125,12 +3167,37 @@ fn encode_tree_value(value: &str) -> String {
 
 fn compact_surface_query(rel: &RelExpr) -> TreeExpression {
     match rel {
+        RelExpr::Bindings {
+            bindings,
+            body,
+            output,
+        } => {
+            let mut children = bindings
+                .iter()
+                .map(|binding| compact_surface_query(&binding.rel))
+                .collect::<Vec<_>>();
+            children.push(compact_surface_query(body));
+            compact_tree_node(
+                "bindings",
+                format!("out={},defs={}", output.len(), bindings.len()),
+                children,
+            )
+        }
         RelExpr::TableScan { table, output } => compact_tree_node(
             "table_scan",
             format!(
                 "out={},table={}",
                 output.len(),
                 encode_tree_value(&table.join("."))
+            ),
+            Vec::new(),
+        ),
+        RelExpr::QueryRef { binding, output } => compact_tree_node(
+            "query_ref",
+            format!(
+                "out={},binding={}",
+                output.len(),
+                encode_tree_value(binding)
             ),
             Vec::new(),
         ),
@@ -3243,7 +3310,7 @@ fn compact_surface_query(rel: &RelExpr) -> TreeExpression {
 }
 
 fn final_output_is_canonicalized(query: &FormalQueryExpr) -> bool {
-    fn select_is_canonical(select: &[FormalSelectItem]) -> bool {
+    fn select_is_canonical(select: &[FormalScalarSelectItem]) -> bool {
         !select.is_empty()
             && select
                 .iter()
@@ -3361,11 +3428,22 @@ fn build_statement_shape(
         exact_frontend_bytes_equal: exact_sql == frontend_sql,
         emitted_rocq_root_symbol: root_symbol,
         emitted_rocq_output_signature_symbol: output_signature_symbol,
-        requires_numeric_exp_model: query.requires_numeric_exp_model(),
+        requires_numeric_exp_model: lowered_statement_requires_numeric_exp_model(lowered, query),
         final_output_canonicalization: final_output_is_canonicalized(query),
         output_signature: compact_formal_attributes(output_signature),
         typed_frontend_tree,
     })
+}
+
+fn lowered_statement_requires_numeric_exp_model(
+    lowered: &LoweredQuery,
+    query: &FormalQueryExpr,
+) -> bool {
+    query.requires_numeric_exp_model()
+        || lowered
+            .bindings
+            .iter()
+            .any(|binding| binding.query_expr.requires_numeric_exp_model())
 }
 
 fn graph_tree_references(tree: &str) -> Vec<String> {
@@ -3537,12 +3615,16 @@ fn build_query_shape(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
-    for required in [
-        "source_query_program",
-        "target_query_program",
+    let has_query_bindings = lowering_programs_have_query_bindings(lowering);
+    let required_program_symbols = if has_query_bindings {
+        ["source_bound_query_program", "target_bound_query_program"]
+    } else {
+        ["source_query_program", "target_query_program"]
+    };
+    for required in required_program_symbols.into_iter().chain([
         "source_program_output_signatures",
         "target_program_output_signatures",
-    ] {
+    ]) {
         if !emitted_symbol_set.contains(required) {
             return Err(Error::ProofAgentCommand(format!(
                 "query context drift: emitted Queries.v is missing required program symbol {required}"
@@ -3982,7 +4064,11 @@ pub(super) fn prepare_formal_input(
         && lowering_report.proof_module.is_some()
     {
         lowering_report.goal_module = Some(FormalProofModule {
-            rocq_module: formal_sql_goal_module(options.verification_mode),
+            rocq_module: if lowering_programs_have_query_bindings(&lowering_report) {
+                formal_sql_bound_goal_module(options.verification_mode)
+            } else {
+                formal_sql_goal_module(options.verification_mode)
+            },
         });
     }
     artifacts.write_json("proof-stage/formal-sql-lowering.json", &lowering_report)?;
@@ -3992,6 +4078,15 @@ pub(super) fn prepare_formal_input(
         lowering_report,
         observation_certificates,
     })
+}
+
+fn lowering_programs_have_query_bindings(lowering: &ProofLoweringReport) -> bool {
+    lowering
+        .source
+        .statements
+        .iter()
+        .chain(&lowering.target.statements)
+        .any(|statement| !statement.bindings.is_empty())
 }
 
 fn remove_proof_workspace_for_formal_witness_restart(artifacts: &ArtifactWriter) -> Result<()> {
@@ -4017,16 +4112,11 @@ fn remove_proof_workspace_for_formal_witness_restart(artifacts: &ArtifactWriter)
             });
         }
     }
-    // The live compiled prefix is bound to the old Witness.v even though it
-    // lives outside the agent-mounted formal-sql directory. Historical round
-    // logs and versioned create-once checkpoints, preflights, and trusted-cache
-    // archives remain intact; only the live cache (and a legacy unversioned
-    // checkpoint, if present) is removed so neither can cross a fixed-witness
-    // boundary.
-    for relative in [
-        "proof-stage/proof-agent/trusted-diagnostic-cache",
-        "proof-stage/proof-agent/initial-problem-checkpoint",
-    ] {
+    // Keep the manifest-validated live compiled prefix so the witness-only
+    // preflight can reuse its unchanged Schema/Queries objects. That preflight
+    // atomically replaces the old Witness and drops every old proof module.
+    // Problem checkpoints remain witness-bound and must not cross generations.
+    for relative in ["proof-stage/proof-agent/initial-problem-checkpoint"] {
         let path = artifacts.root().join(relative);
         match std::fs::symlink_metadata(&path) {
             Ok(metadata) => {
@@ -4211,11 +4301,11 @@ fn restart_proof_workspace_with_formal_witness(
     )?;
     validate_proof_agent_context(artifacts, &context)?;
     let trusted_sources = capture_trusted_proof_sources(artifacts)?;
-    // Replacing the workspace also removes the host-only cache that was bound
-    // to the unavailable/previous witness.  Rebuild and independently check
-    // the immutable Schema/Queries/Witness prefix before compiling the fresh
-    // Problem.v checkpoint against it.
-    let preflight = validate_trusted_rocq_environment(artifacts, options, workspace_generation)?;
+    // Reuse the independently checked Schema/Queries prefix, compile and check
+    // only the replacement Witness, then atomically publish the new prefix
+    // before compiling the fresh Problem.v checkpoint.
+    let preflight =
+        validate_trusted_rocq_environment(artifacts, options, workspace_generation, true)?;
     let checkpoint =
         establish_initial_problem_compile_checkpoint(artifacts, options, workspace_generation)?;
     let session_home = ProofAgentSessionHome::create(artifacts)?;
@@ -4308,8 +4398,12 @@ pub(super) fn run_proof_stage(
                 .as_ref()
                 .expect("a trusted proof workspace always has proof-agent context"),
         )?;
-        let preflight =
-            validate_trusted_rocq_environment(artifacts, options, proof_workspace_generation)?;
+        let preflight = validate_trusted_rocq_environment(
+            artifacts,
+            options,
+            proof_workspace_generation,
+            false,
+        )?;
         bind_trusted_diagnostic_cache_manifest(artifacts, &mut proof_agent_configuration)?;
         initial_problem_compile_checkpoint = Some(establish_initial_problem_compile_checkpoint(
             artifacts,
@@ -9048,6 +9142,7 @@ fn run_trusted_rocq_environment_preflight(
     logos_repo_root: &Path,
     rocq_opam_switch: Option<&Path>,
     timeout: Duration,
+    witness_only: bool,
 ) -> std::io::Result<Output> {
     trusted_rocq_check_command(
         trusted_checker_path,
@@ -9055,7 +9150,11 @@ fn run_trusted_rocq_environment_preflight(
         logos_repo_root,
         rocq_opam_switch,
         timeout,
-        TrustedRocqCheckMode::Preflight,
+        if witness_only {
+            TrustedRocqCheckMode::WitnessPreflight
+        } else {
+            TrustedRocqCheckMode::Preflight
+        },
     )
     .output()
 }
@@ -9089,6 +9188,9 @@ fn trusted_rocq_check_command(
         TrustedRocqCheckMode::Preflight => {
             process.arg("--preflight");
         }
+        TrustedRocqCheckMode::WitnessPreflight => {
+            process.arg("--witness-preflight");
+        }
         TrustedRocqCheckMode::ProblemDiagnostic { timeout_seconds } => {
             process
                 .arg("--problem-diagnostic")
@@ -9109,6 +9211,15 @@ fn trusted_rocq_check_command(
     }
     if let Some(switch) = rocq_opam_switch {
         process.env("LOGOS_ROCQ_OPAM_SWITCH", switch);
+    }
+    for name in [
+        "LOGOS_SHARED_ROCQ_PREFIX_CACHE_DIR",
+        "LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR",
+        "LOGOS_TRUSTED_ROCQ_AUTHORITY_SHA256",
+    ] {
+        if let Some(value) = std::env::var_os(name) {
+            process.env(name, value);
+        }
     }
     process
 }
@@ -9157,6 +9268,7 @@ fn validate_trusted_rocq_environment(
     artifacts: &ArtifactWriter,
     options: &Config,
     workspace_generation: usize,
+    witness_only: bool,
 ) -> Result<TrustedCheckInvocation> {
     let trusted_checker_path = write_trusted_rocq_checker(artifacts)?;
     let proof_workspace = artifacts.root().join("proof-stage/formal-sql");
@@ -9174,6 +9286,7 @@ fn validate_trusted_rocq_environment(
         &logos_repo_root,
         options.proof_rocq_opam_switch.as_deref(),
         Duration::from_secs(timeout_seconds),
+        witness_only,
     ) {
         Ok(output) => output,
         Err(source) => {
@@ -9836,11 +9949,11 @@ fn render_proof_agent_prompt(
             remaining.as_secs()
         ));
         prompt.push_str(&format!(
-            "Invocation budget: {} seconds; the trusted final check is reserved separately. Diagnostics are sequential (parallelism {PROOF_AGENT_DIAGNOSTIC_PARALLELISM_MAX}) and share this invocation's wall-clock deadline; there is no completed-check or broker-request quota. End only after exact Problem.v has compile-clean authority (a current problem-mode pass or byte-identity with the active host checkpoint) and contains {final_theorem}, or no coherent progress remains. An unchanged active checkpoint is deliberately not recompiled; after a failed or timed-out host final check, do not resubmit those identical bytes merely to trigger a retry.\n",
+            "Invocation budget: {} seconds; the trusted final check is reserved separately. Diagnostics are sequential (parallelism {PROOF_AGENT_DIAGNOSTIC_PARALLELISM_MAX}) and share this invocation's wall-clock deadline; there is no completed-check or broker-request quota. End only after exact Problem.v has compile-clean authority (a current problem-mode pass or byte-identity with the active host checkpoint) and contains {final_theorem}, or no coherent progress remains. An unchanged active checkpoint is deliberately not recompiled.\n",
             round_budget.as_secs()
         ));
-        prompt.push_str("This is one continuous proof search. A later invocation resumes the same Codex session only after an explicit handoff, process failure, or a failed host checkpoint/final check; it is not a planned proof phase boundary.\n");
-        prompt.push_str("Within one fixed proof-workspace generation, Problem.v, immutable checked ProofModules, and scratch state persist across rounds. A host-materialized fixed-witness handoff starts a new workspace generation and intentionally discards all witness-bound Problem/modules/scratch. PostgreSQL does not certify query divergence. Scratch is untrusted WIP; scratch/checked holds digest-bound passing snapshots. Only a passing Problem.v advances the restart checkpoint. Individual files have no smaller framework size cap; all writable container state shares the recorded aggregate storage quota.\n");
+        prompt.push_str("This is one continuous proof search; later invocations resume after handoff, process failure, or a failed host check, not at a planned phase boundary.\n");
+        prompt.push_str("Within one fixed proof-workspace generation, Problem.v, immutable checked ProofModules, and scratch state persist across continuations. Scratch is untrusted WIP; scratch/checked holds host-checked reusable fragments. A fixed-witness handoff starts a new generation. PostgreSQL does not certify divergence. Only a passing Problem.v advances the restart checkpoint.\n");
         prompt.push_str(&format!(
             "Proof-session generation: {session_generation}. Sessions are restarted after {PROOF_AGENT_SESSION_RESTART_AFTER_FAILED_ROUNDS} unsuccessful turns to bound transcript growth.\n"
         ));
@@ -10014,8 +10127,9 @@ mod tests {
         build_ordered_signatures, canonical_json_sha256, capture_trusted_proof_sources,
         classify_precondition_source, classify_verification_claim, compact_skeleton_forest,
         encode_tree_value, expand_compact_skeleton_node, extract_precondition_definition,
-        formal_sql_goal_module, is_codex_session_id, is_trusted_rocq_environment_failure,
-        load_counterexample_handoff, ordered_direct_trusted_rocq_imports, parse_skeleton_tree,
+        formal_sql_bound_goal_module, formal_sql_goal_module, is_codex_session_id,
+        is_trusted_rocq_environment_failure, load_counterexample_handoff,
+        ordered_direct_trusted_rocq_imports, parse_skeleton_tree,
         persist_initial_problem_compile_checkpoint_evidence,
         persist_trusted_environment_preflight_evidence, problem_declares_final_theorem,
         proof_agent_host_tmp_directory, proof_agent_instruction_body, proof_agent_launcher_command,
@@ -10030,9 +10144,10 @@ mod tests {
     };
     use crate::artifacts::ArtifactWriter;
     use crate::core::{
-        FormalAttribute, FormalAttributeType, FormalFormulaExpr, FormalQueryExpr, FormalSchema,
-        FormalTable, FormalTableConstraints, LoweredProgram, LoweredQuery, LoweringStatus,
-        SqlEnvironment, SqlTimeZone, VerificationInput, VerificationMode,
+        FormalAttribute, FormalAttributeType, FormalQueryBinding, FormalQueryExpr,
+        FormalRowMapAdapter, FormalScalarExpr, FormalSchema, FormalTable, FormalTableConstraints,
+        LoweredProgram, LoweredQuery, LoweringStatus, SqlEnvironment, SqlTimeZone,
+        VerificationInput, VerificationMode, emit_rocq_bound_query_program_module_with_signatures,
         emit_rocq_query_expr_proof_module_for_mode, query_expr_output_signature,
     };
     use crate::engine::config::Config;
@@ -10242,10 +10357,72 @@ mod tests {
         let output_signature = query_expr_output_signature(&query).expect("valid test signature");
         LoweredQuery {
             status: LoweringStatus::Lowered,
+            bindings: Vec::new(),
             query_expr: Some(query),
             output_signature: Some(output_signature),
             diagnostics: Vec::new(),
         }
+    }
+
+    #[test]
+    fn binding_only_numeric_exp_requirement_matches_emitter_metadata() {
+        let avg_value = FormalAttribute {
+            name: "avg_value".to_owned(),
+            ty: FormalAttributeType::Numeric,
+        };
+        let avg_dscale = FormalAttribute {
+            name: "avg_dscale".to_owned(),
+            ty: FormalAttributeType::Z,
+        };
+        let output_numeric = FormalAttribute {
+            name: "exp_value".to_owned(),
+            ty: FormalAttributeType::Numeric,
+        };
+        let output_dscale = FormalAttribute {
+            name: "exp_dscale".to_owned(),
+            ty: FormalAttributeType::Z,
+        };
+        let binding_query = FormalQueryExpr::RowMap {
+            adapter: FormalRowMapAdapter::NumericExp {
+                passthrough: Vec::new(),
+                avg_value: avg_value.clone(),
+                avg_dscale: avg_dscale.clone(),
+                output_numeric: output_numeric.clone(),
+                output_dscale: output_dscale.clone(),
+            },
+            input: Box::new(FormalQueryExpr::Empty {
+                columns: vec![avg_value, avg_dscale],
+            }),
+        };
+        let body = FormalQueryExpr::EmptyTuple;
+        let lowered = LoweredQuery {
+            status: LoweringStatus::Lowered,
+            bindings: vec![FormalQueryBinding {
+                id: "numeric_model".to_owned(),
+                source_name: "numeric_model".to_owned(),
+                relation: "__logos_numeric_model".to_owned(),
+                output_signature: vec![output_numeric, output_dscale],
+                query_expr: binding_query,
+            }],
+            query_expr: Some(body.clone()),
+            output_signature: Some(Vec::new()),
+            diagnostics: Vec::new(),
+        };
+        let emitted = emit_rocq_bound_query_program_module_with_signatures(
+            &[(&body, &[], lowered.bindings.as_slice())],
+            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
+        )
+        .expect("valid binding-only NumericExp module");
+        let emitter_requirement =
+            emitted.definition_graph.source_statements[0].requires_numeric_exp_model;
+
+        let proof_stage_requirement =
+            super::lowered_statement_requires_numeric_exp_model(&lowered, &body);
+        assert!(proof_stage_requirement);
+        assert_eq!(
+            proof_stage_requirement, emitter_requirement,
+            "proof-stage graph metadata must include NumericExp used only by a local binding"
+        );
     }
 
     #[test]
@@ -10266,7 +10443,7 @@ mod tests {
             input: Box::new(target_frontier.clone()),
         };
         let correlated = FormalQueryExpr::Selection {
-            predicate: FormalFormulaExpr::Exists {
+            predicate: FormalScalarExpr::Exists {
                 query: Box::new(signature_test_table("subquery", &["x"])),
             },
             input: Box::new(signature_test_table("outer", &["a"])),
@@ -12847,7 +13024,7 @@ mod tests {
 
     #[test]
     fn compact_skeleton_dag_is_lossless_deterministic_and_structurally_interned() {
-        let branch = "Branch{items=2;mode=exact}(Leaf,@select_list_0)";
+        let branch = "Branch{items=2;mode=exact}(Leaf,@scalar_select_list_0)";
         let tree = format!("Root({branch},{branch})");
         let trees = [tree.as_str(), tree.as_str()];
 
@@ -12922,9 +13099,9 @@ mod tests {
 
     #[test]
     fn compact_skeleton_regression_preserves_large_graph_without_a_context_cap() {
-        let mut repeated = "FExpr_Pred{args=2}(PredicateEq)".to_owned();
+        let mut repeated = "SExpr_Pred{args=2}(PredicateEq)".to_owned();
         for _ in 0..9 {
-            repeated = format!("FExpr_Conj(And_F,{repeated},{repeated})");
+            repeated = format!("SExpr_ConjList(And_F,{repeated},{repeated})");
         }
         let trees = vec![repeated.as_str(); 6];
         let expanded_bytes = serde_json::to_vec(&trees).unwrap().len();
@@ -13086,21 +13263,42 @@ mod tests {
     #[test]
     fn goal_modules_enforce_the_selected_equivalence_strength() {
         let safe = formal_sql_goal_module(VerificationMode::SafeUnconditional);
-        assert!(safe.contains("@query_program_equiv TNull relname"));
+        assert!(safe.contains("@query_program_possible_equiv TNull relname"));
+        assert!(!safe.contains("@query_program_equiv TNull relname"));
         assert!(!safe.contains("verification_condition_holds db condition"));
 
         let outcome = formal_sql_goal_module(VerificationMode::OutcomeUnconditional);
-        assert!(outcome.contains("@query_program_outcome_equiv TNull relname"));
+        assert!(outcome.contains("@query_program_possible_outcome_equiv TNull relname"));
+        assert!(!outcome.contains("@query_program_outcome_equiv TNull relname"));
         assert!(!outcome.contains("verification_condition_holds db condition"));
 
         let conditional = formal_sql_goal_module(VerificationMode::Conditional);
-        assert!(conditional.contains("@query_program_outcome_equiv TNull relname"));
+        assert!(conditional.contains("@query_program_possible_outcome_equiv TNull relname"));
         assert!(conditional.contains("verification_condition_holds db condition ->"));
         assert!(conditional.contains("Problem.generated_precondition_valid"));
         assert!(conditional.contains("Problem.generated_precondition_source"));
         assert!(conditional.contains("Problem.generated_precondition"));
         assert!(!conditional.contains("Definition required_countermodel_statement"));
         assert!(!conditional.contains("Problem.generated_verification_claim"));
+
+        let bound_safe = formal_sql_bound_goal_module(VerificationMode::SafeUnconditional);
+        assert!(bound_safe.contains("bound_query_program_possible_equiv"));
+        assert!(!bound_safe.contains("bound_query_program_demand_safe_outcome_equiv"));
+
+        let bound_outcome = formal_sql_bound_goal_module(VerificationMode::OutcomeUnconditional);
+        assert!(bound_outcome.contains("bound_query_program_demand_safe_outcome_equiv"));
+        assert!(bound_outcome.contains("Definition required_query_program_materialization_safe"));
+        assert!(bound_outcome.contains(
+            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        (Queries.source_bound_query_program generated_numeric_exp_model)"
+        ));
+        assert!(bound_outcome.contains(
+            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        (Queries.target_bound_query_program generated_numeric_exp_model)"
+        ));
+
+        let bound_conditional = formal_sql_bound_goal_module(VerificationMode::Conditional);
+        assert!(bound_conditional.contains("bound_query_program_demand_safe_outcome_equiv"));
+        assert!(bound_conditional.contains("verification_condition_holds db condition ->"));
+        assert!(!bound_conditional.contains("Definition required_countermodel_statement"));
     }
 
     #[test]
@@ -14210,10 +14408,7 @@ Definition generated_precondition_source :\n\
         assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("search-rocq-declarations.py"));
         assert!(!FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("/workspace/problem/lemma-catalog"));
         assert!(
-            FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$AUTHORITY_STAGE\":/workspace/logos:ro")
-        );
-        assert!(
-            !FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$LOGOS_REPO_ROOT\":/workspace/logos:ro")
+            FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$LOGOS_REPO_ROOT\":/workspace/logos:ro")
         );
         assert!(!FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains(
             "\"$LOGOS_REPO_ROOT/vendor/FormalSQL\":/workspace/logos/vendor/FormalSQL:ro"
@@ -14423,6 +14618,23 @@ Definition generated_precondition_source :\n\
                     .contains(&format!("-norec LogosGenerated.{generated}"))
             );
         }
+        let final_mode_block = FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
+            .split("if [[ \"$mode\" == final ]]; then")
+            .nth(1)
+            .and_then(|tail| tail.split("\nfi\n").next())
+            .expect("final trusted-check mode block");
+        assert!(final_mode_block.contains("copy_trusted_cache_objects \"$PROBLEMOUTDIR\""));
+        assert!(!final_mode_block.contains("sandbox_compile"));
+        let final_kernel_check = FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
+            .rsplit_once("\"$ROCQ_BIN\" check -silent -o")
+            .map(|(_, tail)| tail)
+            .expect("final kernel check");
+        for generated in ["Schema", "Queries", "Witness"] {
+            assert!(!final_kernel_check.contains(&format!("-norec LogosGenerated.{generated}")));
+        }
+        assert!(final_kernel_check.contains("\"${module_check_arguments[@]}\""));
+        assert!(final_kernel_check.contains("-norec LogosGenerated.Problem"));
+        assert!(final_kernel_check.contains("-norec LogosGenerated.Goal"));
         assert!(
             !FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
                 .contains("From LogosGenerated Require Import Schema Queries Witness.")
@@ -14738,10 +14950,13 @@ Definition generated_precondition_source :\n\
         for required in [
             "State the SQL rewrite in one sentence",
             "scratch/proof-plan.md",
-            "`static`",
-            "`core`",
-            "`lift`",
-            "`assembly`",
+            "route-revision: 1",
+            "current-residual: initial-top-level",
+            "## Top-level route",
+            "## Current residual",
+            "## Core",
+            "## Lift",
+            "## Assembly",
             "--mode scratch",
             "--candidate scratch/core-bridge.v",
             "--purpose semantic-equivalence",
@@ -14749,7 +14964,7 @@ Definition generated_precondition_source :\n\
             "--candidate Problem.v",
             "operator-level",
             "rebuilding evaluator recursion",
-            "instantiate the immutable module before building",
+            "import and instantiate the immutable module in `Problem.v` soon enough",
             "search-rocq-declarations.py",
             "Filters are mechanical and conjunctive",
             "Prove wide SELECT-list membership",
@@ -14768,11 +14983,11 @@ Definition generated_precondition_source :\n\
             "immutable dependency",
             "without recompiling their proofs",
             "container handoff never publishes that directory",
-            "independently",
+            "does not count",
             "30--90 seconds",
             "120--180 seconds",
             "two or three minutes",
-            "no separate per-diagnostic ceiling",
+            "quota on local diagnostics",
             "Logos.FormalSQL.VerificationConditions.verification_claim_kind",
             "Logos.FormalSQL.VerificationConditions.verification_condition",
             "Logos.FormalSQL.VerificationConditions.precondition_source",
@@ -14986,10 +15201,10 @@ Definition generated_precondition_source :\n\
         for forbidden_answer_hint in [
             "query_expr_context_global_congr",
             "query_make_groups_group_terms_Permutation",
-            "eval_groups_outcome_Forall2_congr",
-            "eval_group_bag_global_true_outcome_exact",
-            "eval_group_bag_global_true_success_for_representative",
-            "query_expr_project_bag_closed_safe",
+            "eval_groups_outcome_uniform_congr",
+            "eval_group_bag_exact_rows_permut_equiv",
+            "query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes",
+            "query_expr_project_has_outcome_safe",
             "query_expr_filter_bag_closed_exact",
         ] {
             assert!(
@@ -15197,7 +15412,11 @@ Definition generated_precondition_source :\n\
 
         remove_proof_workspace_for_formal_witness_restart(&artifacts)
             .expect("remove live fixed-witness state");
-        assert!(!cache_root.exists());
+        assert!(cache_root.exists());
+        assert_eq!(
+            std::fs::read(cache_root.join("Queries.vo")).unwrap(),
+            b"queries object"
+        );
         assert_eq!(
             std::fs::read(archived_module).unwrap(),
             b"checked module object"
@@ -15205,7 +15424,7 @@ Definition generated_precondition_source :\n\
     }
 
     #[test]
-    fn fixed_witness_restart_discards_the_entire_mutable_proof_workspace() {
+    fn fixed_witness_restart_discards_mutable_state_but_keeps_checked_prefix() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock after Unix epoch")
@@ -15294,8 +15513,7 @@ Definition generated_precondition_source :\n\
             .expect("remove stale fixed-witness workspace");
         assert!(!root.join("proof-stage/formal-sql").exists());
         assert!(
-            !root
-                .join("proof-stage/proof-agent/trusted-diagnostic-cache")
+            root.join("proof-stage/proof-agent/trusted-diagnostic-cache")
                 .exists()
         );
         assert!(

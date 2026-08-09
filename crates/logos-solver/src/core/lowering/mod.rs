@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::VerificationIr;
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
@@ -15,17 +15,16 @@ use logos_ir::ir::{
 use super::syntax::{
     DiagnosticSeverity, FormalAggregateFunction, FormalAggregateQuantifier, FormalAggregateTerm,
     FormalAttribute, FormalAttributeType, FormalCaseBranch, FormalCheckConstraint,
-    FormalConstraintFormula, FormalForeignKeyConstraint, FormalFormulaExpr, FormalFunctionTerm,
-    FormalGroupingSet, FormalNullDirection, FormalNumericAggregate, FormalPredicate,
-    FormalProofModule, FormalQueryError, FormalQueryExpr, FormalQueryJoinKind, FormalQueryModule,
-    FormalScalarExpr, FormalScalarSelectItem, FormalSchema, FormalSelectItem, FormalSetOp,
-    FormalSortDirection, FormalSortKey, FormalTable, FormalTableConstraints,
-    FormalUniqueConstraint, FormalUniqueIndexConstraint, FormalValueLiteral, FormalWindowFunction,
-    FormalWindowItem, LoweredProgram, LoweredQuery, LoweredSchema, LoweringDiagnostic,
-    LoweringStatus, NumericDscaleProvenance, ProofLoweringReport, ScalarBooleanOperator,
-    ScalarCast, ScalarDatePart, ScalarNumericKind, ScalarNumericSource, ScalarOperator,
-    ScalarStringCase, ScalarTimestampUnit, query_expr_output_signature,
-    validate_query_expr_scalar_operators,
+    FormalConstraintFormula, FormalForeignKeyConstraint, FormalFunctionTerm, FormalGroupingSet,
+    FormalNullDirection, FormalNumericAggregate, FormalPredicate, FormalProofModule,
+    FormalQueryBinding, FormalQueryError, FormalQueryExpr, FormalQueryJoinKind, FormalQueryModule,
+    FormalScalarExpr, FormalScalarSelectItem, FormalSchema, FormalSetOp, FormalSortDirection,
+    FormalSortKey, FormalTable, FormalTableConstraints, FormalUniqueConstraint,
+    FormalUniqueIndexConstraint, FormalValueLiteral, FormalWindowFunction, FormalWindowItem,
+    LoweredProgram, LoweredQuery, LoweredSchema, LoweringDiagnostic, LoweringStatus,
+    NumericDscaleProvenance, ProofLoweringReport, ScalarBooleanOperator, ScalarCast,
+    ScalarDatePart, ScalarNumericKind, ScalarNumericSource, ScalarOperator, ScalarStringCase,
+    ScalarTimestampUnit, query_expr_output_signature, validate_query_expr_scalar_operators,
 };
 use crate::core::VerificationMode;
 
@@ -52,10 +51,18 @@ pub fn lower_verification_input_with_mode(
     verification_mode: VerificationMode,
 ) -> ProofLoweringReport {
     let schema = lower_schema_with_config(input.schema_ir(), config);
-    let mut source_statements =
-        lower_query_program(input.source_program_ir(), input.schema_ir(), config);
-    let mut target_statements =
-        lower_query_program(input.target_program_ir(), input.schema_ir(), config);
+    let mut source_statements = lower_query_program(
+        input.source_program_ir(),
+        input.schema_ir(),
+        config,
+        "source",
+    );
+    let mut target_statements = lower_query_program(
+        input.target_program_ir(),
+        input.schema_ir(),
+        config,
+        "target",
+    );
     let mut program_diagnostics = Vec::new();
     if source_statements.len() != target_statements.len() {
         program_diagnostics.push(LoweringDiagnostic {
@@ -82,14 +89,28 @@ pub fn lower_verification_input_with_mode(
     let target_parts = complete_program_parts(&target);
     let query_module = match (&source_parts, &target_parts) {
         (Some(source_parts), Some(target_parts)) => {
-            emit_rocq_query_program_module_with_signatures(source_parts, target_parts)
+            if program_parts_have_bindings(source_parts)
+                || program_parts_have_bindings(target_parts)
+            {
+                emit_rocq_bound_query_program_module_with_signatures(source_parts, target_parts)
+            } else {
+                let source_plain = plain_program_parts(source_parts);
+                let target_plain = plain_program_parts(target_parts);
+                emit_rocq_query_program_module_with_signatures(&source_plain, &target_plain)
+            }
         }
         _ => None,
     };
     let proof_module = match (&schema.schema, &source_parts, &target_parts) {
-        (Some(_), Some(_), Some(_)) => Some(emit_rocq_query_expr_proof_module_for_mode(
-            verification_mode,
-        )),
+        (Some(_), Some(source_parts), Some(target_parts)) => Some(
+            if program_parts_have_bindings(source_parts)
+                || program_parts_have_bindings(target_parts)
+            {
+                emit_rocq_bound_query_proof_module_for_mode(verification_mode)
+            } else {
+                emit_rocq_query_expr_proof_module_for_mode(verification_mode)
+            },
+        ),
         _ => None,
     };
     ProofLoweringReport {
@@ -109,13 +130,15 @@ fn lower_query_program(
     queries: &[Query],
     schema: &Schema,
     config: &LoweringConfig,
+    side: &str,
 ) -> Vec<LoweredQuery> {
     let mut statements = Vec::with_capacity(queries.len());
-    for query in queries {
+    for (index, query) in queries.iter().enumerate() {
         statements.push(lower_query_with_optional_schema_config(
             query,
             Some(schema),
             config,
+            &format!("{side}_{index}"),
         ));
     }
     statements
@@ -148,7 +171,7 @@ fn summarize_lowered_program(
     }
 }
 
-type ProgramPart<'a> = (&'a FormalQueryExpr, &'a [FormalAttribute]);
+type ProgramPart<'a> = emit::BoundProgramPart<'a>;
 
 fn complete_program_parts(program: &LoweredProgram) -> Option<Vec<ProgramPart<'_>>> {
     if program.status != LoweringStatus::Lowered || program.statements.is_empty() {
@@ -161,8 +184,22 @@ fn complete_program_parts(program: &LoweredProgram) -> Option<Vec<ProgramPart<'_
             Some((
                 statement.query_expr.as_ref()?,
                 statement.output_signature.as_deref()?,
+                statement.bindings.as_slice(),
             ))
         })
+        .collect()
+}
+
+fn program_parts_have_bindings(program: &[ProgramPart<'_>]) -> bool {
+    program.iter().any(|(_, _, bindings)| !bindings.is_empty())
+}
+
+fn plain_program_parts<'a>(
+    program: &'a [ProgramPart<'a>],
+) -> Vec<(&'a FormalQueryExpr, &'a [FormalAttribute])> {
+    program
+        .iter()
+        .map(|(query, signature, _)| (*query, *signature))
         .collect()
 }
 
@@ -246,11 +283,14 @@ fn canonicalize_query_output_labels(lowered: &mut LoweredQuery) {
             let select = output_signature
                 .iter()
                 .zip(&canonical_signature)
-                .map(|(source, target)| FormalSelectItem {
-                    expr: FormalAggregateTerm::Expr {
-                        term: FormalFunctionTerm::Attribute {
-                            name: source.name.clone(),
-                            ty: source.ty,
+                .map(|(source, target)| FormalScalarSelectItem {
+                    expr: FormalScalarExpr::Leaf {
+                        result_ty: source.ty,
+                        term: FormalAggregateTerm::Expr {
+                            term: FormalFunctionTerm::Attribute {
+                                name: source.name.clone(),
+                                ty: source.ty,
+                            },
                         },
                     },
                     alias: target.name.clone(),
@@ -309,7 +349,7 @@ fn lower_query(query: &Query) -> LoweredQuery {
 
 #[cfg(test)]
 fn lower_query_with_config(query: &Query, config: &LoweringConfig) -> LoweredQuery {
-    lower_query_with_optional_schema_config(query, None, config)
+    lower_query_with_optional_schema_config(query, None, config, "test_0")
 }
 
 #[cfg(test)]
@@ -318,32 +358,207 @@ fn lower_query_with_schema_config(
     schema: &Schema,
     config: &LoweringConfig,
 ) -> LoweredQuery {
-    lower_query_with_optional_schema_config(query, Some(schema), config)
+    lower_query_with_optional_schema_config(query, Some(schema), config, "test_0")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoundAnalysisErrorNormalization {
+    Unchanged,
+    Promoted,
+    CompetingCategories,
+    MissingOuterSignature,
+}
+
+fn normalize_bound_analysis_errors(
+    bindings: &mut Vec<FormalQueryBinding>,
+    body: &mut Option<FormalQueryExpr>,
+) -> BoundAnalysisErrorNormalization {
+    let mut analysis_errors = bindings
+        .iter()
+        .filter_map(|binding| match &binding.query_expr {
+            FormalQueryExpr::Error { error, .. } => Some(*error),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let body_error = body.as_ref().and_then(|query_expr| match query_expr {
+        FormalQueryExpr::Error { columns, error } => Some((columns.clone(), *error)),
+        _ => None,
+    });
+    analysis_errors.extend(body_error.as_ref().map(|(_, error)| *error));
+    let Some(error) = analysis_errors.first().copied() else {
+        return BoundAnalysisErrorNormalization::Unchanged;
+    };
+    if analysis_errors.iter().any(|candidate| *candidate != error) {
+        return BoundAnalysisErrorNormalization::CompetingCategories;
+    }
+    let columns = body_error
+        .map(|(columns, _)| columns)
+        .or_else(|| body.as_ref().and_then(query_expr_output_signature));
+    let Some(columns) = columns else {
+        return BoundAnalysisErrorNormalization::MissingOuterSignature;
+    };
+    *body = Some(FormalQueryExpr::Error { columns, error });
+    bindings.clear();
+    BoundAnalysisErrorNormalization::Promoted
 }
 
 fn lower_query_with_optional_schema_config(
     query: &Query,
     schema: Option<&Schema>,
     config: &LoweringConfig,
+    binding_namespace: &str,
 ) -> LoweredQuery {
-    if let Err(message) = validate_query_scalar_source_bindings(query, cfg!(test)) {
+    let (raw_bindings, body_rel) = match &query.rel {
+        RelExpr::Bindings { bindings, body, .. } => (bindings.as_slice(), body.as_ref()),
+        rel => (&[][..], rel),
+    };
+    let body_query = Query {
+        source_sql: query.source_sql.clone(),
+        rel: body_rel.clone(),
+        analysis_errors: query.analysis_errors.clone(),
+    };
+    let binding_queries = raw_bindings
+        .iter()
+        .map(|binding| Query {
+            source_sql: query.source_sql.clone(),
+            rel: binding.rel.clone(),
+            analysis_errors: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let invalid_source_binding = binding_queries
+        .iter()
+        .enumerate()
+        .find_map(|(index, binding)| {
+            validate_query_scalar_source_bindings(binding, cfg!(test))
+                .err()
+                .map(|message| (format!("rel.bindings[{index}].sourceProvenance"), message))
+        })
+        .or_else(|| {
+            validate_query_scalar_source_bindings(&body_query, cfg!(test))
+                .err()
+                .map(|message| ("rel.sourceProvenance".to_owned(), message))
+        });
+    if let Some((path, message)) = invalid_source_binding {
         return LoweredQuery {
             status: LoweringStatus::Blocked,
+            bindings: Vec::new(),
             query_expr: None,
             output_signature: None,
             diagnostics: vec![LoweringDiagnostic {
                 severity: DiagnosticSeverity::Error,
-                path: "rel.sourceProvenance".to_owned(),
+                path,
                 code: "scalar_source_provenance_not_bound_to_query".to_owned(),
                 message,
             }],
         };
     }
     let mut context = LoweringContext::new(config.clone(), schema);
-    let mut query_expr_lowered =
-        lower_query_after_special_roots(&mut context, query).and_then(|query_expr| {
-            close_query_root_output(&mut context, query.rel.output(), query_expr)
+    for (index, binding) in raw_bindings.iter().enumerate() {
+        let relation = format!("__logos_{binding_namespace}_cte_{index}");
+        if context
+            .schema
+            .as_ref()
+            .is_some_and(|schema| schema.tables.iter().any(|table| table.name == relation))
+        {
+            context.error(
+                &format!("rel.bindings[{index}].relation"),
+                "query_binding_relation_not_fresh",
+                "The internal CTE relation name collides with an authoritative base-table name.",
+            );
+            continue;
+        }
+        if context
+            .query_bindings
+            .insert(
+                binding.id.clone(),
+                LoweredQueryBindingSource {
+                    relation,
+                    output: binding.rel.output().to_vec(),
+                    lowered_scope: None,
+                },
+            )
+            .is_some()
+        {
+            context.error(
+                &format!("rel.bindings[{index}].id"),
+                "duplicate_query_binding_id",
+                "A query-local CTE binding identity occurs more than once in one statement.",
+            );
+        }
+    }
+
+    let mut lowered_bindings = Vec::with_capacity(raw_bindings.len());
+    for (index, (binding, binding_query)) in raw_bindings.iter().zip(&binding_queries).enumerate() {
+        let diagnostic_start = context.diagnostics.len();
+        let lowered = lower_query_after_special_roots(
+            &mut context,
+            binding_query,
+            &format!("rel.binding{index}"),
+        )
+        .and_then(|query_expr| {
+            close_query_root_output(&mut context, binding.rel.output(), query_expr)
         });
+        for diagnostic in &mut context.diagnostics[diagnostic_start..] {
+            diagnostic.path = format!("rel.bindings[{index}].{}", diagnostic.path);
+        }
+        let Some(query_expr) = lowered else {
+            continue;
+        };
+        if let Err(message) = validate_query_expr_scalar_operators(&query_expr) {
+            context.error(
+                &format!("rel.bindings[{index}].scalarOperators"),
+                "formal_scalar_operator_shape_invalid",
+                &format!(
+                    "Lowering constructed a malformed closed FormalSQL scalar call in a CTE definition: {message}."
+                ),
+            );
+            continue;
+        }
+        let Some(output_signature) = query_expr_output_signature(&query_expr) else {
+            context.error(
+                &format!("rel.bindings[{index}].outputScope"),
+                "query_binding_output_signature_incomplete",
+                "A lowered CTE definition has no complete typed output signature.",
+            );
+            continue;
+        };
+        let Some(output_scope) = context
+            .scope_from_query_expr(&format!("rel.bindings[{index}].outputScope"), &query_expr)
+        else {
+            continue;
+        };
+        let Some(binding_source) = context.query_bindings.get_mut(&binding.id) else {
+            continue;
+        };
+        binding_source.lowered_scope = Some(output_scope);
+        lowered_bindings.push(FormalQueryBinding {
+            id: binding.id.clone(),
+            source_name: binding.source_name.clone(),
+            relation: binding_source.relation.clone(),
+            output_signature,
+            query_expr,
+        });
+    }
+    if lowered_bindings.len() != raw_bindings.len() && !context.has_errors() {
+        context.error(
+            "rel.bindings",
+            "query_binding_lowering_incomplete_without_diagnostic",
+            "At least one query-local CTE definition produced no FormalSQL expression without recording a specific rejection.",
+        );
+    }
+
+    let mut query_expr_lowered = if context.has_errors() {
+        None
+    } else {
+        let body_path = if raw_bindings.is_empty() {
+            "rel"
+        } else {
+            "rel.body"
+        };
+        lower_query_after_special_roots(&mut context, &body_query, body_path).and_then(
+            |query_expr| close_query_root_output(&mut context, body_rel.output(), query_expr),
+        )
+    };
     if let Some(query_expr) = query_expr_lowered.as_ref()
         && let Err(message) = validate_query_expr_scalar_operators(query_expr)
     {
@@ -355,6 +570,28 @@ fn lower_query_with_optional_schema_config(
             ),
         );
         query_expr_lowered = None;
+    }
+    if !context.has_errors() {
+        match normalize_bound_analysis_errors(&mut lowered_bindings, &mut query_expr_lowered) {
+            BoundAnalysisErrorNormalization::Unchanged
+            | BoundAnalysisErrorNormalization::Promoted => {}
+            BoundAnalysisErrorNormalization::CompetingCategories => {
+                context.error(
+                    "rel.analysisErrors",
+                    "competing_bound_query_analysis_errors_not_supported",
+                    "Query-local and statement-body analysis errors disagree on PostgreSQL's SQLSTATE category. Logos cannot recover the first parse-analysis failure from binding order alone, so lowering is fail-closed.",
+                );
+                query_expr_lowered = None;
+            }
+            BoundAnalysisErrorNormalization::MissingOuterSignature => {
+                context.error(
+                    "rel.outputScope",
+                    "analysis_error_output_signature_incomplete",
+                    "A query-local analysis error cannot be promoted to the statement root because the authoritative outer output signature is incomplete.",
+                );
+                query_expr_lowered = None;
+            }
+        }
     }
     let output_signature = query_expr_lowered.as_ref().and_then(|query_expr| {
         let signature = query_expr_output_signature(query_expr)?;
@@ -385,6 +622,11 @@ fn lower_query_with_optional_schema_config(
     };
     LoweredQuery {
         status,
+        bindings: if context.has_errors() {
+            Vec::new()
+        } else {
+            lowered_bindings
+        },
         query_expr: query_expr_lowered,
         output_signature,
         diagnostics: context.diagnostics,
@@ -914,7 +1156,23 @@ fn validate_rel_scalar_source_bindings(
     allow_synthetic_test_bindings: bool,
 ) -> Result<(), String> {
     match rel {
-        RelExpr::TableScan { .. } => {}
+        RelExpr::Bindings { bindings, body, .. } => {
+            for (index, binding) in bindings.iter().enumerate() {
+                validate_rel_scalar_source_bindings(
+                    &binding.rel,
+                    statement,
+                    &format!("{path}.bindings[{index}]"),
+                    allow_synthetic_test_bindings,
+                )?;
+            }
+            validate_rel_scalar_source_bindings(
+                body,
+                statement,
+                &format!("{path}.body"),
+                allow_synthetic_test_bindings,
+            )?;
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => {}
         RelExpr::Project { input, exprs, .. } => {
             validate_rel_scalar_source_bindings(
                 input,
@@ -1127,11 +1385,14 @@ fn close_query_root_output(
     let select = scope.attributes[..expected.len()]
         .iter()
         .zip(expected)
-        .map(|(attribute, expected)| FormalSelectItem {
-            expr: FormalAggregateTerm::Expr {
-                term: FormalFunctionTerm::Attribute {
-                    name: attribute.name.clone(),
-                    ty: attribute.formal_ty,
+        .map(|(attribute, expected)| FormalScalarSelectItem {
+            expr: FormalScalarExpr::Leaf {
+                result_ty: attribute.formal_ty,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Attribute {
+                        name: attribute.name.clone(),
+                        ty: attribute.formal_ty,
+                    },
                 },
             },
             alias: expected.name.clone(),
@@ -1173,6 +1434,7 @@ fn lower_query_analysis_error(
 fn lower_query_after_special_roots(
     context: &mut LoweringContext,
     query: &Query,
+    root_path: &str,
 ) -> Option<FormalQueryExpr> {
     let query_analysis_errors = query.analysis_errors.as_slice();
     if query_analysis_errors.len() > 1 {
@@ -1304,12 +1566,13 @@ fn lower_query_after_special_roots(
                 )
             });
     }
-    lower_query_after_query_level_analysis_error(context, query)
+    lower_query_after_query_level_analysis_error(context, query, root_path)
 }
 
 fn lower_query_after_query_level_analysis_error(
     context: &mut LoweringContext,
     query: &Query,
+    root_path: &str,
 ) -> Option<FormalQueryExpr> {
     let generated_invalid_int4 = rel_generated_invalid_int4_unknown_literal_count(&query.rel);
     let attested_invalid_int4 = rel_source_attested_invalid_int4_unknown_literal_count(&query.rel);
@@ -1381,7 +1644,23 @@ fn lower_query_after_query_level_analysis_error(
             );
             None
         }
-        None => context.lower_query_expr("rel", &query.rel),
+        None => {
+            // Preserve the more specific lowering diagnostic when the scalar
+            // vocabulary itself is unsupported. The planner-demand check is
+            // an additional phase distinction on otherwise modeled queries,
+            // not a replacement for their ordinary admission rules.
+            let lowered = context.lower_query_expr(root_path, &query.rel)?;
+            if scalar::rel_expr_contains_any_closed_immutable_error(&query.rel) {
+                context.error(
+                    "rel.plannerConstants",
+                    "boolean_planner_constant_error_not_supported",
+                    "PostgreSQL may evaluate a closed immutable scalar subexpression while planning before executor row demand, laziness, or error order is known. FormalSQL models execution-time scheduling rather than planner evaluation, so the complete query is conservatively unsupported.",
+                );
+                None
+            } else {
+                Some(lowered)
+            }
+        }
     }
 }
 
@@ -1425,7 +1704,14 @@ fn query_boolean_integer_source_mismatch_count(query: &Query) -> usize {
 
 fn rel_boolean_integer_source_mismatch_count(rel: &RelExpr) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| rel_boolean_integer_source_mismatch_count(&binding.rel))
+                .sum::<usize>()
+                + rel_boolean_integer_source_mismatch_count(body)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             rel_boolean_integer_source_mismatch_count(input)
                 + exprs
@@ -1570,7 +1856,14 @@ fn scalar_ast_boolean_integer_source_mismatch_count(
 
 fn rel_source_analysis_error_marker_count(rel: &RelExpr) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| rel_source_analysis_error_marker_count(&binding.rel))
+                .sum::<usize>()
+                + rel_source_analysis_error_marker_count(body)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             rel_source_analysis_error_marker_count(input)
                 + exprs
@@ -1688,7 +1981,14 @@ fn scalar_ast_nested_analysis_error_marker_count(ast: &ScalarAst) -> usize {
 
 fn collect_rel_source_analysis_errors(rel: &RelExpr, errors: &mut Vec<FormalQueryError>) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| collect_rel_source_analysis_errors(&binding.rel, errors))
+                .sum::<usize>()
+                + collect_rel_source_analysis_errors(body, errors)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             collect_rel_source_analysis_errors(input, errors)
                 + exprs
@@ -2067,7 +2367,13 @@ fn source_identifier_matches_analysis_error_binding(
 
 fn collect_rel_analysis_errors(rel: &RelExpr, errors: &mut Vec<FormalQueryError>) {
     match rel {
-        RelExpr::TableScan { .. } => {}
+        RelExpr::Bindings { bindings, body, .. } => {
+            for binding in bindings {
+                collect_rel_analysis_errors(&binding.rel, errors);
+            }
+            collect_rel_analysis_errors(body, errors);
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => {}
         RelExpr::Project { input, exprs, .. } => {
             let scope = input.output().iter().collect::<Vec<_>>();
             for expr in exprs {
@@ -2242,7 +2548,14 @@ type ScopedScalarCounter = fn(&ScalarExpr, &[&Column]) -> usize;
 
 fn rel_scoped_scalar_count(rel: &RelExpr, counter: ScopedScalarCounter) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| rel_scoped_scalar_count(&binding.rel, counter))
+                .sum::<usize>()
+                + rel_scoped_scalar_count(body, counter)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             let scope = input.output().iter().collect::<Vec<_>>();
             rel_scoped_scalar_count(input, counter)
@@ -2548,7 +2861,14 @@ fn rel_source_attested_invalid_int4_unknown_literal_count(rel: &RelExpr) -> usiz
 
 fn rel_source_attested_invalid_int4_comparison_count(rel: &RelExpr) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| rel_source_attested_invalid_int4_comparison_count(&binding.rel))
+                .sum::<usize>()
+                + rel_source_attested_invalid_int4_comparison_count(body)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             rel_source_attested_invalid_int4_comparison_count(input)
                 + exprs
@@ -2804,7 +3124,20 @@ fn rel_string_literal_cast_count(
     require_source_attestation: bool,
 ) -> usize {
     match rel {
-        RelExpr::TableScan { .. } => 0,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .map(|binding| {
+                    rel_string_literal_cast_count(
+                        &binding.rel,
+                        matches_cast,
+                        require_source_attestation,
+                    )
+                })
+                .sum::<usize>()
+                + rel_string_literal_cast_count(body, matches_cast, require_source_attestation)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => 0,
         RelExpr::Project { input, exprs, .. } => {
             rel_string_literal_cast_count(input, matches_cast, require_source_attestation)
                 + exprs
@@ -4306,6 +4639,21 @@ struct LoweringContext {
     /// representations aligned without relying on source spellings.
     next_scope_barrier: usize,
     scope_barrier_names: BTreeSet<String>,
+    /// Statement-local CTE identities resolved before any definition or body
+    /// is lowered. References become ordinary FormalSQL table leaves using
+    /// these fresh internal relation names.
+    query_bindings: BTreeMap<String, LoweredQueryBindingSource>,
+}
+
+#[derive(Debug, Clone)]
+struct LoweredQueryBindingSource {
+    relation: String,
+    output: Vec<Column>,
+    /// Provenance-enriched scope recovered from the already lowered CTE
+    /// definition. PostgreSQL aggregate results can be typmodless NUMERIC
+    /// while still having a statically known display scale; rebuilding this
+    /// scope from Calcite's public row type would discard that distinction.
+    lowered_scope: Option<Scope>,
 }
 
 #[derive(Debug, Clone)]
@@ -4322,8 +4670,13 @@ mod schema;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use emit::emit_rocq_query_expr_proof_module_for_mode;
-use emit::emit_rocq_query_program_module_with_signatures;
+pub(crate) use emit::{
+    emit_rocq_bound_query_program_module_with_signatures,
+    emit_rocq_query_expr_proof_module_for_mode,
+};
+use emit::{
+    emit_rocq_bound_query_proof_module_for_mode, emit_rocq_query_program_module_with_signatures,
+};
 #[cfg(test)]
 use emit::{
     emit_rocq_query_expr_proof_module, emit_rocq_query_module,
@@ -4340,6 +4693,7 @@ impl LoweringContext {
             correlations: Vec::new(),
             next_scope_barrier: 0,
             scope_barrier_names: BTreeSet::new(),
+            query_bindings: BTreeMap::new(),
         }
     }
 

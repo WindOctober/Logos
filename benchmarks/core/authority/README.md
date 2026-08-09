@@ -11,4 +11,4 @@ particular experiment output directory.
 
 Run artifacts belong under `var/`. Published experiment summaries may live
 outside the repository, but their destination is machine-local configuration
-through `LOGOS_FINAL_EXPERIMENT_DIR`; they are never benchmark authority.
+through `LOGOS_FINAL_EXPERIMENT_DIR`.

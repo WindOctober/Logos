@@ -28,6 +28,326 @@ impl ModeledLikeKind {
     }
 }
 
+fn scalar_numeric_kind_type(kind: ScalarNumericKind) -> FormalAttributeType {
+    match kind {
+        ScalarNumericKind::Int32 => FormalAttributeType::Int32,
+        ScalarNumericKind::Int64 => FormalAttributeType::Int64,
+        ScalarNumericKind::Float => FormalAttributeType::Float,
+        ScalarNumericKind::Double => FormalAttributeType::Double,
+        ScalarNumericKind::Numeric => FormalAttributeType::Numeric,
+    }
+}
+
+fn scalar_numeric_source_type(source: ScalarNumericSource) -> FormalAttributeType {
+    match source {
+        ScalarNumericSource::Z => FormalAttributeType::Z,
+        ScalarNumericSource::Int32 => FormalAttributeType::Int32,
+        ScalarNumericSource::Int64 => FormalAttributeType::Int64,
+        ScalarNumericSource::Numeric => FormalAttributeType::Numeric,
+    }
+}
+
+fn scalar_string_type_from_codes(tag: u32, length: u32) -> Option<FormalAttributeType> {
+    let typmod = match tag {
+        0 => SqlStringType::Text,
+        1 => SqlStringType::Varchar { length: None },
+        2 => SqlStringType::Varchar {
+            length: Some(length),
+        },
+        3 => SqlStringType::Char { length },
+        4 => SqlStringType::Bpchar,
+        _ => return None,
+    };
+    Some(FormalAttributeType::String { typmod })
+}
+
+fn canonical_term_u32(term: &FormalAggregateTerm) -> Option<u32> {
+    match term {
+        FormalAggregateTerm::Expr {
+            term:
+                FormalFunctionTerm::Constant {
+                    raw,
+                    ty: Some(FormalAttributeType::Z),
+                },
+        } => raw.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+fn canonical_aggregate_result_type(
+    function: FormalAggregateFunction,
+    hint: Option<FormalAttributeType>,
+) -> FormalAttributeType {
+    if let Some(hint) = hint {
+        return hint;
+    }
+    match function {
+        FormalAggregateFunction::Count => FormalAttributeType::Int64,
+        FormalAggregateFunction::SumZ
+        | FormalAggregateFunction::MaxZ
+        | FormalAggregateFunction::MinZ
+        | FormalAggregateFunction::AverageZ
+        | FormalAggregateFunction::NumericDisplayScale(_) => FormalAttributeType::Z,
+        FormalAggregateFunction::SumInt32 => FormalAttributeType::Int64,
+        FormalAggregateFunction::SumInt64Numeric
+        | FormalAggregateFunction::SumNumeric
+        | FormalAggregateFunction::MaxNumeric
+        | FormalAggregateFunction::MinNumeric
+        | FormalAggregateFunction::AverageInt32Numeric
+        | FormalAggregateFunction::AverageInt64Numeric
+        | FormalAggregateFunction::VariancePopulationInt32
+        | FormalAggregateFunction::VarianceSampleInt32
+        | FormalAggregateFunction::StddevPopulationInt32
+        | FormalAggregateFunction::StddevSampleInt32
+        | FormalAggregateFunction::StddevSampleNumericFixed { .. }
+        | FormalAggregateFunction::AverageNumericFixed { .. }
+        | FormalAggregateFunction::AverageNumericAtScale { .. } => FormalAttributeType::Numeric,
+        FormalAggregateFunction::SumFloat
+        | FormalAggregateFunction::MaxFloat
+        | FormalAggregateFunction::MinFloat => FormalAttributeType::Float,
+        FormalAggregateFunction::SumDouble
+        | FormalAggregateFunction::MaxDouble
+        | FormalAggregateFunction::MinDouble
+        | FormalAggregateFunction::AverageFloat
+        | FormalAggregateFunction::AverageDouble => FormalAttributeType::Double,
+        FormalAggregateFunction::BitAndInt32
+        | FormalAggregateFunction::BitOrInt32
+        | FormalAggregateFunction::MaxInt32
+        | FormalAggregateFunction::MinInt32
+        | FormalAggregateFunction::SingleValueInt32 => FormalAttributeType::Int32,
+        FormalAggregateFunction::BitAndInt64
+        | FormalAggregateFunction::BitOrInt64
+        | FormalAggregateFunction::MaxInt64
+        | FormalAggregateFunction::MinInt64 => FormalAttributeType::Int64,
+        FormalAggregateFunction::MaxString => FormalAttributeType::String {
+            typmod: SqlStringType::Text,
+        },
+    }
+}
+
+fn canonical_operator_argument_hints(
+    operator: ScalarOperator,
+    arity: usize,
+    result_ty: FormalAttributeType,
+) -> Vec<Option<FormalAttributeType>> {
+    let repeated = |ty| vec![Some(ty); arity];
+    match operator {
+        ScalarOperator::PredicateValue(_) => vec![None; arity],
+        ScalarOperator::Boolean(_) => repeated(FormalAttributeType::Bool),
+        ScalarOperator::Case => (0..arity)
+            .map(|index| {
+                if index + 1 == arity || index % 2 == 1 {
+                    Some(result_ty)
+                } else {
+                    Some(FormalAttributeType::Bool)
+                }
+            })
+            .collect(),
+        ScalarOperator::StringCase(_) => vec![None; arity],
+        ScalarOperator::ExtractDate(_) => vec![Some(FormalAttributeType::Date); arity],
+        ScalarOperator::Cast(ScalarCast::Identity) => repeated(result_ty),
+        ScalarOperator::Cast(ScalarCast::ToNumeric(source)) => {
+            vec![Some(scalar_numeric_source_type(source)); arity]
+        }
+        ScalarOperator::Cast(ScalarCast::ToNumericTypmod(source)) => vec![
+            Some(scalar_numeric_source_type(source)),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Z),
+        ],
+        ScalarOperator::Cast(ScalarCast::Int32ToDouble | ScalarCast::Int32ToInt64) => {
+            repeated(FormalAttributeType::Int32)
+        }
+        ScalarOperator::Cast(ScalarCast::Int64ToInt32) => repeated(FormalAttributeType::Int64),
+        ScalarOperator::Cast(ScalarCast::NumericToInt32) => repeated(FormalAttributeType::Numeric),
+        ScalarOperator::Cast(ScalarCast::StringToInt32 | ScalarCast::StringToInt64) => vec![None],
+        ScalarOperator::Cast(ScalarCast::DateToTimestamp) => repeated(FormalAttributeType::Date),
+        ScalarOperator::Cast(ScalarCast::TimestampToDate) => vec![None],
+        ScalarOperator::Cast(ScalarCast::StringExplicit | ScalarCast::StringImplicit) => vec![
+            None,
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Z),
+        ],
+        ScalarOperator::Add(kind)
+        | ScalarOperator::Subtract(kind)
+        | ScalarOperator::Multiply(kind)
+        | ScalarOperator::Negate(kind) => repeated(scalar_numeric_kind_type(kind)),
+        ScalarOperator::Divide(ScalarNumericKind::Numeric) => vec![
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+        ],
+        ScalarOperator::Divide(kind) => repeated(scalar_numeric_kind_type(kind)),
+        ScalarOperator::NumericDivideResultScale => vec![
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+        ],
+        ScalarOperator::NumericDivideTypmod => vec![
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Numeric),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Z),
+            Some(FormalAttributeType::Z),
+        ],
+        ScalarOperator::PowerHalfInt64ToInt32 => repeated(FormalAttributeType::Int64),
+        ScalarOperator::StringConcat => vec![None; arity],
+        ScalarOperator::SubstringNonnegative => vec![
+            None,
+            Some(FormalAttributeType::Int32),
+            Some(FormalAttributeType::Int32),
+        ],
+        ScalarOperator::TimestampAdd(_) => vec![None, Some(FormalAttributeType::Z)],
+    }
+}
+
+fn canonical_operator_result_type(
+    operator: ScalarOperator,
+    args: &[FormalAggregateTerm],
+    hint: Option<FormalAttributeType>,
+) -> Option<FormalAttributeType> {
+    let hinted_string = || hint.filter(|ty| matches!(ty, FormalAttributeType::String { .. }));
+    Some(match operator {
+        ScalarOperator::PredicateValue(_) | ScalarOperator::Boolean(_) => FormalAttributeType::Bool,
+        ScalarOperator::Case => hint.or_else(|| {
+            args.get(1)
+                .and_then(|arg| canonical_aggregate_term_type(arg, None))
+        })?,
+        ScalarOperator::StringCase(_) => hinted_string().or_else(|| {
+            args.first()
+                .and_then(|arg| canonical_aggregate_term_type(arg, None))
+        })?,
+        ScalarOperator::ExtractDate(_) => FormalAttributeType::Numeric,
+        ScalarOperator::Cast(ScalarCast::Identity) => args
+            .first()
+            .and_then(|arg| canonical_aggregate_term_type(arg, hint))?,
+        ScalarOperator::Cast(ScalarCast::ToNumeric(_)) => FormalAttributeType::Numeric,
+        ScalarOperator::Cast(ScalarCast::ToNumericTypmod(_)) => {
+            let precision = args.get(1).and_then(canonical_term_u32)?;
+            let scale = args.get(2).and_then(canonical_term_u32)?;
+            FormalAttributeType::Decimal { precision, scale }
+        }
+        ScalarOperator::Cast(ScalarCast::Int32ToDouble) => FormalAttributeType::Double,
+        ScalarOperator::Cast(ScalarCast::Int32ToInt64) => FormalAttributeType::Int64,
+        ScalarOperator::Cast(
+            ScalarCast::Int64ToInt32 | ScalarCast::NumericToInt32 | ScalarCast::StringToInt32,
+        )
+        | ScalarOperator::PowerHalfInt64ToInt32 => FormalAttributeType::Int32,
+        ScalarOperator::Cast(ScalarCast::StringToInt64) => FormalAttributeType::Int64,
+        ScalarOperator::Cast(ScalarCast::DateToTimestamp) => {
+            FormalAttributeType::Timestamp { precision: None }
+        }
+        ScalarOperator::Cast(ScalarCast::TimestampToDate) => FormalAttributeType::Date,
+        ScalarOperator::Cast(ScalarCast::StringExplicit | ScalarCast::StringImplicit) => {
+            scalar_string_type_from_codes(
+                args.get(1).and_then(canonical_term_u32)?,
+                args.get(2).and_then(canonical_term_u32)?,
+            )?
+        }
+        ScalarOperator::Add(kind)
+        | ScalarOperator::Subtract(kind)
+        | ScalarOperator::Multiply(kind)
+        | ScalarOperator::Divide(kind)
+        | ScalarOperator::Negate(kind) => scalar_numeric_kind_type(kind),
+        ScalarOperator::NumericDivideResultScale => FormalAttributeType::Z,
+        ScalarOperator::NumericDivideTypmod => FormalAttributeType::Decimal {
+            precision: args.get(4).and_then(canonical_term_u32)?,
+            scale: args.get(5).and_then(canonical_term_u32)?,
+        },
+        ScalarOperator::StringConcat | ScalarOperator::SubstringNonnegative => hinted_string()
+            .or_else(|| {
+                args.first()
+                    .and_then(|arg| canonical_aggregate_term_type(arg, None))
+            })
+            .unwrap_or(FormalAttributeType::String {
+                typmod: SqlStringType::Text,
+            }),
+        ScalarOperator::TimestampAdd(_) => hint
+            .filter(|ty| matches!(ty, FormalAttributeType::Timestamp { .. }))
+            .or_else(|| {
+                args.first()
+                    .and_then(|arg| canonical_aggregate_term_type(arg, None))
+            })
+            .unwrap_or(FormalAttributeType::Timestamp { precision: None }),
+    })
+}
+
+fn canonical_function_term_type(
+    term: &FormalFunctionTerm,
+    hint: Option<FormalAttributeType>,
+) -> Option<FormalAttributeType> {
+    match term {
+        FormalFunctionTerm::Constant { ty: Some(ty), .. }
+        | FormalFunctionTerm::Attribute { ty, .. } => Some(*ty),
+        FormalFunctionTerm::Constant { ty: None, .. } => hint,
+        FormalFunctionTerm::ScalarCall { operator, args } => {
+            let aggregate_args = args
+                .iter()
+                .cloned()
+                .map(|term| FormalAggregateTerm::Expr { term })
+                .collect::<Vec<_>>();
+            canonical_operator_result_type(*operator, &aggregate_args, hint)
+        }
+    }
+}
+
+fn canonical_aggregate_term_type(
+    term: &FormalAggregateTerm,
+    hint: Option<FormalAttributeType>,
+) -> Option<FormalAttributeType> {
+    match term {
+        FormalAggregateTerm::Expr { term } => canonical_function_term_type(term, hint),
+        FormalAggregateTerm::Aggregate { function, .. } => {
+            Some(canonical_aggregate_result_type(*function, hint))
+        }
+        FormalAggregateTerm::CountStar => Some(FormalAttributeType::Int64),
+        FormalAggregateTerm::ScalarCall { operator, args } => {
+            canonical_operator_result_type(*operator, args, hint)
+        }
+        FormalAggregateTerm::Case { else_expr, .. } => {
+            canonical_aggregate_term_type(else_expr, hint)
+        }
+    }
+}
+
+fn canonical_scalar_call_parts(
+    term: FormalAggregateTerm,
+) -> Result<(ScalarOperator, Vec<FormalAggregateTerm>), FormalAggregateTerm> {
+    match term {
+        FormalAggregateTerm::ScalarCall { operator, args } => Ok((operator, args)),
+        FormalAggregateTerm::Expr {
+            term: FormalFunctionTerm::ScalarCall { operator, args },
+        } => Ok((
+            operator,
+            args.into_iter()
+                .map(|term| FormalAggregateTerm::Expr { term })
+                .collect(),
+        )),
+        other => Err(other),
+    }
+}
+
+fn collect_canonical_boolean_operands(
+    term: FormalAggregateTerm,
+    operator: ScalarBooleanOperator,
+    output: &mut Vec<FormalAggregateTerm>,
+) {
+    match canonical_scalar_call_parts(term) {
+        Ok((ScalarOperator::Boolean(actual), args)) if actual == operator => {
+            for arg in args {
+                collect_canonical_boolean_operands(arg, operator, output);
+            }
+        }
+        Ok((actual, args)) => output.push(FormalAggregateTerm::ScalarCall {
+            operator: actual,
+            args,
+        }),
+        Err(term) => output.push(term),
+    }
+}
+
 impl LoweringContext {
     fn validate_closed_type_annotation(
         &mut self,
@@ -76,12 +396,31 @@ impl LoweringContext {
         None
     }
 
-    /// Lower one SQL value into the native exact-query scalar AST.
+    fn reject_planner_constant_errors(
+        &mut self,
+        path: &str,
+        expressions: &[ScalarAst],
+    ) -> Option<()> {
+        if !expressions
+            .iter()
+            .any(scalar_ast_contains_closed_immutable_error)
+        {
+            return Some(());
+        }
+        self.error(
+            path,
+            "boolean_planner_constant_error_not_supported",
+            "PostgreSQL may evaluate a closed immutable scalar subexpression while planning, before CASE laziness or executor Boolean scheduling applies. FormalSQL models execution-time scheduling, so this lazy expression is conservatively unsupported.",
+        );
+        None
+    }
+
+    /// Lower one SQL value into the canonical exact-query scalar AST.
     ///
     /// Flat aggregate terms remain the mature value-only leaves. Query-valued
     /// constructs are represented directly, so a scalar subquery is neither
     /// replayed as a relation nor approximated by existential quantification.
-    pub(super) fn lower_native_scalar_value_expr(
+    pub(super) fn lower_scalar_value_expr(
         &mut self,
         path: &str,
         ast: &ScalarAst,
@@ -96,15 +435,26 @@ impl LoweringContext {
                 if annotated_ty != result_ty {
                     self.error(
                         path,
-                        "native_scalar_result_type_mismatch",
+                        "scalar_result_type_mismatch",
                         "The scalar expression annotation does not match its resolved PostgreSQL output type.",
                     );
                     return None;
                 }
-                self.lower_native_scalar_value_expr(path, expr, scope, result_ty)
+                if cast_arg(expr).is_some() && !scalar_ast_requires_direct_scalar_lowering(expr) {
+                    // The annotation is the machine-readable target type of
+                    // an explicit CAST.  Dropping it would leave a bare CAST
+                    // operator with no result typmod and lose both conversion
+                    // and runtime-error semantics.
+                    let term = annotate_literal_term(
+                        self.lower_aggregate_term(path, ast, scope)?,
+                        result_ty,
+                    );
+                    return self.canonical_scalar_value_from_aggregate_term(path, term, result_ty);
+                }
+                self.lower_scalar_value_expr(path, expr, scope, result_ty)
             }
             ScalarAst::RelSubquery { rel } => {
-                self.lower_native_scalar_subquery_value(path, rel, result_ty)
+                self.lower_scalar_subquery_value(path, rel, result_ty)
             }
             ScalarAst::Call {
                 op: ScalarOp::ScalarQuery,
@@ -119,15 +469,13 @@ impl LoweringContext {
                     );
                     return None;
                 };
-                self.lower_native_scalar_subquery_value(path, rel, result_ty)
+                self.lower_scalar_subquery_value(path, rel, result_ty)
             }
             ScalarAst::Call {
                 op: ScalarOp::Case,
                 args,
                 ..
-            } if scalar_ast_has_rel_subquery(ast) => {
-                self.lower_native_scalar_case_value(path, args, scope, result_ty)
-            }
+            } => self.lower_scalar_case_value(path, args, scope, result_ty),
             ScalarAst::Call { op, .. }
                 if is_boolean_value_function(op)
                     || op.is_comparison()
@@ -136,35 +484,323 @@ impl LoweringContext {
                 if result_ty != FormalAttributeType::Bool {
                     self.error(
                         path,
-                        "native_boolean_value_type_mismatch",
+                        "boolean_value_type_mismatch",
                         "A Boolean scalar expression must have PostgreSQL BOOLEAN result type.",
                     );
                     return None;
                 }
                 Some(FormalScalarExpr::BooleanValue {
-                    expression: Box::new(self.lower_native_scalar_boolean_expr(path, ast, scope)?),
+                    expression: Box::new(self.lower_scalar_boolean_expr(path, ast, scope)?),
                 })
             }
-            ScalarAst::Call { op, args, .. } if scalar_ast_has_rel_subquery(ast) => {
-                self.lower_native_scalar_call_value(path, op, args, scope, result_ty)
+            ScalarAst::Call { op, args, .. } if scalar_ast_requires_direct_scalar_lowering(ast) => {
+                self.lower_scalar_call_value(path, op, args, scope, result_ty)
             }
-            _ if scalar_ast_has_rel_subquery(ast) => {
+            _ if scalar_ast_requires_direct_scalar_lowering(ast) => {
                 self.error(
                     path,
                     "scalar_subquery_value_operator_not_supported",
-                    "A scalar subquery is native in SELECT, predicates, and searched CASE arms. This surrounding scalar operator still needs an exact typed FormalSQL call lowering and is conservatively blocked.",
+                    "A scalar subquery or reorderable Boolean connective requires the canonical scalar layer. This surrounding operator still needs an exact typed FormalSQL call lowering and is conservatively blocked.",
                 );
                 None
             }
             _ => {
                 let term =
                     annotate_literal_term(self.lower_aggregate_term(path, ast, scope)?, result_ty);
-                Some(FormalScalarExpr::Leaf { result_ty, term })
+                self.canonical_scalar_value_from_aggregate_term(path, term, result_ty)
             }
         }
     }
 
-    fn lower_native_scalar_call_value(
+    /// Move a mature query-free aggregate-term value into the canonical typed
+    /// scalar tree. Only atomic values and true aggregates remain leaves;
+    /// ordinary calls and searched CASE become their dedicated typed nodes.
+    pub(super) fn canonical_scalar_value_from_aggregate_term(
+        &mut self,
+        path: &str,
+        term: FormalAggregateTerm,
+        result_ty: FormalAttributeType,
+    ) -> Option<FormalScalarExpr> {
+        match term {
+            FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::Constant { raw, ty: None },
+            } => Some(FormalScalarExpr::Leaf {
+                result_ty,
+                term: FormalAggregateTerm::Expr {
+                    term: FormalFunctionTerm::Constant {
+                        raw,
+                        ty: Some(result_ty),
+                    },
+                },
+            }),
+            FormalAggregateTerm::Expr {
+                term:
+                    FormalFunctionTerm::Constant { ty: Some(_), .. }
+                    | FormalFunctionTerm::Attribute { .. },
+            }
+            | FormalAggregateTerm::Aggregate { .. }
+            | FormalAggregateTerm::CountStar => Some(FormalScalarExpr::Leaf { result_ty, term }),
+            FormalAggregateTerm::Expr {
+                term: FormalFunctionTerm::ScalarCall { operator, args },
+            } => self.canonical_scalar_call_value(
+                path,
+                operator,
+                args.into_iter()
+                    .map(|term| FormalAggregateTerm::Expr { term })
+                    .collect(),
+                result_ty,
+            ),
+            FormalAggregateTerm::ScalarCall { operator, args } => {
+                self.canonical_scalar_call_value(path, operator, args, result_ty)
+            }
+            FormalAggregateTerm::Case {
+                branches,
+                else_expr,
+            } => {
+                if branches.is_empty() {
+                    self.error(
+                        path,
+                        "case_arity_not_supported",
+                        "Canonical searched CASE requires at least one WHEN/THEN branch.",
+                    );
+                    return None;
+                }
+                let mut nested = self.canonical_scalar_value_from_aggregate_term(
+                    &format!("{path}.else"),
+                    *else_expr,
+                    result_ty,
+                )?;
+                for (index, branch) in branches.into_iter().enumerate().rev() {
+                    let condition = self.canonical_scalar_boolean_from_aggregate_term(
+                        &format!("{path}.branches[{index}].when"),
+                        branch.when,
+                    )?;
+                    let then_expr = self.canonical_scalar_value_from_aggregate_term(
+                        &format!("{path}.branches[{index}].then"),
+                        branch.then_expr,
+                        result_ty,
+                    )?;
+                    nested = FormalScalarExpr::Case {
+                        result_ty,
+                        condition: Box::new(condition),
+                        then_expr: Box::new(then_expr),
+                        else_expr: Box::new(nested),
+                    };
+                }
+                Some(nested)
+            }
+        }
+    }
+
+    fn canonical_scalar_call_value(
+        &mut self,
+        path: &str,
+        operator: ScalarOperator,
+        args: Vec<FormalAggregateTerm>,
+        result_ty: FormalAttributeType,
+    ) -> Option<FormalScalarExpr> {
+        match operator {
+            ScalarOperator::PredicateValue(_) | ScalarOperator::Boolean(_) => {
+                Some(FormalScalarExpr::BooleanValue {
+                    expression: Box::new(self.canonical_scalar_boolean_call(path, operator, args)?),
+                })
+            }
+            ScalarOperator::Case => {
+                if args.len() < 3 || args.len().is_multiple_of(2) {
+                    self.error(
+                        path,
+                        "case_arity_not_supported",
+                        "Canonical searched CASE requires WHEN/THEN pairs followed by one ELSE value.",
+                    );
+                    return None;
+                }
+                let mut args = args;
+                let else_term = args.pop().expect("CASE arity checked");
+                let mut nested = self.canonical_scalar_value_from_aggregate_term(
+                    &format!("{path}.else"),
+                    else_term,
+                    result_ty,
+                )?;
+                for (index, pair) in args.chunks_exact(2).enumerate().rev() {
+                    let condition = self.canonical_scalar_boolean_from_aggregate_term(
+                        &format!("{path}.branches[{index}].when"),
+                        pair[0].clone(),
+                    )?;
+                    let then_expr = self.canonical_scalar_value_from_aggregate_term(
+                        &format!("{path}.branches[{index}].then"),
+                        pair[1].clone(),
+                        result_ty,
+                    )?;
+                    nested = FormalScalarExpr::Case {
+                        result_ty,
+                        condition: Box::new(condition),
+                        then_expr: Box::new(then_expr),
+                        else_expr: Box::new(nested),
+                    };
+                }
+                Some(nested)
+            }
+            _ => {
+                let hints = canonical_operator_argument_hints(operator, args.len(), result_ty);
+                let lowered_args = args
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, arg)| {
+                        let hint = hints.get(index).copied().flatten();
+                        let arg_ty = canonical_aggregate_term_type(&arg, hint).or_else(|| {
+                            self.error(
+                                &format!("{path}.args[{index}]"),
+                                "canonical_scalar_argument_type_not_supported",
+                                "The canonical typed scalar call could not recover one exact operand type from the mature aggregate term.",
+                            );
+                            None
+                        })?;
+                        self.canonical_scalar_value_from_aggregate_term(
+                            &format!("{path}.args[{index}]"),
+                            arg,
+                            arg_ty,
+                        )
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                Some(FormalScalarExpr::Call {
+                    result_ty,
+                    operator,
+                    args: lowered_args,
+                })
+            }
+        }
+    }
+
+    fn canonical_scalar_boolean_from_aggregate_term(
+        &mut self,
+        path: &str,
+        term: FormalAggregateTerm,
+    ) -> Option<FormalScalarExpr> {
+        match canonical_scalar_call_parts(term) {
+            Ok((operator, args)) => self.canonical_scalar_boolean_call(path, operator, args),
+            Err(term) => Some(FormalScalarExpr::ValueBoolean {
+                expression: Box::new(self.canonical_scalar_value_from_aggregate_term(
+                    path,
+                    term,
+                    FormalAttributeType::Bool,
+                )?),
+            }),
+        }
+    }
+
+    fn canonical_scalar_boolean_call(
+        &mut self,
+        path: &str,
+        operator: ScalarOperator,
+        args: Vec<FormalAggregateTerm>,
+    ) -> Option<FormalScalarExpr> {
+        match operator {
+            ScalarOperator::PredicateValue(predicate) => {
+                let inferred_types = args
+                    .iter()
+                    .map(|arg| canonical_aggregate_term_type(arg, None))
+                    .collect::<Vec<_>>();
+                let lowered_args = args
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, arg)| {
+                        let contextual = (inferred_types.len() == 2)
+                            .then(|| inferred_types[1 - index])
+                            .flatten();
+                        let arg_ty = inferred_types[index].or(contextual).or_else(|| {
+                            self.error(
+                                &format!("{path}.args[{index}]"),
+                                "canonical_predicate_argument_type_not_supported",
+                                "The canonical predicate could not recover one exact operand type.",
+                            );
+                            None
+                        })?;
+                        self.canonical_scalar_value_from_aggregate_term(
+                            &format!("{path}.args[{index}]"),
+                            arg,
+                            arg_ty,
+                        )
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                Some(FormalScalarExpr::Predicate {
+                    predicate,
+                    args: lowered_args,
+                })
+            }
+            ScalarOperator::Boolean(
+                boolean_operator @ (ScalarBooleanOperator::And | ScalarBooleanOperator::Or),
+            ) => {
+                let mut flattened = Vec::new();
+                for arg in args {
+                    collect_canonical_boolean_operands(arg, boolean_operator, &mut flattened);
+                }
+                if flattened.is_empty() {
+                    self.error(
+                        path,
+                        "boolean_value_operator_arity_not_supported",
+                        "Canonical AND/OR requires at least one flattened operand.",
+                    );
+                    return None;
+                }
+                let operands = flattened
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, operand)| {
+                        self.canonical_scalar_boolean_from_aggregate_term(
+                            &format!("{path}.operands[{index}]"),
+                            operand,
+                        )
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                let insertion_sites = (0..operands.len())
+                    .map(|operand_index| {
+                        (0..operand_index)
+                            .map(|position| {
+                                format!("{path}.booleanOrder[{operand_index}][{position}]")
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                Some(match boolean_operator {
+                    ScalarBooleanOperator::And => FormalScalarExpr::And {
+                        insertion_sites,
+                        operands,
+                    },
+                    ScalarBooleanOperator::Or => FormalScalarExpr::Or {
+                        insertion_sites,
+                        operands,
+                    },
+                    ScalarBooleanOperator::Not => unreachable!("guarded AND/OR"),
+                })
+            }
+            ScalarOperator::Boolean(ScalarBooleanOperator::Not) => {
+                let [arg] = args.as_slice() else {
+                    self.error(
+                        path,
+                        "boolean_value_operator_arity_not_supported",
+                        "Canonical NOT requires exactly one Boolean operand.",
+                    );
+                    return None;
+                };
+                Some(FormalScalarExpr::Not {
+                    expression: Box::new(self.canonical_scalar_boolean_from_aggregate_term(
+                        &format!("{path}.operand"),
+                        arg.clone(),
+                    )?),
+                })
+            }
+            operator => Some(FormalScalarExpr::ValueBoolean {
+                expression: Box::new(self.canonical_scalar_call_value(
+                    path,
+                    operator,
+                    args,
+                    FormalAttributeType::Bool,
+                )?),
+            }),
+        }
+    }
+
+    fn lower_scalar_call_value(
         &mut self,
         path: &str,
         op: &ScalarOp,
@@ -189,7 +825,7 @@ impl LoweringContext {
             .iter()
             .enumerate()
             .map(|(index, arg)| {
-                self.native_scalar_operand_type(&format!("{path}.args[{index}].type"), arg, scope)
+                self.scalar_operand_type(&format!("{path}.args[{index}].type"), arg, scope)
             })
             .collect::<Option<Vec<_>>>()?;
         let operator = match (op, args.len(), result_ty) {
@@ -233,7 +869,7 @@ impl LoweringContext {
                 self.error(
                     path,
                     "scalar_subquery_value_operator_not_supported",
-                    "The scalar operator surrounding this subquery has no exact result/operand signature in the native FormalSQL scalar layer. Numeric division, typmod casts, and other representation-sensitive calls remain fail-closed.",
+                    "The scalar operator surrounding this subquery has no exact result/operand signature in the typed FormalSQL scalar expression. Numeric division, typmod casts, and other representation-sensitive calls remain fail-closed.",
                 );
                 return None;
             }
@@ -243,7 +879,7 @@ impl LoweringContext {
             .zip(operand_types)
             .enumerate()
             .map(|(index, (arg, operand_ty))| {
-                self.lower_native_scalar_value_expr(
+                self.lower_scalar_value_expr(
                     &format!("{path}.args[{index}]"),
                     arg,
                     scope,
@@ -258,7 +894,7 @@ impl LoweringContext {
         })
     }
 
-    fn lower_native_scalar_subquery_value(
+    fn lower_scalar_subquery_value(
         &mut self,
         path: &str,
         rel: &RelExpr,
@@ -295,7 +931,7 @@ impl LoweringContext {
         })
     }
 
-    fn probe_native_scalar_subquery_output_type(
+    fn probe_scalar_subquery_output_type(
         &mut self,
         path: &str,
         rel: &RelExpr,
@@ -327,13 +963,14 @@ impl LoweringContext {
         Some(ty)
     }
 
-    fn lower_native_scalar_case_value(
+    pub(super) fn lower_scalar_case_value(
         &mut self,
         path: &str,
         args: &[ScalarAst],
         scope: &Scope,
         result_ty: FormalAttributeType,
     ) -> Option<FormalScalarExpr> {
+        self.reject_planner_constant_errors(path, args)?;
         if args.len() < 3 || args.len().is_multiple_of(2) {
             self.error(
                 path,
@@ -347,24 +984,48 @@ impl LoweringContext {
             self.error(
                 path,
                 "case_result_type_not_supported",
-                "The native CASE common type differs from the resolved PostgreSQL output type.",
+                "The canonical CASE common type differs from the resolved PostgreSQL output type.",
+            );
+            return None;
+        }
+        self.lower_scalar_case_value_at_type(path, args, scope, result_ty)
+    }
+
+    /// Lower a CASE whose result carrier has already been established by an
+    /// enclosing SQL construct. Aggregate FILTER desugaring uses this path:
+    /// its synthetic ELSE NULL is coerced to the aggregate argument type and
+    /// must not independently erase a DECIMAL typmod through ordinary CASE
+    /// common-type selection.
+    pub(super) fn lower_scalar_case_value_at_type(
+        &mut self,
+        path: &str,
+        args: &[ScalarAst],
+        scope: &Scope,
+        result_ty: FormalAttributeType,
+    ) -> Option<FormalScalarExpr> {
+        self.reject_planner_constant_errors(path, args)?;
+        if args.len() < 3 || args.len().is_multiple_of(2) {
+            self.error(
+                path,
+                "case_arity_not_supported",
+                "FormalSQL CASE lowering expects WHEN/THEN pairs followed by one ELSE expression.",
             );
             return None;
         }
         let else_ast = args.last().expect("CASE arity checked");
-        let mut nested = self.lower_native_scalar_value_expr(
+        let mut nested = self.lower_scalar_case_result_value(
             &format!("{path}.else"),
             else_ast,
             scope,
             result_ty,
         )?;
         for (branch_index, pair) in args[..args.len() - 1].chunks_exact(2).enumerate().rev() {
-            let condition = self.lower_native_scalar_boolean_expr(
+            let condition = self.lower_scalar_boolean_expr(
                 &format!("{path}.branches[{branch_index}].when"),
                 &pair[0],
                 scope,
             )?;
-            let then_expr = self.lower_native_scalar_value_expr(
+            let then_expr = self.lower_scalar_case_result_value(
                 &format!("{path}.branches[{branch_index}].then"),
                 &pair[1],
                 scope,
@@ -380,10 +1041,25 @@ impl LoweringContext {
         Some(nested)
     }
 
+    fn lower_scalar_case_result_value(
+        &mut self,
+        path: &str,
+        ast: &ScalarAst,
+        scope: &Scope,
+        result_ty: FormalAttributeType,
+    ) -> Option<FormalScalarExpr> {
+        if scalar_ast_requires_direct_scalar_lowering(ast) {
+            return self.lower_scalar_value_expr(path, ast, scope, result_ty);
+        }
+        let term = self.lower_aggregate_term(path, ast, scope)?;
+        let term = self.coerce_case_result(path, ast, term, result_ty, scope)?;
+        self.canonical_scalar_value_from_aggregate_term(path, term, result_ty)
+    }
+
     /// Lower one SQL search condition into the Boolean index of the native
     /// scalar AST. Nullable BOOLEAN values cross through ValueBoolean, which
     /// preserves UNKNOWN (unlike rewriting a value as `IS TRUE`).
-    pub(super) fn lower_native_scalar_boolean_expr(
+    pub(super) fn lower_scalar_boolean_expr(
         &mut self,
         path: &str,
         ast: &ScalarAst,
@@ -391,7 +1067,7 @@ impl LoweringContext {
     ) -> Option<FormalScalarExpr> {
         self.reject_locale_dependent_string_case_mapping(path, ast)?;
         if let Some(rewritten) = complementary_text_order_disjunction(ast, scope) {
-            return self.lower_native_scalar_boolean_expr(path, &rewritten, scope);
+            return self.lower_scalar_boolean_expr(path, &rewritten, scope);
         }
         match ast {
             ScalarAst::Literal { raw } if raw.eq_ignore_ascii_case("true") => {
@@ -405,48 +1081,78 @@ impl LoweringContext {
             ScalarAst::Call { op, args, .. }
                 if matches!(op, ScalarOp::And | ScalarOp::Or) && !args.is_empty() =>
             {
-                let lowered = args
+                if boolean_tree_has_repeated_atom(ast)
+                    && self.scalar_ast_may_raise_runtime_in_scope(ast, scope)
+                {
+                    self.error(
+                        path,
+                        "boolean_algebra_runtime_error_not_supported",
+                        "PostgreSQL may eliminate repeated Boolean atoms through idempotence or absorption. FormalSQL models evaluation order at stable syntactic sites, so a Boolean tree that combines repeated atoms with a reachable runtime error is conservatively unsupported.",
+                    );
+                    return None;
+                }
+                let mut flattened_args = Vec::new();
+                collect_flattened_boolean_operands(op, args, &mut flattened_args);
+                if flattened_args.is_empty() {
+                    self.error(
+                        path,
+                        "boolean_value_operator_arity_not_supported",
+                        "FormalSQL boolean value lowering expects AND/OR to have at least one operand after associative flattening.",
+                    );
+                    return None;
+                }
+                let runtime_risky = self.scalar_ast_may_raise_runtime_in_scope(ast, scope);
+                if scalar_ast_contains_closed_immutable_error(ast)
+                    || (runtime_risky
+                        && flattened_args
+                            .iter()
+                            .any(|argument| planner_can_fold_boolean_operand(op, argument)))
+                {
+                    self.error(
+                        path,
+                        "boolean_planner_constant_error_not_supported",
+                        "PostgreSQL may fold a closed immutable Boolean operand, or evaluate its constant error, during planning before the executor Boolean schedule exists. FormalSQL models executor scheduling, so this combination is conservatively unsupported.",
+                    );
+                    return None;
+                }
+                let lowered = flattened_args
                     .iter()
                     .enumerate()
                     .map(|(index, argument)| {
-                        self.lower_native_scalar_boolean_expr(
+                        self.lower_scalar_boolean_expr(
                             &format!("{path}.args[{index}]"),
                             argument,
                             scope,
                         )
                     })
                     .collect::<Option<Vec<_>>>()?;
-                if args
-                    .iter()
-                    .any(|argument| self.scalar_ast_may_raise_runtime_in_scope(argument, scope))
-                {
-                    self.error(
-                        path,
-                        "boolean_short_circuit_runtime_error_not_supported",
-                        "PostgreSQL may reorganize AND/OR operands and does not provide source-order evaluation authority. FormalSQL's ordered Boolean connective is therefore restricted to operands proved runtime-total.",
-                    );
-                    return None;
-                }
-                let mut lowered = lowered.into_iter();
-                let first = lowered.next().expect("non-empty AND/OR checked");
-                Some(lowered.fold(first, |left, right| match op {
+                let insertion_sites = (0..lowered.len())
+                    .map(|operand_index| {
+                        (0..operand_index)
+                            .map(|position| {
+                                format!("{path}.booleanOrder[{operand_index}][{position}]")
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                Some(match op {
                     ScalarOp::And => FormalScalarExpr::And {
-                        left: Box::new(left),
-                        right: Box::new(right),
+                        insertion_sites,
+                        operands: lowered,
                     },
                     ScalarOp::Or => FormalScalarExpr::Or {
-                        left: Box::new(left),
-                        right: Box::new(right),
+                        insertion_sites,
+                        operands: lowered,
                     },
                     _ => unreachable!("guarded by And/Or"),
-                }))
+                })
             }
             ScalarAst::Call {
                 op: ScalarOp::Not,
                 args,
                 ..
             } if matches!(args.as_slice(), [_]) => Some(FormalScalarExpr::Not {
-                expression: Box::new(self.lower_native_scalar_boolean_expr(
+                expression: Box::new(self.lower_scalar_boolean_expr(
                     &format!("{path}.arg"),
                     &args[0],
                     scope,
@@ -471,7 +1177,10 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                if !args.iter().any(scalar_ast_has_rel_subquery) {
+                if !args.iter().any(|argument| {
+                    scalar_ast_requires_direct_scalar_lowering(argument)
+                        || scalar_ast_is_boolean_value(argument)
+                }) {
                     let raw_types = args
                         .iter()
                         .enumerate()
@@ -512,6 +1221,28 @@ impl LoweringContext {
                                 }
                                 (Some(ty), _) => ty,
                                 (None, Some(ty)) => ty,
+                                (None, None)
+                                    if is_untyped_null_literal(&args[index])
+                                        && matches!(op, ScalarOp::IsNull | ScalarOp::IsNotNull) =>
+                                {
+                                    // The operand type is unobservable for a
+                                    // bare NULL under a nullness predicate.
+                                    // Use one canonical typed NULL rather than
+                                    // inventing a source-level coercion.
+                                    FormalAttributeType::Z
+                                }
+                                (None, None)
+                                    if is_untyped_null_literal(&args[index])
+                                        && matches!(
+                                            op,
+                                            ScalarOp::IsTrue
+                                                | ScalarOp::IsNotTrue
+                                                | ScalarOp::IsFalse
+                                                | ScalarOp::IsNotFalse
+                                        ) =>
+                                {
+                                    FormalAttributeType::Bool
+                                }
                                 (None, None) => {
                                     self.error(
                                         &format!("{path}.args[{index}].type"),
@@ -521,10 +1252,11 @@ impl LoweringContext {
                                     return None;
                                 }
                             };
-                            Some(FormalScalarExpr::Leaf {
+                            self.canonical_scalar_value_from_aggregate_term(
+                                &format!("{path}.args[{index}]"),
+                                annotate_literal_term(term, result_ty),
                                 result_ty,
-                                term: annotate_literal_term(term, result_ty),
-                            })
+                            )
                         })
                         .collect::<Option<Vec<_>>>()?;
                     return Some(FormalScalarExpr::Predicate {
@@ -536,7 +1268,7 @@ impl LoweringContext {
                     .iter()
                     .enumerate()
                     .map(|(index, argument)| {
-                        self.native_scalar_operand_type(
+                        self.scalar_operand_type(
                             &format!("{path}.args[{index}].type"),
                             argument,
                             scope,
@@ -575,7 +1307,7 @@ impl LoweringContext {
                         } else {
                             operand_types[index]
                         };
-                        self.lower_native_scalar_value_expr(
+                        self.lower_scalar_value_expr(
                             &format!("{path}.args[{index}]"),
                             argument,
                             scope,
@@ -599,14 +1331,14 @@ impl LoweringContext {
                 args,
                 ..
             } => {
-                let (kind, legacy_args) =
+                let (kind, aggregate_args) =
                     self.lower_modeled_like_aggregate_args(path, args, scope)?;
-                let scalar_args = legacy_args
+                let scalar_args = aggregate_args
                     .into_iter()
                     .enumerate()
-                    .map(|(index, term)| FormalScalarExpr::Leaf {
-                        result_ty: if index == 0 {
-                            self.native_scalar_operand_type(
+                    .map(|(index, term)| {
+                        let result_ty = if index == 0 {
+                            self.scalar_operand_type(
                                 &format!("{path}.args[0].type"),
                                 &args[0],
                                 scope,
@@ -618,10 +1350,14 @@ impl LoweringContext {
                             FormalAttributeType::String {
                                 typmod: SqlStringType::Text,
                             }
-                        },
-                        term,
+                        };
+                        self.canonical_scalar_value_from_aggregate_term(
+                            &format!("{path}.args[{index}]"),
+                            term,
+                            result_ty,
+                        )
                     })
-                    .collect();
+                    .collect::<Option<Vec<_>>>()?;
                 Some(FormalScalarExpr::Predicate {
                     predicate: kind.predicate(),
                     args: scalar_args,
@@ -630,15 +1366,11 @@ impl LoweringContext {
             ScalarAst::TypeAnnotation { expr, ty }
                 if formal_type_from_annotation(ty) == Some(FormalAttributeType::Bool) =>
             {
-                self.lower_native_scalar_boolean_expr(path, expr, scope)
+                self.lower_scalar_boolean_expr(path, expr, scope)
             }
             _ => {
-                let value = self.lower_native_scalar_value_expr(
-                    path,
-                    ast,
-                    scope,
-                    FormalAttributeType::Bool,
-                )?;
+                let value =
+                    self.lower_scalar_value_expr(path, ast, scope, FormalAttributeType::Bool)?;
                 Some(FormalScalarExpr::ValueBoolean {
                     expression: Box::new(value),
                 })
@@ -690,7 +1422,7 @@ impl LoweringContext {
             self.error(
                 path,
                 "in_list_not_supported",
-                "Native IN currently requires a structured relational subquery operand.",
+                "IN currently requires a structured relational subquery operand.",
             );
             return None;
         };
@@ -709,7 +1441,7 @@ impl LoweringContext {
             .zip(&signature)
             .enumerate()
             .map(|(index, (argument, output))| {
-                let actual = self.native_scalar_operand_type(
+                let actual = self.scalar_operand_type(
                     &format!("{path}.left[{index}].type"),
                     argument,
                     scope,
@@ -725,7 +1457,7 @@ impl LoweringContext {
                     );
                     return None;
                 }
-                self.lower_native_scalar_value_expr(
+                self.lower_scalar_value_expr(
                     &format!("{path}.left[{index}]"),
                     argument,
                     scope,
@@ -739,16 +1471,17 @@ impl LoweringContext {
         })
     }
 
-    pub(super) fn native_scalar_operand_type(
+    pub(super) fn scalar_operand_type(
         &mut self,
         path: &str,
         ast: &ScalarAst,
         scope: &Scope,
     ) -> Option<FormalAttributeType> {
+        if scalar_ast_is_boolean_value(ast) {
+            return Some(FormalAttributeType::Bool);
+        }
         match ast {
-            ScalarAst::RelSubquery { rel } => {
-                self.probe_native_scalar_subquery_output_type(path, rel)
-            }
+            ScalarAst::RelSubquery { rel } => self.probe_scalar_subquery_output_type(path, rel),
             ScalarAst::Call {
                 op: ScalarOp::ScalarQuery,
                 args,
@@ -762,17 +1495,15 @@ impl LoweringContext {
                     );
                     return None;
                 };
-                self.probe_native_scalar_subquery_output_type(path, rel)
+                self.probe_scalar_subquery_output_type(path, rel)
             }
             ScalarAst::Call { op, args, .. }
                 if scalar_ast_has_rel_subquery(ast)
                     && matches!(op, ScalarOp::Plus | ScalarOp::Minus | ScalarOp::Multiply)
                     && matches!(args.as_slice(), [_, _]) =>
             {
-                let left =
-                    self.native_scalar_operand_type(&format!("{path}.left"), &args[0], scope)?;
-                let right =
-                    self.native_scalar_operand_type(&format!("{path}.right"), &args[1], scope)?;
+                let left = self.scalar_operand_type(&format!("{path}.left"), &args[0], scope)?;
+                let right = self.scalar_operand_type(&format!("{path}.right"), &args[1], scope)?;
                 if left == right {
                     Some(left)
                 } else if (is_exact_numeric_type(left) || is_integral_type(left))
@@ -802,27 +1533,17 @@ impl LoweringContext {
         }
     }
 
-    fn scalar_ast_may_raise_runtime_in_scope(&self, ast: &ScalarAst, scope: &Scope) -> bool {
+    pub(super) fn scalar_ast_may_raise_runtime_in_scope(
+        &self,
+        ast: &ScalarAst,
+        scope: &Scope,
+    ) -> bool {
         let input_types = scope
             .attributes
             .iter()
             .map(|attribute| Some(attribute.formal_ty))
             .collect::<Vec<_>>();
         scalar_ast_may_raise_runtime_with_types(ast, &input_types)
-    }
-
-    /// Compatibility bridge for query constructors whose mature bag theory
-    /// still carries a formula. Every SQL predicate is nevertheless lowered
-    /// through the same native scalar AST used by SELECT and WHERE.
-    pub(super) fn lower_formula_expr(
-        &mut self,
-        path: &str,
-        ast: &ScalarAst,
-        scope: &Scope,
-    ) -> Option<FormalFormulaExpr> {
-        Some(FormalFormulaExpr::Scalar {
-            expression: Box::new(self.lower_native_scalar_boolean_expr(path, ast, scope)?),
-        })
     }
 
     fn predicate_name_for_args(
@@ -1363,8 +2084,13 @@ impl LoweringContext {
                 );
                 None
             }
-            ScalarAst::Call { op, args, .. } if matches!(op, ScalarOp::And | ScalarOp::Or) => {
-                self.lower_variadic_boolean_aggregate_term(path, op, args, scope)
+            ScalarAst::Call { op, .. } if matches!(op, ScalarOp::And | ScalarOp::Or) => {
+                self.error(
+                    path,
+                    "boolean_value_requires_scheduled_scalar",
+                    "AND/OR must be lowered through FormalSQL's canonical scheduled Boolean expression rather than the query-free aggregate-term interpreter.",
+                );
+                None
             }
             ScalarAst::Call { op, args, .. }
                 if op.is_comparison()
@@ -2674,6 +3400,7 @@ impl LoweringContext {
         args: &[ScalarAst],
         scope: &Scope,
     ) -> Option<FormalAggregateTerm> {
+        self.reject_planner_constant_errors(path, args)?;
         if args.len() < 3 || args.len().is_multiple_of(2) {
             self.error(
                 path,
@@ -2813,42 +3540,6 @@ impl LoweringContext {
             );
         }
         ok
-    }
-
-    fn lower_variadic_boolean_aggregate_term(
-        &mut self,
-        path: &str,
-        op: &ScalarOp,
-        args: &[ScalarAst],
-        scope: &Scope,
-    ) -> Option<FormalAggregateTerm> {
-        if args.is_empty() {
-            self.error(
-                path,
-                "boolean_value_operator_arity_not_supported",
-                "FormalSQL boolean value lowering expects AND/OR to have at least one argument.",
-            );
-            return None;
-        }
-        let mut lowered = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| {
-                Some(annotate_literal_term(
-                    self.lower_aggregate_term(&format!("{path}.args[{index}]"), arg, scope)?,
-                    FormalAttributeType::Bool,
-                ))
-            })
-            .collect::<Option<Vec<_>>>()?
-            .into_iter();
-        let mut acc = lowered.next().expect("non-empty AND/OR checked");
-        for right in lowered {
-            acc = FormalAggregateTerm::ScalarCall {
-                operator: self.scalar_operator_for_args(path, op, args, scope)?,
-                args: vec![acc, right],
-            };
-        }
-        Some(acc)
     }
 
     pub(super) fn lower_function_term(
@@ -3428,7 +4119,7 @@ impl LoweringContext {
                 self.error(
                     path,
                     "flat_leaf_in_not_supported",
-                    "Query-valued IN is represented by the native scalar AST and cannot be embedded in a legacy flat function-term leaf.",
+                    "Query-valued IN is represented by the canonical scalar AST and cannot be embedded in a query-free aggregate-term leaf.",
                 );
                 None
             }
@@ -3439,7 +4130,7 @@ impl LoweringContext {
                 self.error(
                     path,
                     "flat_leaf_scalar_subquery_not_supported",
-                    "Scalar subqueries are represented natively and cannot be embedded in a legacy flat function-term leaf.",
+                    "Scalar subqueries are represented by the scalar expression and cannot be embedded in a query-free aggregate-term leaf.",
                 );
                 None
             }
@@ -4126,6 +4817,208 @@ impl LoweringContext {
                     .direct_function_type(&format!("{path}.right"), right, scope)
                     .is_some_and(is_temporal_type))
     }
+}
+
+fn collect_boolean_atoms<'a>(ast: &'a ScalarAst, atoms: &mut Vec<&'a ScalarAst>) {
+    match ast {
+        ScalarAst::Call { op, args, .. } if matches!(op, ScalarOp::And | ScalarOp::Or) => {
+            for arg in args {
+                collect_boolean_atoms(arg, atoms);
+            }
+        }
+        _ => atoms.push(ast),
+    }
+}
+
+fn boolean_tree_has_repeated_atom(ast: &ScalarAst) -> bool {
+    let mut atoms = Vec::new();
+    collect_boolean_atoms(ast, &mut atoms);
+    atoms
+        .iter()
+        .enumerate()
+        .any(|(index, atom)| atoms[..index].contains(atom))
+}
+
+/// Closed expressions over the modeled immutable scalar vocabulary may be
+/// evaluated or simplified by PostgreSQL's planner, before executor-level
+/// AND/OR ordering applies. Query-valued and unknown calls are excluded.
+fn scalar_ast_is_closed_immutable(ast: &ScalarAst) -> bool {
+    match ast {
+        ScalarAst::Literal { .. } => true,
+        ScalarAst::TypeAnnotation { expr, .. } => scalar_ast_is_closed_immutable(expr),
+        ScalarAst::Call { op, args, .. }
+            if !matches!(
+                op,
+                ScalarOp::In | ScalarOp::Exists | ScalarOp::ScalarQuery | ScalarOp::Other(_)
+            ) =>
+        {
+            args.iter().all(scalar_ast_is_closed_immutable)
+        }
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Flag { .. }
+        | ScalarAst::RelSubquery { .. }
+        | ScalarAst::Window { .. }
+        | ScalarAst::Call { .. } => false,
+    }
+}
+
+/// PostgreSQL may evaluate a closed immutable subexpression while planning
+/// the complete statement, before CASE laziness or executor Boolean ordering
+/// can hide it. This scan therefore crosses scalar-subquery boundaries and is
+/// used as a query-wide fail-closed admission check.
+fn scalar_ast_contains_closed_immutable_error(ast: &ScalarAst) -> bool {
+    if let ScalarAst::TypeAnnotation { expr, ty } = ast
+        && let Some(arg) = cast_arg(expr)
+    {
+        return (scalar_ast_is_closed_immutable(arg) && !cast_is_provably_total(arg, ty, &[]))
+            || scalar_ast_contains_closed_immutable_error(arg);
+    }
+    if let ScalarAst::Call {
+        op: ScalarOp::Cast,
+        args,
+        ..
+    } = ast
+    {
+        // A CAST call's target and error behavior belong to its enclosing
+        // TypeAnnotation. Inspect only its operand here; treating the
+        // unannotated wrapper as an independent call would report every safe
+        // constant cast as a planner error.
+        return args.iter().any(scalar_ast_contains_closed_immutable_error);
+    }
+    if scalar_ast_is_closed_immutable(ast) && scalar_ast_may_raise_runtime_in_columns(ast, &[]) {
+        return true;
+    }
+    match ast {
+        ScalarAst::Call { args, .. } => args.iter().any(scalar_ast_contains_closed_immutable_error),
+        ScalarAst::TypeAnnotation { expr, .. } => scalar_ast_contains_closed_immutable_error(expr),
+        ScalarAst::Window { parsed } => {
+            parsed
+                .args
+                .iter()
+                .chain(&parsed.partition_by)
+                .any(scalar_ast_contains_closed_immutable_error)
+                || parsed
+                    .order_by
+                    .iter()
+                    .any(|key| scalar_ast_contains_closed_immutable_error(&key.expr))
+                || parsed.frame.as_ref().is_some_and(|frame| {
+                    frame
+                        .offset_exprs()
+                        .any(scalar_ast_contains_closed_immutable_error)
+                })
+        }
+        // The caller is already below a lazy scalar boundary (CASE or a
+        // scheduled Boolean operand), so the complete subquery may be skipped.
+        // Any closed error inside it can nevertheless be folded by PostgreSQL.
+        ScalarAst::RelSubquery { rel } => rel_expr_contains_any_closed_immutable_error(rel),
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Literal { .. }
+        | ScalarAst::Flag { .. } => false,
+    }
+}
+
+/// Scan all scalar positions below a relation. FormalSQL intentionally models
+/// executor outcomes, not PostgreSQL's planner phase. A closed immutable error
+/// can therefore race with empty row demand, lazy evaluation, a child error,
+/// or an earlier strict sibling error. Until planner evaluation is represented
+/// explicitly, every otherwise accepted query containing such an error is
+/// conservatively rejected at the query boundary.
+pub(super) fn rel_expr_contains_any_closed_immutable_error(rel: &RelExpr) -> bool {
+    match rel {
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .any(|binding| rel_expr_contains_any_closed_immutable_error(&binding.rel))
+                || rel_expr_contains_any_closed_immutable_error(body)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => false,
+        RelExpr::Values { rows, .. } => rows
+            .iter()
+            .flatten()
+            .any(|expr| scalar_ast_contains_closed_immutable_error(&expr.parsed)),
+        RelExpr::Project { input, exprs, .. } => {
+            rel_expr_contains_any_closed_immutable_error(input)
+                || exprs
+                    .iter()
+                    .any(|expr| scalar_ast_contains_closed_immutable_error(&expr.parsed))
+        }
+        RelExpr::Filter {
+            input, predicate, ..
+        }
+        | RelExpr::NativeHaving {
+            input, predicate, ..
+        } => {
+            rel_expr_contains_any_closed_immutable_error(input)
+                || scalar_ast_contains_closed_immutable_error(&predicate.parsed)
+        }
+        RelExpr::Join {
+            left,
+            right,
+            condition,
+            ..
+        } => {
+            rel_expr_contains_any_closed_immutable_error(left)
+                || rel_expr_contains_any_closed_immutable_error(right)
+                || scalar_ast_contains_closed_immutable_error(&condition.parsed)
+        }
+        RelExpr::Aggregate {
+            input, agg_calls, ..
+        } => {
+            rel_expr_contains_any_closed_immutable_error(input)
+                || agg_calls.iter().any(|call| {
+                    call.args
+                        .iter()
+                        .any(|expr| scalar_ast_contains_closed_immutable_error(&expr.parsed))
+                        || call.filter.as_ref().is_some_and(|expr| {
+                            scalar_ast_contains_closed_immutable_error(&expr.parsed)
+                        })
+                })
+        }
+        RelExpr::Distinct { input, .. } => rel_expr_contains_any_closed_immutable_error(input),
+        RelExpr::Sort {
+            input,
+            fetch,
+            offset,
+            ..
+        } => {
+            rel_expr_contains_any_closed_immutable_error(input)
+                || fetch
+                    .as_ref()
+                    .is_some_and(|expr| scalar_ast_contains_closed_immutable_error(&expr.parsed))
+                || offset
+                    .as_deref()
+                    .is_some_and(|expr| scalar_ast_contains_closed_immutable_error(&expr.parsed))
+        }
+        RelExpr::Set { inputs, .. } => inputs
+            .iter()
+            .any(rel_expr_contains_any_closed_immutable_error),
+    }
+}
+
+fn closed_boolean_literal(ast: &ScalarAst) -> Option<bool> {
+    match ast {
+        ScalarAst::Literal { raw } if raw.eq_ignore_ascii_case("true") => Some(true),
+        ScalarAst::Literal { raw } if raw.eq_ignore_ascii_case("false") => Some(false),
+        ScalarAst::TypeAnnotation { expr, .. } => closed_boolean_literal(expr),
+        ScalarAst::Call {
+            op: ScalarOp::Not,
+            args,
+            ..
+        } if matches!(args.as_slice(), [_]) => closed_boolean_literal(&args[0]).map(|value| !value),
+        _ => None,
+    }
+}
+
+fn planner_can_fold_boolean_operand(operation: &ScalarOp, operand: &ScalarAst) -> bool {
+    if !scalar_ast_is_closed_immutable(operand) {
+        return false;
+    }
+    !matches!(
+        (operation, closed_boolean_literal(operand)),
+        (ScalarOp::And, Some(true)) | (ScalarOp::Or, Some(false))
+    )
 }
 
 struct DateIntervalFunction<'a> {
@@ -4892,8 +5785,9 @@ fn scalar_operator(op: &ScalarOp) -> Option<ScalarOperator> {
         return Some(ScalarOperator::PredicateValue(predicate));
     }
     match op {
-        ScalarOp::And => Some(ScalarOperator::Boolean(ScalarBooleanOperator::And)),
-        ScalarOp::Or => Some(ScalarOperator::Boolean(ScalarBooleanOperator::Or)),
+        // AND/OR have PostgreSQL's unspecified operand-evaluation order and
+        // must use FormalScalarExpr's scheduled n-ary representation.
+        ScalarOp::And | ScalarOp::Or => None,
         ScalarOp::Not => Some(ScalarOperator::Boolean(ScalarBooleanOperator::Not)),
         ScalarOp::Lower => Some(ScalarOperator::StringCase(ScalarStringCase::Lower)),
         ScalarOp::Upper => Some(ScalarOperator::StringCase(ScalarStringCase::Upper)),
@@ -4919,6 +5813,25 @@ fn is_boolean_value_function(op: &ScalarOp) -> bool {
         )
 }
 
+fn scalar_ast_is_boolean_value(ast: &ScalarAst) -> bool {
+    match ast {
+        ScalarAst::Literal { raw } => {
+            raw.eq_ignore_ascii_case("true") || raw.eq_ignore_ascii_case("false")
+        }
+        ScalarAst::TypeAnnotation { ty, .. } => {
+            formal_type_from_annotation(ty) == Some(FormalAttributeType::Bool)
+        }
+        ScalarAst::Call { op, .. } => {
+            is_boolean_value_function(op) || matches!(op, ScalarOp::In | ScalarOp::Exists)
+        }
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Flag { .. }
+        | ScalarAst::RelSubquery { .. }
+        | ScalarAst::Window { .. } => false,
+    }
+}
+
 fn scalar_ast_has_rel_subquery(ast: &ScalarAst) -> bool {
     match ast {
         ScalarAst::RelSubquery { .. } => true,
@@ -4941,6 +5854,63 @@ fn scalar_ast_has_rel_subquery(ast: &ScalarAst) -> bool {
         | ScalarAst::Literal { .. }
         | ScalarAst::Flag { .. } => false,
     }
+}
+
+fn scalar_ast_contains_boolean_connective(ast: &ScalarAst) -> bool {
+    match ast {
+        ScalarAst::Call { op, args, .. } => {
+            matches!(op, ScalarOp::And | ScalarOp::Or)
+                || args.iter().any(scalar_ast_contains_boolean_connective)
+        }
+        ScalarAst::TypeAnnotation { expr, .. } => scalar_ast_contains_boolean_connective(expr),
+        ScalarAst::Window { parsed } => {
+            parsed
+                .args
+                .iter()
+                .any(scalar_ast_contains_boolean_connective)
+                || parsed
+                    .partition_by
+                    .iter()
+                    .any(scalar_ast_contains_boolean_connective)
+                || parsed
+                    .order_by
+                    .iter()
+                    .any(|key| scalar_ast_contains_boolean_connective(&key.expr))
+                || parsed.frame.as_ref().is_some_and(|frame| {
+                    frame
+                        .offset_exprs()
+                        .any(scalar_ast_contains_boolean_connective)
+                })
+        }
+        ScalarAst::InputRef { .. }
+        | ScalarAst::CorrelatedRef { .. }
+        | ScalarAst::Literal { .. }
+        | ScalarAst::Flag { .. }
+        | ScalarAst::RelSubquery { .. } => false,
+    }
+}
+
+fn collect_flattened_boolean_operands<'a>(
+    operation: &ScalarOp,
+    arguments: &'a [ScalarAst],
+    flattened: &mut Vec<&'a ScalarAst>,
+) {
+    for argument in arguments {
+        match argument {
+            ScalarAst::Call {
+                op: nested_operation,
+                args,
+                ..
+            } if nested_operation == operation => {
+                collect_flattened_boolean_operands(operation, args, flattened);
+            }
+            _ => flattened.push(argument),
+        }
+    }
+}
+
+fn scalar_ast_requires_direct_scalar_lowering(ast: &ScalarAst) -> bool {
+    scalar_ast_has_rel_subquery(ast) || scalar_ast_contains_boolean_connective(ast)
 }
 
 fn scalar_ast_rel_subquery_may_raise_runtime(ast: &ScalarAst) -> bool {
@@ -5549,9 +6519,13 @@ fn provable_constant_arithmetic(op: &ScalarOp, args: &[ScalarAst]) -> Option<Pro
                     coeff: left_coeff.checked_mul(right_coeff)?,
                     scale: left_scale.checked_add(right_scale)?,
                 }),
-                // Exact rational evaluation is unnecessary for the current
-                // proof of totality. Keep constant division conservative.
-                ScalarOp::Divide => None,
+                // For bounded finite constants the quotient itself need not be
+                // materialized to prove planner totality. PostgreSQL NUMERIC
+                // division is defined whenever the divisor is nonzero; these
+                // i128-bounded operands are far below its implementation
+                // digit limit.
+                ScalarOp::Divide => (right_coeff != 0)
+                    .then_some(ProvableConstant::Total(FormalAttributeType::Numeric)),
                 _ => None,
             }
         }
@@ -5798,25 +6772,51 @@ fn scalar_ast_may_raise_runtime_with_types(
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AggregateRuntimeErrorClass {
+    NumericValueOutOfRange,
+    CardinalityViolation,
+}
+
+/// Classify the aggregate-local error exposed by the active FormalSQL
+/// callback.  Multiple aggregates with the same singleton class can share a
+/// fixed scheduler because choosing either error is observationally
+/// irrelevant.  Argument and FILTER errors are classified separately by the
+/// caller and remain unknown.
+pub(super) fn postgres_aggregate_runtime_error_class(
+    function: &str,
+    argument_type: Option<FormalAttributeType>,
+) -> Option<AggregateRuntimeErrorClass> {
+    match function.to_ascii_lowercase().as_str() {
+        "count" | "sum" => Some(AggregateRuntimeErrorClass::NumericValueOutOfRange),
+        "single_value" => Some(AggregateRuntimeErrorClass::CardinalityViolation),
+        "avg"
+            if !matches!(
+                argument_type,
+                Some(
+                    FormalAttributeType::Int32
+                        | FormalAttributeType::Int64
+                        | FormalAttributeType::Z
+                )
+            ) =>
+        {
+            Some(AggregateRuntimeErrorClass::NumericValueOutOfRange)
+        }
+        "stddev_samp" | "stddev" if argument_type != Some(FormalAttributeType::Int32) => {
+            Some(AggregateRuntimeErrorClass::NumericValueOutOfRange)
+        }
+        _ => None,
+    }
+}
+
 /// Keep aggregate overloads whose active FormalSQL callback can report an
-/// error visible to query-shape decisions.  Integral AVG and INTEGER
-/// statistics are total under the supported input authority, while
-/// floating/NUMERIC AVG and fixed-NUMERIC sample standard deviation retain
-/// error-capable finalization.  Unknown overloads fail closed instead of
-/// borrowing Calcite's non-authoritative result type.
-fn postgres_aggregate_function_may_raise_runtime(
+/// error visible to query-shape decisions.  Unknown overloads have already
+/// been rejected by aggregate lowering and therefore are total here.
+pub(super) fn postgres_aggregate_function_may_raise_runtime(
     function: &str,
     argument_type: Option<FormalAttributeType>,
 ) -> bool {
-    match function.to_ascii_lowercase().as_str() {
-        "count" | "sum" | "single_value" => true,
-        "avg" => !matches!(
-            argument_type,
-            Some(FormalAttributeType::Int32 | FormalAttributeType::Int64 | FormalAttributeType::Z)
-        ),
-        "stddev_samp" | "stddev" => argument_type != Some(FormalAttributeType::Int32),
-        _ => false,
-    }
+    postgres_aggregate_runtime_error_class(function, argument_type).is_some()
 }
 
 /// PostgreSQL ROW_NUMBER/RANK embed an unbounded logical position in signed
@@ -6048,12 +7048,38 @@ fn constant_cast_is_provably_total(
         return Some(true);
     }
     if let Some(raw) = typed_literal_raw(arg) {
+        if let Some(content) = sql_string_literal_content(raw) {
+            match target_ty {
+                FormalAttributeType::Int32 => {
+                    return Some(postgres_text_integer_fits(
+                        &content,
+                        i128::from(i32::MIN),
+                        i128::from(i32::MAX),
+                    ));
+                }
+                FormalAttributeType::Int64 => {
+                    return Some(postgres_text_integer_fits(
+                        &content,
+                        i128::from(i64::MIN),
+                        i128::from(i64::MAX),
+                    ));
+                }
+                _ => {}
+            }
+        }
         match target_ty {
             FormalAttributeType::Int32 => {
                 return numeric_literal_rounds_to_int32(raw);
             }
             FormalAttributeType::Bool => {
                 return Some(parse_postgres_boolean_source_literal(raw).is_some());
+            }
+            FormalAttributeType::String { .. } => {
+                // PostgreSQL's explicit CHAR/VARCHAR casts truncate and pad
+                // a valid string literal rather than raising a truncation
+                // error. Literal syntax and encoding were already validated
+                // by the structured frontend.
+                return Some(sql_string_literal_content(raw).is_some());
             }
             FormalAttributeType::Date => {
                 return Some(super::emit::parse_source_date_cast_literal(raw).is_some());
@@ -6092,6 +7118,108 @@ fn constant_cast_is_provably_total(
         )),
         _ => None,
     }
+}
+
+fn postgres_integer_space(byte: u8) -> bool {
+    matches!(byte, b'\t' | b'\n' | 0x0b | 0x0c | b'\r' | b' ')
+}
+
+fn postgres_integer_digit(byte: u8, base: i128) -> Option<i128> {
+    let digit = match byte {
+        b'0'..=b'9' => i128::from(byte - b'0'),
+        b'a'..=b'f' => i128::from(byte - b'a' + 10),
+        b'A'..=b'F' => i128::from(byte - b'A' + 10),
+        _ => return None,
+    };
+    (digit < base).then_some(digit)
+}
+
+/// Exact acceptance check for the PostgreSQL 17 integer input spellings that
+/// FormalSQL models in ValueTextInteger.v: ASCII surrounding whitespace,
+/// signs, 0x/0o/0b bases, and underscores between digits (including one just
+/// after a base prefix). The accumulator uses i128 because both SQL integer
+/// destination domains fit strictly inside it.
+fn postgres_text_integer_fits(input: &str, minimum: i128, maximum: i128) -> bool {
+    let bytes = input.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() && postgres_integer_space(bytes[index]) {
+        index += 1;
+    }
+    let negative = match bytes.get(index) {
+        Some(b'-') => {
+            index += 1;
+            true
+        }
+        Some(b'+') => {
+            index += 1;
+            false
+        }
+        _ => false,
+    };
+
+    let mut base = 10i128;
+    let mut allow_initial_underscore = false;
+    if bytes.get(index) == Some(&b'0') {
+        match bytes.get(index + 1) {
+            Some(b'x' | b'X') => {
+                base = 16;
+                index += 2;
+                allow_initial_underscore = true;
+            }
+            Some(b'o' | b'O') => {
+                base = 8;
+                index += 2;
+                allow_initial_underscore = true;
+            }
+            Some(b'b' | b'B') => {
+                base = 2;
+                index += 2;
+                allow_initial_underscore = true;
+            }
+            _ => {}
+        }
+    }
+
+    let limit = if negative { -minimum } else { maximum };
+    let mut magnitude = 0i128;
+    let mut saw_digit = false;
+    while index < bytes.len() {
+        if let Some(digit) = postgres_integer_digit(bytes[index], base) {
+            let Some(next) = magnitude
+                .checked_mul(base)
+                .and_then(|value| value.checked_add(digit))
+            else {
+                return false;
+            };
+            if next > limit {
+                return false;
+            }
+            magnitude = next;
+            saw_digit = true;
+            index += 1;
+            continue;
+        }
+        if bytes[index] == b'_'
+            && (saw_digit || allow_initial_underscore)
+            && bytes
+                .get(index + 1)
+                .and_then(|byte| postgres_integer_digit(*byte, base))
+                .is_some()
+        {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    saw_digit
+        && bytes[index..]
+            .iter()
+            .all(|byte| postgres_integer_space(*byte))
+        && if negative {
+            -magnitude >= minimum
+        } else {
+            magnitude <= maximum
+        }
 }
 
 /// Exact, deliberately narrow subset of PostgreSQL's boolean input syntax.
@@ -6222,6 +7350,7 @@ fn formal_type_for_runtime_risk(ty: &SqlType) -> Option<FormalAttributeType> {
 /// letting those unknown siblings manufacture CAST-totality evidence.
 fn runtime_risk_authoritative_output_types(rel: &RelExpr) -> Vec<Option<FormalAttributeType>> {
     match rel {
+        RelExpr::Bindings { body, .. } => runtime_risk_authoritative_output_types(body),
         // TableScan rows are closed against the parsed schema by logos-ir.
         // Values retains the pre-existing authority boundary established by
         // the structured tuple/common-type importer.
@@ -6229,6 +7358,10 @@ fn runtime_risk_authoritative_output_types(rel: &RelExpr) -> Vec<Option<FormalAt
             .iter()
             .map(|column| formal_type_for_runtime_risk(&column.ty))
             .collect(),
+        // The binding definition is the authority for a local reference;
+        // this leaf alone must not promote Calcite-derived row metadata into
+        // a proof that a cast is total.
+        RelExpr::QueryRef { output, .. } => vec![None; output.len()],
         RelExpr::Filter { input, output, .. }
         | RelExpr::NativeHaving { input, output, .. }
         | RelExpr::Distinct { input, output }
@@ -6404,6 +7537,12 @@ pub(super) fn join_condition_may_raise_runtime(
 
 fn exists_subquery_has_incomplete_capped_runtime_path(rel: &RelExpr) -> bool {
     match rel {
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .any(|binding| exists_subquery_has_incomplete_capped_runtime_path(&binding.rel))
+                || exists_subquery_has_incomplete_capped_runtime_path(body)
+        }
         RelExpr::Project { input, .. }
         | RelExpr::Filter { input, .. }
         | RelExpr::Distinct { input, .. }
@@ -6423,13 +7562,20 @@ fn exists_subquery_has_incomplete_capped_runtime_path(rel: &RelExpr) -> bool {
         | RelExpr::Aggregate { .. }
         | RelExpr::Set { .. }
         | RelExpr::TableScan { .. }
+        | RelExpr::QueryRef { .. }
         | RelExpr::Values { .. } => false,
     }
 }
 
 pub(super) fn rel_expr_may_raise_runtime(rel: &RelExpr) -> bool {
     match rel {
-        RelExpr::TableScan { .. } => false,
+        RelExpr::Bindings { bindings, body, .. } => {
+            bindings
+                .iter()
+                .any(|binding| rel_expr_may_raise_runtime(&binding.rel))
+                || rel_expr_may_raise_runtime(body)
+        }
+        RelExpr::TableScan { .. } | RelExpr::QueryRef { .. } => false,
         RelExpr::Values { rows, .. } => rows
             .iter()
             .flatten()

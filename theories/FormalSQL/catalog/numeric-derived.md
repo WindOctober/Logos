@@ -2,11 +2,13 @@
 
 Route here for: INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow.
 
-This focused catalog contains 127 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 126 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `int32_checked_result_value`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:12`](../NumericDerivedFacts.v#L12)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the int32 checked result value law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -28,6 +30,8 @@ Lemma int32_checked_result_value : forall integer result,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:23`](../NumericDerivedFacts.v#L23)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int64 checked result value law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int64_checked_result_value` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -47,6 +51,8 @@ Lemma int64_checked_result_value : forall integer result,
 ## `interp_int32_neq_disjunction_true_of_unequal_constants`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:37`](../NumericDerivedFacts.v#L37)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp int32 disequality disjunction true of unequal constants law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -74,6 +80,8 @@ Lemma interp_int32_neq_disjunction_true_of_unequal_constants :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:59`](../NumericDerivedFacts.v#L59)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -93,6 +101,8 @@ Lemma int32_checked_defined_iff : forall integer,
 ## `int64_checked_defined_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:74`](../NumericDerivedFacts.v#L74)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -114,6 +124,8 @@ Lemma int64_checked_defined_iff : forall integer,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:89`](../NumericDerivedFacts.v#L89)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -133,6 +145,8 @@ Lemma int32_checked_none_iff : forall integer,
 ## `int64_checked_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:106`](../NumericDerivedFacts.v#L106)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -154,6 +168,8 @@ Lemma int64_checked_none_iff : forall integer,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:123`](../NumericDerivedFacts.v#L123)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 checked value law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_checked_value` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -172,6 +188,8 @@ Lemma int32_checked_value : forall value,
 ## `int32_to_int64_injective`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:135`](../NumericDerivedFacts.v#L135)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Recovers source equality from the declared typed numeric semantics representation.
 
@@ -192,6 +210,8 @@ Lemma int32_to_int64_injective : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:143`](../NumericDerivedFacts.v#L143)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 to int64 value law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_to_int64_value` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -210,6 +230,8 @@ Lemma int32_to_int64_value : forall value,
 ## `int32_add_total_of_range`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:149`](../NumericDerivedFacts.v#L149)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
@@ -233,6 +255,8 @@ Lemma int32_add_total_of_range : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:162`](../NumericDerivedFacts.v#L162)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_sub_total_of_range` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -255,6 +279,8 @@ Lemma int32_sub_total_of_range : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:175`](../NumericDerivedFacts.v#L175)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_mul_total_of_range` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -276,6 +302,8 @@ Lemma int32_mul_total_of_range : forall left right,
 ## `int32_div_total_of_nonzero_range`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:188`](../NumericDerivedFacts.v#L188)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
@@ -300,6 +328,8 @@ Lemma int32_div_total_of_nonzero_range : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:210`](../NumericDerivedFacts.v#L210)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -319,6 +349,8 @@ Lemma int32_add_some_iff : forall left right result,
 ## `int32_sub_some_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:221`](../NumericDerivedFacts.v#L221)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -340,6 +372,8 @@ Lemma int32_sub_some_iff : forall left right result,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:232`](../NumericDerivedFacts.v#L232)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -359,6 +393,8 @@ Lemma int32_mul_some_iff : forall left right result,
 ## `int32_div_some_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:243`](../NumericDerivedFacts.v#L243)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -381,6 +417,8 @@ Lemma int32_div_some_iff : forall left right result,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:262`](../NumericDerivedFacts.v#L262)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -400,6 +438,8 @@ Lemma int32_opp_some_iff : forall input result,
 ## `int32_add_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:273`](../NumericDerivedFacts.v#L273)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -422,6 +462,8 @@ Lemma int32_add_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:282`](../NumericDerivedFacts.v#L282)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -443,6 +485,8 @@ Lemma int32_sub_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:291`](../NumericDerivedFacts.v#L291)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -463,6 +507,8 @@ Lemma int32_mul_none_iff : forall left right,
 ## `int32_div_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:300`](../NumericDerivedFacts.v#L300)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -486,6 +532,8 @@ Lemma int32_div_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:316`](../NumericDerivedFacts.v#L316)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -507,6 +555,8 @@ Lemma int32_opp_none_iff : forall input,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:328`](../NumericDerivedFacts.v#L328)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -527,6 +577,8 @@ Lemma int32_binary_runtime_error_none_iff : forall operation left right,
 ## `int32_binary_runtime_error_out_of_range_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:340`](../NumericDerivedFacts.v#L340)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -551,6 +603,8 @@ Lemma int32_binary_runtime_error_out_of_range_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:353`](../NumericDerivedFacts.v#L353)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -572,6 +626,8 @@ Lemma int32_div_runtime_error_none_iff : forall left right,
 ## `int32_div_runtime_error_division_by_zero_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:370`](../NumericDerivedFacts.v#L370)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -595,6 +651,8 @@ Lemma int32_div_runtime_error_division_by_zero_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:386`](../NumericDerivedFacts.v#L386)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -617,6 +675,8 @@ Lemma int32_div_runtime_error_out_of_range_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:406`](../NumericDerivedFacts.v#L406)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -636,6 +696,8 @@ Lemma int32_opp_runtime_error_none_iff : forall input,
 ## `int64_binary_runtime_error_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:416`](../NumericDerivedFacts.v#L416)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -661,6 +723,8 @@ Lemma int64_binary_runtime_error_none_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:433`](../NumericDerivedFacts.v#L433)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -684,6 +748,8 @@ Lemma int64_binary_runtime_error_out_of_range_iff :
 ## `int64_div_runtime_error_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:448`](../NumericDerivedFacts.v#L448)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -710,6 +776,8 @@ Lemma int64_div_runtime_error_none_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:470`](../NumericDerivedFacts.v#L470)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -733,6 +801,8 @@ Lemma int64_div_runtime_error_division_by_zero_iff :
 ## `int64_div_runtime_error_out_of_range_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:489`](../NumericDerivedFacts.v#L489)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -759,6 +829,8 @@ Lemma int64_div_runtime_error_out_of_range_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:517`](../NumericDerivedFacts.v#L517)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp cast int32 to double nonnull law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_cast_int32_to_double_nonnull` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -778,6 +850,8 @@ Lemma interp_cast_int32_to_double_nonnull : forall value,
 ## `interp_cast_int32_to_int64_nonnull`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:522`](../NumericDerivedFacts.v#L522)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp cast int32 to int64 nonnull law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -799,6 +873,8 @@ Lemma interp_cast_int32_to_int64_nonnull : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:527`](../NumericDerivedFacts.v#L527)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp cast int64 to int32 nonnull law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_cast_int64_to_int32_nonnull` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -818,6 +894,8 @@ Lemma interp_cast_int64_to_int32_nonnull : forall value,
 ## `interp_int32_int64_cast_roundtrip`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:532`](../NumericDerivedFacts.v#L532)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Proves the stated cast or representation round trip for typed numeric semantics.
 
@@ -839,6 +917,8 @@ Lemma interp_int32_int64_cast_roundtrip : forall value,
 ## `numeric_integer_casts_preserve_null`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:543`](../NumericDerivedFacts.v#L543)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for typed numeric semantics.
 
@@ -862,6 +942,8 @@ Lemma numeric_integer_casts_preserve_null :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:550`](../NumericDerivedFacts.v#L550)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the explicit runtime-safety direction for typed numeric semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -884,6 +966,8 @@ Lemma scalar_widening_casts_runtime_safe : forall values,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:557`](../NumericDerivedFacts.v#L557)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -905,6 +989,8 @@ Lemma scalar_cast_int64_to_int32_runtime_error_none_iff : forall value,
 ## `scalar_cast_int64_to_int32_out_of_range_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:569`](../NumericDerivedFacts.v#L569)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -929,6 +1015,8 @@ Lemma scalar_cast_int64_to_int32_out_of_range_iff : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:582`](../NumericDerivedFacts.v#L582)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -951,6 +1039,8 @@ Lemma numeric_to_int32_checked_some_iff : forall value result,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:599`](../NumericDerivedFacts.v#L599)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric to int32 checked result value law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_to_int32_checked_result_value` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -972,6 +1062,8 @@ Lemma numeric_to_int32_checked_result_value : forall value result,
 ## `scalar_cast_numeric_to_int32_finite_runtime_error_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:612`](../NumericDerivedFacts.v#L612)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -997,6 +1089,8 @@ Lemma scalar_cast_numeric_to_int32_finite_runtime_error_none_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:627`](../NumericDerivedFacts.v#L627)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the scalar cast numeric to int32 special unsupported law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `scalar_cast_numeric_to_int32_special_unsupported` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1021,6 +1115,8 @@ Lemma scalar_cast_numeric_to_int32_special_unsupported : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:642`](../NumericDerivedFacts.v#L642)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1044,6 +1140,8 @@ Lemma float32_add_runtime_error_none_iff : forall operation left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:658`](../NumericDerivedFacts.v#L658)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1066,6 +1164,8 @@ Lemma float64_add_runtime_error_none_iff : forall operation left right,
 ## `float32_mul_runtime_error_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:674`](../NumericDerivedFacts.v#L674)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1093,6 +1193,8 @@ Lemma float32_mul_runtime_error_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:705`](../NumericDerivedFacts.v#L705)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1119,6 +1221,8 @@ Lemma float64_mul_runtime_error_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:736`](../NumericDerivedFacts.v#L736)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1141,6 +1245,8 @@ Lemma float32_div_runtime_error_division_by_zero_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:764`](../NumericDerivedFacts.v#L764)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1162,6 +1268,8 @@ Lemma float64_div_runtime_error_division_by_zero_iff : forall left right,
 ## `float32_div_runtime_error_none_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:792`](../NumericDerivedFacts.v#L792)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1189,6 +1297,8 @@ Lemma float32_div_runtime_error_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:827`](../NumericDerivedFacts.v#L827)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1215,6 +1325,8 @@ Lemma float64_div_runtime_error_none_iff : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:864`](../NumericDerivedFacts.v#L864)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes commutativity for the declared typed numeric semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_add_commutative` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1233,6 +1345,8 @@ Lemma numeric_add_commutative : forall left right,
 ## `numeric_mul_commutative`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:873`](../NumericDerivedFacts.v#L873)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes commutativity for the declared typed numeric semantics operator.
 
@@ -1253,6 +1367,8 @@ Lemma numeric_mul_commutative : forall left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:882`](../NumericDerivedFacts.v#L882)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric opp involutive law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_opp_involutive` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1271,6 +1387,8 @@ Lemma numeric_opp_involutive : forall value,
 ## `numeric_add_zero_left`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:889`](../NumericDerivedFacts.v#L889)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric add zero left law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -1291,6 +1409,8 @@ Lemma numeric_add_zero_left : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:897`](../NumericDerivedFacts.v#L897)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric sub self finite law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_sub_self_finite` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1309,6 +1429,8 @@ Lemma numeric_sub_self_finite : forall value,
 ## `numeric_min_idempotent`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:905`](../NumericDerivedFacts.v#L905)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes idempotence for the declared typed numeric semantics operator.
 
@@ -1329,6 +1451,8 @@ Lemma numeric_min_idempotent : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:912`](../NumericDerivedFacts.v#L912)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes idempotence for the declared typed numeric semantics operator.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_max_idempotent` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1348,6 +1472,8 @@ Lemma numeric_max_idempotent : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:922`](../NumericDerivedFacts.v#L922)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1366,6 +1492,8 @@ Lemma numeric_is_nan_true_iff : forall value,
 ## `numeric_rounded_coeff_some_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:929`](../NumericDerivedFacts.v#L929)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1389,6 +1517,8 @@ Lemma numeric_rounded_coeff_some_iff : forall value scale coefficient,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:946`](../NumericDerivedFacts.v#L946)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric decimal parts some is finite law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_decimal_parts_some_is_finite` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1408,6 +1538,8 @@ Lemma numeric_decimal_parts_some_is_finite : forall value parts,
 ## `numeric_round_special_identity`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:955`](../NumericDerivedFacts.v#L955)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric round special identity law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -1431,6 +1563,8 @@ Lemma numeric_round_special_identity : forall value scale,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:964`](../NumericDerivedFacts.v#L964)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric runtime fits special law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -1453,6 +1587,8 @@ Lemma numeric_runtime_fits_special : forall value,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:975`](../NumericDerivedFacts.v#L975)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1474,6 +1610,8 @@ Lemma numeric_typmod_valid_true_iff : forall precision scale,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:986`](../NumericDerivedFacts.v#L986)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric fits typmod true implies valid law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_fits_typmod_true_implies_valid` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1493,6 +1631,8 @@ Lemma numeric_fits_typmod_true_implies_valid : forall value precision scale,
 ## `numeric_cast_typmod_some_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:995`](../NumericDerivedFacts.v#L995)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1515,6 +1655,8 @@ Lemma numeric_cast_typmod_some_iff : forall value precision scale result,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1011`](../NumericDerivedFacts.v#L1011)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1534,6 +1676,8 @@ Lemma numeric_cast_typmod_none_iff : forall value precision scale,
 ## `numeric_cast_typmod_nan_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1022`](../NumericDerivedFacts.v#L1022)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1555,6 +1699,8 @@ Lemma numeric_cast_typmod_nan_iff : forall precision scale,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1033`](../NumericDerivedFacts.v#L1033)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric cast typmod infinity rejected law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_cast_typmod_infinity_rejected` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1574,6 +1720,8 @@ Lemma numeric_cast_typmod_infinity_rejected : forall value precision scale,
 ## `numeric_of_scaled_with_typmod_some_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1042`](../NumericDerivedFacts.v#L1042)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1599,6 +1747,8 @@ Lemma numeric_of_scaled_with_typmod_some_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1055`](../NumericDerivedFacts.v#L1055)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1623,6 +1773,8 @@ Lemma numeric_div_with_typmod_some_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1079`](../NumericDerivedFacts.v#L1079)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1642,6 +1794,8 @@ Lemma numeric_result_runtime_error_none_iff : forall result,
 ## `numeric_binary_runtime_error_total`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1089`](../NumericDerivedFacts.v#L1089)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
@@ -1664,6 +1818,8 @@ Lemma numeric_binary_runtime_error_total : forall operation left right,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1099`](../NumericDerivedFacts.v#L1099)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -1683,6 +1839,8 @@ Lemma numeric_unary_runtime_error_total : forall operation input,
 ## `numeric_typmod_runtime_error_success_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1108`](../NumericDerivedFacts.v#L1108)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1708,6 +1866,8 @@ Lemma numeric_typmod_runtime_error_success_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1125`](../NumericDerivedFacts.v#L1125)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -1732,6 +1892,8 @@ Lemma numeric_typmod_runtime_error_failure_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1142`](../NumericDerivedFacts.v#L1142)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric div nan left law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_div_nan_left` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1751,6 +1913,8 @@ Lemma numeric_div_nan_left : forall right left_scale right_scale,
 ## `numeric_div_nan_right`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1147`](../NumericDerivedFacts.v#L1147)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric div nan right law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -1772,6 +1936,8 @@ Lemma numeric_div_nan_right : forall left left_scale right_scale,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1152`](../NumericDerivedFacts.v#L1152)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric div finite by infinity law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_div_finite_by_infinity` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -1792,6 +1958,8 @@ Lemma numeric_div_finite_by_infinity : forall finite divisor left_scale right_sc
 ## `numeric_div_runtime_error_zero_divisor`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1160`](../NumericDerivedFacts.v#L1160)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
@@ -1815,6 +1983,8 @@ Lemma numeric_div_runtime_error_zero_divisor : forall left left_scale right_scal
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1171`](../NumericDerivedFacts.v#L1171)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -1837,6 +2007,8 @@ Lemma numeric_div_runtime_error_nan :
 ## `numeric_div_runtime_error_division_by_zero`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1184`](../NumericDerivedFacts.v#L1184)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
@@ -1863,6 +2035,8 @@ Lemma numeric_div_runtime_error_division_by_zero :
 ## `numeric_div_runtime_error_success_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1199`](../NumericDerivedFacts.v#L1199)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1894,6 +2068,8 @@ Lemma numeric_div_runtime_error_success_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1232`](../NumericDerivedFacts.v#L1232)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -1921,6 +2097,8 @@ Lemma numeric_div_runtime_error_invalid_scale :
 ## `numeric_div_typmod_runtime_error_success_iff`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1252`](../NumericDerivedFacts.v#L1252)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
@@ -1953,6 +2131,8 @@ Lemma numeric_div_typmod_runtime_error_success_iff :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1278`](../NumericDerivedFacts.v#L1278)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
 Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
@@ -1983,6 +2163,8 @@ Lemma numeric_div_typmod_runtime_error_total :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1303`](../NumericDerivedFacts.v#L1303)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for typed numeric semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_state_empty` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2002,6 +2184,8 @@ Lemma numeric_sum_from_state_empty : forall state,
 ## `numeric_sum_from_state_special`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1311`](../NumericDerivedFacts.v#L1311)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric sum from state special law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2026,6 +2210,8 @@ Lemma numeric_sum_from_state_special : forall state special,
 ## `numeric_sum_from_state_finite`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1327`](../NumericDerivedFacts.v#L1327)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric sum from state finite law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2052,6 +2238,8 @@ Lemma numeric_sum_from_state_finite : forall state,
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1344`](../NumericDerivedFacts.v#L1344)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for typed numeric semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_avg_from_scale_state_empty` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2071,6 +2259,8 @@ Lemma numeric_avg_from_scale_state_empty : forall input_scale state,
 ## `numeric_avg_from_scale_state_finite`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1352`](../NumericDerivedFacts.v#L1352)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric avg from scale state finite law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2101,6 +2291,8 @@ Lemma numeric_avg_from_scale_state_finite :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1373`](../NumericDerivedFacts.v#L1373)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric agg special result nan law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_agg_special_result_nan` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2120,6 +2312,8 @@ Lemma numeric_agg_special_result_nan : forall nan_count pos_count neg_count,
 ## `numeric_agg_special_result_mixed_infinities`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1384`](../NumericDerivedFacts.v#L1384)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric agg special result mixed infinities law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2141,6 +2335,8 @@ Lemma numeric_agg_special_result_mixed_infinities :
 ## `numeric_agg_special_result_positive_infinity`
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1400`](../NumericDerivedFacts.v#L1400)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric agg special result positive infinity law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2164,6 +2360,8 @@ Lemma numeric_agg_special_result_positive_infinity :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1417`](../NumericDerivedFacts.v#L1417)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric agg special result negative infinity law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_agg_special_result_negative_infinity` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2186,6 +2384,8 @@ Lemma numeric_agg_special_result_negative_infinity :
 
 Source: [`theories/FormalSQL/NumericDerivedFacts.v:1434`](../NumericDerivedFacts.v#L1434)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric agg special result none law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_agg_special_result_none` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2202,53 +2402,11 @@ Lemma numeric_agg_special_result_none : forall nan_count pos_count neg_count,
   numeric_agg_special_result nan_count pos_count neg_count = None.
 ```
 
-## `eval_int32_neq_disjunction_true_of_unequal_constants`
-
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1456`](../NumericDerivedFacts.v#L1456)
-
-Purpose/direction: States the eval int32 disequality disjunction true of unequal constants law for typed numeric semantics, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `eval_int32_neq_disjunction_true_of_unequal_constants` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
-
-Cross-index: `scalar`
-
-Search aliases: `numeric and cast semantics`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `INTEGER`, `int32`
-
-```rocq
-Lemma eval_int32_neq_disjunction_true_of_unequal_constants :
-  forall basesort instance value_is_null env subject first_term second_term
-      value first second,
-    @Interp.interp_aggterm TNull env subject = Value_int32 (Some value) ->
-    @Interp.interp_aggterm TNull env first_term = Value_int32 (Some first) ->
-    @Interp.interp_aggterm TNull env second_term = Value_int32 (Some second) ->
-    @eval_aggterm_runtime_error TNull
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error env subject = None ->
-    @eval_aggterm_runtime_error TNull
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error env first_term = None ->
-    @eval_aggterm_runtime_error TNull
-      NullValues.interp_scalar_operator_runtime_error
-      NullValues.interp_aggregate_runtime_error env second_term = None ->
-    int32_value first <> int32_value second ->
-    forall outcome,
-      @eval_formula_expr_outcome TNull relname basesort instance
-        unknown3
-        NullValues.interp_scalar_operator_runtime_error
-        NullValues.interp_aggregate_runtime_error value_is_null env
-        (FExpr_Conj Formula.Or_F
-          (FExpr_Pred (PredicateNeq : FTuples.Tuple.predicate TNull)
-            [subject; first_term])
-          (FExpr_Pred (PredicateNeq : FTuples.Tuple.predicate TNull)
-            [subject; second_term])) outcome <->
-      outcome = SqlSuccess Bool3.true3.
-```
-
 ## `numeric_add_associative`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:23`](../NumericRegroupFacts.v#L23)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes associativity for the declared typed numeric semantics operator.
 
@@ -2270,6 +2428,8 @@ Lemma numeric_add_associative : forall first second third,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:41`](../NumericRegroupFacts.v#L41)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Preserves the declared typed numeric semantics result across the indicated transformation.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_sum_initial_reachable_invariant` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2288,6 +2448,8 @@ Lemma numeric_sum_initial_reachable_invariant :
 ## `numeric_sum_transition_preserves_reachable_invariant`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:49`](../NumericRegroupFacts.v#L49)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Preserves the declared typed numeric semantics result across the indicated transformation.
 
@@ -2310,6 +2472,8 @@ Lemma numeric_sum_transition_preserves_reachable_invariant :
 ## `numeric_sum_option_regroup`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:80`](../NumericRegroupFacts.v#L80)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric sum option regroup law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2339,6 +2503,8 @@ Theorem numeric_sum_option_regroup : forall groups,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:146`](../NumericRegroupFacts.v#L146)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_sum_from_state_transition` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2359,6 +2525,8 @@ Lemma numeric_sum_from_state_transition : forall state next,
 ## `numeric_sum_fold_option_add`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:185`](../NumericRegroupFacts.v#L185)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2383,6 +2551,8 @@ Lemma numeric_sum_fold_option_add : forall numbers state,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:199`](../NumericRegroupFacts.v#L199)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_sum_fold_from_initial` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2403,6 +2573,8 @@ Corollary numeric_sum_fold_from_initial : forall numbers,
 ## `interp_sum_numeric_option_fold`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:210`](../NumericRegroupFacts.v#L210)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2426,6 +2598,8 @@ Lemma interp_sum_numeric_option_fold : forall observations,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:223`](../NumericRegroupFacts.v#L223)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp sum numeric singleton law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric_singleton` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2444,6 +2618,8 @@ Lemma interp_sum_numeric_singleton : forall number,
 ## `sum_numeric_runtime_error_singleton`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:240`](../NumericRegroupFacts.v#L240)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Exposes the modeled SQL error condition or propagation direction for typed numeric semantics.
 
@@ -2467,6 +2643,8 @@ Lemma sum_numeric_runtime_error_singleton : forall number,
 ## `interp_sum_numeric_regroup_value_runtime_exact`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:294`](../NumericRegroupFacts.v#L294)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp sum numeric regroup value runtime exact law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2502,6 +2680,8 @@ Theorem interp_sum_numeric_regroup_value_runtime_exact :
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:531`](../NumericRegroupFacts.v#L531)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Shows that the declared typed numeric semantics result is invariant under input permutation.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about typed numeric semantics.
@@ -2531,6 +2711,8 @@ Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_row
 ## `tnull_closed_group_sum_numeric_dot_value_runtime_exact`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:576`](../NumericRegroupFacts.v#L576)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed closure property for typed numeric semantics.
 
@@ -2566,6 +2748,8 @@ Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
 ## `query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:728`](../NumericRegroupFacts.v#L728)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Regroups closed-group SUM(NUMERIC column) values while preserving only the outer SUM value and its local runtime callback.
 
@@ -2607,6 +2791,8 @@ Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:880`](../NumericRegroupFacts.v#L880)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the numeric values finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `numeric_values_finite_observations` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2627,6 +2813,8 @@ Lemma numeric_values_finite_observations : forall numbers,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:887`](../NumericRegroupFacts.v#L887)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the finite observations all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `finite_observations_all_numeric` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2645,6 +2833,8 @@ Lemma finite_observations_all_numeric : forall numbers,
 ## `numeric_sum_finite_fold_state`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:893`](../NumericRegroupFacts.v#L893)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
 
@@ -2672,6 +2862,8 @@ Lemma numeric_sum_finite_fold_state :
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:909`](../NumericRegroupFacts.v#L909)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp sum finite observations law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_sum_finite_observations` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2695,6 +2887,8 @@ Lemma interp_sum_finite_observations : forall numbers,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:932`](../NumericRegroupFacts.v#L932)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the interp sum numeric values extensional law for typed numeric semantics, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `interp_sum_numeric_values_extensional` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2717,6 +2911,8 @@ Lemma interp_sum_numeric_values_extensional : forall left right,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:942`](../NumericRegroupFacts.v#L942)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes totality of the indicated typed numeric semantics operation under the shown premises.
 
 Applicability: Use when the goal or a hypothesis matches the `finite_numeric_total_from_accumulator` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2737,6 +2933,8 @@ Lemma finite_numeric_total_from_accumulator : forall numbers accumulator,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:954`](../NumericRegroupFacts.v#L954)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for typed numeric semantics.
 
 Applicability: Use when the goal or a hypothesis matches the `nonempty_group_totals_flatten` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
@@ -2756,6 +2954,8 @@ Lemma nonempty_group_totals_flatten : forall groups,
 ## `grouped_finite_sums_all_numeric`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:976`](../NumericRegroupFacts.v#L976)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the grouped finite sums all numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2779,6 +2979,8 @@ Lemma grouped_finite_sums_all_numeric : forall groups,
 ## `numeric_values_grouped_finite_sums`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:988`](../NumericRegroupFacts.v#L988)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the numeric values grouped finite sums law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2804,6 +3006,8 @@ Lemma numeric_values_grouped_finite_sums : forall groups,
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:1001`](../NumericRegroupFacts.v#L1001)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
 
 Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
@@ -2822,6 +3026,8 @@ Lemma nonempty_group_totals_nil_iff : forall groups,
 ## `interp_sum_numeric_finite_regroup`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:1019`](../NumericRegroupFacts.v#L1019)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the interp sum numeric finite regroup law for typed numeric semantics, in the exact direction displayed by the declaration.
 
@@ -2846,7 +3052,9 @@ Theorem interp_sum_numeric_finite_regroup : forall groups,
 
 ## `eval_group_bag_global_success_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1140`](../NumericRegroupFacts.v#L1140)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1142`](../NumericRegroupFacts.v#L1142)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Inverts or constructs the successful evaluation branch for typed numeric semantics.
 
@@ -2863,6 +3071,7 @@ Theorem eval_group_bag_global_success_duplicate_free :
   forall env select_list having input_bag output_bag,
     @eval_group_bag_outcome T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env select_list [] having input_bag (SqlSuccess output_bag) ->
+      boolean_schedule env select_list [] having input_bag
+      (SqlSuccess output_bag) ->
     query_bag_duplicate_free output_bag.
 ```

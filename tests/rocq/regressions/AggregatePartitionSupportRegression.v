@@ -128,6 +128,8 @@ Variable aggregate_runtime_error :
   list (option SqlOutcome.sql_runtime_error * FTuples.Tuple.value T) ->
   option SqlOutcome.sql_runtime_error.
 Variable value_is_null : FTuples.Tuple.value T -> bool.
+Variable boolean_schedule :
+  SqlQuerySyntax.boolean_site -> SqlQuerySyntax.boolean_evaluation_order.
 
 Local Definition grouping_bag :=
   FiniteBag.Febag.bag
@@ -138,18 +140,20 @@ Theorem grouping_sets_success_fold_contract_regression :
     @SqlQuerySemantics.eval_grouping_sets_bag_outcome
       T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env grouping_sets input_bag (SqlOutcome.SqlSuccess output_bag) <->
+      boolean_schedule env grouping_sets input_bag
+      (SqlOutcome.SqlSuccess output_bag) <->
     exists branch_bags,
       Forall2
         (@grouping_set_success_at T relname basesort instance unknown
           symbol_runtime_error aggregate_runtime_error value_is_null
-          env input_bag)
+          boolean_schedule env input_bag)
         grouping_sets branch_bags /\
       output_bag = @grouping_sets_union_fold T branch_bags.
 Proof.
   exact
     (@eval_grouping_sets_success_fold_iff T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null).
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule).
 Qed.
 
 Theorem grouping_sets_error_prefix_contract_regression :
@@ -157,24 +161,25 @@ Theorem grouping_sets_error_prefix_contract_regression :
     @SqlQuerySemantics.eval_grouping_sets_bag_outcome
       T relname basesort instance unknown
       symbol_runtime_error aggregate_runtime_error value_is_null
-      env grouping_sets input_bag (SqlOutcome.SqlError error) <->
-    exists (prefix : list (@SqlQuerySyntax.query_grouping_set T))
-        (current : @SqlQuerySyntax.query_grouping_set T)
-        (suffix : list (@SqlQuerySyntax.query_grouping_set T))
+      boolean_schedule env grouping_sets input_bag (SqlOutcome.SqlError error) <->
+    exists (prefix : list (@SqlQuerySyntax.query_grouping_set T relname))
+        (current : @SqlQuerySyntax.query_grouping_set T relname)
+        (suffix : list (@SqlQuerySyntax.query_grouping_set T relname))
         (prefix_bags : list grouping_bag),
       grouping_sets = prefix ++ current :: suffix /\
       Forall2
         (@grouping_set_success_at T relname basesort instance unknown
           symbol_runtime_error aggregate_runtime_error value_is_null
-          env input_bag)
+          boolean_schedule env input_bag)
         prefix prefix_bags /\
       @grouping_set_error_at T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env input_bag current error.
+        boolean_schedule env input_bag current error.
 Proof.
   exact
     (@eval_grouping_sets_error_prefix_iff T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null).
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule).
 Qed.
 
 Theorem grouping_sets_ordered_congruence_contract_regression :
@@ -182,21 +187,22 @@ Theorem grouping_sets_ordered_congruence_contract_regression :
     Forall2
       (@grouping_set_exact_outcome_at T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env input_bag)
+        boolean_schedule env input_bag)
       left_sets right_sets ->
     forall outcome,
       @SqlQuerySemantics.eval_grouping_sets_bag_outcome
         T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env left_sets input_bag outcome <->
+        boolean_schedule env left_sets input_bag outcome <->
       @SqlQuerySemantics.eval_grouping_sets_bag_outcome
         T relname basesort instance unknown
         symbol_runtime_error aggregate_runtime_error value_is_null
-        env right_sets input_bag outcome.
+        boolean_schedule env right_sets input_bag outcome.
 Proof.
   exact
     (@eval_grouping_sets_outcome_Forall2_congr T relname basesort instance
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null).
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule).
 Qed.
 
 End GroupingSetSchedulerContracts.

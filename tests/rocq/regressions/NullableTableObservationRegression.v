@@ -29,7 +29,8 @@ Qed.
 
 Theorem nullable_table_success_observation_regression :
   forall expected constraints actual relation attribute outputs env rows
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @query_outputs_sort TNull outputs =S=
@@ -37,13 +38,14 @@ Theorem nullable_table_success_observation_regression :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     Forall (row_attribute_present_conforms attribute) rows.
 Proof.
 intros expected constraints actual relation attribute outputs env rows
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hattribute Hsort Hrows.
 eapply query_expr_table_success_rows_present_conform_attribute;
 eassumption.
@@ -51,7 +53,8 @@ Qed.
 
 Theorem nullable_generated_sort_row_observation_regression :
   forall expected constraints actual relation attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     attribute inS (@_basesort TNull expected relation) ->
     @_basesort TNull expected relation =S=
@@ -59,7 +62,7 @@ Theorem nullable_generated_sort_row_observation_regression :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs relation)
       (SqlSuccess rows) ->
     In row rows ->
@@ -67,6 +70,7 @@ Theorem nullable_generated_sort_row_observation_regression :
 Proof.
 intros expected constraints actual relation attribute outputs env rows row
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hattribute Hsort Hrows Hrow.
 eapply query_expr_table_success_row_present_conform_attribute_generated_sort;
   eassumption.
@@ -74,7 +78,8 @@ Qed.
 
 Theorem nonnull_generated_sort_row_observation_regression :
   forall expected constraints actual constraint attribute outputs env rows row
-      unknown symbol_runtime_error aggregate_runtime_error value_is_null,
+      unknown symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule,
     database_conforms_schema expected constraints actual ->
     In constraint constraints ->
     attribute inS
@@ -85,7 +90,7 @@ Theorem nonnull_generated_sort_row_observation_regression :
     @eval_query_expr_outcome TNull relname
       (@_basesort TNull actual) (@_instance TNull actual)
       unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
+      value_is_null boolean_schedule env
       (@QExpr_Table TNull relname outputs
         (constraint_relation constraint))
       (SqlSuccess rows) ->
@@ -94,6 +99,7 @@ Theorem nonnull_generated_sort_row_observation_regression :
 Proof.
 intros expected constraints actual constraint attribute outputs env rows row
   unknown symbol_runtime_error aggregate_runtime_error value_is_null
+  boolean_schedule
   Hschema Hconstraint Hattribute Hnot_null Hsort Hrows Hrow.
 eapply query_expr_table_success_row_conform_attribute_generated_sort;
   eassumption.

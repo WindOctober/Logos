@@ -8,6 +8,8 @@ This focused catalog contains 99 declarations routed at declaration granularity 
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:15`](../IntegrityFacts.v#L15)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -27,6 +29,8 @@ Lemma project_row_length :
 ## `sql_key_equal_true_length`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:25`](../IntegrityFacts.v#L25)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -49,6 +53,8 @@ Lemma sql_key_equal_true_length :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:42`](../IntegrityFacts.v#L42)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
 Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
@@ -69,6 +75,8 @@ Lemma sql_key_equal_true_iff_Forall2 :
 ## `row_attributes_not_null_project`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:72`](../IntegrityFacts.v#L72)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
@@ -93,6 +101,8 @@ Lemma row_attributes_not_null_project :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:91`](../IntegrityFacts.v#L91)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_attributes_not_null_weaken` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -115,6 +125,8 @@ Lemma rows_attributes_not_null_weaken :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:104`](../IntegrityFacts.v#L104)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_attributes_not_null_filter` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -135,6 +147,8 @@ Lemma rows_attributes_not_null_filter :
 ## `primary_key_component_not_null`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:115`](../IntegrityFacts.v#L115)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
@@ -158,6 +172,8 @@ Lemma primary_key_component_not_null :
 ## `primary_key_projection_not_null`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:128`](../IntegrityFacts.v#L128)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
@@ -183,6 +199,8 @@ Corollary primary_key_projection_not_null :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:143`](../IntegrityFacts.v#L143)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the unique key conforms filter law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `unique_key_conforms_filter` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -203,6 +221,8 @@ Lemma unique_key_conforms_filter :
 ## `unique_key_pairwise_lookup_length_le_one`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:157`](../IntegrityFacts.v#L157)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for schema and integrity reasoning.
 
@@ -232,6 +252,8 @@ Theorem unique_key_pairwise_lookup_length_le_one :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:182`](../IntegrityFacts.v#L182)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the foreign key conforms shape law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `foreign_key_conforms_shape` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -254,6 +276,8 @@ Lemma foreign_key_conforms_shape :
 ## `foreign_key_conforms_nonnull_row_referenced`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:195`](../IntegrityFacts.v#L195)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key conforms nonnull row referenced law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -285,6 +309,8 @@ Lemma foreign_key_conforms_nonnull_row_referenced :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:221`](../IntegrityFacts.v#L221)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the foreign key conforms filter law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `foreign_key_conforms_filter` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -305,6 +331,8 @@ Lemma foreign_key_conforms_filter :
 ## `check_constraint_conforms_row`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:237`](../IntegrityFacts.v#L237)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the check constraint conforms row law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -328,6 +356,8 @@ Lemma check_constraint_conforms_row :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:251`](../IntegrityFacts.v#L251)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the check constraint conforms filter law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `check_constraint_conforms_filter` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -348,6 +378,8 @@ Lemma check_constraint_conforms_filter :
 ## `check_constraint_conforms_app_iff`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:265`](../IntegrityFacts.v#L265)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
@@ -371,6 +403,8 @@ Lemma check_constraint_conforms_app_iff :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:278`](../IntegrityFacts.v#L278)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
 Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
@@ -393,6 +427,8 @@ Lemma unique_index_row_participates_iff :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:309`](../IntegrityFacts.v#L309)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the unique index without predicate participates law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `unique_index_without_predicate_participates` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -414,6 +450,8 @@ Lemma unique_index_without_predicate_participates :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:323`](../IntegrityFacts.v#L323)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -433,6 +471,8 @@ Lemma unique_index_key_length :
 ## `unique_index_conforms_filter`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:334`](../IntegrityFacts.v#L334)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the unique index conforms filter law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -454,6 +494,8 @@ Lemma unique_index_conforms_filter :
 ## `unique_index_pairwise_lookup_length_le_one`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:362`](../IntegrityFacts.v#L362)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the stated reusable upper bound for schema and integrity reasoning.
 
@@ -488,6 +530,8 @@ Theorem unique_index_pairwise_lookup_length_le_one :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:396`](../IntegrityFacts.v#L396)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows constraint conform filter law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_constraint_conform_filter` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -512,6 +556,8 @@ Theorem rows_constraint_conform_filter :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:440`](../IntegrityFacts.v#L440)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `table_constraint_conforms_not_null` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -534,6 +580,8 @@ Lemma table_constraint_conforms_not_null :
 ## `table_constraint_conforms_primary_key`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:453`](../IntegrityFacts.v#L453)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the table constraint conforms primary key law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -558,6 +606,8 @@ Lemma table_constraint_conforms_primary_key :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:467`](../IntegrityFacts.v#L467)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the table constraint conforms unique key law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `table_constraint_conforms_unique_key` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -580,6 +630,8 @@ Lemma table_constraint_conforms_unique_key :
 ## `table_constraint_conforms_foreign_key`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:480`](../IntegrityFacts.v#L480)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the table constraint conforms foreign key law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -604,6 +656,8 @@ Lemma table_constraint_conforms_foreign_key :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:493`](../IntegrityFacts.v#L493)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the table constraint conforms check law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `table_constraint_conforms_check` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -626,6 +680,8 @@ Lemma table_constraint_conforms_check :
 ## `table_constraint_conforms_unique_index`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:506`](../IntegrityFacts.v#L506)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the table constraint conforms unique index law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -650,6 +706,8 @@ Lemma table_constraint_conforms_unique_index :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:519`](../IntegrityFacts.v#L519)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the database conforms schema table constraint law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `database_conforms_schema_table_constraint` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -671,6 +729,8 @@ Lemma database_conforms_schema_table_constraint :
 ## `database_conforms_schema_primary_key`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:534`](../IntegrityFacts.v#L534)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Extracts a declared primary-key contract directly from database conformance and constraint membership for functional key reasoning.
 
@@ -696,6 +756,8 @@ Corollary database_conforms_schema_primary_key :
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:551`](../IntegrityFacts.v#L551)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `database_conforms_schema_not_null_member` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -719,6 +781,8 @@ Corollary database_conforms_schema_not_null_member :
 ## `database_conforms_schema_foreign_key_nonnull_referenced`
 
 Source: [`theories/FormalSQL/IntegrityFacts.v:576`](../IntegrityFacts.v#L576)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Provides the schema-side totality witness used by an outer join when every referencing foreign-key column is declared NOT NULL.
 
@@ -754,6 +818,8 @@ Corollary database_conforms_schema_foreign_key_nonnull_referenced :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:16`](../SchemaCardinality.v#L16)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 domain size spec law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_domain_size_spec` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -773,6 +839,8 @@ Lemma int32_domain_size_spec :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:28`](../SchemaCardinality.v#L28)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 domain size is two power 32 law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_domain_size_is_two_power_32` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -791,6 +859,8 @@ Lemma int32_domain_size_is_two_power_32 :
 ## `database_conforms_schema_typed_cell`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:45`](../SchemaCardinality.v#L45)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the database conforms schema typed cell law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -815,6 +885,8 @@ Lemma database_conforms_schema_typed_cell :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:67`](../SchemaCardinality.v#L67)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows attribute conform from database law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_attribute_conform_from_database` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -837,6 +909,8 @@ Lemma rows_attribute_conform_from_database :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:80`](../SchemaCardinality.v#L80)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the conforming int32 value law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `conforming_int32_value` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -857,6 +931,8 @@ Lemma conforming_int32_value :
 ## `conforming_nonnull_int32_value`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:90`](../SchemaCardinality.v#L90)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the conforming nonnull int32 value law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -880,6 +956,8 @@ Lemma conforming_nonnull_int32_value :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:107`](../SchemaCardinality.v#L107)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes reflexivity for schema and integrity reasoning.
 
 Applicability: Use to orient, transport, or compose a semantic relation about schema and integrity reasoning.
@@ -902,6 +980,8 @@ Lemma sql_value_equal_true_int32_refl :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:125`](../SchemaCardinality.v#L125)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 index strict-bound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_index_lt` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -920,6 +1000,8 @@ Lemma int32_index_lt :
 ## `int32_index_in_domain`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:138`](../SchemaCardinality.v#L138)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the int32 index in domain law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -941,6 +1023,8 @@ Lemma int32_index_in_domain :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:149`](../SchemaCardinality.v#L149)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Recovers source equality from the declared schema and integrity reasoning representation.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_index_injective` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -961,6 +1045,8 @@ Lemma int32_index_injective :
 ## `conforming_nonnull_int32_index_eq_iff`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:176`](../SchemaCardinality.v#L176)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
@@ -985,6 +1071,8 @@ Lemma conforming_nonnull_int32_index_eq_iff :
 ## `NoDup_map_by_key`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:199`](../SchemaCardinality.v#L199)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
@@ -1013,6 +1101,8 @@ Lemma NoDup_map_by_key :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:231`](../SchemaCardinality.v#L231)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1034,6 +1124,8 @@ Lemma int32_singleton_primary_key_projection_nodup :
 ## `int32_singleton_primary_key_codes_nodup`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:250`](../SchemaCardinality.v#L250)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
@@ -1060,6 +1152,8 @@ Lemma int32_singleton_primary_key_codes_nodup :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:280`](../SchemaCardinality.v#L280)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1081,6 +1175,8 @@ Theorem int32_singleton_primary_key_length :
 ## `int32_singleton_primary_key_length_2_32`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:314`](../SchemaCardinality.v#L314)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1104,6 +1200,8 @@ Corollary int32_singleton_primary_key_length_2_32 :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:330`](../SchemaCardinality.v#L330)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `NoDup_map_fixed_pair` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1124,6 +1222,8 @@ Lemma NoDup_map_fixed_pair :
 ## `NoDup_list_prod`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:346`](../SchemaCardinality.v#L346)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
@@ -1147,6 +1247,8 @@ Lemma NoDup_list_prod :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:371`](../SchemaCardinality.v#L371)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Recovers source equality from the declared schema and integrity reasoning representation.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_pair_index_injective` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1168,6 +1270,8 @@ Lemma int32_pair_index_injective :
 ## `conforming_nonnull_int32_pair_index_eq`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:391`](../SchemaCardinality.v#L391)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the conforming nonnull int32 pair index equality law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1200,6 +1304,8 @@ Lemma conforming_nonnull_int32_pair_index_eq :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:431`](../SchemaCardinality.v#L431)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1226,6 +1332,8 @@ Lemma int32_composite_primary_key_projection_nodup :
 ## `int32_composite_primary_key_codes_nodup`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:459`](../SchemaCardinality.v#L459)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Establishes the displayed duplicate-freedom property for schema and integrity reasoning.
 
@@ -1257,6 +1365,8 @@ Lemma int32_composite_primary_key_codes_nodup :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:500`](../SchemaCardinality.v#L500)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1281,6 +1391,8 @@ Theorem int32_composite_primary_key_length :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:549`](../SchemaCardinality.v#L549)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the int32 composite domain size is two power 64 law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `int32_composite_domain_size_is_two_power_64` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1299,6 +1411,8 @@ Lemma int32_composite_domain_size_is_two_power_64 :
 ## `int32_composite_primary_key_length_2_64`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:556`](../SchemaCardinality.v#L556)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1323,6 +1437,8 @@ Corollary int32_composite_primary_key_length_2_64 :
 ## `int32_composite_primary_key_fixed_first_length`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:575`](../SchemaCardinality.v#L575)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1351,6 +1467,8 @@ Theorem int32_composite_primary_key_fixed_first_length :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:644`](../SchemaCardinality.v#L644)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1378,6 +1496,8 @@ Theorem int32_composite_primary_key_fixed_second_length :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:718`](../SchemaCardinality.v#L718)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the conforming nullable int32 index strict-bound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `conforming_nullable_int32_index_lt` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1398,6 +1518,8 @@ Lemma conforming_nullable_int32_index_lt :
 ## `conforming_nullable_int32_index_eq_iff`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:730`](../SchemaCardinality.v#L730)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
@@ -1422,6 +1544,8 @@ Lemma conforming_nullable_int32_index_eq_iff :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:753`](../SchemaCardinality.v#L753)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1444,6 +1568,8 @@ Theorem nullable_int32_nodup_length :
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:802`](../SchemaCardinality.v#L802)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the nullable int32 domain size is two power 32 plus 1 law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `nullable_int32_domain_size_is_two_power_32_plus_1` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1462,6 +1588,8 @@ Lemma nullable_int32_domain_size_is_two_power_32_plus_1 :
 ## `nullable_int32_nodup_length_2_32_plus_1`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:809`](../SchemaCardinality.v#L809)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1485,6 +1613,8 @@ Corollary nullable_int32_nodup_length_2_32_plus_1 :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:45`](../WitnessFacts.v#L45)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the witness database instance rows law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `witness_database_instance_rows` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1505,6 +1635,8 @@ Lemma witness_database_instance_rows :
 ## `witness_database_instance_cardinal`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:57`](../WitnessFacts.v#L57)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1527,6 +1659,8 @@ Lemma witness_database_instance_cardinal :
 ## `witness_query_table_bag_cardinal`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:72`](../WitnessFacts.v#L72)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
@@ -1555,6 +1689,8 @@ Lemma witness_query_table_bag_cardinal :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:101`](../WitnessFacts.v#L101)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Relates schema and integrity reasoning to the exact list length or bag cardinality shown below.
 
 Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about schema and integrity reasoning.
@@ -1582,6 +1718,8 @@ Corollary witness_query_table_bag_cardinal_generated_sort :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:174`](../WitnessFacts.v#L174)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the option numeric eqb true law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `option_numeric_eqb_true` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1601,6 +1739,8 @@ Lemma option_numeric_eqb_true :
 ## `value_conforms_attributeb_sound`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:183`](../WitnessFacts.v#L183)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the value conforms attributeb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1623,6 +1763,8 @@ Lemma value_conforms_attributeb_sound :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:222`](../WitnessFacts.v#L222)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the tuple conforms sortb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `tuple_conforms_sortb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1643,6 +1785,8 @@ Lemma tuple_conforms_sortb_sound :
 ## `row_attributes_not_nullb_sound`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:263`](../WitnessFacts.v#L263)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the row attributes not nullb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1665,6 +1809,8 @@ Lemma row_attributes_not_nullb_sound :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:275`](../WitnessFacts.v#L275)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the rows attributes not nullb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
 Applicability: Use when the goal or a hypothesis matches the `rows_attributes_not_nullb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1685,6 +1831,8 @@ Lemma rows_attributes_not_nullb_sound :
 ## `sql_value_equal_trueb_sound`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:303`](../WitnessFacts.v#L303)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the sql value equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1707,6 +1855,8 @@ Lemma sql_value_equal_trueb_sound :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:313`](../WitnessFacts.v#L313)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
 Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
@@ -1727,6 +1877,8 @@ Lemma sql_value_equal_trueb_iff :
 ## `sql_key_equal_trueb_sound`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:323`](../WitnessFacts.v#L323)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the sql key equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1749,6 +1901,8 @@ Lemma sql_key_equal_trueb_sound :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:335`](../WitnessFacts.v#L335)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: Gives necessary and sufficient conditions for schema and integrity reasoning.
 
 Applicability: Use in either direction to invert or construct a goal about schema and integrity reasoning.
@@ -1769,6 +1923,8 @@ Lemma sql_key_equal_trueb_iff :
 ## `no_relatedb_sound`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:356`](../WitnessFacts.v#L356)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the no relatedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1794,6 +1950,8 @@ Lemma no_relatedb_sound :
 
 Source: [`theories/FormalSQL/WitnessFacts.v:382`](../WitnessFacts.v#L382)
 
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
 Purpose/direction: States the exact empty-input or empty-result law for schema and integrity reasoning.
 
 Applicability: Use when the goal or a hypothesis matches the `list_nonemptyb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
@@ -1812,7 +1970,9 @@ Lemma list_nonemptyb_sound :
 
 ## `unique_key_rows_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:393`](../WitnessFacts.v#L393)
+Source: [`theories/FormalSQL/WitnessFacts.v:394`](../WitnessFacts.v#L394)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the unique key rows conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1833,7 +1993,9 @@ Lemma unique_key_rows_conformb_sound :
 
 ## `unique_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:407`](../WitnessFacts.v#L407)
+Source: [`theories/FormalSQL/WitnessFacts.v:408`](../WitnessFacts.v#L408)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the unique key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1854,7 +2016,9 @@ Lemma unique_key_conformsb_sound :
 
 ## `primary_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:425`](../WitnessFacts.v#L425)
+Source: [`theories/FormalSQL/WitnessFacts.v:426`](../WitnessFacts.v#L426)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the primary key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1875,7 +2039,9 @@ Lemma primary_key_conformsb_sound :
 
 ## `foreign_key_attribute_compatibleb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:466`](../WitnessFacts.v#L466)
+Source: [`theories/FormalSQL/WitnessFacts.v:467`](../WitnessFacts.v#L467)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key attribute compatibleb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1896,7 +2062,9 @@ Lemma foreign_key_attribute_compatibleb_sound :
 
 ## `foreign_key_value_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:488`](../WitnessFacts.v#L488)
+Source: [`theories/FormalSQL/WitnessFacts.v:489`](../WitnessFacts.v#L489)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key value equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1919,7 +2087,9 @@ Lemma foreign_key_value_equal_trueb_sound :
 
 ## `foreign_key_key_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:521`](../WitnessFacts.v#L521)
+Source: [`theories/FormalSQL/WitnessFacts.v:522`](../WitnessFacts.v#L522)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key key equal trueb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1942,7 +2112,9 @@ Lemma foreign_key_key_equal_trueb_sound :
 
 ## `foreign_key_row_conforms_againstb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:550`](../WitnessFacts.v#L550)
+Source: [`theories/FormalSQL/WitnessFacts.v:551`](../WitnessFacts.v#L551)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key row conforms againstb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1965,7 +2137,9 @@ Lemma foreign_key_row_conforms_againstb_sound :
 
 ## `foreign_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:584`](../WitnessFacts.v#L584)
+Source: [`theories/FormalSQL/WitnessFacts.v:585`](../WitnessFacts.v#L585)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -1987,7 +2161,9 @@ Lemma foreign_key_conformsb_sound :
 
 ## `attribute_list_eqb_true`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:612`](../WitnessFacts.v#L612)
+Source: [`theories/FormalSQL/WitnessFacts.v:613`](../WitnessFacts.v#L613)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the attribute list eqb true law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2007,7 +2183,9 @@ Lemma attribute_list_eqb_true :
 
 ## `compatible_attribute_listsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:634`](../WitnessFacts.v#L634)
+Source: [`theories/FormalSQL/WitnessFacts.v:635`](../WitnessFacts.v#L635)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the compatible attribute listsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2028,7 +2206,9 @@ Lemma compatible_attribute_listsb_sound :
 
 ## `table_declares_unique_keyb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:658`](../WitnessFacts.v#L658)
+Source: [`theories/FormalSQL/WitnessFacts.v:659`](../WitnessFacts.v#L659)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the table declares unique keyb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2049,7 +2229,9 @@ Lemma table_declares_unique_keyb_sound :
 
 ## `foreign_key_reference_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:694`](../WitnessFacts.v#L694)
+Source: [`theories/FormalSQL/WitnessFacts.v:695`](../WitnessFacts.v#L695)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the foreign key reference well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2070,7 +2252,9 @@ Lemma foreign_key_reference_well_formedb_sound :
 
 ## `table_constraint_declarations_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:729`](../WitnessFacts.v#L729)
+Source: [`theories/FormalSQL/WitnessFacts.v:730`](../WitnessFacts.v#L730)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the table constraint declarations well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2091,7 +2275,9 @@ Lemma table_constraint_declarations_well_formedb_sound :
 
 ## `schema_constraints_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:758`](../WitnessFacts.v#L758)
+Source: [`theories/FormalSQL/WitnessFacts.v:759`](../WitnessFacts.v#L759)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the schema constraints well formedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2112,7 +2298,9 @@ Lemma schema_constraints_well_formedb_sound :
 
 ## `deferred_row_constraints_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:796`](../WitnessFacts.v#L796)
+Source: [`theories/FormalSQL/WitnessFacts.v:797`](../WitnessFacts.v#L797)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the deferred row constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2134,7 +2322,9 @@ Lemma deferred_row_constraints_conformb_sound :
 
 ## `rows_constraint_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:836`](../WitnessFacts.v#L836)
+Source: [`theories/FormalSQL/WitnessFacts.v:837`](../WitnessFacts.v#L837)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the rows constraint conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2156,7 +2346,9 @@ Lemma rows_constraint_conformb_sound :
 
 ## `schema_constraints_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:878`](../WitnessFacts.v#L878)
+Source: [`theories/FormalSQL/WitnessFacts.v:879`](../WitnessFacts.v#L879)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the schema constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2178,7 +2370,9 @@ Lemma schema_constraints_conformb_sound :
 
 ## `witness_values_conformb_lookup_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:892`](../WitnessFacts.v#L892)
+Source: [`theories/FormalSQL/WitnessFacts.v:893`](../WitnessFacts.v#L893)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the witness values conformb lookup sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2200,7 +2394,9 @@ Lemma witness_values_conformb_lookup_sound :
 
 ## `witness_values_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:916`](../WitnessFacts.v#L916)
+Source: [`theories/FormalSQL/WitnessFacts.v:917`](../WitnessFacts.v#L917)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the witness values conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
@@ -2221,7 +2417,9 @@ Lemma witness_values_conformb_sound :
 
 ## `witness_database_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:940`](../WitnessFacts.v#L940)
+Source: [`theories/FormalSQL/WitnessFacts.v:941`](../WitnessFacts.v#L941)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
 
 Purpose/direction: States the witness database conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 

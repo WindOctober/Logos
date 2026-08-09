@@ -217,6 +217,11 @@ pub struct CalciteRel {
     #[serde(default)]
     pub inputs: Vec<CalciteRel>,
 
+    /// Internal marker installed only after all source-provenance validation
+    /// succeeds. It is never accepted from or emitted to the wrapper JSON.
+    #[serde(skip)]
+    pub(crate) shared_query_ref: Option<CalciteSharedQueryRef>,
+
     /// Lexical source-query identity emitted from the independently parsed
     /// PostgreSQL source AST.  This is deliberately absent when Calcite's
     /// relational node cannot be aligned with one exact source query block.
@@ -298,6 +303,12 @@ pub struct CalciteRel {
     pub fetch_rex: Option<CalciteRex>,
     pub offset_rex: Option<CalciteRex>,
     pub tuples: Option<Vec<Vec<CalciteRex>>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CalciteSharedQueryRef {
+    pub binding: String,
+    pub output: Vec<crate::ir::Column>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
