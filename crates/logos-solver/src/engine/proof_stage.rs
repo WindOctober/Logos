@@ -258,7 +258,6 @@ struct QueryStatementShape {
     exact_frontend_bytes_equal: bool,
     emitted_rocq_root_symbol: String,
     emitted_rocq_output_signature_symbol: String,
-    requires_numeric_exp_model: bool,
     final_output_canonicalization: bool,
     output_signature: Vec<CompactAttribute>,
     typed_frontend_tree: CompactOperatorTree,
@@ -397,7 +396,6 @@ struct CompactQueryStatementShape {
     exact_frontend_bytes_equal: bool,
     emitted_rocq_root_symbol: String,
     emitted_rocq_output_signature_symbol: String,
-    requires_numeric_exp_model: bool,
     final_output_canonicalization: bool,
     output_signature: Vec<CompactAttribute>,
     typed_frontend_tree: CompactOperatorTreeRoot,
@@ -1631,16 +1629,15 @@ fn formal_sql_goal_module(verification_mode: VerificationMode) -> String {
 Definition required_countermodel_statement : Prop :=
   Witness.generated_witness_available = true /\\
   Schema.generated_schema_conforms Witness.generated_witness_db /\\
-  forall generated_numeric_exp_model : NumericExpModel,
       required_query_program_admissible
         Witness.generated_witness_db
-        (Queries.source_query_program generated_numeric_exp_model) /\\
+        Queries.source_query_program /\\
       required_query_program_admissible
         Witness.generated_witness_db
-        (Queries.target_query_program generated_numeric_exp_model) /\\
+        Queries.target_query_program /\\
       ~ required_query_program_outcome_equiv Witness.generated_witness_db
-          (Queries.source_query_program generated_numeric_exp_model)
-          (Queries.target_query_program generated_numeric_exp_model).
+          Queries.source_query_program
+          Queries.target_query_program.
 
 Definition required_verification_statement
     (claim : verification_claim_kind) : Prop :=
@@ -1717,24 +1714,23 @@ Definition required_query_program_admissible
     program.
 
 Definition required_equivalence_statement{condition_parameter} : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     Queries.source_program_output_signatures =
       map query_expr_outputs
-        (Queries.source_query_program generated_numeric_exp_model) /\\
+        Queries.source_query_program /\\
     Queries.target_program_output_signatures =
       map query_expr_outputs
-        (Queries.target_query_program generated_numeric_exp_model) /\\
+        Queries.target_query_program /\\
     Queries.source_program_output_signatures =
       Queries.target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
 {condition_premise}      required_query_program_admissible
-        db (Queries.source_query_program generated_numeric_exp_model) /\\
+        db Queries.source_query_program /\\
       required_query_program_admissible
-        db (Queries.target_query_program generated_numeric_exp_model) /\\
+        db Queries.target_query_program /\\
       required_query_program_equiv db
-        (Queries.source_query_program generated_numeric_exp_model)
-        (Queries.target_query_program generated_numeric_exp_model)).
+        Queries.source_query_program
+        Queries.target_query_program).
 
 {unconditional_claim_contract}
 
@@ -1764,22 +1760,21 @@ fn formal_sql_bound_goal_module(verification_mode: VerificationMode) -> String {
 Definition required_countermodel_statement : Prop :=
   Witness.generated_witness_available = true /\\
   Schema.generated_schema_conforms Witness.generated_witness_db /\\
-  forall generated_numeric_exp_model : NumericExpModel,
       required_query_program_admissible
         Witness.generated_witness_db
-        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+        Queries.source_bound_query_program /\\
       required_query_program_admissible
         Witness.generated_witness_db
-        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+        Queries.target_bound_query_program /\\
       required_query_program_materialization_safe
         Witness.generated_witness_db
-        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+        Queries.source_bound_query_program /\\
       required_query_program_materialization_safe
         Witness.generated_witness_db
-        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+        Queries.target_bound_query_program /\\
       ~ required_query_program_outcome_equiv Witness.generated_witness_db
-          (Queries.source_bound_query_program generated_numeric_exp_model)
-          (Queries.target_bound_query_program generated_numeric_exp_model).
+          Queries.source_bound_query_program
+          Queries.target_bound_query_program.
 
 Definition required_verification_statement
     (claim : verification_claim_kind) : Prop :=
@@ -1846,24 +1841,23 @@ Definition required_query_program_admissible
     db Queries.generated_local_query_schemas program.
 
 Definition required_equivalence_statement{condition_parameter} : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     Queries.source_program_output_signatures =
       map bound_query_outputs
-        (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+        Queries.source_bound_query_program /\\
     Queries.target_program_output_signatures =
       map bound_query_outputs
-        (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+        Queries.target_bound_query_program /\\
     Queries.source_program_output_signatures =
       Queries.target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
 {condition_premise}      required_query_program_admissible
-        db (Queries.source_bound_query_program generated_numeric_exp_model) /\\
+        db Queries.source_bound_query_program /\\
       required_query_program_admissible
-        db (Queries.target_bound_query_program generated_numeric_exp_model) /\\
+        db Queries.target_bound_query_program /\\
       required_query_program_equiv db
-        (Queries.source_bound_query_program generated_numeric_exp_model)
-        (Queries.target_bound_query_program generated_numeric_exp_model)).
+        Queries.source_bound_query_program
+        Queries.target_bound_query_program).
 
 {unconditional_claim_contract}
 
@@ -2314,7 +2308,6 @@ fn compact_query_statement(
         emitted_rocq_output_signature_symbol: statement
             .emitted_rocq_output_signature_symbol
             .clone(),
-        requires_numeric_exp_model: statement.requires_numeric_exp_model,
         final_output_canonicalization: statement.final_output_canonicalization,
         output_signature: statement.output_signature.clone(),
         typed_frontend_tree: CompactOperatorTreeRoot {
@@ -2406,7 +2399,6 @@ fn ordered_signature_operator_kind(query: &FormalQueryExpr) -> &'static str {
         FormalQueryExpr::CrossJoin { .. } => "CrossJoin",
         FormalQueryExpr::Join { .. } => "Join",
         FormalQueryExpr::Projection { .. } => "Projection",
-        FormalQueryExpr::RowMap { .. } => "RowMap",
         FormalQueryExpr::Selection { .. } => "Selection",
         FormalQueryExpr::Group { .. } => "Group",
         FormalQueryExpr::GroupingSets { .. } => "GroupingSets",
@@ -2549,8 +2541,7 @@ impl OrderedSignatureArtifactBuilder {
                     }
                 }
             }
-            FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
+            FormalQueryExpr::Rank { input, .. }
             | FormalQueryExpr::Window { input, .. }
             | FormalQueryExpr::Distinct { input }
             | FormalQueryExpr::OrderBy { input, .. }
@@ -3428,22 +3419,10 @@ fn build_statement_shape(
         exact_frontend_bytes_equal: exact_sql == frontend_sql,
         emitted_rocq_root_symbol: root_symbol,
         emitted_rocq_output_signature_symbol: output_signature_symbol,
-        requires_numeric_exp_model: lowered_statement_requires_numeric_exp_model(lowered, query),
         final_output_canonicalization: final_output_is_canonicalized(query),
         output_signature: compact_formal_attributes(output_signature),
         typed_frontend_tree,
     })
-}
-
-fn lowered_statement_requires_numeric_exp_model(
-    lowered: &LoweredQuery,
-    query: &FormalQueryExpr,
-) -> bool {
-    query.requires_numeric_exp_model()
-        || lowered
-            .bindings
-            .iter()
-            .any(|binding| binding.query_expr.requires_numeric_exp_model())
 }
 
 fn graph_tree_references(tree: &str) -> Vec<String> {
@@ -3508,7 +3487,6 @@ fn validate_graph_statement_bindings(
             || statement.statement_index != position
             || binding.root_symbol != statement.emitted_rocq_root_symbol
             || binding.output_signature_symbol != statement.emitted_rocq_output_signature_symbol
-            || binding.requires_numeric_exp_model != statement.requires_numeric_exp_model
         {
             return Err(Error::ProofAgentCommand(format!(
                 "query context drift: emitter-owned {side} statement binding {position} disagrees with the typed lowering or emitted symbol contract"
@@ -10144,10 +10122,9 @@ mod tests {
     };
     use crate::artifacts::ArtifactWriter;
     use crate::core::{
-        FormalAttribute, FormalAttributeType, FormalQueryBinding, FormalQueryExpr,
-        FormalRowMapAdapter, FormalScalarExpr, FormalSchema, FormalTable, FormalTableConstraints,
-        LoweredProgram, LoweredQuery, LoweringStatus, SqlEnvironment, SqlTimeZone,
-        VerificationInput, VerificationMode, emit_rocq_bound_query_program_module_with_signatures,
+        FormalAttribute, FormalAttributeType, FormalQueryExpr, FormalScalarExpr, FormalSchema,
+        FormalTable, FormalTableConstraints, LoweredProgram, LoweredQuery, LoweringStatus,
+        SqlEnvironment, SqlTimeZone, VerificationInput, VerificationMode,
         emit_rocq_query_expr_proof_module_for_mode, query_expr_output_signature,
     };
     use crate::engine::config::Config;
@@ -10362,67 +10339,6 @@ mod tests {
             output_signature: Some(output_signature),
             diagnostics: Vec::new(),
         }
-    }
-
-    #[test]
-    fn binding_only_numeric_exp_requirement_matches_emitter_metadata() {
-        let avg_value = FormalAttribute {
-            name: "avg_value".to_owned(),
-            ty: FormalAttributeType::Numeric,
-        };
-        let avg_dscale = FormalAttribute {
-            name: "avg_dscale".to_owned(),
-            ty: FormalAttributeType::Z,
-        };
-        let output_numeric = FormalAttribute {
-            name: "exp_value".to_owned(),
-            ty: FormalAttributeType::Numeric,
-        };
-        let output_dscale = FormalAttribute {
-            name: "exp_dscale".to_owned(),
-            ty: FormalAttributeType::Z,
-        };
-        let binding_query = FormalQueryExpr::RowMap {
-            adapter: FormalRowMapAdapter::NumericExp {
-                passthrough: Vec::new(),
-                avg_value: avg_value.clone(),
-                avg_dscale: avg_dscale.clone(),
-                output_numeric: output_numeric.clone(),
-                output_dscale: output_dscale.clone(),
-            },
-            input: Box::new(FormalQueryExpr::Empty {
-                columns: vec![avg_value, avg_dscale],
-            }),
-        };
-        let body = FormalQueryExpr::EmptyTuple;
-        let lowered = LoweredQuery {
-            status: LoweringStatus::Lowered,
-            bindings: vec![FormalQueryBinding {
-                id: "numeric_model".to_owned(),
-                source_name: "numeric_model".to_owned(),
-                relation: "__logos_numeric_model".to_owned(),
-                output_signature: vec![output_numeric, output_dscale],
-                query_expr: binding_query,
-            }],
-            query_expr: Some(body.clone()),
-            output_signature: Some(Vec::new()),
-            diagnostics: Vec::new(),
-        };
-        let emitted = emit_rocq_bound_query_program_module_with_signatures(
-            &[(&body, &[], lowered.bindings.as_slice())],
-            &[(&FormalQueryExpr::EmptyTuple, &[], &[])],
-        )
-        .expect("valid binding-only NumericExp module");
-        let emitter_requirement =
-            emitted.definition_graph.source_statements[0].requires_numeric_exp_model;
-
-        let proof_stage_requirement =
-            super::lowered_statement_requires_numeric_exp_model(&lowered, &body);
-        assert!(proof_stage_requirement);
-        assert_eq!(
-            proof_stage_requirement, emitter_requirement,
-            "proof-stage graph metadata must include NumericExp used only by a local binding"
-        );
     }
 
     #[test]
@@ -13225,26 +13141,23 @@ mod tests {
             "Definition required_verification_statement\n    (claim : verification_claim_kind)"
         ));
         assert!(
-            FORMAL_SQL_GOAL_MODULE.contains("forall generated_numeric_exp_model : NumericExpModel")
-        );
-        assert!(
             FORMAL_SQL_GOAL_MODULE
                 .contains("Queries.source_program_output_signatures =\n      Queries.target_program_output_signatures /\\")
         );
         assert!(FORMAL_SQL_GOAL_MODULE.contains(
-            "Queries.source_program_output_signatures =\n      map query_expr_outputs\n        (Queries.source_query_program generated_numeric_exp_model) /\\"
+            "Queries.source_program_output_signatures =\n      map query_expr_outputs\n        Queries.source_query_program /\\"
         ));
         assert!(FORMAL_SQL_GOAL_MODULE.contains(
-            "Queries.target_program_output_signatures =\n      map query_expr_outputs\n        (Queries.target_query_program generated_numeric_exp_model) /\\"
+            "Queries.target_program_output_signatures =\n      map query_expr_outputs\n        Queries.target_query_program /\\"
         ));
         assert!(FORMAL_SQL_GOAL_MODULE.contains(
-            "required_query_program_admissible\n        db (Queries.source_query_program generated_numeric_exp_model) /\\"
+            "required_query_program_admissible\n        db Queries.source_query_program /\\"
         ));
         assert!(FORMAL_SQL_GOAL_MODULE.contains(
-            "required_query_program_admissible\n        db (Queries.target_query_program generated_numeric_exp_model) /\\"
+            "required_query_program_admissible\n        db Queries.target_query_program /\\"
         ));
         assert!(FORMAL_SQL_GOAL_MODULE.contains(
-            "required_query_program_equiv db\n        (Queries.source_query_program generated_numeric_exp_model)\n        (Queries.target_query_program generated_numeric_exp_model))."
+            "required_query_program_equiv db\n        Queries.source_query_program\n        Queries.target_query_program)."
         ));
         assert!(!FORMAL_SQL_GOAL_MODULE.contains("required_list_query_equiv"));
         let statement = FORMAL_SQL_GOAL_MODULE
@@ -13289,10 +13202,10 @@ mod tests {
         assert!(bound_outcome.contains("bound_query_program_demand_safe_outcome_equiv"));
         assert!(bound_outcome.contains("Definition required_query_program_materialization_safe"));
         assert!(bound_outcome.contains(
-            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        (Queries.source_bound_query_program generated_numeric_exp_model)"
+            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        Queries.source_bound_query_program"
         ));
         assert!(bound_outcome.contains(
-            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        (Queries.target_bound_query_program generated_numeric_exp_model)"
+            "required_query_program_materialization_safe\n        Witness.generated_witness_db\n        Queries.target_bound_query_program"
         ));
 
         let bound_conditional = formal_sql_bound_goal_module(VerificationMode::Conditional);

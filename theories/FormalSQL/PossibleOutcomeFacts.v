@@ -20,6 +20,54 @@ Import ListNotations.
     scheduled relations explicit, so no proof can silently promote a theorem
     about one Boolean schedule to a public SQL certificate. *)
 
+Lemma successful_relation_equiv_transport_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+      (left left' right right' : sql_outcome A -> Prop),
+    successful_relation_equiv value_equiv left right ->
+    (forall outcome, left outcome <-> left' outcome) ->
+    (forall outcome, right outcome <-> right' outcome) ->
+    successful_relation_equiv value_equiv left' right'.
+Proof.
+intros A value_equiv left left' right right'
+  [Hsuccess [Hleft_safe [Hright_safe [Hforward Hbackward]]]]
+  Hleft_iff Hright_iff.
+apply successful_relation_equiv_intro.
+- destruct Hsuccess as [value Hvalue].
+  exists value; now apply (proj1 (Hleft_iff _)).
+- intros error Herror.
+  apply (proj2 (Hleft_iff _)) in Herror.
+  now apply (Hleft_safe error).
+- intros error Herror.
+  apply (proj2 (Hright_iff _)) in Herror.
+  now apply (Hright_safe error).
+- intros left_value Hleft'.
+  apply (proj2 (Hleft_iff _)) in Hleft'.
+  destruct (Hforward left_value Hleft')
+    as [right_value [Hright Hequiv]].
+  exists right_value; split;
+    [now apply (proj1 (Hright_iff _))|exact Hequiv].
+- intros right_value Hright'.
+  apply (proj2 (Hright_iff _)) in Hright'.
+  destruct (Hbackward right_value Hright')
+    as [left_value [Hleft Hequiv]].
+  exists left_value; split;
+    [now apply (proj1 (Hleft_iff _))|exact Hequiv].
+Qed.
+
+Lemma outcome_relation_equiv_implies_successful_relation_equiv_safe :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_equiv value_equiv left right ->
+    (exists value, left (SqlSuccess value)) ->
+    (forall error, ~ left (SqlError error)) ->
+    (forall error, ~ right (SqlError error)) ->
+    successful_relation_equiv value_equiv left right.
+Proof.
+intros A value_equiv left right
+  [_ [_ [Hforward [Hbackward _]]]] Hsuccess Hleft_safe Hright_safe.
+now apply successful_relation_equiv_intro.
+Qed.
+
 Lemma outcome_relation_equiv_transport_iff :
   forall (A : Type) (value_equiv : A -> A -> Prop)
       (left left' right right' : sql_outcome A -> Prop),
@@ -1037,46 +1085,6 @@ apply outcome_relation_equiv_intro.
   + now apply (proj2 (proj2 (Hall schedule) env (SqlError error))).
 Qed.
 
-(** DISTINCT elimination at a bag reset is a public SQL rewrite only when
-    duplicate elimination is inert for every successful child bag under
-    every legal Boolean schedule.  The pointwise reset proof remains in
-    [OrderedQueryFacts]; this theorem quantifies that premise uniformly and
-    preserves the complete possible success/error outcome relation. *)
-Theorem query_expr_distinct_possible_outcome_equiv_inert_reset :
-  forall env input,
-    query_expr_order_behavior input = BagReset ->
-    (forall (schedule : boolean_site -> boolean_evaluation_order)
-        current_env bag,
-      @query_success_bags T relname
-        basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null schedule current_env input bag ->
-      bag_eq T (query_distinct_bag bag) bag) ->
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname
-        basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null env input outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Distinct input) input.
-Proof.
-intros env input Hreset Hinert Hinput.
-assert (Huniform :
-  query_expr_uniform_global_typed_outcome_equiv
-    (QExpr_Distinct input) input).
-{
-  intro schedule.
-  apply query_expr_distinct_global_typed_inert_reset; [exact Hreset |].
-  intros current_env bag Hbag.
-  exact (Hinert schedule current_env bag Hbag).
-}
-eapply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- exact Huniform.
-- destruct Hinput as [outcome [schedule Houtcome]].
-  exists outcome, schedule.
-  apply (proj2 (proj2 (Huniform schedule) env outcome)).
-  exact Houtcome.
-Qed.
-
 (** Exact typed projection rows retain child list order.  Only the scalar
     expressions change; output attributes are related positionally, so the
     constructed tuples are definitionally equal after rewriting the output
@@ -1835,134 +1843,6 @@ apply query_expr_window_outcome_equiv_congr.
 - exact (Hright_outcomes schedule).
 Qed.
 
-(** Exact ordered identities retain list order and runtime errors pointwise.
-    Their scheduled iff proofs are uniform in the schedule, so a single
-    possible source outcome suffices at the public boundary. *)
-
-Theorem query_expr_offset_zero_possible_outcome_equiv :
-  forall env input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset 0 input) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Offset 0 input) input.
-Proof.
-intros env input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_offset_zero_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule input).
-- exact Houtcome.
-Qed.
-
-Theorem query_expr_offset_offset_possible_outcome_equiv :
-  forall env outer inner input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset outer (QExpr_Offset inner input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Offset outer (QExpr_Offset inner input))
-      (QExpr_Offset (outer + inner) input).
-Proof.
-intros env outer inner input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_offset_offset_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule outer inner input).
-- exact Houtcome.
-Qed.
-
-Theorem query_expr_fetch_fetch_possible_outcome_equiv :
-  forall env outer inner input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Fetch outer (QExpr_Fetch inner input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Fetch outer (QExpr_Fetch inner input))
-      (QExpr_Fetch (Nat.min outer inner) input).
-Proof.
-intros env outer inner input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_fetch_fetch_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule outer inner input).
-- exact Houtcome.
-Qed.
-
-Theorem query_expr_offset_fetch_possible_outcome_equiv :
-  forall env offset count input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset offset (QExpr_Fetch count input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Offset offset (QExpr_Fetch count input))
-      (QExpr_Fetch (count - offset) (QExpr_Offset offset input)).
-Proof.
-intros env offset count input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_offset_fetch_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule offset count input).
-- exact Houtcome.
-Qed.
-
-Theorem query_expr_fetch_offset_possible_outcome_equiv :
-  forall env count offset input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Fetch count (QExpr_Offset offset input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Fetch count (QExpr_Offset offset input))
-      (QExpr_Offset offset (QExpr_Fetch (offset + count) input)).
-Proof.
-intros env count offset input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_fetch_offset_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule count offset input).
-- exact Houtcome.
-Qed.
-
-Theorem query_expr_order_by_order_by_possible_outcome_equiv :
-  forall env outer_keys inner_keys input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input))
-      (QExpr_OrderBy outer_keys input).
-Proof.
-intros env outer_keys inner_keys input Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule.
-  exact (@query_expr_order_by_order_by_global_typed_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null schedule outer_keys inner_keys input).
-- exact Houtcome.
-Qed.
-
 Definition query_expr_possible_runtime_safe
     (env : Env.env T) (query : query_expr T relname) : Prop :=
   forall error,
@@ -2079,109 +1959,12 @@ Theorem query_expr_possible_equiv_of_possible_outcome_equiv_safe :
       value_is_null env left right.
 Proof.
 intros env left right
-  [Houtputs [_ [_ [Hforward [Hbackward _]]]]]
+  [Houtputs Hobservations]
   Hleft_safe Hright_safe Hleft_success.
 split; [exact Houtputs |].
-unfold query_expr_possible_observation_equiv.
-now apply successful_relation_equiv_intro.
-Qed.
-
-(** FETCH 0 still evaluates its child.  Complete possible-schedule safety is
-    therefore essential even though every successful observation is empty. *)
-Theorem query_expr_fetch_zero_possible_outcome_equiv_safe :
-  forall env left right,
-    query_expr_outputs left = query_expr_outputs right ->
-    query_expr_possible_runtime_safe env left ->
-    query_expr_possible_runtime_safe env right ->
-    query_expr_possible_has_success env left ->
-    query_expr_possible_has_success env right ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Fetch 0 left) (QExpr_Fetch 0 right).
-Proof.
-intros env left right Houtputs Hleft_safe Hright_safe
-  [left_rows [left_schedule Hleft]]
-  [right_rows [right_schedule Hright]].
-split; [exact Houtputs|].
-unfold query_expr_possible_outcome_observation_equiv,
-  eval_query_expr_possible_outcome.
-apply outcome_relation_equiv_intro.
-- exists (SqlSuccess nil), left_schedule.
-  now apply EQuery_FetchSuccess with (input_rows := left_rows).
-- exists (SqlSuccess nil), right_schedule.
-  now apply EQuery_FetchSuccess with (input_rows := right_rows).
-- intros output [schedule Houtput].
-  apply eval_query_expr_fetch_zero_success_iff in Houtput.
-  destruct Houtput as [-> _].
-  exists nil; split.
-  + exists right_schedule.
-    now apply EQuery_FetchSuccess with (input_rows := right_rows).
-  + apply ordered_rows_equiv_refl.
-- intros output [schedule Houtput].
-  apply eval_query_expr_fetch_zero_success_iff in Houtput.
-  destruct Houtput as [-> _].
-  exists nil; split.
-  + exists left_schedule.
-    now apply EQuery_FetchSuccess with (input_rows := left_rows).
-  + apply ordered_rows_equiv_refl.
-- intro error.
-  split; intros [schedule Herror].
-  + exfalso; apply (Hleft_safe error).
-    exists schedule; now apply eval_query_expr_fetch_error_iff in Herror.
-  + exfalso; apply (Hright_safe error).
-    exists schedule; now apply eval_query_expr_fetch_error_iff in Herror.
-Qed.
-
-(** ORDER BY is redundant only under a bound on every possible successful
-    child list.  The proof preserves exact row positions; no bag abstraction
-    crosses this ordered boundary. *)
-Theorem query_expr_order_by_possible_outcome_equiv_of_success_length_le_one :
-  forall env keys input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        env input outcome) ->
-    (forall rows,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        env input (SqlSuccess rows) ->
-      (length rows <= 1)%nat) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_OrderBy keys input) input.
-Proof.
-intros env keys input Hinput_outcome Hbound.
-split; [reflexivity|].
-unfold query_expr_possible_outcome_observation_equiv,
-  eval_query_expr_possible_outcome.
-apply outcome_relation_equiv_intro.
-- destruct Hinput_outcome as [[rows|error] [schedule Hinput]].
-  + destruct (@order_by_rows_has_observation T value_is_null keys rows)
-      as [output [Hsame Hordered]].
-    exists (SqlSuccess output), schedule.
-    now apply EQuery_OrderBySuccess with rows.
-  + exists (SqlError error), schedule.
-    now apply EQuery_OrderByChildError.
-- exact Hinput_outcome.
-- intros output [schedule Houtput].
-  apply eval_query_expr_order_by_success_iff in Houtput.
-  destruct Houtput as [input_rows [Hinput [Hsame _]]].
-  exists input_rows; split.
-  + now exists schedule.
-  + apply query_same_rows_as_bag_length_le_one_ordered_equiv; [exact Hsame|].
-    apply Hbound; now exists schedule.
-- intros input_rows [schedule Hinput].
-  destruct (@order_by_rows_has_observation T value_is_null keys input_rows)
-    as [output [Hsame Hordered]].
-  exists output; split.
-  + exists schedule.
-    apply eval_query_expr_order_by_success_iff.
-    exists input_rows; repeat split; assumption.
-  + apply query_same_rows_as_bag_length_le_one_ordered_equiv; [exact Hsame|].
-    apply Hbound; now exists schedule.
-- intro error; split; intros [schedule Herror].
-  + exists schedule; now apply eval_query_expr_order_by_error_iff in Herror.
-  + exists schedule; now apply eval_query_expr_order_by_error_iff.
+unfold query_expr_possible_observation_equiv,
+  query_expr_possible_outcome_observation_equiv in *.
+now apply outcome_relation_equiv_implies_successful_relation_equiv_safe.
 Qed.
 
 (** Possible error-only relations are equivalent only when both expose the
@@ -2530,87 +2313,6 @@ apply outcome_relation_equiv_intro.
   + destruct (Hparent_backward schedule (SqlError error) Heval)
       as [left_schedule Hleft].
     now exists left_schedule.
-Qed.
-
-Theorem query_expr_filter_possible_outcome_equiv_of_always_true_uniform :
-  forall env formula input,
-    (forall schedule, exists outcome,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env input outcome) ->
-    (forall schedule rows,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env input (SqlSuccess rows) ->
-      forall row,
-        In row rows ->
-        forall outcome,
-          @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
-            symbol_runtime_error aggregate_runtime_error value_is_null
-            schedule (env_t T env row) formula outcome <->
-          outcome = SqlSuccess (Bool.true (B T))) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Filter formula input) input.
-Proof.
-intros env formula input Houtcomes Hformula.
-apply query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv.
-intro schedule.
-apply query_expr_filter_outcome_equiv_of_always_true.
-- exact (Houtcomes schedule).
-- exact (Hformula schedule).
-Qed.
-
-(** CROSS JOIN distribution duplicates the left child on the target.  The
-    possible theorem therefore retains uniform, per-schedule bag
-    functionality, safety, and success rather than pretending that unrelated
-    possible child witnesses can be combined. *)
-Theorem query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall schedule left_bag left_bag',
-      @query_success_bags T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env left left_bag ->
-      @query_success_bags T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    (forall schedule,
-      @query_expr_runtime_safe T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_CrossJoin left (QExpr_Set Union first second))) ->
-    (forall schedule,
-      @query_expr_runtime_safe T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_Set Union
-          (QExpr_CrossJoin left first)
-          (QExpr_CrossJoin left second))) ->
-    (forall schedule,
-      @query_expr_has_success T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_CrossJoin left (QExpr_Set Union first second))) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-Proof.
-intros env left first second Hsource_sort Htarget_sort Hfunctional
-  Hsource_safe Htarget_safe Hsource_success.
-apply query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv.
-intro schedule.
-apply query_expr_cross_join_union_right_outcome_equiv_safe.
-- exact Hsource_sort.
-- exact Htarget_sort.
-- exact (Hfunctional schedule).
-- exact (Hsource_safe schedule).
-- exact (Htarget_safe schedule).
-- exact (Hsource_success schedule).
 Qed.
 
 (** Read-only query programs compose the public relation statement by

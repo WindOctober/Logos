@@ -1522,6 +1522,30 @@ apply Hproject with (input_row := input_row).
 - apply Hpairs in Hpair; cbn in Hpair; exact Hpair.
 Qed.
 
+(** A successful row-map query emits exactly one output occurrence for each
+    occurrence in the child success selected by the parent derivation.  The
+    existential child keeps the statement valid for relational, scheduled
+    evaluation without asserting determinism or excluding error outcomes. *)
+Lemma eval_query_expr_row_map_success_length :
+  forall env outputs row_map input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env (QExpr_RowMap outputs row_map input)
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
+Proof.
+intros env outputs row_map input output Houtput.
+apply eval_query_expr_row_map_success_iff in Houtput.
+destruct Houtput as [input_rows [Hinput Hmap]].
+exists input_rows; split; [exact Hinput|].
+apply row_map_rows_outcome_success_map in Hmap.
+subst output; now rewrite length_map.
+Qed.
+
 (** A compositional occurrence bound for every successful ordered observation
     of a query.  This contract deliberately does not claim determinism or
     runtime safety: errors remain possible outcomes, and every successful
@@ -1651,11 +1675,11 @@ Lemma query_success_length_le_row_map :
       (QExpr_RowMap outputs row_map input) bound.
 Proof.
 intros env outputs row_map input bound Hinput output Houtput.
-apply eval_query_expr_row_map_success_iff in Houtput.
-destruct Houtput as [input_rows [Hinput_rows Hmap]].
-apply row_map_rows_outcome_success_map in Hmap.
-subst output; rewrite length_map.
-now apply Hinput.
+destruct
+  (eval_query_expr_row_map_success_length
+    env outputs row_map input output Houtput)
+  as [input_rows [Hinput_rows Hlength]].
+rewrite Hlength; now apply Hinput.
 Qed.
 
 (** OFFSET subtracts the same prefix length from every successful input
@@ -2119,17 +2143,27 @@ induction rows as [|row rows IH];
     eapply IH; exact Htail.
 Qed.
 
-Lemma query_success_length_le_rank :
-  forall env partition_keys order_keys rank_attribute rank_value input bound,
-    query_success_length_le env input bound ->
-    query_success_length_le env
+(** RANK preserves the exact occurrence count of the child success used by
+    the parent derivation.  Rank values and legal row order remain observable;
+    only the list length is related here. *)
+Lemma eval_query_expr_rank_success_length :
+  forall env partition_keys order_keys rank_attribute rank_value input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
       (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
-      bound.
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
 Proof.
-intros env partition_keys order_keys rank_attribute rank_value input bound
-  Hinput output Houtput.
+intros env partition_keys order_keys rank_attribute rank_value input output
+  Houtput.
 apply eval_query_expr_rank_success_iff in Houtput.
-destruct Houtput as [input_rows [output_bag [Hinput_rows [Hrank Hsame]]]].
+destruct Houtput as [input_rows [output_bag [Hinput [Hrank Hsame]]]].
+exists input_rows; split; [exact Hinput|].
 unfold query_rank_bag_relation in Hrank.
 destruct Hrank as [ranked_rows [Hcompute Hbag]].
 assert (Houtput_length : List.length output = List.length ranked_rows).
@@ -2145,19 +2179,28 @@ assert (Houtput_length : List.length output = List.length ranked_rows).
 }
 rewrite Houtput_length.
 rewrite (query_rank_rows_outcome_success_length _ _ _ _ _ _ _ Hcompute).
-rewrite query_rank_bag_rows_length.
-exact (Hinput input_rows Hinput_rows).
+apply query_rank_bag_rows_length.
 Qed.
 
-Lemma query_success_length_le_window :
-  forall env partition_keys order_keys items input bound,
-    query_success_length_le env input bound ->
-    query_success_length_le env
-      (QExpr_Window partition_keys order_keys items input) bound.
+(** WINDOW likewise preserves exact occurrence count while leaving peer
+    ordering, frame values, runtime errors, and the Boolean schedule intact. *)
+Lemma eval_query_expr_window_success_length :
+  forall env partition_keys order_keys items input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
+      (QExpr_Window partition_keys order_keys items input)
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
 Proof.
-intros env partition_keys order_keys items input bound Hinput output Houtput.
+intros env partition_keys order_keys items input output Houtput.
 apply eval_query_expr_window_success_iff in Houtput.
-destruct Houtput as [input_rows [output_bag [Hinput_rows [Hwindow Hsame]]]].
+destruct Houtput as [input_rows [output_bag [Hinput [Hwindow Hsame]]]].
+exists input_rows; split; [exact Hinput|].
 unfold query_window_bag_relation in Hwindow.
 destruct Hwindow as
   [ordered_rows [window_rows [Horder [Hcompute Hbag]]]].
@@ -2185,8 +2228,37 @@ assert (Hordered_length :
 rewrite Houtput_length.
 rewrite (query_window_rows_outcome_success_length
   env partition_keys items None 0 nil ordered_rows window_rows Hcompute).
-rewrite Hordered_length, query_rank_bag_rows_length.
-exact (Hinput input_rows Hinput_rows).
+rewrite Hordered_length; apply query_rank_bag_rows_length.
+Qed.
+
+Lemma query_success_length_le_rank :
+  forall env partition_keys order_keys rank_attribute rank_value input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+      bound.
+Proof.
+intros env partition_keys order_keys rank_attribute rank_value input bound
+  Hinput output Houtput.
+destruct
+  (eval_query_expr_rank_success_length
+    env partition_keys order_keys rank_attribute rank_value input output Houtput)
+  as [input_rows [Hinput_rows Hlength]].
+rewrite Hlength; exact (Hinput input_rows Hinput_rows).
+Qed.
+
+Lemma query_success_length_le_window :
+  forall env partition_keys order_keys items input bound,
+    query_success_length_le env input bound ->
+    query_success_length_le env
+      (QExpr_Window partition_keys order_keys items input) bound.
+Proof.
+intros env partition_keys order_keys items input bound Hinput output Houtput.
+destruct
+  (eval_query_expr_window_success_length
+    env partition_keys order_keys items input output Houtput)
+  as [input_rows [Hinput_rows Hlength]].
+rewrite Hlength; exact (Hinput input_rows Hinput_rows).
 Qed.
 
 Lemma if_tuple_rows_success_true :
@@ -2564,117 +2636,4 @@ repeat split; [exact Hnonempty| |].
   apply filter_In in Hrow as [Hrow _].
   eapply Hnonnull; eauto.
 - now apply NoDupA_map_filter.
-Qed.
-
-(** Fixed-first-key handoff. The caller supplies fact rows for one key value,
-    then any number of functional dimension stages. Grouping cannot create
-    occurrences, and the unfixed second key component ranges over at most the
-    complete INT32 domain. *)
-Theorem functional_chain_fixed_first_composite_int32_group_length_2_32 :
-  forall first_name second_name facts keep stages fixed_first
-      env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall
-      (fun row => dot TNull row (Attr_int32 first_name) = fixed_first)
-      (filter keep facts) ->
-    Forall theta_stage_is_functional stages ->
-    In group
-      (@query_make_groups TNull env
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-        group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 32.
-Proof.
-intros first_name second_name facts keep stages fixed_first
-  env group_terms group Hfirst Hsecond Hprimary Hfixed
-  Hfunctional Hgroup.
-pose proof
-  (query_make_groups_member_length_le env
-    (functional_theta_join_chain
-      (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-    group_terms group Hgroup) as Hgroup_chain.
-pose proof
-  (functional_theta_join_chain_length_le
-    (tuple TNull) (join_tuple TNull) (filter keep facts) stages Hfunctional)
-  as Hchain_driver.
-pose proof
-  (int32_composite_primary_key_fixed_first_length
-    first_name second_name (filter keep facts) fixed_first
-    (rows_attribute_conform_filter _ _ _ Hfirst)
-    (rows_attribute_conform_filter _ _ _ Hsecond)
-    (primary_key_conforms_filter _ _ _ Hprimary)
-    Hfixed) as Hdriver.
-assert (Hgroup_domain : (List.length group <= int32_domain_size)%nat).
-{ eapply Nat.le_trans; [exact Hgroup_chain|].
-  eapply Nat.le_trans; eassumption. }
-apply Nat2Z.inj_le in Hgroup_domain.
-now rewrite int32_domain_size_is_two_power_32 in Hgroup_domain.
-Qed.
-
-(** Filtering a fact table and then adjoining only at-most-one dimension row at
-    each stage cannot exceed the complete two-INT32 primary-key domain.  This is
-    an occurrence bound: duplicates are retained, and a missing dimension match
-    simply removes the corresponding fact occurrence. *)
-Theorem functional_chain_composite_int32_occurrence_length_2_64 :
-  forall first_name second_name facts keep stages,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall theta_stage_is_functional stages ->
-    Z.of_nat
-      (List.length
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)) <=
-      Z.pow 2 64.
-Proof.
-intros first_name second_name facts keep stages
-  Hfirst Hsecond Hprimary Hfunctional.
-pose proof
-  (functional_theta_join_chain_length_le
-    (tuple TNull) (join_tuple TNull) (filter keep facts) stages Hfunctional)
-  as Hchain.
-pose proof (filter_length keep facts) as Hfilter.
-assert (List.length (filter keep facts) <= List.length facts)%nat as Hfilter_le
-  by lia.
-pose proof
-  (int32_composite_primary_key_length_2_64
-    first_name second_name facts Hfirst Hsecond Hprimary) as Hfacts.
-apply Nat2Z.inj_le in Hchain.
-apply Nat2Z.inj_le in Hfilter_le.
-lia.
-Qed.
-
-(** Grouping cannot increase an individual occurrence list, so every group of
-    the same functional producer inherits the complete fact-key bound. *)
-Theorem functional_chain_composite_int32_group_length_2_64 :
-  forall first_name second_name facts keep stages env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall theta_stage_is_functional stages ->
-    In group
-      (@query_make_groups TNull env
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-        group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 64.
-Proof.
-intros first_name second_name facts keep stages env group_terms group
-  Hfirst Hsecond Hprimary Hfunctional Hgroup.
-pose proof
-  (query_make_groups_member_length_le env
-    (functional_theta_join_chain
-      (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-    group_terms group Hgroup) as Hgroup_chain.
-apply Nat2Z.inj_le in Hgroup_chain.
-pose proof
-  (functional_chain_composite_int32_occurrence_length_2_64
-    first_name second_name facts keep stages
-    Hfirst Hsecond Hprimary Hfunctional) as Hchain.
-eapply Z.le_trans; [exact Hgroup_chain|exact Hchain].
 Qed.

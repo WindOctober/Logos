@@ -2,7 +2,7 @@
 
 Route here for: INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow.
 
-This focused catalog contains 126 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 127 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `int32_checked_result_value`
 
@@ -48,37 +48,9 @@ Lemma int64_checked_result_value : forall integer result,
   int64_value result = integer.
 ```
 
-## `interp_int32_neq_disjunction_true_of_unequal_constants`
-
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:37`](../NumericDerivedFacts.v#L37)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: States the interp int32 disequality disjunction true of unequal constants law for typed numeric semantics, in the exact direction displayed by the declaration.
-
-Applicability: Use when the goal or a hypothesis matches the `interp_int32_neq_disjunction_true_of_unequal_constants` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `scalar`
-
-Search aliases: `numeric and cast semantics`, `predicate`, `Bool3`, `INTEGER`, `int32`
-
-```rocq
-Lemma interp_int32_neq_disjunction_true_of_unequal_constants :
-  forall value first second,
-    int32_value first <> int32_value second ->
-    Bool3.orb3
-      (NullValues.interp_predicate PredicateNeq
-        [Value_int32 (Some value); Value_int32 (Some first)])
-      (NullValues.interp_predicate PredicateNeq
-        [Value_int32 (Some value); Value_int32 (Some second)]) =
-    Bool3.true3.
-```
-
 ## `int32_checked_defined_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:59`](../NumericDerivedFacts.v#L59)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:34`](../NumericDerivedFacts.v#L34)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -100,7 +72,7 @@ Lemma int32_checked_defined_iff : forall integer,
 
 ## `int64_checked_defined_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:74`](../NumericDerivedFacts.v#L74)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:49`](../NumericDerivedFacts.v#L49)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -122,7 +94,7 @@ Lemma int64_checked_defined_iff : forall integer,
 
 ## `int32_checked_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:89`](../NumericDerivedFacts.v#L89)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:64`](../NumericDerivedFacts.v#L64)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -144,7 +116,7 @@ Lemma int32_checked_none_iff : forall integer,
 
 ## `int64_checked_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:106`](../NumericDerivedFacts.v#L106)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:81`](../NumericDerivedFacts.v#L81)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -166,7 +138,7 @@ Lemma int64_checked_none_iff : forall integer,
 
 ## `int32_checked_value`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:123`](../NumericDerivedFacts.v#L123)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:98`](../NumericDerivedFacts.v#L98)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -185,9 +157,53 @@ Lemma int32_checked_value : forall value,
   int32_checked (int32_value value) = Some value.
 ```
 
+## `int32_checked_some_iff`
+
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:110`](../NumericDerivedFacts.v#L110)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
+
+Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `INTEGER`, `int32`
+
+```rocq
+Lemma int32_checked_some_iff : forall integer result,
+  int32_checked integer = Some result <->
+  int32_value result = integer.
+```
+
+## `int64_checked_some_iff`
+
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:119`](../NumericDerivedFacts.v#L119)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
+
+Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `BIGINT`, `int64`
+
+```rocq
+Lemma int64_checked_some_iff : forall integer result,
+  int64_checked integer = Some result <->
+  int64_value result = integer.
+```
+
 ## `int32_to_int64_injective`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:135`](../NumericDerivedFacts.v#L135)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:128`](../NumericDerivedFacts.v#L128)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -208,7 +224,7 @@ Lemma int32_to_int64_injective : forall left right,
 
 ## `int32_to_int64_value`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:143`](../NumericDerivedFacts.v#L143)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:136`](../NumericDerivedFacts.v#L136)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -229,7 +245,7 @@ Lemma int32_to_int64_value : forall value,
 
 ## `int32_add_total_of_range`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:149`](../NumericDerivedFacts.v#L149)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:142`](../NumericDerivedFacts.v#L142)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -253,7 +269,7 @@ Lemma int32_add_total_of_range : forall left right,
 
 ## `int32_sub_total_of_range`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:162`](../NumericDerivedFacts.v#L162)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:155`](../NumericDerivedFacts.v#L155)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -277,7 +293,7 @@ Lemma int32_sub_total_of_range : forall left right,
 
 ## `int32_mul_total_of_range`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:175`](../NumericDerivedFacts.v#L175)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:168`](../NumericDerivedFacts.v#L168)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -301,7 +317,7 @@ Lemma int32_mul_total_of_range : forall left right,
 
 ## `int32_div_total_of_nonzero_range`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:188`](../NumericDerivedFacts.v#L188)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:181`](../NumericDerivedFacts.v#L181)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -326,7 +342,7 @@ Lemma int32_div_total_of_nonzero_range : forall left right,
 
 ## `int32_add_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:210`](../NumericDerivedFacts.v#L210)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:203`](../NumericDerivedFacts.v#L203)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -348,7 +364,7 @@ Lemma int32_add_some_iff : forall left right result,
 
 ## `int32_sub_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:221`](../NumericDerivedFacts.v#L221)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:214`](../NumericDerivedFacts.v#L214)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -370,7 +386,7 @@ Lemma int32_sub_some_iff : forall left right result,
 
 ## `int32_mul_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:232`](../NumericDerivedFacts.v#L232)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:225`](../NumericDerivedFacts.v#L225)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -392,7 +408,7 @@ Lemma int32_mul_some_iff : forall left right result,
 
 ## `int32_div_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:243`](../NumericDerivedFacts.v#L243)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:236`](../NumericDerivedFacts.v#L236)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -415,7 +431,7 @@ Lemma int32_div_some_iff : forall left right result,
 
 ## `int32_opp_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:262`](../NumericDerivedFacts.v#L262)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:255`](../NumericDerivedFacts.v#L255)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -437,7 +453,7 @@ Lemma int32_opp_some_iff : forall input result,
 
 ## `int32_add_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:273`](../NumericDerivedFacts.v#L273)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:266`](../NumericDerivedFacts.v#L266)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -460,7 +476,7 @@ Lemma int32_add_none_iff : forall left right,
 
 ## `int32_sub_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:282`](../NumericDerivedFacts.v#L282)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:275`](../NumericDerivedFacts.v#L275)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -483,7 +499,7 @@ Lemma int32_sub_none_iff : forall left right,
 
 ## `int32_mul_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:291`](../NumericDerivedFacts.v#L291)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:284`](../NumericDerivedFacts.v#L284)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -506,7 +522,7 @@ Lemma int32_mul_none_iff : forall left right,
 
 ## `int32_div_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:300`](../NumericDerivedFacts.v#L300)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:293`](../NumericDerivedFacts.v#L293)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -530,7 +546,7 @@ Lemma int32_div_none_iff : forall left right,
 
 ## `int32_opp_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:316`](../NumericDerivedFacts.v#L316)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:309`](../NumericDerivedFacts.v#L309)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -553,7 +569,7 @@ Lemma int32_opp_none_iff : forall input,
 
 ## `int32_binary_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:328`](../NumericDerivedFacts.v#L328)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:321`](../NumericDerivedFacts.v#L321)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -576,7 +592,7 @@ Lemma int32_binary_runtime_error_none_iff : forall operation left right,
 
 ## `int32_binary_runtime_error_out_of_range_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:340`](../NumericDerivedFacts.v#L340)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:333`](../NumericDerivedFacts.v#L333)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -601,7 +617,7 @@ Lemma int32_binary_runtime_error_out_of_range_iff :
 
 ## `int32_div_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:353`](../NumericDerivedFacts.v#L353)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:346`](../NumericDerivedFacts.v#L346)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -625,7 +641,7 @@ Lemma int32_div_runtime_error_none_iff : forall left right,
 
 ## `int32_div_runtime_error_division_by_zero_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:370`](../NumericDerivedFacts.v#L370)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:363`](../NumericDerivedFacts.v#L363)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -649,7 +665,7 @@ Lemma int32_div_runtime_error_division_by_zero_iff : forall left right,
 
 ## `int32_div_runtime_error_out_of_range_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:386`](../NumericDerivedFacts.v#L386)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:379`](../NumericDerivedFacts.v#L379)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -673,7 +689,7 @@ Lemma int32_div_runtime_error_out_of_range_iff : forall left right,
 
 ## `int32_opp_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:406`](../NumericDerivedFacts.v#L406)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:399`](../NumericDerivedFacts.v#L399)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -695,7 +711,7 @@ Lemma int32_opp_runtime_error_none_iff : forall input,
 
 ## `int64_binary_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:416`](../NumericDerivedFacts.v#L416)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:409`](../NumericDerivedFacts.v#L409)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -721,7 +737,7 @@ Lemma int64_binary_runtime_error_none_iff :
 
 ## `int64_binary_runtime_error_out_of_range_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:433`](../NumericDerivedFacts.v#L433)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:426`](../NumericDerivedFacts.v#L426)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -747,7 +763,7 @@ Lemma int64_binary_runtime_error_out_of_range_iff :
 
 ## `int64_div_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:448`](../NumericDerivedFacts.v#L448)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:441`](../NumericDerivedFacts.v#L441)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -774,7 +790,7 @@ Lemma int64_div_runtime_error_none_iff :
 
 ## `int64_div_runtime_error_division_by_zero_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:470`](../NumericDerivedFacts.v#L470)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:463`](../NumericDerivedFacts.v#L463)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -800,7 +816,7 @@ Lemma int64_div_runtime_error_division_by_zero_iff :
 
 ## `int64_div_runtime_error_out_of_range_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:489`](../NumericDerivedFacts.v#L489)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:482`](../NumericDerivedFacts.v#L482)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -827,7 +843,7 @@ Lemma int64_div_runtime_error_out_of_range_iff :
 
 ## `interp_cast_int32_to_double_nonnull`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:517`](../NumericDerivedFacts.v#L517)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:510`](../NumericDerivedFacts.v#L510)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -849,7 +865,7 @@ Lemma interp_cast_int32_to_double_nonnull : forall value,
 
 ## `interp_cast_int32_to_int64_nonnull`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:522`](../NumericDerivedFacts.v#L522)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:515`](../NumericDerivedFacts.v#L515)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -871,7 +887,7 @@ Lemma interp_cast_int32_to_int64_nonnull : forall value,
 
 ## `interp_cast_int64_to_int32_nonnull`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:527`](../NumericDerivedFacts.v#L527)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:520`](../NumericDerivedFacts.v#L520)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -893,7 +909,7 @@ Lemma interp_cast_int64_to_int32_nonnull : forall value,
 
 ## `interp_int32_int64_cast_roundtrip`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:532`](../NumericDerivedFacts.v#L532)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:525`](../NumericDerivedFacts.v#L525)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -916,7 +932,7 @@ Lemma interp_int32_int64_cast_roundtrip : forall value,
 
 ## `numeric_integer_casts_preserve_null`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:543`](../NumericDerivedFacts.v#L543)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:536`](../NumericDerivedFacts.v#L536)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -940,7 +956,7 @@ Lemma numeric_integer_casts_preserve_null :
 
 ## `scalar_widening_casts_runtime_safe`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:550`](../NumericDerivedFacts.v#L550)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:543`](../NumericDerivedFacts.v#L543)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -964,7 +980,7 @@ Lemma scalar_widening_casts_runtime_safe : forall values,
 
 ## `scalar_cast_int64_to_int32_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:557`](../NumericDerivedFacts.v#L557)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:550`](../NumericDerivedFacts.v#L550)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -988,7 +1004,7 @@ Lemma scalar_cast_int64_to_int32_runtime_error_none_iff : forall value,
 
 ## `scalar_cast_int64_to_int32_out_of_range_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:569`](../NumericDerivedFacts.v#L569)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:562`](../NumericDerivedFacts.v#L562)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1013,7 +1029,7 @@ Lemma scalar_cast_int64_to_int32_out_of_range_iff : forall value,
 
 ## `numeric_to_int32_checked_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:582`](../NumericDerivedFacts.v#L582)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:575`](../NumericDerivedFacts.v#L575)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1037,7 +1053,7 @@ Lemma numeric_to_int32_checked_some_iff : forall value result,
 
 ## `numeric_to_int32_checked_result_value`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:599`](../NumericDerivedFacts.v#L599)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:592`](../NumericDerivedFacts.v#L592)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1061,7 +1077,7 @@ Lemma numeric_to_int32_checked_result_value : forall value result,
 
 ## `scalar_cast_numeric_to_int32_finite_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:612`](../NumericDerivedFacts.v#L612)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:605`](../NumericDerivedFacts.v#L605)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1087,7 +1103,7 @@ Lemma scalar_cast_numeric_to_int32_finite_runtime_error_none_iff :
 
 ## `scalar_cast_numeric_to_int32_special_unsupported`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:627`](../NumericDerivedFacts.v#L627)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:620`](../NumericDerivedFacts.v#L620)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1113,7 +1129,7 @@ Lemma scalar_cast_numeric_to_int32_special_unsupported : forall value,
 
 ## `float32_add_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:642`](../NumericDerivedFacts.v#L642)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:635`](../NumericDerivedFacts.v#L635)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1138,7 +1154,7 @@ Lemma float32_add_runtime_error_none_iff : forall operation left right,
 
 ## `float64_add_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:658`](../NumericDerivedFacts.v#L658)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:651`](../NumericDerivedFacts.v#L651)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1163,7 +1179,7 @@ Lemma float64_add_runtime_error_none_iff : forall operation left right,
 
 ## `float32_mul_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:674`](../NumericDerivedFacts.v#L674)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:667`](../NumericDerivedFacts.v#L667)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1191,7 +1207,7 @@ Lemma float32_mul_runtime_error_none_iff : forall left right,
 
 ## `float64_mul_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:705`](../NumericDerivedFacts.v#L705)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:698`](../NumericDerivedFacts.v#L698)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1219,7 +1235,7 @@ Lemma float64_mul_runtime_error_none_iff : forall left right,
 
 ## `float32_div_runtime_error_division_by_zero_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:736`](../NumericDerivedFacts.v#L736)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:729`](../NumericDerivedFacts.v#L729)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1243,7 +1259,7 @@ Lemma float32_div_runtime_error_division_by_zero_iff : forall left right,
 
 ## `float64_div_runtime_error_division_by_zero_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:764`](../NumericDerivedFacts.v#L764)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:757`](../NumericDerivedFacts.v#L757)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1267,7 +1283,7 @@ Lemma float64_div_runtime_error_division_by_zero_iff : forall left right,
 
 ## `float32_div_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:792`](../NumericDerivedFacts.v#L792)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:785`](../NumericDerivedFacts.v#L785)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1295,7 +1311,7 @@ Lemma float32_div_runtime_error_none_iff : forall left right,
 
 ## `float64_div_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:827`](../NumericDerivedFacts.v#L827)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:820`](../NumericDerivedFacts.v#L820)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1323,7 +1339,7 @@ Lemma float64_div_runtime_error_none_iff : forall left right,
 
 ## `numeric_add_commutative`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:864`](../NumericDerivedFacts.v#L864)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:857`](../NumericDerivedFacts.v#L857)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1344,7 +1360,7 @@ Lemma numeric_add_commutative : forall left right,
 
 ## `numeric_mul_commutative`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:873`](../NumericDerivedFacts.v#L873)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:866`](../NumericDerivedFacts.v#L866)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1365,7 +1381,7 @@ Lemma numeric_mul_commutative : forall left right,
 
 ## `numeric_opp_involutive`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:882`](../NumericDerivedFacts.v#L882)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:875`](../NumericDerivedFacts.v#L875)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1386,7 +1402,7 @@ Lemma numeric_opp_involutive : forall value,
 
 ## `numeric_add_zero_left`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:889`](../NumericDerivedFacts.v#L889)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:882`](../NumericDerivedFacts.v#L882)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1407,7 +1423,7 @@ Lemma numeric_add_zero_left : forall value,
 
 ## `numeric_sub_self_finite`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:897`](../NumericDerivedFacts.v#L897)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:890`](../NumericDerivedFacts.v#L890)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1428,7 +1444,7 @@ Lemma numeric_sub_self_finite : forall value,
 
 ## `numeric_min_idempotent`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:905`](../NumericDerivedFacts.v#L905)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:898`](../NumericDerivedFacts.v#L898)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1449,7 +1465,7 @@ Lemma numeric_min_idempotent : forall value,
 
 ## `numeric_max_idempotent`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:912`](../NumericDerivedFacts.v#L912)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:905`](../NumericDerivedFacts.v#L905)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1470,7 +1486,7 @@ Lemma numeric_max_idempotent : forall value,
 
 ## `numeric_is_nan_true_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:922`](../NumericDerivedFacts.v#L922)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:915`](../NumericDerivedFacts.v#L915)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1491,7 +1507,7 @@ Lemma numeric_is_nan_true_iff : forall value,
 
 ## `numeric_rounded_coeff_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:929`](../NumericDerivedFacts.v#L929)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:922`](../NumericDerivedFacts.v#L922)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1515,7 +1531,7 @@ Lemma numeric_rounded_coeff_some_iff : forall value scale coefficient,
 
 ## `numeric_decimal_parts_some_is_finite`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:946`](../NumericDerivedFacts.v#L946)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:939`](../NumericDerivedFacts.v#L939)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1537,7 +1553,7 @@ Lemma numeric_decimal_parts_some_is_finite : forall value parts,
 
 ## `numeric_round_special_identity`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:955`](../NumericDerivedFacts.v#L955)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:948`](../NumericDerivedFacts.v#L948)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1561,7 +1577,7 @@ Lemma numeric_round_special_identity : forall value scale,
 
 ## `numeric_runtime_fits_special`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:964`](../NumericDerivedFacts.v#L964)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:957`](../NumericDerivedFacts.v#L957)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1585,7 +1601,7 @@ Lemma numeric_runtime_fits_special : forall value,
 
 ## `numeric_typmod_valid_true_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:975`](../NumericDerivedFacts.v#L975)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:968`](../NumericDerivedFacts.v#L968)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1608,7 +1624,7 @@ Lemma numeric_typmod_valid_true_iff : forall precision scale,
 
 ## `numeric_fits_typmod_true_implies_valid`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:986`](../NumericDerivedFacts.v#L986)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:979`](../NumericDerivedFacts.v#L979)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1630,7 +1646,7 @@ Lemma numeric_fits_typmod_true_implies_valid : forall value precision scale,
 
 ## `numeric_cast_typmod_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:995`](../NumericDerivedFacts.v#L995)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:988`](../NumericDerivedFacts.v#L988)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1653,7 +1669,7 @@ Lemma numeric_cast_typmod_some_iff : forall value precision scale result,
 
 ## `numeric_cast_typmod_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1011`](../NumericDerivedFacts.v#L1011)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1004`](../NumericDerivedFacts.v#L1004)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1675,7 +1691,7 @@ Lemma numeric_cast_typmod_none_iff : forall value precision scale,
 
 ## `numeric_cast_typmod_nan_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1022`](../NumericDerivedFacts.v#L1022)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1015`](../NumericDerivedFacts.v#L1015)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1697,7 +1713,7 @@ Lemma numeric_cast_typmod_nan_iff : forall precision scale,
 
 ## `numeric_cast_typmod_infinity_rejected`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1033`](../NumericDerivedFacts.v#L1033)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1026`](../NumericDerivedFacts.v#L1026)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1719,7 +1735,7 @@ Lemma numeric_cast_typmod_infinity_rejected : forall value precision scale,
 
 ## `numeric_of_scaled_with_typmod_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1042`](../NumericDerivedFacts.v#L1042)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1035`](../NumericDerivedFacts.v#L1035)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1745,7 +1761,7 @@ Lemma numeric_of_scaled_with_typmod_some_iff :
 
 ## `numeric_div_with_typmod_some_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1055`](../NumericDerivedFacts.v#L1055)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1048`](../NumericDerivedFacts.v#L1048)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1771,7 +1787,7 @@ Lemma numeric_div_with_typmod_some_iff :
 
 ## `numeric_result_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1079`](../NumericDerivedFacts.v#L1079)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1072`](../NumericDerivedFacts.v#L1072)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1793,7 +1809,7 @@ Lemma numeric_result_runtime_error_none_iff : forall result,
 
 ## `numeric_binary_runtime_error_total`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1089`](../NumericDerivedFacts.v#L1089)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1082`](../NumericDerivedFacts.v#L1082)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1816,7 +1832,7 @@ Lemma numeric_binary_runtime_error_total : forall operation left right,
 
 ## `numeric_unary_runtime_error_total`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1099`](../NumericDerivedFacts.v#L1099)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1092`](../NumericDerivedFacts.v#L1092)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1838,7 +1854,7 @@ Lemma numeric_unary_runtime_error_total : forall operation input,
 
 ## `numeric_typmod_runtime_error_success_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1108`](../NumericDerivedFacts.v#L1108)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1101`](../NumericDerivedFacts.v#L1101)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1864,7 +1880,7 @@ Lemma numeric_typmod_runtime_error_success_iff :
 
 ## `numeric_typmod_runtime_error_failure_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1125`](../NumericDerivedFacts.v#L1125)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1118`](../NumericDerivedFacts.v#L1118)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1890,7 +1906,7 @@ Lemma numeric_typmod_runtime_error_failure_iff :
 
 ## `numeric_div_nan_left`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1142`](../NumericDerivedFacts.v#L1142)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1135`](../NumericDerivedFacts.v#L1135)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1912,7 +1928,7 @@ Lemma numeric_div_nan_left : forall right left_scale right_scale,
 
 ## `numeric_div_nan_right`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1147`](../NumericDerivedFacts.v#L1147)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1140`](../NumericDerivedFacts.v#L1140)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1934,7 +1950,7 @@ Lemma numeric_div_nan_right : forall left left_scale right_scale,
 
 ## `numeric_div_finite_by_infinity`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1152`](../NumericDerivedFacts.v#L1152)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1145`](../NumericDerivedFacts.v#L1145)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1957,7 +1973,7 @@ Lemma numeric_div_finite_by_infinity : forall finite divisor left_scale right_sc
 
 ## `numeric_div_runtime_error_zero_divisor`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1160`](../NumericDerivedFacts.v#L1160)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1153`](../NumericDerivedFacts.v#L1153)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1981,7 +1997,7 @@ Lemma numeric_div_runtime_error_zero_divisor : forall left left_scale right_scal
 
 ## `numeric_div_runtime_error_nan`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1171`](../NumericDerivedFacts.v#L1171)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1164`](../NumericDerivedFacts.v#L1164)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2006,7 +2022,7 @@ Lemma numeric_div_runtime_error_nan :
 
 ## `numeric_div_runtime_error_division_by_zero`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1184`](../NumericDerivedFacts.v#L1184)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1177`](../NumericDerivedFacts.v#L1177)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2034,7 +2050,7 @@ Lemma numeric_div_runtime_error_division_by_zero :
 
 ## `numeric_div_runtime_error_success_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1199`](../NumericDerivedFacts.v#L1199)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1192`](../NumericDerivedFacts.v#L1192)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2066,7 +2082,7 @@ Lemma numeric_div_runtime_error_success_iff :
 
 ## `numeric_div_runtime_error_invalid_scale`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1232`](../NumericDerivedFacts.v#L1232)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1225`](../NumericDerivedFacts.v#L1225)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2096,7 +2112,7 @@ Lemma numeric_div_runtime_error_invalid_scale :
 
 ## `numeric_div_typmod_runtime_error_success_iff`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1252`](../NumericDerivedFacts.v#L1252)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1245`](../NumericDerivedFacts.v#L1245)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2129,7 +2145,7 @@ Lemma numeric_div_typmod_runtime_error_success_iff :
 
 ## `numeric_div_typmod_runtime_error_total`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1278`](../NumericDerivedFacts.v#L1278)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1271`](../NumericDerivedFacts.v#L1271)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2161,7 +2177,7 @@ Lemma numeric_div_typmod_runtime_error_total :
 
 ## `numeric_sum_from_state_empty`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1303`](../NumericDerivedFacts.v#L1303)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1296`](../NumericDerivedFacts.v#L1296)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2183,7 +2199,7 @@ Lemma numeric_sum_from_state_empty : forall state,
 
 ## `numeric_sum_from_state_special`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1311`](../NumericDerivedFacts.v#L1311)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1304`](../NumericDerivedFacts.v#L1304)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2209,7 +2225,7 @@ Lemma numeric_sum_from_state_special : forall state special,
 
 ## `numeric_sum_from_state_finite`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1327`](../NumericDerivedFacts.v#L1327)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1320`](../NumericDerivedFacts.v#L1320)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2236,7 +2252,7 @@ Lemma numeric_sum_from_state_finite : forall state,
 
 ## `numeric_avg_from_scale_state_empty`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1344`](../NumericDerivedFacts.v#L1344)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1337`](../NumericDerivedFacts.v#L1337)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2258,7 +2274,7 @@ Lemma numeric_avg_from_scale_state_empty : forall input_scale state,
 
 ## `numeric_avg_from_scale_state_finite`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1352`](../NumericDerivedFacts.v#L1352)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1345`](../NumericDerivedFacts.v#L1345)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2289,7 +2305,7 @@ Lemma numeric_avg_from_scale_state_finite :
 
 ## `numeric_agg_special_result_nan`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1373`](../NumericDerivedFacts.v#L1373)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1366`](../NumericDerivedFacts.v#L1366)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2311,7 +2327,7 @@ Lemma numeric_agg_special_result_nan : forall nan_count pos_count neg_count,
 
 ## `numeric_agg_special_result_mixed_infinities`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1384`](../NumericDerivedFacts.v#L1384)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1377`](../NumericDerivedFacts.v#L1377)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2334,7 +2350,7 @@ Lemma numeric_agg_special_result_mixed_infinities :
 
 ## `numeric_agg_special_result_positive_infinity`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1400`](../NumericDerivedFacts.v#L1400)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1393`](../NumericDerivedFacts.v#L1393)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2358,7 +2374,7 @@ Lemma numeric_agg_special_result_positive_infinity :
 
 ## `numeric_agg_special_result_negative_infinity`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1417`](../NumericDerivedFacts.v#L1417)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1410`](../NumericDerivedFacts.v#L1410)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2382,7 +2398,7 @@ Lemma numeric_agg_special_result_negative_infinity :
 
 ## `numeric_agg_special_result_none`
 
-Source: [`theories/FormalSQL/NumericDerivedFacts.v:1434`](../NumericDerivedFacts.v#L1434)
+Source: [`theories/FormalSQL/NumericDerivedFacts.v:1427`](../NumericDerivedFacts.v#L1427)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2469,9 +2485,39 @@ Lemma numeric_sum_transition_preserves_reachable_invariant :
       (numeric_sum_transition state next).
 ```
 
-## `numeric_sum_option_regroup`
+## `numeric_sum_option_regroup_from`
 
 Source: [`theories/FormalSQL/NumericRegroupFacts.v:80`](../NumericRegroupFacts.v#L80)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the numeric sum option regroup from law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_sum_option_regroup_from` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Theorem numeric_sum_option_regroup_from : forall groups current,
+  fold_left numeric_sum_option_add
+    (flat_map
+      (fun group =>
+        match fold_left numeric_sum_option_add group None with
+        | Some total => [total]
+        | None => []
+        end)
+      groups)
+    current =
+  fold_left numeric_sum_option_add (concat groups) current.
+```
+
+## `numeric_sum_option_regroup`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:146`](../NumericRegroupFacts.v#L146)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2486,7 +2532,7 @@ Cross-index: `scalar`
 Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
 
 ```rocq
-Theorem numeric_sum_option_regroup : forall groups,
+Corollary numeric_sum_option_regroup : forall groups,
   fold_left numeric_sum_option_add
     (flat_map
       (fun group =>
@@ -2501,7 +2547,7 @@ Theorem numeric_sum_option_regroup : forall groups,
 
 ## `numeric_sum_from_state_transition`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:146`](../NumericRegroupFacts.v#L146)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:161`](../NumericRegroupFacts.v#L161)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2524,7 +2570,7 @@ Lemma numeric_sum_from_state_transition : forall state next,
 
 ## `numeric_sum_fold_option_add`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:185`](../NumericRegroupFacts.v#L185)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:200`](../NumericRegroupFacts.v#L200)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2549,7 +2595,7 @@ Lemma numeric_sum_fold_option_add : forall numbers state,
 
 ## `numeric_sum_fold_from_initial`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:199`](../NumericRegroupFacts.v#L199)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:214`](../NumericRegroupFacts.v#L214)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2572,7 +2618,7 @@ Corollary numeric_sum_fold_from_initial : forall numbers,
 
 ## `interp_sum_numeric_option_fold`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:210`](../NumericRegroupFacts.v#L210)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:225`](../NumericRegroupFacts.v#L225)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2596,7 +2642,7 @@ Lemma interp_sum_numeric_option_fold : forall observations,
 
 ## `interp_sum_numeric_singleton`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:223`](../NumericRegroupFacts.v#L223)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:238`](../NumericRegroupFacts.v#L238)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2617,7 +2663,7 @@ Lemma interp_sum_numeric_singleton : forall number,
 
 ## `sum_numeric_runtime_error_singleton`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:240`](../NumericRegroupFacts.v#L240)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:255`](../NumericRegroupFacts.v#L255)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2642,7 +2688,7 @@ Lemma sum_numeric_runtime_error_singleton : forall number,
 
 ## `interp_sum_numeric_regroup_value_runtime_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:294`](../NumericRegroupFacts.v#L294)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:309`](../NumericRegroupFacts.v#L309)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2678,7 +2724,7 @@ Theorem interp_sum_numeric_regroup_value_runtime_exact :
 
 ## `tnull_closed_group_sum_numeric_dot_argument_observations_permutation_rows`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:531`](../NumericRegroupFacts.v#L531)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:546`](../NumericRegroupFacts.v#L546)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2710,7 +2756,7 @@ Theorem tnull_closed_group_sum_numeric_dot_argument_observations_permutation_row
 
 ## `tnull_closed_group_sum_numeric_dot_value_runtime_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:576`](../NumericRegroupFacts.v#L576)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:591`](../NumericRegroupFacts.v#L591)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2745,51 +2791,9 @@ Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
         (map (fun row => dot TNull row attribute) group).
 ```
 
-## `query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact`
-
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:728`](../NumericRegroupFacts.v#L728)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Regroups closed-group SUM(NUMERIC column) values while preserving only the outer SUM value and its local runtime callback.
-
-Applicability: Use only for the displayed closed-group SUM(NUMERIC Dot) family. The conclusion covers the outer SUM value/local callback; it does not prove inner aggregate safety or a complete grouped-query outcome.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
-
-Cross-index: `grouping`, `runtime`, `scalar`
-
-Search aliases: `numeric and cast semantics`, `GROUP BY`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
-  forall grouping_env rows group_terms attribute,
-    group_terms <> nil ->
-    Forall
-      (fun row =>
-        attribute inS labels TNull row /\
-        NullValues.is_numeric_value (dot TNull row attribute) = true)
-      rows ->
-    let groups := @query_make_groups TNull grouping_env rows group_terms in
-    let grouped_sums :=
-      map
-        (fun group =>
-          Interp.interp_aggterm TNull
-            (Env.env_g TNull nil
-              (@Env.Group_By TNull group_terms) group)
-            (tnull_sum_numeric_dot_term attribute))
-        groups in
-    NullValues.interp_sum_numeric grouped_sums =
-      NullValues.interp_sum_numeric
-        (map (fun row => dot TNull row attribute) rows) /\
-    NullValues.sum_numeric_runtime_error grouped_sums =
-      NullValues.sum_numeric_runtime_error
-        (map (fun row => dot TNull row attribute) rows).
-```
-
 ## `numeric_values_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:880`](../NumericRegroupFacts.v#L880)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:675`](../NumericRegroupFacts.v#L675)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2811,7 +2815,7 @@ Lemma numeric_values_finite_observations : forall numbers,
 
 ## `finite_observations_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:887`](../NumericRegroupFacts.v#L887)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:682`](../NumericRegroupFacts.v#L682)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2832,7 +2836,7 @@ Lemma finite_observations_all_numeric : forall numbers,
 
 ## `numeric_sum_finite_fold_state`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:893`](../NumericRegroupFacts.v#L893)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:688`](../NumericRegroupFacts.v#L688)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2860,7 +2864,7 @@ Lemma numeric_sum_finite_fold_state :
 
 ## `interp_sum_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:909`](../NumericRegroupFacts.v#L909)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:704`](../NumericRegroupFacts.v#L704)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2885,7 +2889,7 @@ Lemma interp_sum_finite_observations : forall numbers,
 
 ## `interp_sum_numeric_values_extensional`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:932`](../NumericRegroupFacts.v#L932)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:727`](../NumericRegroupFacts.v#L727)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2909,7 +2913,7 @@ Lemma interp_sum_numeric_values_extensional : forall left right,
 
 ## `finite_numeric_total_from_accumulator`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:942`](../NumericRegroupFacts.v#L942)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:737`](../NumericRegroupFacts.v#L737)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2931,7 +2935,7 @@ Lemma finite_numeric_total_from_accumulator : forall numbers accumulator,
 
 ## `nonempty_group_totals_flatten`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:954`](../NumericRegroupFacts.v#L954)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:749`](../NumericRegroupFacts.v#L749)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2953,7 +2957,7 @@ Lemma nonempty_group_totals_flatten : forall groups,
 
 ## `grouped_finite_sums_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:976`](../NumericRegroupFacts.v#L976)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:771`](../NumericRegroupFacts.v#L771)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2978,7 +2982,7 @@ Lemma grouped_finite_sums_all_numeric : forall groups,
 
 ## `numeric_values_grouped_finite_sums`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:988`](../NumericRegroupFacts.v#L988)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:783`](../NumericRegroupFacts.v#L783)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3004,7 +3008,7 @@ Lemma numeric_values_grouped_finite_sums : forall groups,
 
 ## `nonempty_group_totals_nil_iff`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1001`](../NumericRegroupFacts.v#L1001)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:796`](../NumericRegroupFacts.v#L796)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3025,7 +3029,7 @@ Lemma nonempty_group_totals_nil_iff : forall groups,
 
 ## `interp_sum_numeric_finite_regroup`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1019`](../NumericRegroupFacts.v#L1019)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:814`](../NumericRegroupFacts.v#L814)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3052,7 +3056,7 @@ Theorem interp_sum_numeric_finite_regroup : forall groups,
 
 ## `eval_group_bag_global_success_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1142`](../NumericRegroupFacts.v#L1142)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:937`](../NumericRegroupFacts.v#L937)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

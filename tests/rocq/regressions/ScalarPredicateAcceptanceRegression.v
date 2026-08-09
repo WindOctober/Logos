@@ -48,9 +48,16 @@ Example encoded_coalesce_nonnull_identity
      value;
      fallback] = value.
 Proof.
-  apply interp_case_is_not_null_identity.
+  intro Hnonnull.
+  apply interp_case_values_true_branch_if.
+  change
+    (value_bool_to_bool3
+      (bool3_to_value_bool
+        (interp_predicate PredicateIsNotNull [value])) = true3).
+  rewrite value_bool_to_bool3_roundtrip.
+  now apply interp_predicate_is_not_null_true_iff.
 Qed.
 
 Print Assumptions interp_predicate_eq_true_is_true_acceptance.
-Print Assumptions interp_case_is_not_null_identity.
-Print Assumptions case_runtime_error_is_not_null_identity.
+Print Assumptions interp_case_values_true_branch_if.
+Print Assumptions case_runtime_error_true_branch.

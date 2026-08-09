@@ -186,7 +186,6 @@ pub struct FormalQueryStatementSymbols {
     pub statement_index: usize,
     pub root_symbol: String,
     pub output_signature_symbol: String,
-    pub requires_numeric_exp_model: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -382,13 +381,6 @@ pub enum FormalQueryExpr {
         select: Vec<FormalScalarSelectItem>,
         input: Box<FormalQueryExpr>,
     },
-    /// Declarative, order-preserving application of a constrained SQL row
-    /// adapter. The adapter carries its complete typed input/output binding;
-    /// no executor or plan choice participates in its meaning.
-    RowMap {
-        adapter: FormalRowMapAdapter,
-        input: Box<FormalQueryExpr>,
-    },
     /// Order-preserving typed Boolean filtering with mutually recursive
     /// subqueries. Context validation rejects aggregates at this query level.
     Selection {
@@ -445,160 +437,6 @@ pub enum FormalQueryExpr {
         count: u64,
         input: Box<FormalQueryExpr>,
     },
-}
-
-impl FormalQueryExpr {
-    pub fn requires_numeric_exp_model(&self) -> bool {
-        match self {
-            FormalQueryExpr::RowMap {
-                adapter: FormalRowMapAdapter::NumericExp { .. },
-                ..
-            } => true,
-            FormalQueryExpr::Set { left, right, .. }
-            | FormalQueryExpr::CrossJoin { left, right } => {
-                left.requires_numeric_exp_model() || right.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Join {
-                predicate,
-                matched_select,
-                left_select,
-                right_select,
-                left,
-                right,
-                ..
-            } => {
-                scalar_expr_requires_numeric_exp_model(predicate)
-                    || matched_select
-                        .iter()
-                        .chain(left_select)
-                        .chain(right_select)
-                        .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
-                    || left.requires_numeric_exp_model()
-                    || right.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Selection { predicate, input } => {
-                scalar_expr_requires_numeric_exp_model(predicate)
-                    || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Group {
-                select,
-                group_by,
-                having,
-                input,
-            } => {
-                select
-                    .iter()
-                    .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
-                    || group_by.iter().any(scalar_expr_requires_numeric_exp_model)
-                    || scalar_expr_requires_numeric_exp_model(having)
-                    || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Projection { select, input } => {
-                select
-                    .iter()
-                    .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
-                    || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::GroupingSets {
-                grouping_sets,
-                input,
-            } => {
-                grouping_sets.iter().any(|set| {
-                    set.select
-                        .iter()
-                        .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
-                        || set
-                            .group_by
-                            .iter()
-                            .any(scalar_expr_requires_numeric_exp_model)
-                }) || input.requires_numeric_exp_model()
-            }
-            FormalQueryExpr::Rank { input, .. }
-            | FormalQueryExpr::Window { input, .. }
-            | FormalQueryExpr::Distinct { input }
-            | FormalQueryExpr::OrderBy { input, .. }
-            | FormalQueryExpr::Offset { input, .. }
-            | FormalQueryExpr::Fetch { input, .. } => input.requires_numeric_exp_model(),
-            FormalQueryExpr::Error { .. }
-            | FormalQueryExpr::Empty { .. }
-            | FormalQueryExpr::EmptyTuple
-            | FormalQueryExpr::Table { .. } => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
-pub enum FormalRowMapAdapter {
-    /// PostgreSQL's declarative `EXP(AVG(int4))` value operation. The AVG
-    /// value and display scale are explicit input attributes; the abstract
-    /// model returns both the exact finite NUMERIC result and its display
-    /// scale, or the language-level NUMERIC out-of-range error.
-    NumericExp {
-        passthrough: Vec<FormalAttribute>,
-        avg_value: FormalAttribute,
-        avg_dscale: FormalAttribute,
-        output_numeric: FormalAttribute,
-        output_dscale: FormalAttribute,
-    },
-}
-
-impl FormalRowMapAdapter {
-    pub fn output_attributes(&self) -> Vec<FormalAttribute> {
-        match self {
-            FormalRowMapAdapter::NumericExp {
-                passthrough,
-                output_numeric,
-                output_dscale,
-                ..
-            } => {
-                let mut output = passthrough.clone();
-                output.push(output_numeric.clone());
-                output.push(output_dscale.clone());
-                output
-            }
-        }
-    }
-}
-
-pub(super) fn scalar_expr_requires_numeric_exp_model(expression: &FormalScalarExpr) -> bool {
-    match expression {
-        FormalScalarExpr::Leaf { .. } | FormalScalarExpr::True => false,
-        FormalScalarExpr::Call { args, .. }
-        | FormalScalarExpr::Predicate { args, .. }
-        | FormalScalarExpr::In { args, .. }
-        | FormalScalarExpr::QuantifiedComparison { args, .. } => {
-            args.iter().any(scalar_expr_requires_numeric_exp_model)
-                || match expression {
-                    FormalScalarExpr::In { query, .. }
-                    | FormalScalarExpr::QuantifiedComparison { query, .. } => {
-                        query.requires_numeric_exp_model()
-                    }
-                    _ => false,
-                }
-        }
-        FormalScalarExpr::Case {
-            condition,
-            then_expr,
-            else_expr,
-            ..
-        } => {
-            scalar_expr_requires_numeric_exp_model(condition)
-                || scalar_expr_requires_numeric_exp_model(then_expr)
-                || scalar_expr_requires_numeric_exp_model(else_expr)
-        }
-        FormalScalarExpr::BooleanValue { expression }
-        | FormalScalarExpr::ValueBoolean { expression }
-        | FormalScalarExpr::Not { expression } => {
-            scalar_expr_requires_numeric_exp_model(expression)
-        }
-        FormalScalarExpr::And { operands, .. } | FormalScalarExpr::Or { operands, .. } => {
-            operands.iter().any(scalar_expr_requires_numeric_exp_model)
-        }
-        FormalScalarExpr::Exists { query } | FormalScalarExpr::Subquery { query, .. } => {
-            query.requires_numeric_exp_model()
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -920,7 +758,6 @@ pub enum ScalarOperator {
     Negate(ScalarNumericKind),
     NumericDivideResultScale,
     NumericDivideTypmod,
-    PowerHalfInt64ToInt32,
     StringConcat,
     SubstringNonnegative,
     TimestampAdd(ScalarTimestampUnit),
@@ -1173,7 +1010,7 @@ impl ScalarOperator {
             Self::Add(_) | Self::Subtract(_) | Self::Multiply(_) => arity == 2,
             Self::Divide(ScalarNumericKind::Numeric) => arity == 4,
             Self::Divide(_) => arity == 2,
-            Self::Negate(_) | Self::PowerHalfInt64ToInt32 => arity == 1,
+            Self::Negate(_) => arity == 1,
             Self::NumericDivideResultScale => arity == 4,
             Self::NumericDivideTypmod => arity == 6,
             Self::StringConcat | Self::TimestampAdd(_) => arity == 2,
@@ -1301,8 +1138,7 @@ pub(super) fn formal_query_expr_contains_analysis_error(query: &FormalQueryExpr)
                         .any(formal_scalar_expr_contains_analysis_error)
             }) || formal_query_expr_contains_analysis_error(input)
         }
-        FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
+        FormalQueryExpr::Rank { input, .. }
         | FormalQueryExpr::Window { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
@@ -1868,8 +1704,7 @@ fn scalar_operator_result_type_class(
         ScalarOperator::Cast(ScalarCast::Int32ToInt64) => FormalValueTypeClass::Int64,
         ScalarOperator::Cast(
             ScalarCast::Int64ToInt32 | ScalarCast::NumericToInt32 | ScalarCast::StringToInt32,
-        )
-        | ScalarOperator::PowerHalfInt64ToInt32 => FormalValueTypeClass::Int32,
+        ) => FormalValueTypeClass::Int32,
         ScalarOperator::Cast(ScalarCast::StringToInt64) => FormalValueTypeClass::Int64,
         ScalarOperator::Cast(ScalarCast::DateToTimestamp) | ScalarOperator::TimestampAdd(_) => {
             FormalValueTypeClass::Timestamp
@@ -1966,7 +1801,6 @@ fn scalar_operator_argument_types_are_valid(
             FormalValueTypeClass::Z,
             FormalValueTypeClass::Z,
         ]),
-        ScalarOperator::PowerHalfInt64ToInt32 => exact(&[FormalValueTypeClass::Int64]),
         ScalarOperator::StringConcat => {
             exact(&[FormalValueTypeClass::String, FormalValueTypeClass::String])
         }
@@ -2472,7 +2306,6 @@ pub(crate) fn query_expr_output_signature(query: &FormalQueryExpr) -> Option<Vec
         FormalQueryExpr::Projection { select, .. } | FormalQueryExpr::Group { select, .. } => {
             Some(scalar_select_output_signature(select))
         }
-        FormalQueryExpr::RowMap { adapter, .. } => Some(adapter.output_attributes()),
         FormalQueryExpr::Selection { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
@@ -2581,9 +2414,6 @@ fn validate_query_expr_scalar_operators_at(
                 FormalScalarContext::RowSelect,
                 &format!("{path}.select"),
             )?;
-            validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
-        }
-        FormalQueryExpr::RowMap { input, .. } => {
             validate_query_expr_scalar_operators_at(input, &format!("{path}.input"))
         }
         FormalQueryExpr::Selection { predicate, input } => {

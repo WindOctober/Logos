@@ -77,7 +77,7 @@ Definition numeric_sum_option_add
     SQL SUM's treatment of NULL subtotals.  The result covers finite values,
     NaN, and infinities because it relies only on exact [numeric_add]
     associativity. *)
-Theorem numeric_sum_option_regroup : forall groups,
+Theorem numeric_sum_option_regroup_from : forall groups current,
   fold_left numeric_sum_option_add
     (flat_map
       (fun group =>
@@ -86,8 +86,8 @@ Theorem numeric_sum_option_regroup : forall groups,
         | None => []
         end)
       groups)
-    None =
-  fold_left numeric_sum_option_add (concat groups) None.
+    current =
+  fold_left numeric_sum_option_add (concat groups) current.
 Proof.
 assert (Hsome : forall numbers total,
   fold_left numeric_sum_option_add numbers (Some total) =
@@ -140,7 +140,22 @@ assert (Hregroup : forall groups current,
     + rewrite (Haccumulator group current), Hgroup; cbn.
       apply IH.
 }
-intro groups; apply Hregroup.
+intros groups current; apply Hregroup.
+Qed.
+
+Corollary numeric_sum_option_regroup : forall groups,
+  fold_left numeric_sum_option_add
+    (flat_map
+      (fun group =>
+        match fold_left numeric_sum_option_add group None with
+        | Some total => [total]
+        | None => []
+        end)
+      groups)
+    None =
+  fold_left numeric_sum_option_add (concat groups) None.
+Proof.
+intro groups; apply numeric_sum_option_regroup_from.
 Qed.
 
 Lemma numeric_sum_from_state_transition : forall state next,
@@ -639,226 +654,6 @@ split.
   + exact Hchildren.
 Qed.
 
-Local Lemma numeric_values_map_interp_sum_numeric : forall groups,
-  Forall
-    (fun observations =>
-      forallb NullValues.is_numeric_value observations = true)
-    groups ->
-  NullValues.numeric_values
-      (map NullValues.interp_sum_numeric groups) =
-    flat_map
-      (fun numbers =>
-        match fold_left numeric_sum_option_add numbers None with
-        | Some total => [total]
-        | None => []
-        end)
-      (map NullValues.numeric_values groups).
-Proof.
-intros groups Hgroups.
-induction Hgroups as [|observations groups Hobservations Hgroups IH].
-- reflexivity.
-- cbn [map flat_map].
-  rewrite (interp_sum_numeric_option_fold observations Hobservations).
-  destruct
-    (fold_left numeric_sum_option_add
-      (NullValues.numeric_values observations) None) as [total|];
-    cbn; now rewrite IH.
-Qed.
-
-Local Lemma map_interp_sum_numeric_all_numeric : forall groups,
-  forallb NullValues.is_numeric_value
-    (map NullValues.interp_sum_numeric groups) = true.
-Proof.
-induction groups as [|observations groups IH]; cbn; [reflexivity|].
-unfold NullValues.interp_sum_numeric.
-destruct (forallb NullValues.is_numeric_value observations);
-  cbn; exact IH.
-Qed.
-
-Local Lemma interp_sum_numeric_regroup_mapped_runtime_exact : forall groups,
-  Forall
-    (fun observations =>
-      forallb NullValues.is_numeric_value observations = true)
-    groups ->
-  NullValues.interp_sum_numeric
-      (map NullValues.interp_sum_numeric groups) =
-    NullValues.interp_sum_numeric (concat groups) /\
-  NullValues.sum_numeric_runtime_error
-      (map NullValues.interp_sum_numeric groups) =
-    NullValues.sum_numeric_runtime_error (concat groups).
-Proof.
-intros groups Hgroups.
-apply interp_sum_numeric_regroup_value_runtime_exact.
-- exact Hgroups.
-- apply map_interp_sum_numeric_all_numeric.
-- now apply numeric_values_map_interp_sum_numeric.
-Qed.
-
-Local Lemma query_make_groups_flatten_Permutation :
-  forall (T : Tuple.Rcd) env rows group_terms,
-    group_terms <> nil ->
-    Permutation rows
-      (concat (@query_make_groups T env rows group_terms)).
-Proof.
-intros T env rows [|term terms] Hterms; [contradiction|].
-unfold query_make_groups, FlatData.make_groups; cbn.
-assert (Hconcat : forall groups :
-  list (list (value T) * list (tuple T)),
-  concat (map snd groups) = flat_map snd groups).
-{
-  intro groups; induction groups as [|[key members] groups IH];
-    cbn; now rewrite ?IH.
-}
-rewrite Hconcat.
-apply list_permut_eq_implies_Permutation.
-apply Partition.partition_permut.
-Qed.
-
-(** Evaluate every subtotal value through the actual closed-group interpreter,
-    then regroup those values through an outer NUMERIC SUM.  The conclusion
-    compares that outer SUM's value and local runtime-error callback with the
-    corresponding callback on all input values.  It does not claim that every
-    inner group runtime check returns [None], nor does it by itself establish a
-    complete grouped-query outcome equivalence; the preceding single-group
-    theorem exposes each inner runtime result when that obligation is needed.
-
-    The only semantic premises here are column presence/type on the input rows
-    and a nonempty grouping key; no concrete schema, SELECT list, grouping
-    depth, or rewrite pattern is encoded. *)
-Theorem query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact :
-  forall grouping_env rows group_terms attribute,
-    group_terms <> nil ->
-    Forall
-      (fun row =>
-        attribute inS labels TNull row /\
-        NullValues.is_numeric_value (dot TNull row attribute) = true)
-      rows ->
-    let groups := @query_make_groups TNull grouping_env rows group_terms in
-    let grouped_sums :=
-      map
-        (fun group =>
-          Interp.interp_aggterm TNull
-            (Env.env_g TNull nil
-              (@Env.Group_By TNull group_terms) group)
-            (tnull_sum_numeric_dot_term attribute))
-        groups in
-    NullValues.interp_sum_numeric grouped_sums =
-      NullValues.interp_sum_numeric
-        (map (fun row => dot TNull row attribute) rows) /\
-    NullValues.sum_numeric_runtime_error grouped_sums =
-      NullValues.sum_numeric_runtime_error
-        (map (fun row => dot TNull row attribute) rows).
-Proof.
-intros grouping_env rows group_terms attribute Hterms Hnumeric.
-cbv beta zeta.
-set (groups := @query_make_groups TNull grouping_env rows group_terms).
-assert (Hflatten :
-  Permutation rows (concat groups)).
-{
-  unfold groups.
-  now apply query_make_groups_flatten_Permutation.
-}
-assert (Hconcat_numeric :
-  Forall
-    (fun row =>
-      attribute inS labels TNull row /\
-      NullValues.is_numeric_value (dot TNull row attribute) = true)
-    (concat groups)).
-{
-  rewrite Forall_forall in Hnumeric |- *.
-  intros row Hrow.
-  apply Hnumeric.
-  eapply Permutation_in.
-  - apply Permutation_sym; exact Hflatten.
-  - exact Hrow.
-}
-assert (Hgroups_numeric :
-  Forall
-    (fun observations =>
-      forallb NullValues.is_numeric_value observations = true)
-    (map
-      (map (fun row => dot TNull row attribute))
-      groups)).
-{
-  rewrite Forall_forall; intros observations Hobservations.
-  apply in_map_iff in Hobservations.
-  destruct Hobservations as [group [Hobservations Hgroup]].
-  subst observations.
-  rewrite forallb_forall; intros value Hvalue.
-  apply in_map_iff in Hvalue.
-  destruct Hvalue as [row [Hvalue Hrow]].
-  subst value.
-  rewrite Forall_forall in Hconcat_numeric.
-  exact
-    (proj2
-      (Hconcat_numeric row
-        (proj2 (in_concat groups row)
-          (ex_intro _ group (conj Hgroup Hrow))))).
-}
-assert (Hgroup_nonempty : forall group,
-  In group groups -> group <> nil).
-{
-  intros group Hgroup.
-  unfold groups, query_make_groups in Hgroup.
-  destruct group_terms as [|term terms]; [contradiction|].
-  cbn [FlatData.make_groups] in Hgroup.
-  eapply Partition.in_map_snd_partition_diff_nil
-    with (l := rows) (l1 := group).
-  exact Hgroup.
-}
-assert (Hgroup_present : forall group,
-  In group groups ->
-  Forall (fun row => attribute inS labels TNull row) group).
-{
-  intros group Hgroup.
-  rewrite Forall_forall; intros row Hrow.
-  rewrite Forall_forall in Hconcat_numeric.
-  exact
-    (proj1
-      (Hconcat_numeric row
-        (proj2 (in_concat groups row)
-          (ex_intro _ group (conj Hgroup Hrow))))).
-}
-assert (Hmapped :
-  map
-    (fun group =>
-      Interp.interp_aggterm TNull
-        (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)
-        (tnull_sum_numeric_dot_term attribute))
-    groups =
-  map NullValues.interp_sum_numeric
-    (map (map (fun row => dot TNull row attribute)) groups)).
-{
-  rewrite map_map.
-  apply map_ext_in; intros group Hgroup.
-  exact
-    (proj1
-      (@tnull_closed_group_sum_numeric_dot_value_runtime_exact
-        group_terms group attribute
-        (Hgroup_nonempty group Hgroup)
-        (Hgroup_present group Hgroup))).
-}
-rewrite Hmapped.
-pose proof
-  (@interp_sum_numeric_regroup_mapped_runtime_exact
-    (map (map (fun row => dot TNull row attribute)) groups)
-    Hgroups_numeric) as Hregroup.
-assert (Hvalues :
-  Permutation
-    (map (fun row => dot TNull row attribute) rows)
-    (concat
-      (map (map (fun row => dot TNull row attribute)) groups))).
-{
-  rewrite <- concat_map.
-  now apply Permutation_map.
-}
-destruct Hregroup as [Hvalue Hruntime]; split.
-- rewrite Hvalue.
-  symmetry; now apply NumericFacts.interp_sum_numeric_permutation.
-- rewrite Hruntime.
-  symmetry; now apply NumericFacts.sum_numeric_runtime_error_permutation.
-Qed.
-
 (** A finite NUMERIC observation is an exact canonical rational.  These
     helpers make the common DECIMAL rollup proof independent of generated
     attributes and select-list names. *)
@@ -1289,20 +1084,6 @@ destruct right_occ as [|right_count].
   assert (N.pos right_count = 1%N) by lia.
   congruence.
 Qed.
-
-Corollary query_distinct_union_inert : forall left right,
-  query_bag_duplicate_free left ->
-  query_bag_duplicate_free right ->
-  query_bags_disjoint left right ->
-  bag_eq T
-    (query_distinct_bag (query_set_bag Union left right))
-    (query_set_bag Union left right).
-Proof.
-intros left right Hleft Hright Hdisjoint.
-apply query_distinct_bag_inert.
-now apply query_set_union_duplicate_free.
-Qed.
-
 
 End DuplicateFreeUnion.
 

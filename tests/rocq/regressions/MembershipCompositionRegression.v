@@ -161,16 +161,6 @@ Example distinct_membership_acceptance_regression :
       distinct_values distinct_subquery distinct_input).
 Proof. eapply in_rows_acceptance_distinct; eassumption. Qed.
 
-Example in_union_all_acceptance_regression :
-  scalar_expr_acceptance_exact_at
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null boolean_schedule env
-    (SExpr_In arguments (QExpr_Set Union left right))
-    (orb left_accepted right_accepted).
-Proof.
-eapply scalar_expr_in_union_all_acceptance_exact; eassumption.
-Qed.
-
 End UnionAllOutcomeRegression.
 
 Section OutcomeRegression.
@@ -237,7 +227,6 @@ Print Assumptions tnull_not_in_rows_acceptance_iff_all_false.
 Print Assumptions tnull_not_in_rows_acceptance_iff_no_true_or_unknown.
 Print Assumptions query_distinct_rows_support_rel.
 Print Assumptions in_rows_acceptance_distinct.
-Print Assumptions scalar_expr_in_union_all_acceptance_exact.
 Print Assumptions tnull_scalar_expr_not_in_accepts_exact_of_all_false.
 Print Assumptions tnull_scalar_expr_not_in_rejects_exact_of_true_match.
 Print Assumptions tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match.

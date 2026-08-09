@@ -2,7 +2,7 @@
 
 Route here for: CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ.
 
-This focused catalog contains 76 declarations routed at declaration granularity from `StringTemporalFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 80 declarations routed at declaration granularity from `StringTemporalFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `string_typmod_descriptor_roundtrip`
 
@@ -1673,9 +1673,32 @@ Lemma interp_date_lt_timestamp_true_iff : forall date timestamp,
   date_cmp_timestamp_internal date timestamp = Lt.
 ```
 
-## `interp_date_lte_timestamp_true_iff`
+## `interp_date_lt_timestamp_false_iff`
 
 Source: [`theories/FormalSQL/StringTemporalFacts.v:884`](../StringTemporalFacts.v#L884)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
+
+Applicability: Use in either direction to invert or construct a goal about temporal semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+
+```rocq
+Lemma interp_date_lt_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateLtTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp <> Lt.
+```
+
+## `interp_date_lte_timestamp_true_iff`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:896`](../StringTemporalFacts.v#L896)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1696,9 +1719,32 @@ Lemma interp_date_lte_timestamp_true_iff : forall date timestamp,
   date_cmp_timestamp_internal date timestamp <> Gt.
 ```
 
+## `interp_date_lte_timestamp_false_iff`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:908`](../StringTemporalFacts.v#L908)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
+
+Applicability: Use in either direction to invert or construct a goal about temporal semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+
+```rocq
+Lemma interp_date_lte_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateLteTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp = Gt.
+```
+
 ## `interp_date_gt_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:896`](../StringTemporalFacts.v#L896)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:920`](../StringTemporalFacts.v#L920)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1719,9 +1765,32 @@ Lemma interp_date_gt_timestamp_true_iff : forall date timestamp,
   date_cmp_timestamp_internal date timestamp = Gt.
 ```
 
+## `interp_date_gt_timestamp_false_iff`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:932`](../StringTemporalFacts.v#L932)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
+
+Applicability: Use in either direction to invert or construct a goal about temporal semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+
+```rocq
+Lemma interp_date_gt_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateGtTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp <> Gt.
+```
+
 ## `interp_date_gte_timestamp_true_iff`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:908`](../StringTemporalFacts.v#L908)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:944`](../StringTemporalFacts.v#L944)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1742,9 +1811,32 @@ Lemma interp_date_gte_timestamp_true_iff : forall date timestamp,
   date_cmp_timestamp_internal date timestamp <> Lt.
 ```
 
+## `interp_date_gte_timestamp_false_iff`
+
+Source: [`theories/FormalSQL/StringTemporalFacts.v:956`](../StringTemporalFacts.v#L956)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for temporal semantics.
+
+Applicability: Use in either direction to invert or construct a goal about temporal semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `string/temporal scalar semantics`, `predicate`, `Bool3`, `temporal`, `DATE`, `TIME`, `TIMESTAMP`
+
+```rocq
+Lemma interp_date_gte_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateGteTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp = Lt.
+```
+
 ## `timestamp_scalar_add_checked_success`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:932`](../StringTemporalFacts.v#L932)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:980`](../StringTemporalFacts.v#L980)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1770,7 +1862,7 @@ Lemma timestamp_scalar_add_checked_success : forall unit timestamp amount result
 
 ## `timestamp_scalar_add_checked_failure`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:946`](../StringTemporalFacts.v#L946)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:994`](../StringTemporalFacts.v#L994)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1797,7 +1889,7 @@ Lemma timestamp_scalar_add_checked_failure : forall unit timestamp amount,
 
 ## `timestamp_scalar_add_null_safe`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:961`](../StringTemporalFacts.v#L961)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:1009`](../StringTemporalFacts.v#L1009)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1822,7 +1914,7 @@ Lemma timestamp_scalar_add_null_safe : forall unit timestamp amount,
 
 ## `timestamp_checked_operation_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:973`](../StringTemporalFacts.v#L973)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:1021`](../StringTemporalFacts.v#L1021)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1844,7 +1936,7 @@ Lemma timestamp_checked_operation_infinity : forall unit timestamp amount,
 
 ## `timestamp_scalar_add_preserves_infinity`
 
-Source: [`theories/FormalSQL/StringTemporalFacts.v:989`](../StringTemporalFacts.v#L989)
+Source: [`theories/FormalSQL/StringTemporalFacts.v:1037`](../StringTemporalFacts.v#L1037)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

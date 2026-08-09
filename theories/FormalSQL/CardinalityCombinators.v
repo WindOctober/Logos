@@ -86,6 +86,25 @@ induction rows as [|row rows IH]; intros bound Hbound; cbn.
   nia.
 Qed.
 
+(** A uniformly exact expansion multiplies the input occurrence count. *)
+Lemma flat_map_uniform_length_eq :
+  forall (A B : Type) (expand : A -> list B) rows bound,
+    (forall row,
+      In row rows ->
+      List.length (expand row) = bound) ->
+    List.length (flat_map expand rows) =
+      (List.length rows * bound)%nat.
+Proof.
+intros A B expand rows.
+induction rows as [|row rows IH]; intros bound Hexact; cbn.
+- reflexivity.
+- rewrite length_app.
+  rewrite (Hexact row (or_introl eq_refl)).
+  rewrite (IH bound (fun other Hother =>
+    Hexact other (or_intror _ Hother))).
+  reflexivity.
+Qed.
+
 (** Nonempty groups consume at least one occurrence apiece. *)
 Lemma nonempty_groups_count_le_total_length :
   forall (A Group : Type) (members : Group -> list A) groups,

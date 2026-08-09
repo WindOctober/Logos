@@ -1114,6 +1114,39 @@ Definition filter_scalar_observation_equiv_at
     eval_scalar_boolean left_env left_formula (SqlError error) <->
     eval_scalar_boolean right_env right_formula (SqlError error).
 
+(** Two exact contracts for the same TRUE/non-TRUE decision induce the local
+    observation relation needed by ordered filter transport.  The contracts
+    rule out every scalar runtime error on both sides; successful Bool3 values
+    may still differ as long as their SQL filter acceptance agrees. *)
+Lemma filter_scalar_observation_equiv_at_of_acceptance_exact :
+  forall left_env left_formula right_env right_formula accepted,
+    scalar_expr_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule left_env left_formula accepted ->
+    scalar_expr_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule right_env right_formula accepted ->
+    filter_scalar_observation_equiv_at
+      left_env left_formula right_env right_formula.
+Proof.
+intros left_env left_formula right_env right_formula accepted
+  [[left_truth [Hleft_truth Hleft_accept]]
+    [Hleft_success Hleft_error]]
+  [[right_truth [Hright_truth Hright_accept]]
+    [Hright_success Hright_error]].
+split.
+- intros observed Hobserved.
+  exists right_truth; split; [exact Hright_truth|].
+  now rewrite (Hleft_success observed Hobserved), Hright_accept.
+- split.
+  + intros observed Hobserved.
+    exists left_truth; split; [exact Hleft_truth|].
+    now rewrite Hleft_accept, (Hright_success observed Hobserved).
+  + intro error; split; intro Herror.
+    * exfalso; exact (Hleft_error error Herror).
+    * exfalso; exact (Hright_error error Herror).
+Qed.
+
 Lemma filter_scalar_observation_equiv_at_sym :
   forall left_env left_formula right_env right_formula,
     filter_scalar_observation_equiv_at

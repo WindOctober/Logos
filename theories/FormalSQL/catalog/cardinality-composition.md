@@ -2,7 +2,7 @@
 
 Route here for: row-count bounds, functional joins, filters, groups, finite images.
 
-This focused catalog contains 136 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 137 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `bag_map_cardinal`
 
@@ -108,9 +108,35 @@ Lemma flat_map_uniform_length_le :
       List.length rows * bound)%nat.
 ```
 
-## `nonempty_groups_count_le_total_length`
+## `flat_map_uniform_length_eq`
 
 Source: [`theories/FormalSQL/CardinalityCombinators.v:90`](../CardinalityCombinators.v#L90)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `cardinality`
+
+Search aliases: `cardinality composition`, `cardinality`
+
+```rocq
+Lemma flat_map_uniform_length_eq :
+  forall (A B : Type) (expand : A -> list B) rows bound,
+    (forall row,
+      In row rows ->
+      List.length (expand row) = bound) ->
+    List.length (flat_map expand rows) =
+      (List.length rows * bound)%nat.
+```
+
+## `nonempty_groups_count_le_total_length`
+
+Source: [`theories/FormalSQL/CardinalityCombinators.v:109`](../CardinalityCombinators.v#L109)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -133,7 +159,7 @@ Lemma nonempty_groups_count_le_total_length :
 
 ## `NoDupA_pairwise_filter_length_le_one`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:107`](../CardinalityCombinators.v#L107)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:126`](../CardinalityCombinators.v#L126)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -163,7 +189,7 @@ Lemma NoDupA_pairwise_filter_length_le_one :
 
 ## `filter_singleton_of_nonempty_length_le_one`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:149`](../CardinalityCombinators.v#L149)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:168`](../CardinalityCombinators.v#L168)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -187,7 +213,7 @@ Lemma filter_singleton_of_nonempty_length_le_one :
 
 ## `map_theta_join_total_functional`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:172`](../CardinalityCombinators.v#L172)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:191`](../CardinalityCombinators.v#L191)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -220,7 +246,7 @@ Lemma map_theta_join_total_functional :
 
 ## `map_theta_join_functional_permut_filter_exists`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:209`](../CardinalityCombinators.v#L209)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:228`](../CardinalityCombinators.v#L228)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -257,7 +283,7 @@ Lemma map_theta_join_functional_permut_filter_exists :
 
 ## `anti_filter_empty_of_total_match`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:282`](../CardinalityCombinators.v#L282)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:301`](../CardinalityCombinators.v#L301)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -284,7 +310,7 @@ Lemma anti_filter_empty_of_total_match :
 
 ## `map_left_join_total_functional`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:304`](../CardinalityCombinators.v#L304)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:323`](../CardinalityCombinators.v#L323)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -324,7 +350,7 @@ Lemma map_left_join_total_functional :
 
 ## `map_left_join_functional_permut`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:340`](../CardinalityCombinators.v#L340)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:359`](../CardinalityCombinators.v#L359)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -363,7 +389,7 @@ Lemma map_left_join_functional_permut :
 
 ## `map_left_join_functional_branch_permut`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:422`](../CardinalityCombinators.v#L422)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:441`](../CardinalityCombinators.v#L441)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -412,7 +438,7 @@ Lemma map_left_join_functional_branch_permut :
 
 ## `NoDupA_map_preimage`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:524`](../CardinalityCombinators.v#L524)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:543`](../CardinalityCombinators.v#L543)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -437,7 +463,7 @@ Lemma NoDupA_map_preimage :
 
 ## `NoDupA_map_of_reflection`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:550`](../CardinalityCombinators.v#L550)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:569`](../CardinalityCombinators.v#L569)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -466,7 +492,7 @@ Lemma NoDupA_map_of_reflection :
 
 ## `NoDupA_flat_map_filter_map_functional_reflection`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:584`](../CardinalityCombinators.v#L584)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:603`](../CardinalityCombinators.v#L603)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -508,7 +534,7 @@ Lemma NoDupA_flat_map_filter_map_functional_reflection :
 
 ## `NoDupA_map_iff_NoDup_on`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:651`](../CardinalityCombinators.v#L651)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:670`](../CardinalityCombinators.v#L670)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -535,7 +561,7 @@ Lemma NoDupA_map_iff_NoDup_on :
 
 ## `NoDupA_finite_image_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:699`](../CardinalityCombinators.v#L699)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:718`](../CardinalityCombinators.v#L718)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -564,7 +590,7 @@ Theorem NoDupA_finite_image_length_le :
 
 ## `NoDupA_finite_product_code_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:725`](../CardinalityCombinators.v#L725)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:744`](../CardinalityCombinators.v#L744)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -598,7 +624,7 @@ Corollary NoDupA_finite_product_code_length_le :
 
 ## `NoDupA_finite_option_code_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:758`](../CardinalityCombinators.v#L758)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:777`](../CardinalityCombinators.v#L777)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -632,7 +658,7 @@ Corollary NoDupA_finite_option_code_length_le :
 
 ## `oeset_nb_occ_le_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:795`](../CardinalityCombinators.v#L795)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:814`](../CardinalityCombinators.v#L814)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -655,7 +681,7 @@ Lemma oeset_nb_occ_le_length :
 
 ## `instance_row_multiplicity_le_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:820`](../CardinalityCombinators.v#L820)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:839`](../CardinalityCombinators.v#L839)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -680,7 +706,7 @@ Corollary instance_row_multiplicity_le_length :
 
 ## `instance_row_positive_multiplicity_nonempty`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:833`](../CardinalityCombinators.v#L833)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:852`](../CardinalityCombinators.v#L852)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -705,7 +731,7 @@ Corollary instance_row_positive_multiplicity_nonempty :
 
 ## `theta_join_list_degree_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:852`](../CardinalityCombinators.v#L852)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:871`](../CardinalityCombinators.v#L871)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -732,7 +758,7 @@ Lemma theta_join_list_degree_length_le :
 
 ## `theta_join_list_length_le_product`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:871`](../CardinalityCombinators.v#L871)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:890`](../CardinalityCombinators.v#L890)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -756,7 +782,7 @@ Corollary theta_join_list_length_le_product :
 
 ## `filter_theta_join_list_degree_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:885`](../CardinalityCombinators.v#L885)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:904`](../CardinalityCombinators.v#L904)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -785,7 +811,7 @@ Corollary filter_theta_join_list_degree_length_le :
 
 ## `expansion_pipeline_length_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:925`](../CardinalityCombinators.v#L925)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:944`](../CardinalityCombinators.v#L944)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -809,7 +835,7 @@ Theorem expansion_pipeline_length_le :
 
 ## `partition_flatten_length`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:949`](../CardinalityCombinators.v#L949)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:968`](../CardinalityCombinators.v#L968)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -834,7 +860,7 @@ Lemma partition_flatten_length :
 
 ## `partition_group_count_le`
 
-Source: [`theories/FormalSQL/CardinalityCombinators.v:964`](../CardinalityCombinators.v#L964)
+Source: [`theories/FormalSQL/CardinalityCombinators.v:983`](../CardinalityCombinators.v#L983)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2379,9 +2405,39 @@ Lemma project_rows_success_Forall :
     Forall output_property output.
 ```
 
+## `eval_query_expr_row_map_success_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:1529`](../QueryCardinality.v#L1529)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `projection`, `cardinality`
+
+Search aliases: `cardinality composition`, `projection`, `SELECT list`, `cardinality`
+
+```rocq
+Lemma eval_query_expr_row_map_success_length :
+  forall env outputs row_map input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env (QExpr_RowMap outputs row_map input)
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
+```
+
 ## `query_same_rows_as_bag_length_N`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1541`](../QueryCardinality.v#L1541)
+Source: [`theories/FormalSQL/QueryCardinality.v:1565`](../QueryCardinality.v#L1565)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2405,7 +2461,7 @@ Lemma query_same_rows_as_bag_length_N :
 
 ## `query_same_rows_as_bag_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1557`](../QueryCardinality.v#L1557)
+Source: [`theories/FormalSQL/QueryCardinality.v:1581`](../QueryCardinality.v#L1581)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2430,7 +2486,7 @@ Lemma query_same_rows_as_bag_length_le :
 
 ## `query_success_length_le_error`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1574`](../QueryCardinality.v#L1574)
+Source: [`theories/FormalSQL/QueryCardinality.v:1598`](../QueryCardinality.v#L1598)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2452,7 +2508,7 @@ Lemma query_success_length_le_error :
 
 ## `query_success_length_le_values`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1583`](../QueryCardinality.v#L1583)
+Source: [`theories/FormalSQL/QueryCardinality.v:1607`](../QueryCardinality.v#L1607)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2476,7 +2532,7 @@ Lemma query_success_length_le_values :
 
 ## `query_success_length_le_table`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1598`](../QueryCardinality.v#L1598)
+Source: [`theories/FormalSQL/QueryCardinality.v:1622`](../QueryCardinality.v#L1622)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2501,7 +2557,7 @@ Lemma query_success_length_le_table :
 
 ## `query_success_length_le_project`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1630`](../QueryCardinality.v#L1630)
+Source: [`theories/FormalSQL/QueryCardinality.v:1654`](../QueryCardinality.v#L1654)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2524,7 +2580,7 @@ Lemma query_success_length_le_project :
 
 ## `query_success_length_le_row_map`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1647`](../QueryCardinality.v#L1647)
+Source: [`theories/FormalSQL/QueryCardinality.v:1671`](../QueryCardinality.v#L1671)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2548,7 +2604,7 @@ Lemma query_success_length_le_row_map :
 
 ## `query_success_length_le_offset`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1663`](../QueryCardinality.v#L1663)
+Source: [`theories/FormalSQL/QueryCardinality.v:1687`](../QueryCardinality.v#L1687)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2572,7 +2628,7 @@ Lemma query_success_length_le_offset :
 
 ## `query_offset_success_nil_of_input_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1682`](../QueryCardinality.v#L1682)
+Source: [`theories/FormalSQL/QueryCardinality.v:1706`](../QueryCardinality.v#L1706)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2599,7 +2655,7 @@ Lemma query_offset_success_nil_of_input_length_le :
 
 ## `query_success_length_le_fetch`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1701`](../QueryCardinality.v#L1701)
+Source: [`theories/FormalSQL/QueryCardinality.v:1725`](../QueryCardinality.v#L1725)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2623,7 +2679,7 @@ Lemma query_success_length_le_fetch :
 
 ## `query_success_length_le_fetch_count`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1718`](../QueryCardinality.v#L1718)
+Source: [`theories/FormalSQL/QueryCardinality.v:1742`](../QueryCardinality.v#L1742)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2645,7 +2701,7 @@ Lemma query_success_length_le_fetch_count :
 
 ## `query_success_length_le_order_by`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1732`](../QueryCardinality.v#L1732)
+Source: [`theories/FormalSQL/QueryCardinality.v:1756`](../QueryCardinality.v#L1756)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2668,7 +2724,7 @@ Lemma query_success_length_le_order_by :
 
 ## `tuple_mk_set_cardinal_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1752`](../QueryCardinality.v#L1752)
+Source: [`theories/FormalSQL/QueryCardinality.v:1776`](../QueryCardinality.v#L1776)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2692,7 +2748,7 @@ Lemma tuple_mk_set_cardinal_le :
 
 ## `query_distinct_bag_cardinal_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1800`](../QueryCardinality.v#L1800)
+Source: [`theories/FormalSQL/QueryCardinality.v:1824`](../QueryCardinality.v#L1824)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2716,7 +2772,7 @@ Lemma query_distinct_bag_cardinal_le :
 
 ## `query_success_length_le_distinct`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1817`](../QueryCardinality.v#L1817)
+Source: [`theories/FormalSQL/QueryCardinality.v:1841`](../QueryCardinality.v#L1841)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2739,7 +2795,7 @@ Lemma query_success_length_le_distinct :
 
 ## `oeset_pointwise_nb_occ_le_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1853`](../QueryCardinality.v#L1853)
+Source: [`theories/FormalSQL/QueryCardinality.v:1877`](../QueryCardinality.v#L1877)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2764,7 +2820,7 @@ Lemma oeset_pointwise_nb_occ_le_length :
 
 ## `febag_cardinal_le_of_nb_occ_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1890`](../QueryCardinality.v#L1890)
+Source: [`theories/FormalSQL/QueryCardinality.v:1914`](../QueryCardinality.v#L1914)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2790,7 +2846,7 @@ Lemma febag_cardinal_le_of_nb_occ_le :
 
 ## `febag_cardinal_union`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1907`](../QueryCardinality.v#L1907)
+Source: [`theories/FormalSQL/QueryCardinality.v:1931`](../QueryCardinality.v#L1931)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2814,7 +2870,7 @@ Lemma febag_cardinal_union :
 
 ## `febag_cardinal_union_max_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1925`](../QueryCardinality.v#L1925)
+Source: [`theories/FormalSQL/QueryCardinality.v:1949`](../QueryCardinality.v#L1949)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2838,7 +2894,7 @@ Lemma febag_cardinal_union_max_le :
 
 ## `febag_cardinal_inter_le_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1938`](../QueryCardinality.v#L1938)
+Source: [`theories/FormalSQL/QueryCardinality.v:1962`](../QueryCardinality.v#L1962)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2862,7 +2918,7 @@ Lemma febag_cardinal_inter_le_left :
 
 ## `febag_cardinal_inter_le_right`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1949`](../QueryCardinality.v#L1949)
+Source: [`theories/FormalSQL/QueryCardinality.v:1973`](../QueryCardinality.v#L1973)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2886,7 +2942,7 @@ Lemma febag_cardinal_inter_le_right :
 
 ## `febag_cardinal_diff_le_left`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1960`](../QueryCardinality.v#L1960)
+Source: [`theories/FormalSQL/QueryCardinality.v:1984`](../QueryCardinality.v#L1984)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2910,7 +2966,7 @@ Lemma febag_cardinal_diff_le_left :
 
 ## `query_set_cardinality_bound_union`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1974`](../QueryCardinality.v#L1974)
+Source: [`theories/FormalSQL/QueryCardinality.v:1998`](../QueryCardinality.v#L1998)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2933,7 +2989,7 @@ Lemma query_set_cardinality_bound_union :
 
 ## `query_set_cardinality_bound_union_max`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:1987`](../QueryCardinality.v#L1987)
+Source: [`theories/FormalSQL/QueryCardinality.v:2011`](../QueryCardinality.v#L2011)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2956,7 +3012,7 @@ Lemma query_set_cardinality_bound_union_max :
 
 ## `query_set_cardinality_bound_inter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2001`](../QueryCardinality.v#L2001)
+Source: [`theories/FormalSQL/QueryCardinality.v:2025`](../QueryCardinality.v#L2025)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2979,7 +3035,7 @@ Lemma query_set_cardinality_bound_inter :
 
 ## `query_set_cardinality_bound_diff`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2017`](../QueryCardinality.v#L2017)
+Source: [`theories/FormalSQL/QueryCardinality.v:2041`](../QueryCardinality.v#L2041)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3002,7 +3058,7 @@ Lemma query_set_cardinality_bound_diff :
 
 ## `query_success_length_le_set`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2030`](../QueryCardinality.v#L2030)
+Source: [`theories/FormalSQL/QueryCardinality.v:2054`](../QueryCardinality.v#L2054)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3028,7 +3084,7 @@ Lemma query_success_length_le_set :
 
 ## `query_rank_rows_outcome_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2054`](../QueryCardinality.v#L2054)
+Source: [`theories/FormalSQL/QueryCardinality.v:2078`](../QueryCardinality.v#L2078)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3053,7 +3109,7 @@ Lemma query_rank_rows_outcome_success_length :
 
 ## `query_rank_bag_rows_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2072`](../QueryCardinality.v#L2072)
+Source: [`theories/FormalSQL/QueryCardinality.v:2096`](../QueryCardinality.v#L2096)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3075,7 +3131,7 @@ Lemma query_rank_bag_rows_length :
 
 ## `query_window_rows_outcome_success_length`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2087`](../QueryCardinality.v#L2087)
+Source: [`theories/FormalSQL/QueryCardinality.v:2111`](../QueryCardinality.v#L2111)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3098,9 +3154,71 @@ Lemma query_window_rows_outcome_success_length :
     List.length output = List.length rows.
 ```
 
+## `eval_query_expr_rank_success_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2149`](../QueryCardinality.v#L2149)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `window`, `PARTITION BY`, `cardinality`
+
+```rocq
+Lemma eval_query_expr_rank_success_length :
+  forall env partition_keys order_keys rank_attribute rank_value input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
+```
+
+## `eval_query_expr_window_success_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2187`](../QueryCardinality.v#L2187)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain exact order whenever the declaration observes it.
+
+Cross-index: `ordered`, `cardinality`
+
+Search aliases: `cardinality composition`, `window`, `PARTITION BY`, `cardinality`
+
+```rocq
+Lemma eval_query_expr_window_success_length :
+  forall env partition_keys order_keys items input output,
+    @eval_query_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
+      (QExpr_Window partition_keys order_keys items input)
+      (SqlSuccess output) ->
+    exists input_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input (SqlSuccess input_rows) /\
+      List.length output = List.length input_rows.
+```
+
 ## `query_success_length_le_rank`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2122`](../QueryCardinality.v#L2122)
+Source: [`theories/FormalSQL/QueryCardinality.v:2234`](../QueryCardinality.v#L2234)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3125,7 +3243,7 @@ Lemma query_success_length_le_rank :
 
 ## `query_success_length_le_window`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2152`](../QueryCardinality.v#L2152)
+Source: [`theories/FormalSQL/QueryCardinality.v:2250`](../QueryCardinality.v#L2250)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3149,7 +3267,7 @@ Lemma query_success_length_le_window :
 
 ## `if_tuple_rows_success_true`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2192`](../QueryCardinality.v#L2192)
+Source: [`theories/FormalSQL/QueryCardinality.v:2264`](../QueryCardinality.v#L2264)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3176,7 +3294,7 @@ Lemma if_tuple_rows_success_true :
 
 ## `if_tuple_rows_success_false`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2205`](../QueryCardinality.v#L2205)
+Source: [`theories/FormalSQL/QueryCardinality.v:2277`](../QueryCardinality.v#L2277)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3203,7 +3321,7 @@ Lemma if_tuple_rows_success_false :
 
 ## `filter_rows_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2218`](../QueryCardinality.v#L2218)
+Source: [`theories/FormalSQL/QueryCardinality.v:2290`](../QueryCardinality.v#L2290)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3228,7 +3346,7 @@ Lemma filter_rows_success_length_le :
 
 ## `query_success_length_le_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2250`](../QueryCardinality.v#L2250)
+Source: [`theories/FormalSQL/QueryCardinality.v:2322`](../QueryCardinality.v#L2322)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3251,7 +3369,7 @@ Lemma query_success_length_le_filter :
 
 ## `filter_cons_outcome_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2263`](../QueryCardinality.v#L2263)
+Source: [`theories/FormalSQL/QueryCardinality.v:2335`](../QueryCardinality.v#L2335)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3276,7 +3394,7 @@ Lemma filter_cons_outcome_success_Forall :
 
 ## `filter_rows_success_Forall`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2277`](../QueryCardinality.v#L2277)
+Source: [`theories/FormalSQL/QueryCardinality.v:2349`](../QueryCardinality.v#L2349)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3302,7 +3420,7 @@ Lemma filter_rows_success_Forall :
 
 ## `filter_rows_success_Forall_accepted`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2308`](../QueryCardinality.v#L2308)
+Source: [`theories/FormalSQL/QueryCardinality.v:2380`](../QueryCardinality.v#L2380)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3333,7 +3451,7 @@ Lemma filter_rows_success_Forall_accepted :
 
 ## `filter_rows_success_exact_count`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2345`](../QueryCardinality.v#L2345)
+Source: [`theories/FormalSQL/QueryCardinality.v:2417`](../QueryCardinality.v#L2417)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3363,7 +3481,7 @@ Lemma filter_rows_success_exact_count :
 
 ## `filter_rows_error_observable`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2386`](../QueryCardinality.v#L2386)
+Source: [`theories/FormalSQL/QueryCardinality.v:2458`](../QueryCardinality.v#L2458)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3393,7 +3511,7 @@ Lemma filter_rows_error_observable :
 
 ## `eval_groups_success_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2404`](../QueryCardinality.v#L2404)
+Source: [`theories/FormalSQL/QueryCardinality.v:2476`](../QueryCardinality.v#L2476)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3419,7 +3537,7 @@ Lemma eval_groups_success_length_le :
 
 ## `int32_composite_primary_key_true_matches_at_most_one`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2445`](../QueryCardinality.v#L2445)
+Source: [`theories/FormalSQL/QueryCardinality.v:2517`](../QueryCardinality.v#L2517)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3455,7 +3573,7 @@ Lemma int32_composite_primary_key_true_matches_at_most_one :
 
 ## `functional_theta_join_chain_length_le`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2507`](../QueryCardinality.v#L2507)
+Source: [`theories/FormalSQL/QueryCardinality.v:2579`](../QueryCardinality.v#L2579)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3479,7 +3597,7 @@ Theorem functional_theta_join_chain_length_le :
 
 ## `rows_attribute_conform_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2526`](../QueryCardinality.v#L2526)
+Source: [`theories/FormalSQL/QueryCardinality.v:2598`](../QueryCardinality.v#L2598)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3502,7 +3620,7 @@ Lemma rows_attribute_conform_filter :
 
 ## `NoDup_map_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2536`](../QueryCardinality.v#L2536)
+Source: [`theories/FormalSQL/QueryCardinality.v:2608`](../QueryCardinality.v#L2608)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3525,7 +3643,7 @@ Lemma NoDup_map_filter :
 
 ## `primary_key_conforms_filter`
 
-Source: [`theories/FormalSQL/QueryCardinality.v:2556`](../QueryCardinality.v#L2556)
+Source: [`theories/FormalSQL/QueryCardinality.v:2628`](../QueryCardinality.v#L2628)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3544,103 +3662,4 @@ Lemma primary_key_conforms_filter :
   forall primary_key rows keep,
     primary_key_conforms primary_key rows ->
     primary_key_conforms primary_key (filter keep rows).
-```
-
-## `functional_chain_fixed_first_composite_int32_group_length_2_32`
-
-Source: [`theories/FormalSQL/QueryCardinality.v:2573`](../QueryCardinality.v#L2573)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `grouping`, `cardinality`, `scalar`
-
-Search aliases: `cardinality composition`, `GROUP BY`, `INTEGER`, `int32`, `cardinality`
-
-```rocq
-Theorem functional_chain_fixed_first_composite_int32_group_length_2_32 :
-  forall first_name second_name facts keep stages fixed_first
-      env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall
-      (fun row => dot TNull row (Attr_int32 first_name) = fixed_first)
-      (filter keep facts) ->
-    Forall theta_stage_is_functional stages ->
-    In group
-      (@query_make_groups TNull env
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-        group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 32.
-```
-
-## `functional_chain_composite_int32_occurrence_length_2_64`
-
-Source: [`theories/FormalSQL/QueryCardinality.v:2621`](../QueryCardinality.v#L2621)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
-
-Cross-index: `bag`, `cardinality`, `scalar`
-
-Search aliases: `cardinality composition`, `INTEGER`, `int32`, `cardinality`, `multiplicity`
-
-```rocq
-Theorem functional_chain_composite_int32_occurrence_length_2_64 :
-  forall first_name second_name facts keep stages,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall theta_stage_is_functional stages ->
-    Z.of_nat
-      (List.length
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)) <=
-      Z.pow 2 64.
-```
-
-## `functional_chain_composite_int32_group_length_2_64`
-
-Source: [`theories/FormalSQL/QueryCardinality.v:2653`](../QueryCardinality.v#L2653)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required.
-
-Cross-index: `grouping`, `cardinality`, `scalar`
-
-Search aliases: `cardinality composition`, `GROUP BY`, `INTEGER`, `int32`, `cardinality`
-
-```rocq
-Theorem functional_chain_composite_int32_group_length_2_64 :
-  forall first_name second_name facts keep stages env group_terms group,
-    rows_attribute_conform (Attr_int32 first_name) facts ->
-    rows_attribute_conform (Attr_int32 second_name) facts ->
-    primary_key_conforms
-      [Attr_int32 first_name; Attr_int32 second_name] facts ->
-    Forall theta_stage_is_functional stages ->
-    In group
-      (@query_make_groups TNull env
-        (functional_theta_join_chain
-          (tuple TNull) (join_tuple TNull) (filter keep facts) stages)
-        group_terms) ->
-    Z.of_nat (List.length group) <= Z.pow 2 64.
 ```

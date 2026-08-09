@@ -2,7 +2,7 @@
 
 Route here for: EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality.
 
-This focused catalog contains 96 declarations routed at declaration granularity from `CorrelatedMembershipFacts.v`, `MembershipCompositionFacts.v`, `MembershipJoinCompositionFacts.v`, `SubqueryFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 93 declarations routed at declaration granularity from `CorrelatedMembershipFacts.v`, `MembershipCompositionFacts.v`, `SubqueryFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `interp_direct_attribute_in_env_t_absent`
 
@@ -168,115 +168,6 @@ Theorem primary_key_self_filter_existsb_exact :
     existsb matches (filter keep rows) = keep outer.
 ```
 
-## `tnull_primary_key_self_in_rows_acceptance_exact`
-
-Source: [`theories/FormalSQL/CorrelatedMembershipFacts.v:195`](../CorrelatedMembershipFacts.v#L195)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Establishes TNull primary-key self-IN TRUE-acceptance from an actual tuple-comparison witness, key reflection, and the complete projected NOT NULL fact.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_primary_key_self_in_rows_acceptance_exact` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: `schema`, `scalar`
-
-Search aliases: `predicate subquery semantics`, `subquery`, `NULL`, `UNKNOWN`, `three-valued logic`, `schema conformance`, `typing`, `integrity constraint`, `key`, `primary key`, `IN`, `self membership`
-
-```rocq
-Theorem tnull_primary_key_self_in_rows_acceptance_exact :
-  forall {relname : Type} key rows (keep : tuple TNull -> bool) outer
-      (values : list (value TNull)) (subquery : query_expr TNull relname)
-      (project_candidate : tuple TNull -> tuple TNull),
-    primary_key_conforms key rows ->
-    In outer rows ->
-    Forall
-      (query_row_has_outputs (query_expr_outputs subquery))
-      (map project_candidate (filter keep rows)) ->
-    Bool.is_true Bool3
-      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery (project_candidate outer)) = true ->
-    (forall candidate,
-      In candidate rows ->
-      Bool.is_true Bool3
-        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-          values subquery (project_candidate candidate)) = true ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate)) ->
-    (forall candidate,
-      In candidate rows ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate) ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key candidate)
-        (SchemaConstraints.project_row key outer)) ->
-    Bool.is_true Bool3
-      (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery
-        (map project_candidate (filter keep rows))) = keep outer /\
-    Forall
-      (fun cell => NullValues.is_null_value cell = false)
-      (SchemaConstraints.project_row key outer).
-```
-
-## `tnull_primary_key_self_in_rows_true`
-
-Source: [`theories/FormalSQL/CorrelatedMembershipFacts.v:269`](../CorrelatedMembershipFacts.v#L269)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Establishes TNull primary-key self-IN TRUE-acceptance from an actual tuple-comparison witness, key reflection, and the complete projected NOT NULL fact.
-
-Applicability: Use when the goal or a hypothesis matches the `tnull_primary_key_self_in_rows_true` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; keep schema/integrity conformance premises explicit; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: `schema`, `scalar`
-
-Search aliases: `predicate subquery semantics`, `subquery`, `NULL`, `UNKNOWN`, `three-valued logic`, `schema conformance`, `typing`, `integrity constraint`, `key`, `primary key`, `IN`, `exact TRUE`, `correlation`
-
-```rocq
-Corollary tnull_primary_key_self_in_rows_true :
-  forall {relname : Type} key rows (keep : tuple TNull -> bool) outer
-      (values : list (value TNull)) (subquery : query_expr TNull relname)
-      (project_candidate : tuple TNull -> tuple TNull),
-    primary_key_conforms key rows ->
-    In outer rows ->
-    keep outer = true ->
-    Forall
-      (query_row_has_outputs (query_expr_outputs subquery))
-      (map project_candidate (filter keep rows)) ->
-    Bool.is_true Bool3
-      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery (project_candidate outer)) = true ->
-    (forall candidate,
-      In candidate rows ->
-      Bool.is_true Bool3
-        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-          values subquery (project_candidate candidate)) = true ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate)) ->
-    (forall candidate,
-      In candidate rows ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate) ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key candidate)
-        (SchemaConstraints.project_row key outer)) ->
-    Bool.is_true Bool3
-      (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery
-        (map project_candidate (filter keep rows))) = true /\
-    Forall
-      (fun cell => NullValues.is_null_value cell = false)
-      (SchemaConstraints.project_row key outer).
-```
-
 ## `tnull_in_rows_unknown_iff`
 
 Source: [`theories/FormalSQL/MembershipCompositionFacts.v:26`](../MembershipCompositionFacts.v#L26)
@@ -425,7 +316,7 @@ Theorem tnull_not_in_rows_acceptance_iff_no_true_or_unknown :
 
 ## `query_distinct_rows_support_rel`
 
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:240`](../MembershipCompositionFacts.v#L240)
+Source: [`theories/FormalSQL/MembershipCompositionFacts.v:218`](../MembershipCompositionFacts.v#L218)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -452,7 +343,7 @@ Theorem query_distinct_rows_support_rel :
 
 ## `in_rows_acceptance_distinct`
 
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:286`](../MembershipCompositionFacts.v#L286)
+Source: [`theories/FormalSQL/MembershipCompositionFacts.v:264`](../MembershipCompositionFacts.v#L264)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -481,66 +372,9 @@ Theorem in_rows_acceptance_distinct :
         values subquery input).
 ```
 
-## `scalar_expr_in_union_all_acceptance_exact`
-
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:319`](../MembershipCompositionFacts.v#L319)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Builds exact correlated IN acceptance over UNION ALL as the Boolean OR of fixed branch decisions while retaining duplicate candidates and requiring both branch error relations to be empty.
-
-Applicability: Use only for UNION ALL at one fixed correlated environment after proving schema compatibility, argument safety, inhabited branch successes, fixed per-branch TRUE-acceptance decisions, and absence of both branch errors.  It is not a full Bool3 or UNION DISTINCT distribution theorem.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: `runtime`, `scalar`
-
-Search aliases: `predicate subquery semantics`, `set operation`, `UNION`, `subquery`, `IN`, `runtime outcome`, `runtime safety`, `error propagation`, `UNION ALL`, `correlation`, `filter acceptance`, `runtime error`
-
-```rocq
-Theorem scalar_expr_in_union_all_acceptance_exact :
-  forall env arguments left right
-      (accept : list (value T) -> tuple T -> bool)
-      left_accepted right_accepted,
-    query_expr_sort left =S= query_expr_sort right ->
-    (exists values,
-      eval_scalar_values env arguments (SqlSuccess values)) ->
-    (exists rows, eval_query env left (SqlSuccess rows)) ->
-    (exists rows, eval_query env right (SqlSuccess rows)) ->
-    (forall rows,
-      eval_query env (QExpr_Set Union left right) (SqlSuccess rows) ->
-      Forall
-        (query_row_has_outputs
-          (query_expr_outputs (QExpr_Set Union left right))) rows) ->
-    (forall values,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      forall row,
-      Bool.is_true (B T)
-        (@in_row_truth T relname unknown value_is_null
-          values (QExpr_Set Union left right) row) =
-      accept values row) ->
-    (forall values rows,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      eval_query env left (SqlSuccess rows) ->
-      existsb (accept values) rows = left_accepted) ->
-    (forall values rows,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      eval_query env right (SqlSuccess rows) ->
-      existsb (accept values) rows = right_accepted) ->
-    (forall error,
-      ~ eval_scalar_values env arguments (SqlError error)) ->
-    (forall error, ~ eval_query env left (SqlError error)) ->
-    (forall error, ~ eval_query env right (SqlError error)) ->
-    scalar_expr_acceptance_exact_at
-      basesort instance unknown symbol_runtime_error
-      aggregate_runtime_error value_is_null boolean_schedule env
-      (SExpr_In arguments (QExpr_Set Union left right))
-      (orb left_accepted right_accepted).
-```
-
 ## `tnull_scalar_expr_not_in_accepts_exact_of_all_false`
 
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:463`](../MembershipCompositionFacts.v#L463)
+Source: [`theories/FormalSQL/MembershipCompositionFacts.v:328`](../MembershipCompositionFacts.v#L328)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -579,7 +413,7 @@ Theorem tnull_scalar_expr_not_in_accepts_exact_of_all_false :
 
 ## `tnull_scalar_expr_not_in_rejects_exact_of_true_match`
 
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:509`](../MembershipCompositionFacts.v#L509)
+Source: [`theories/FormalSQL/MembershipCompositionFacts.v:374`](../MembershipCompositionFacts.v#L374)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -617,7 +451,7 @@ Theorem tnull_scalar_expr_not_in_rejects_exact_of_true_match :
 
 ## `tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match`
 
-Source: [`theories/FormalSQL/MembershipCompositionFacts.v:545`](../MembershipCompositionFacts.v#L545)
+Source: [`theories/FormalSQL/MembershipCompositionFacts.v:410`](../MembershipCompositionFacts.v#L410)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -657,69 +491,6 @@ Theorem tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match :
       basesort instance unknown3 symbol_runtime_error
       aggregate_runtime_error NullValues.is_null_value boolean_schedule env
       (SExpr_Not (SExpr_In arguments subquery)) false.
-```
-
-## `scalar_expr_in_distinct_acceptance_exact_of_inner`
-
-Source: [`theories/FormalSQL/MembershipJoinCompositionFacts.v:52`](../MembershipJoinCompositionFacts.v#L52)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Lifts an exact correlated IN acceptance contract through DISTINCT without claiming equality of the complete FALSE/UNKNOWN Bool3 result.
-
-Applicability: Use when the goal or a hypothesis matches the `scalar_expr_in_distinct_acceptance_exact_of_inner` direction for predicate-subquery evaluation; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: `scalar`
-
-Search aliases: `predicate subquery semantics`, `subquery`, `IN`, `DISTINCT`, `duplicate elimination`, `correlation`, `runtime error`
-
-```rocq
-Theorem scalar_expr_in_distinct_acceptance_exact_of_inner :
-  forall env arguments input accepted,
-    (forall rows,
-      eval_query env input (SqlSuccess rows) ->
-      Forall
-        (query_row_has_outputs (query_expr_outputs input)) rows) ->
-    scalar_exact env (SExpr_In arguments input) accepted ->
-    scalar_exact env
-      (SExpr_In arguments (QExpr_Distinct input)) accepted.
-```
-
-## `query_expr_project_filter_runtime_safe_exact`
-
-Source: [`theories/FormalSQL/MembershipJoinCompositionFacts.v:144`](../MembershipJoinCompositionFacts.v#L144)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Composes child, filter-expression, and reached-projection safety into exact runtime safety for a Project over Filter without inferring safety from bags.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for predicate-subquery evaluation.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the displayed environment/correlation and SQL three-valued result.
-
-Cross-index: `runtime`, `projection`, `filter`, `scalar`
-
-Search aliases: `predicate subquery semantics`, `subquery`, `filter`, `WHERE`, `projection`, `SELECT list`, `runtime outcome`, `runtime safety`, `error propagation`, `evaluation reachability`
-
-```rocq
-Theorem query_expr_project_filter_runtime_safe_exact :
-  forall env select_list predicate input (keep : tuple T -> bool),
-    (forall row,
-      scalar_exact (env_t T env row) predicate (keep row)) ->
-    (forall row,
-      @scalar_select_values_runtime_safe_at T relname
-        basesort instance unknown symbol_runtime_error
-        aggregate_runtime_error value_is_null boolean_schedule
-        (env_t T env row) select_list) ->
-    @query_expr_runtime_safe T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env input ->
-    @query_expr_runtime_safe T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env
-      (QExpr_Project select_list (QExpr_Filter predicate input)).
 ```
 
 ## `interp_exists_quant_not_true_iff`
@@ -2288,9 +2059,72 @@ Lemma scalar_expr_exists_env_congr :
       (SExpr_Exists subquery).
 ```
 
+## `eval_scalar_boolean_quant_env_congr_safe`
+
+Source: [`theories/FormalSQL/SubqueryFacts.v:1504`](../SubqueryFacts.v#L1504)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes predicate-subquery evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about predicate-subquery evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the displayed environment/correlation and SQL three-valued result; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `runtime`, `scalar`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `predicate subquery semantics`, `subquery`, `quantified predicate`, `ANY/ALL`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma eval_scalar_boolean_quant_env_congr_safe :
+  forall left_env right_env which_quantifier which_predicate
+      arguments subquery,
+    (forall outcome,
+      eval_scalar_values left_env arguments outcome <->
+      eval_scalar_values right_env arguments outcome) ->
+    (forall outcome,
+      eval_query left_env subquery outcome <->
+      eval_query right_env subquery outcome) ->
+    forall outcome,
+      eval_scalar_boolean left_env
+        (SExpr_Quant which_quantifier which_predicate arguments subquery)
+        outcome <->
+      eval_scalar_boolean right_env
+        (SExpr_Quant which_quantifier which_predicate arguments subquery)
+        outcome.
+```
+
+## `scalar_expr_quant_env_congr_safe`
+
+Source: [`theories/FormalSQL/SubqueryFacts.v:1544`](../SubqueryFacts.v#L1544)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes predicate-subquery evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about predicate-subquery evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the displayed environment/correlation and SQL three-valued result; supply the declared equivalence/properness relation.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `predicate subquery semantics`, `subquery`, `quantified predicate`, `ANY/ALL`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma scalar_expr_quant_env_congr_safe :
+  forall left_env right_env which_quantifier which_predicate
+      arguments subquery,
+    (forall outcome,
+      eval_scalar_values left_env arguments outcome <->
+      eval_scalar_values right_env arguments outcome) ->
+    query_expr_env_outcome_equiv left_env right_env subquery ->
+    scalar_expr_env_outcome_equiv left_env right_env
+      (SExpr_Quant which_quantifier which_predicate arguments subquery).
+```
+
 ## `eval_scalar_boolean_in_env_congr_safe`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1503`](../SubqueryFacts.v#L1503)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1562`](../SubqueryFacts.v#L1562)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2320,7 +2154,7 @@ Lemma eval_scalar_boolean_in_env_congr_safe :
 
 ## `scalar_expr_in_env_congr_safe`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1536`](../SubqueryFacts.v#L1536)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1595`](../SubqueryFacts.v#L1595)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2347,7 +2181,7 @@ Lemma scalar_expr_in_env_congr_safe :
 
 ## `eval_scalar_boolean_exists_false_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1549`](../SubqueryFacts.v#L1549)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1608`](../SubqueryFacts.v#L1608)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2370,7 +2204,7 @@ Lemma eval_scalar_boolean_exists_false_iff : forall env subquery,
 
 ## `eval_scalar_boolean_exists_true_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1559`](../SubqueryFacts.v#L1559)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1618`](../SubqueryFacts.v#L1618)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2393,7 +2227,7 @@ Lemma eval_scalar_boolean_exists_true_iff : forall env subquery,
 
 ## `exists_truth_from_empty_negation_acceptance`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1584`](../SubqueryFacts.v#L1584)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1643`](../SubqueryFacts.v#L1643)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2416,7 +2250,7 @@ Lemma exists_truth_from_empty_negation_acceptance :
 
 ## `scalar_expr_exists_truth_exact`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1598`](../SubqueryFacts.v#L1598)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1657`](../SubqueryFacts.v#L1657)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2444,7 +2278,7 @@ Theorem scalar_expr_exists_truth_exact :
 
 ## `scalar_expr_not_exists_acceptance_exact`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1624`](../SubqueryFacts.v#L1624)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1683`](../SubqueryFacts.v#L1683)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2474,7 +2308,7 @@ Theorem scalar_expr_not_exists_acceptance_exact :
 
 ## `scalar_expr_exists_acceptance_exact`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1649`](../SubqueryFacts.v#L1649)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1708`](../SubqueryFacts.v#L1708)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2504,7 +2338,7 @@ Theorem scalar_expr_exists_acceptance_exact :
 
 ## `eval_scalar_boolean_quant_subquery_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1674`](../SubqueryFacts.v#L1674)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1733`](../SubqueryFacts.v#L1733)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2533,7 +2367,7 @@ Lemma eval_scalar_boolean_quant_subquery_congr :
 
 ## `eval_scalar_boolean_in_subquery_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1701`](../SubqueryFacts.v#L1701)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1760`](../SubqueryFacts.v#L1760)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2560,7 +2394,7 @@ Lemma eval_scalar_boolean_in_subquery_congr :
 
 ## `eval_scalar_boolean_exists_subquery_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1726`](../SubqueryFacts.v#L1726)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1785`](../SubqueryFacts.v#L1785)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2586,7 +2420,7 @@ Lemma eval_scalar_boolean_exists_subquery_congr :
 
 ## `scalar_expr_quant_admissible_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1754`](../SubqueryFacts.v#L1754)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1813`](../SubqueryFacts.v#L1813)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2627,7 +2461,7 @@ Lemma scalar_expr_quant_admissible_iff :
 
 ## `scalar_expr_in_admissible_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1780`](../SubqueryFacts.v#L1780)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1839`](../SubqueryFacts.v#L1839)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2662,7 +2496,7 @@ Lemma scalar_expr_in_admissible_iff : forall phase arguments subquery,
 
 ## `scalar_expr_exists_admissible_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1800`](../SubqueryFacts.v#L1800)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1859`](../SubqueryFacts.v#L1859)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2690,7 +2524,7 @@ Lemma scalar_expr_exists_admissible_iff : forall phase subquery,
 
 ## `scalar_expr_subquery_admissible_iff`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1813`](../SubqueryFacts.v#L1813)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1872`](../SubqueryFacts.v#L1872)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2725,7 +2559,7 @@ Lemma scalar_expr_subquery_admissible_iff :
 
 ## `eval_scalar_value_context_correlated_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1835`](../SubqueryFacts.v#L1835)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1894`](../SubqueryFacts.v#L1894)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2754,7 +2588,7 @@ Lemma eval_scalar_value_context_correlated_congr :
 
 ## `eval_scalar_boolean_context_correlated_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1853`](../SubqueryFacts.v#L1853)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1912`](../SubqueryFacts.v#L1912)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2783,7 +2617,7 @@ Lemma eval_scalar_boolean_context_correlated_congr :
 
 ## `eval_query_context_correlated_congr`
 
-Source: [`theories/FormalSQL/SubqueryFacts.v:1871`](../SubqueryFacts.v#L1871)
+Source: [`theories/FormalSQL/SubqueryFacts.v:1930`](../SubqueryFacts.v#L1930)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 

@@ -101,28 +101,6 @@ intros right_row Hright.
 apply andb_comm.
 Qed.
 
-(** A post-join filter may be distributed to both inputs only when its
-    accepted-pair decision factors exactly as stated.  This theorem is an
-    exact list law, not an outcome theorem: condition, projection, and filter
-    errors remain separate obligations below. *)
-Theorem inner_filter_to_input_filters_exact :
-  forall (A B C : Type) (join : A -> B -> C)
-      (accept : A -> B -> bool) (post : C -> bool)
-      (left_guard : A -> bool) (right_guard : B -> bool) left right,
-    (forall left_row right_row,
-      andb (accept left_row right_row) (post (join left_row right_row)) =
-      andb (left_guard left_row)
-        (andb (right_guard right_row) (accept left_row right_row))) ->
-    filter post (join_matched_rows join accept left right) =
-    join_matched_rows join accept
-      (filter left_guard left) (filter right_guard right).
-Proof.
-intros A B C join accept post left_guard right_guard left right Hfactor.
-rewrite filter_join_matched_rows_exact.
-apply join_matched_rows_filter_inputs_exact.
-exact Hfactor.
-Qed.
-
 (** Moving a guard before a join changes the rows on which it is evaluated.
     These predicates expose the exact reachability obligations rather than
     silently treating an unreachable expression as total. *)
@@ -459,55 +437,6 @@ split.
       eassumption.
 Qed.
 
-(** A concrete accepted join cell supplies the reached bad row needed by the
-    unsafe FILTER theorem.  The remaining premise is the exact per-occurrence
-    success-or-same-error contract for the actual matched-row list. *)
-Theorem eval_filter_rows_uniform_error_of_join_witness :
-  forall (A B : Type) env formula
-      (join : A -> B -> tuple T) (accept : A -> B -> bool)
-      left right left_row right_row error,
-    In left_row left ->
-    In right_row right ->
-    accept left_row right_row = true ->
-    eval_scalar_boolean (env_t T env (join left_row right_row)) formula
-      (SqlError error) ->
-    (forall row,
-      In row (join_matched_rows join accept left right) ->
-      (exists truth,
-        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
-    eval_filter_rows env formula
-      (join_matched_rows join accept left right) (SqlError error).
-Proof.
-intros A B env formula join accept left right left_row right_row error
-  Hleft Hright Haccepted Herror Hall.
-eapply eval_filter_rows_uniform_error_of_reached_member
-  with (bad := join left_row right_row); [|exact Herror|exact Hall].
-now apply join_matched_rows_member_of_accepted_cell.
-Qed.
-
-(** The self-join specialization keeps the accepted diagonal premise
-    explicit.  It says nothing about rows outside the actual matched list. *)
-Corollary eval_filter_rows_uniform_error_of_self_match :
-  forall (A : Type) env formula
-      (join : A -> A -> tuple T) (accept : A -> A -> bool)
-      rows bad error,
-    In bad rows ->
-    accept bad bad = true ->
-    eval_scalar_boolean (env_t T env (join bad bad)) formula (SqlError error) ->
-    (forall row,
-      In row (join_matched_rows join accept rows rows) ->
-      (exists truth,
-        eval_scalar_boolean (env_t T env row) formula (SqlSuccess truth)) \/
-      eval_scalar_boolean (env_t T env row) formula (SqlError error)) ->
-    eval_filter_rows env formula
-      (join_matched_rows join accept rows rows) (SqlError error).
-Proof.
-intros A env formula join accept rows bad error Hbad Haccepted Herror Hall.
-eapply eval_filter_rows_uniform_error_of_join_witness
-  with (left_row := bad) (right_row := bad); eassumption.
-Qed.
-
 End ReachedFilterErrors.
 
 (*****************************************************************************)
@@ -634,34 +563,6 @@ rewrite Hhead; cbn.
 apply IH.
 intros row right_row Hrow Hright.
 apply Hreject; [now right|exact Hright].
-Qed.
-
-(** A downstream null-rejecting predicate makes every padded middle
-    occurrence unreachable.  The result is exact list emptiness, so no
-    duplicate or order quotient is involved. *)
-Theorem middle_padding_downstream_empty :
-  forall (A B D M O : Type)
-      (pad : A -> M) (middle_accept : A -> B -> bool)
-      (emit : M -> D -> O) (downstream_accept : M -> D -> bool)
-      source_rows middle_rows downstream_rows,
-    (forall source downstream,
-      In source source_rows -> In downstream downstream_rows ->
-      downstream_accept (pad source) downstream = false) ->
-    join_matched_rows emit downstream_accept
-      (join_unmatched_left_rows pad middle_accept
-        source_rows middle_rows)
-      downstream_rows = nil.
-Proof.
-intros A B D M O pad middle_accept emit downstream_accept
-  source_rows middle_rows downstream_rows Hreject.
-apply join_matched_rows_empty_of_rejection.
-intros padded downstream Hpadded Hdownstream.
-unfold join_unmatched_left_rows in Hpadded.
-apply in_map_iff in Hpadded.
-destruct Hpadded as [source [Hpadded Hsource]].
-subst padded.
-apply filter_In in Hsource as [Hsource Hnone].
-now apply Hreject.
 Qed.
 
 (** Pairwise predicate agreement plus payload erasure transports one exact

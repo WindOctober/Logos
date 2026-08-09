@@ -74,6 +74,25 @@ Definition query_local_references_allowed
       In (MakeLocalQuerySchema relation (snd reference)) schemas)
     (query_expr_table_references query).
 
+(** Extending the set of bindings in scope cannot invalidate a reference that
+    was already allowed.  The complete local-name set and exact ordered schema
+    signatures remain fixed. *)
+Lemma query_local_references_allowed_available_monotone :
+  forall schemas all_local before after query,
+    (forall relation, In relation before -> In relation after) ->
+    query_local_references_allowed schemas all_local before query ->
+    query_local_references_allowed schemas all_local after query.
+Proof.
+intros schemas all_local before after query Hincluded Hallowed.
+unfold query_local_references_allowed in *.
+rewrite Forall_forall in Hallowed |- *.
+intros [relation outputs] Hreference; cbn in *.
+specialize (Hallowed (relation, outputs) Hreference).
+intro Hlocal.
+destruct (Hallowed Hlocal) as [Havailable Hschema].
+split; [now apply Hincluded | exact Hschema].
+Qed.
+
 Fixpoint local_query_binding_dependencies_well_formed
     (schemas : list LocalQuerySchema) (all_local available_local : list relname)
     (bindings : list LocalQueryBinding) : Prop :=
@@ -85,6 +104,30 @@ Fixpoint local_query_binding_dependencies_well_formed
       local_query_binding_dependencies_well_formed schemas all_local
         (local_binding_relation binding :: available_local) rest
   end.
+
+(** A well-formed binding sequence remains well formed when earlier bindings
+    become available.  Each newly defined head is still extended in front of
+    both availability lists, so left-to-right dependency order is unchanged. *)
+Lemma local_query_binding_dependencies_available_monotone :
+  forall schemas all_local before after bindings,
+    (forall relation, In relation before -> In relation after) ->
+    local_query_binding_dependencies_well_formed
+      schemas all_local before bindings ->
+    local_query_binding_dependencies_well_formed
+      schemas all_local after bindings.
+Proof.
+intros schemas all_local before after bindings.
+revert before after.
+induction bindings as [|binding rest IH];
+  intros before after Hincluded Hwell_formed; cbn in *; [exact I|].
+destruct Hwell_formed as [Hbinding Hrest]; split.
+- eapply query_local_references_allowed_available_monotone;
+    [exact Hincluded | exact Hbinding].
+- eapply IH; [|exact Hrest].
+  intros relation [Hequal | Hbefore].
+  + now left.
+  + right; now apply Hincluded.
+Qed.
 
 Definition bound_query_local_references_well_formed
     (schemas : list LocalQuerySchema) (query : BoundQuery) : Prop :=
@@ -112,6 +155,39 @@ Fixpoint declare_local_query_schemas
         (declare_local_query_schema db schema) rest
   end.
 
+(** Predeclaring schemas changes no table contents. *)
+Lemma declare_local_query_schemas_instance_preserving :
+  forall db schemas,
+    @_instance TNull (declare_local_query_schemas db schemas) =
+    @_instance TNull db.
+Proof.
+intros db schemas; revert db.
+induction schemas as [|schema rest IH]; intro db; cbn; [reflexivity|].
+rewrite IH.
+unfold declare_local_query_schema, create_table.
+reflexivity.
+Qed.
+
+(** A relation absent from every local schema retains its original sort after
+    the complete predeclaration pass. *)
+Lemma declare_local_query_schemas_basesort_absent :
+  forall db schemas relation,
+    ~ In relation (local_query_schema_relations schemas) ->
+    @_basesort TNull (declare_local_query_schemas db schemas) relation =
+    @_basesort TNull db relation.
+Proof.
+intros db schemas; revert db.
+induction schemas as [|schema rest IH]; intros db relation Habsent.
+- reflexivity.
+- cbn [local_query_schema_relations] in Habsent.
+  cbn [declare_local_query_schemas].
+  rewrite (IH (declare_local_query_schema db schema) relation).
+  + unfold declare_local_query_schema, create_table.
+    apply (@basesort_create_table_neq TNull).
+    intro Hequal; apply Habsent; left; now symmetry.
+  + intro Hmember; apply Habsent; now right.
+Qed.
+
 (** A successful definition is materialized as one bag.  Later references may
     choose different list representatives of this bag, but they cannot replay
     the definition or choose a different successful outcome. *)
@@ -126,6 +202,50 @@ Definition set_local_query_binding_rows
       | Eq => @query_rows_bag TNull rows
       | _ => @_instance TNull db relation
       end).
+
+(** Materialization updates only the instance function. *)
+Lemma set_local_query_binding_rows_relnames_preserving :
+  forall db binding rows,
+    @_relnames TNull (set_local_query_binding_rows db binding rows) =
+    @_relnames TNull db.
+Proof.
+reflexivity.
+Qed.
+
+Lemma set_local_query_binding_rows_basesort_preserving :
+  forall db binding rows relation,
+    @_basesort TNull (set_local_query_binding_rows db binding rows) relation =
+    @_basesort TNull db relation.
+Proof.
+reflexivity.
+Qed.
+
+(** Lookup at the defined name observes exactly the newly materialized bag;
+    this is the operational shadowing law for repeated writes. *)
+Lemma set_local_query_binding_rows_instance_eq :
+  forall db binding rows,
+    @_instance TNull (set_local_query_binding_rows db binding rows)
+      (local_binding_relation binding) =
+    @query_rows_bag TNull rows.
+Proof.
+intros db binding rows.
+unfold set_local_query_binding_rows; cbn [_instance].
+rewrite Oset.compare_eq_refl; reflexivity.
+Qed.
+
+(** Lookup at every distinct relation is preserved by the extension. *)
+Lemma set_local_query_binding_rows_instance_neq :
+  forall db binding rows relation,
+    relation <> local_binding_relation binding ->
+    @_instance TNull (set_local_query_binding_rows db binding rows) relation =
+    @_instance TNull db relation.
+Proof.
+intros db binding rows relation Hdistinct.
+unfold set_local_query_binding_rows; cbn [_instance].
+destruct (Oset.compare ORN relation (local_binding_relation binding))
+  eqn:Hcompare; try reflexivity.
+apply Oset.compare_eq_iff in Hcompare; contradiction.
+Qed.
 
 Definition eval_query_expr_with_schedule
     (db : db_state)

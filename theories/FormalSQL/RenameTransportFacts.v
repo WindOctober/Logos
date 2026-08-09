@@ -36,6 +36,38 @@ Definition rename_tnull_attribute_name
       Attr_timestamptz (rename_name name) precision
   end.
 
+Lemma rename_tnull_attribute_name_identity :
+  forall source,
+    rename_tnull_attribute_name (fun name => name) source = source.
+Proof.
+intro source; destruct source; reflexivity.
+Qed.
+
+Lemma rename_tnull_attribute_name_composition :
+  forall first second source,
+    rename_tnull_attribute_name second
+      (rename_tnull_attribute_name first source) =
+    rename_tnull_attribute_name
+      (fun name => second (first name)) source.
+Proof.
+intros first second source; destruct source; reflexivity.
+Qed.
+
+(** Global injectivity of the textual map is sufficient for collision freedom
+    on every attribute support.  Constructor, type-modifier, precision, and
+    scale fields are reflected by structural equality rather than discarded. *)
+Lemma tnull_attribute_name_renaming_injective_on :
+  forall rename_name,
+    (forall left right, rename_name left = rename_name right -> left = right) ->
+    forall support,
+      attribute_rename_injective_on support
+        (rename_tnull_attribute_name rename_name).
+Proof.
+intros rename_name Hinjective support left right _ _ Hequal.
+destruct left; destruct right; cbn in Hequal; try discriminate;
+  inversion Hequal; subst; f_equal; now apply Hinjective.
+Qed.
+
 Lemma tnull_attribute_name_renaming_type_preserving :
   forall rename_name source,
     type_of_attribute TNull
@@ -43,6 +75,19 @@ Lemma tnull_attribute_name_renaming_type_preserving :
     type_of_attribute TNull source.
 Proof.
 intros rename_name source; destruct source; reflexivity.
+Qed.
+
+Lemma tnull_attribute_name_renaming_sound_on :
+  forall rename_name,
+    (forall left right, rename_name left = rename_name right -> left = right) ->
+    forall support,
+      attribute_rename_sound_on support
+        (rename_tnull_attribute_name rename_name).
+Proof.
+intros rename_name Hinjective support; split.
+- now apply tnull_attribute_name_renaming_injective_on.
+- intros source _.
+  apply tnull_attribute_name_renaming_type_preserving.
 Qed.
 
 (** This is the typmod-sensitive adapter missing from generic [Tuple.Rcd].

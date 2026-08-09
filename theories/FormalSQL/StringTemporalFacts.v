@@ -881,6 +881,18 @@ Proof.
     split; intro H; try discriminate H; reflexivity.
 Qed.
 
+Lemma interp_date_lt_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateLtTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp <> Lt.
+Proof.
+  intros date timestamp.
+  cbn [NullValues.interp_predicate NullPredicates.interp_predicate].
+  unfold date_lt_timestamp_bool.
+  destruct (date_cmp_timestamp_internal date timestamp); cbn;
+    split; congruence.
+Qed.
+
 Lemma interp_date_lte_timestamp_true_iff : forall date timestamp,
   NullValues.interp_predicate PredicateDateLteTimestamp
     [Value_date (Some date); Value_timestamp (Some timestamp)] = true3 <->
@@ -891,6 +903,18 @@ Proof.
   rewrite <- (date_lte_timestamp_bool_spec date timestamp).
   destruct (date_lte_timestamp_bool date timestamp); cbn;
     split; intro H; try discriminate H; reflexivity.
+Qed.
+
+Lemma interp_date_lte_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateLteTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp = Gt.
+Proof.
+  intros date timestamp.
+  cbn [NullValues.interp_predicate NullPredicates.interp_predicate].
+  unfold date_lte_timestamp_bool.
+  destruct (date_cmp_timestamp_internal date timestamp); cbn;
+    split; congruence.
 Qed.
 
 Lemma interp_date_gt_timestamp_true_iff : forall date timestamp,
@@ -905,6 +929,18 @@ Proof.
     split; intro H; try discriminate H; reflexivity.
 Qed.
 
+Lemma interp_date_gt_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateGtTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp <> Gt.
+Proof.
+  intros date timestamp.
+  cbn [NullValues.interp_predicate NullPredicates.interp_predicate].
+  unfold date_gt_timestamp_bool.
+  destruct (date_cmp_timestamp_internal date timestamp); cbn;
+    split; congruence.
+Qed.
+
 Lemma interp_date_gte_timestamp_true_iff : forall date timestamp,
   NullValues.interp_predicate PredicateDateGteTimestamp
     [Value_date (Some date); Value_timestamp (Some timestamp)] = true3 <->
@@ -915,6 +951,18 @@ Proof.
   rewrite <- (date_gte_timestamp_bool_spec date timestamp).
   destruct (date_gte_timestamp_bool date timestamp); cbn;
     split; intro H; try discriminate H; reflexivity.
+Qed.
+
+Lemma interp_date_gte_timestamp_false_iff : forall date timestamp,
+  NullValues.interp_predicate PredicateDateGteTimestamp
+    [Value_date (Some date); Value_timestamp (Some timestamp)] = false3 <->
+  date_cmp_timestamp_internal date timestamp = Lt.
+Proof.
+  intros date timestamp.
+  cbn [NullValues.interp_predicate NullPredicates.interp_predicate].
+  unfold date_gte_timestamp_bool.
+  destruct (date_cmp_timestamp_internal date timestamp); cbn;
+    split; congruence.
 Qed.
 
 Definition timestamp_checked_operation

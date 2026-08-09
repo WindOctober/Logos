@@ -76,18 +76,8 @@ Local Abbreviation eval_query :=
     symbol_runtime_error aggregate_runtime_error value_is_null
     boolean_schedule).
 
-Local Abbreviation query_equiv :=
-  (@query_expr_equiv T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null
-    boolean_schedule).
-
 Local Abbreviation query_outcome_equiv :=
   (@query_expr_outcome_equiv T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null
-    boolean_schedule).
-
-Local Abbreviation query_global_typed_outcome_equiv :=
-  (@query_expr_global_typed_outcome_equiv T relname basesort instance unknown
     symbol_runtime_error aggregate_runtime_error value_is_null
     boolean_schedule).
 
@@ -2027,47 +2017,6 @@ intros env input [[rows | error] Hinput].
   now apply EQuery_DistinctChildError.
 Qed.
 
-(** DISTINCT is raw-outcome inert at a reset boundary when duplicate
-    elimination leaves every possible child bag unchanged.  The reset
-    transport is used directly; ordinary [BagClosed] deliberately promises
-    only an observationally equivalent representative and is not strong
-    enough for this exact context-congruence result. *)
-Theorem query_expr_distinct_global_typed_inert_reset :
-  forall input,
-    query_expr_order_behavior input = BagReset ->
-    (forall env bag,
-      query_success_bags basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule env input bag ->
-      bag_eq T (query_distinct_bag bag) bag) ->
-    query_global_typed_outcome_equiv (QExpr_Distinct input) input.
-Proof.
-intros input Hreset Hinert.
-split; [reflexivity |].
-intros env [rows | error].
-- split; intro Heval.
-  + apply eval_query_expr_distinct_success_iff in Heval.
-    destruct Heval as [input_rows [Hinput Hrows]].
-    apply query_same_rows_as_bag_iff_bag_eq in Hrows.
-    assert (Hbags : bag_eq T
-      (rows_bag T input_rows) (rows_bag T rows)).
-    {
-      apply bag_eq_sym.
-      eapply bag_eq_trans; [exact Hrows |].
-      apply (Hinert env (rows_bag T input_rows)).
-      unfold query_success_bags, alpha.
-      exists input_rows; split; [exact Hinput | apply bag_eq_refl].
-    }
-    eapply query_bag_reset_success_transport; eassumption.
-  + apply eval_query_expr_distinct_success_iff.
-    exists rows; split; [exact Heval |].
-    apply query_same_rows_as_bag_iff_bag_eq.
-    apply bag_eq_sym.
-    apply (Hinert env (rows_bag T rows)).
-    unfold query_success_bags, alpha.
-    exists rows; split; [exact Heval | apply bag_eq_refl].
-- apply eval_query_expr_distinct_error_iff.
-Qed.
-
 Lemma eval_query_expr_rank_error_iff :
   forall env partition_keys order_keys rank_attribute rank_value input error,
     eval_query env
@@ -2259,45 +2208,6 @@ intros env input output; split; intro Heval.
 - destruct Heval as [-> [input_rows Hinput]].
   apply eval_query_expr_fetch_success_iff.
   exists input_rows; split; [exact Hinput | reflexivity].
-Qed.
-
-(** Under safety and success-inhabitation, FETCH 0 erases every semantic
-    distinction between equal-typed children.  Safety is essential because
-    child errors are still observable before the slice is applied. *)
-Theorem query_expr_fetch_zero_annihilator_outcome_equiv_safe :
-  forall env left right,
-    query_expr_outputs left = query_expr_outputs right ->
-    query_safe env left ->
-    query_safe env right ->
-    query_has_success env left ->
-    query_has_success env right ->
-    query_outcome_equiv env
-      (QExpr_Fetch 0 left) (QExpr_Fetch 0 right).
-Proof.
-intros env left right Houtputs Hleft_safe Hright_safe
-  [left_rows Hleft_success] [right_rows Hright_success].
-apply query_expr_outcome_equiv_of_observations.
-- exact Houtputs.
-- exists (SqlSuccess nil).
-  now apply EQuery_FetchSuccess with (input_rows := left_rows).
-- exists (SqlSuccess nil).
-  now apply EQuery_FetchSuccess with (input_rows := right_rows).
-- intros output Houtput.
-  apply eval_query_expr_fetch_zero_success_iff in Houtput.
-  destruct Houtput as [-> _].
-  exists nil; split.
-  + now apply EQuery_FetchSuccess with (input_rows := right_rows).
-  + apply ordered_rows_equiv_refl.
-- intros output Houtput.
-  apply eval_query_expr_fetch_zero_success_iff in Houtput.
-  destruct Houtput as [-> _].
-  exists nil; split.
-  + now apply EQuery_FetchSuccess with (input_rows := left_rows).
-  + apply ordered_rows_equiv_refl.
-- intro error; rewrite 2 eval_query_expr_fetch_error_iff.
-  split; intro Herror.
-  + exfalso; now apply (Hleft_safe error).
-  + exfalso; now apply (Hright_safe error).
 Qed.
 
 Lemma eval_query_expr_offset_offset_iff :
@@ -2944,50 +2854,6 @@ destruct right as [|right_head right_tail].
   + cbn in Hlength; lia.
 Qed.
 
-(** ORDER BY is observationally redundant for a query whose every successful
-    outcome contains at most one row.  Child errors are preserved exactly. *)
-Theorem query_expr_order_by_outcome_equiv_of_success_length_le_one :
-  forall env keys input,
-    (exists outcome, eval_query env input outcome) ->
-    (forall rows,
-      eval_query env input (SqlSuccess rows) ->
-      (length rows <= 1)%nat) ->
-    query_outcome_equiv env (QExpr_OrderBy keys input) input.
-Proof.
-intros env keys input Houtcome Hbound.
-assert (Hordered_outcome :
-  exists outcome, eval_query env (QExpr_OrderBy keys input) outcome).
-{
-  destruct Houtcome as [[rows | error] Heval].
-  - destruct (@order_by_rows_has_observation T value_is_null keys rows)
-      as [output [Hsame Hordered]].
-    exists (SqlSuccess output).
-    apply eval_query_expr_order_by_success_iff.
-    exists rows; repeat split; assumption.
-  - exists (SqlError error).
-    now apply eval_query_expr_order_by_error_iff.
-}
-apply query_expr_outcome_equiv_of_observations.
-- reflexivity.
-- exact Hordered_outcome.
-- exact Houtcome.
-- intros output Heval.
-  apply eval_query_expr_order_by_success_iff in Heval.
-  destruct Heval as [input_rows [Hinput [Hsame _]]].
-  exists input_rows; split; [exact Hinput |].
-  now apply query_same_rows_as_bag_length_le_one_ordered_equiv;
-    [exact Hsame | apply Hbound].
-- intros input_rows Hinput.
-  destruct (@order_by_rows_has_observation T value_is_null keys input_rows)
-    as [output [Hsame Hordered]].
-  exists output; split.
-  + apply eval_query_expr_order_by_success_iff.
-    exists input_rows; repeat split; assumption.
-  + now apply query_same_rows_as_bag_length_le_one_ordered_equiv;
-      [exact Hsame | apply Hbound].
-- intro error; apply eval_query_expr_order_by_error_iff.
-Qed.
-
 (** A nested ORDER BY exposes only the outer key order.  The inner sort still
     must produce a legal representative, but it neither changes the input bag
     nor hides a child runtime error. *)
@@ -3034,68 +2900,6 @@ intros env outer_keys inner_keys input [output | error].
   + apply eval_query_expr_order_by_error_iff in Heval.
     apply eval_query_expr_order_by_error_iff.
     now apply eval_query_expr_order_by_error_iff.
-Qed.
-
-(** Context-ready forms of the exact slicing and ordering rewrites.  These
-    preserve the ordered output schema and every runtime outcome, so they may
-    be passed directly to [query_expr_context_global_congr]. *)
-
-Lemma query_expr_offset_zero_global_typed_equiv :
-  forall input,
-    query_global_typed_outcome_equiv (QExpr_Offset 0 input) input.
-Proof.
-intro input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_offset_zero_iff.
-Qed.
-
-Lemma query_expr_offset_offset_global_typed_equiv :
-  forall outer inner input,
-    query_global_typed_outcome_equiv
-      (QExpr_Offset outer (QExpr_Offset inner input))
-      (QExpr_Offset (outer + inner) input).
-Proof.
-intros outer inner input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_offset_offset_iff.
-Qed.
-
-Lemma query_expr_fetch_fetch_global_typed_equiv :
-  forall outer inner input,
-    query_global_typed_outcome_equiv
-      (QExpr_Fetch outer (QExpr_Fetch inner input))
-      (QExpr_Fetch (Nat.min outer inner) input).
-Proof.
-intros outer inner input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_fetch_fetch_iff.
-Qed.
-
-Lemma query_expr_offset_fetch_global_typed_equiv :
-  forall offset count input,
-    query_global_typed_outcome_equiv
-      (QExpr_Offset offset (QExpr_Fetch count input))
-      (QExpr_Fetch (count - offset) (QExpr_Offset offset input)).
-Proof.
-intros offset count input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_offset_fetch_comm_iff.
-Qed.
-
-Lemma query_expr_fetch_offset_global_typed_equiv :
-  forall count offset input,
-    query_global_typed_outcome_equiv
-      (QExpr_Fetch count (QExpr_Offset offset input))
-      (QExpr_Offset offset (QExpr_Fetch (offset + count) input)).
-Proof.
-intros count offset input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_fetch_offset_comm_iff.
-Qed.
-
-Lemma query_expr_order_by_order_by_global_typed_equiv :
-  forall outer_keys inner_keys input,
-    query_global_typed_outcome_equiv
-      (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input))
-      (QExpr_OrderBy outer_keys input).
-Proof.
-intros outer_keys inner_keys input; split; [reflexivity |].
-intros env outcome; apply eval_query_expr_order_by_order_by_iff.
 Qed.
 
 (** Fixed-environment error-preserving congruence uses extensional ordered-row
@@ -3590,57 +3394,6 @@ induction rows as [|row rows IH]; intro outcome.
       -- apply IH; reflexivity.
     * unfold filter_cons_outcome.
       now rewrite Bool.true_is_true_alt.
-Qed.
-
-Theorem query_expr_filter_outcome_equiv_of_always_true :
-  forall env formula input,
-    (exists outcome, eval_query env input outcome) ->
-    (forall rows,
-      eval_query env input (SqlSuccess rows) ->
-      forall row,
-        In row rows ->
-        forall outcome,
-          @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-            value_is_null boolean_schedule (env_t T env row)
-            formula outcome <->
-          outcome = SqlSuccess (Bool.true (B T))) ->
-    query_outcome_equiv env (QExpr_Filter formula input) input.
-Proof.
-intros env formula input Hinhabited Hformula.
-apply query_expr_outcome_equiv_of_observations.
-- reflexivity.
-- destruct Hinhabited as [[rows | error] Heval].
-  + exists (SqlSuccess rows).
-    eapply EQuery_FilterRows; [exact Heval |].
-    apply eval_filter_rows_always_true_iff with (rows := rows).
-    * now apply Hformula.
-    * reflexivity.
-  + exists (SqlError error); now apply EQuery_FilterChildError.
-- exact Hinhabited.
-- intros output Houtput.
-  apply eval_query_expr_filter_success_iff in Houtput.
-  destruct Houtput as [input_rows [Hinput Hfilter]].
-  apply (eval_filter_rows_always_true_iff
-    (env := env) (formula := formula)) in Hfilter.
-  + inversion Hfilter; subst output.
-    exists input_rows; split; [exact Hinput |].
-    apply ordered_rows_equiv_refl.
-  + now apply Hformula.
-- intros input_rows Hinput.
-  exists input_rows; split.
-  + eapply EQuery_FilterRows; [exact Hinput |].
-    apply eval_filter_rows_always_true_iff with (rows := input_rows).
-    * now apply Hformula.
-    * reflexivity.
-  + apply ordered_rows_equiv_refl.
-- intro error; split; intro Herror.
-  + apply eval_query_expr_filter_error_iff in Herror.
-    destruct Herror as [Hchild | [rows [Hinput Hfilter]]]; [exact Hchild |].
-    apply (eval_filter_rows_always_true_iff
-      (env := env) (formula := formula)) in Hfilter.
-    * discriminate.
-    * now apply Hformula.
-  + now apply EQuery_FilterChildError.
 Qed.
 
 (** Pull an arbitrary relational permutation of a mapped list back to a
@@ -4192,72 +3945,6 @@ eapply bag_eq_trans.
 - apply bag_eq_sym.
   eapply bag_eq_trans;
     [apply bag_eq_sym; exact Hsecond_bag | exact Hsecond_eval].
-Qed.
-
-(** Exact safe equivalence for right distribution.  Possible-bag
-    functionality is explicit because the target evaluates [left] twice. *)
-Theorem query_expr_cross_join_union_right_equiv_safe :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall left_bag left_bag',
-      success_bags env left left_bag ->
-      success_bags env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    query_safe env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_safe env
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)) ->
-    query_has_success env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_equiv env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-Proof.
-intros env left first second Hsource_sort Htarget_sort Hfunctional
-  Hsource_safe Htarget_safe Hsource_success.
-apply query_bag_reset_equiv_of_success_bags_safe.
-- reflexivity.
-- reflexivity.
-- reflexivity.
-- now apply query_cross_join_union_right_success_bags.
-- exact Hsource_safe.
-- exact Htarget_safe.
-- exact Hsource_success.
-Qed.
-
-Theorem query_expr_cross_join_union_right_outcome_equiv_safe :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall left_bag left_bag',
-      success_bags env left left_bag ->
-      success_bags env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    query_safe env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_safe env
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)) ->
-    query_has_success env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_outcome_equiv env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-Proof.
-intros env left first second Hsource_sort Htarget_sort Hfunctional
-  Hsource_safe Htarget_safe Hsource_success.
-apply query_expr_equiv_implies_outcome_equiv.
-now apply query_expr_cross_join_union_right_equiv_safe.
 Qed.
 
 (** Set operations preserve possible-success-bag functionality whenever both

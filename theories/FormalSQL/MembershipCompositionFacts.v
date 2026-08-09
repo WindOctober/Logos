@@ -160,35 +160,13 @@ Qed.
 
 End TNullMembershipCases.
 
-(** Safe query-level distribution of [IN] acceptance over UNION ALL.  The
-    result is deliberately a filter-acceptance theorem, not equality of the
-    complete Bool3 truth: a branch may contribute UNKNOWN without making the
-    disjunction accepted.  Child evaluation remains left-to-right, and the
-    explicit no-error premises justify the corresponding eager branch form. *)
-Section UnionAllMembershipAcceptance.
+(** DISTINCT support and membership-acceptance laws. *)
+Section DistinctMembershipAcceptance.
 
 Context {T : Tuple.Rcd} {relname : Type}.
 
-Variable basesort : relname -> Fset.set (A T).
-Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
 Variable unknown : Bool.b (B T).
-Variable symbol_runtime_error :
-  scalar_operator T -> list (option sql_runtime_error * value T) ->
-  option sql_runtime_error.
-Variable aggregate_runtime_error :
-  aggregate T -> list (option sql_runtime_error * value T) ->
-  option sql_runtime_error.
 Variable value_is_null : value T -> bool.
-Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
-
-Local Abbreviation eval_query :=
-  (@eval_query_expr_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null
-    boolean_schedule).
-Local Abbreviation eval_scalar_values :=
-  (@eval_scalar_values_outcome T relname basesort instance unknown
-    symbol_runtime_error aggregate_runtime_error value_is_null
-    boolean_schedule).
 
 Local Lemma query_rows_bag_occ_local : forall rows row,
   Febag.nb_occ (Fecol.CBag (CTuple T)) row (query_rows_bag rows) =
@@ -316,120 +294,7 @@ eapply in_rows_acceptance_support_rel;
   [exact Houtput_rows|exact Hinput|exact Hsupport].
 Qed.
 
-Theorem scalar_expr_in_union_all_acceptance_exact :
-  forall env arguments left right
-      (accept : list (value T) -> tuple T -> bool)
-      left_accepted right_accepted,
-    query_expr_sort left =S= query_expr_sort right ->
-    (exists values,
-      eval_scalar_values env arguments (SqlSuccess values)) ->
-    (exists rows, eval_query env left (SqlSuccess rows)) ->
-    (exists rows, eval_query env right (SqlSuccess rows)) ->
-    (forall rows,
-      eval_query env (QExpr_Set Union left right) (SqlSuccess rows) ->
-      Forall
-        (query_row_has_outputs
-          (query_expr_outputs (QExpr_Set Union left right))) rows) ->
-    (forall values,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      forall row,
-      Bool.is_true (B T)
-        (@in_row_truth T relname unknown value_is_null
-          values (QExpr_Set Union left right) row) =
-      accept values row) ->
-    (forall values rows,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      eval_query env left (SqlSuccess rows) ->
-      existsb (accept values) rows = left_accepted) ->
-    (forall values rows,
-      eval_scalar_values env arguments (SqlSuccess values) ->
-      eval_query env right (SqlSuccess rows) ->
-      existsb (accept values) rows = right_accepted) ->
-    (forall error,
-      ~ eval_scalar_values env arguments (SqlError error)) ->
-    (forall error, ~ eval_query env left (SqlError error)) ->
-    (forall error, ~ eval_query env right (SqlError error)) ->
-    scalar_expr_acceptance_exact_at
-      basesort instance unknown symbol_runtime_error
-      aggregate_runtime_error value_is_null boolean_schedule env
-      (SExpr_In arguments (QExpr_Set Union left right))
-      (orb left_accepted right_accepted).
-Proof.
-intros env arguments left right accept left_accepted right_accepted
-  Hsort Harguments [left_rows0 Hleft0] [right_rows0 Hright0]
-  Houtputs Haccept Hleft_fixed Hright_fixed Hargument_errors
-  Hleft_errors Hright_errors.
-eapply scalar_expr_in_acceptance_exact
-  with (accept := accept).
-- exact Harguments.
-- exists
-    (Febag.elements (Fecol.CBag (CTuple T))
-      (query_set_bag_function Union left right
-        (query_rows_bag left_rows0) (query_rows_bag right_rows0))).
-  apply eval_query_expr_set_success_iff.
-  exists left_rows0, right_rows0.
-  repeat split; try assumption.
-  apply query_elements_same_rows_as_bag.
-- exact Houtputs.
-- exact Haccept.
-- intros values output Hvalues Houtput.
-  pose proof (Houtputs output Houtput) as Houtput_rows.
-  apply eval_query_expr_set_success_iff in Houtput.
-  destruct Houtput as
-    [left_rows [right_rows [Hleft [Hright Houtput]]]].
-  assert (Happend :
-    query_same_rows_as_bag (left_rows ++ right_rows)
-      (query_set_bag_function Union left right
-        (query_rows_bag left_rows) (query_rows_bag right_rows))).
-  {
-    unfold query_set_bag_function; rewrite Hsort.
-    apply query_same_rows_as_bag_iff_occurrences; intro row.
-    rewrite Oeset.nb_occ_app.
-    unfold query_set_bag, Febag.interp_set_op; cbn.
-    rewrite Febag.nb_occ_union, 2 rows_bag_occ; reflexivity.
-  }
-  assert (Hpermut : Oeset.permut (OTuple T) output
-    (left_rows ++ right_rows)).
-  {
-    eapply query_same_rows_as_bag_permut_between;
-      [exact Houtput|exact Happend].
-  }
-  assert (Hproper : forall first second,
-    Oeset.compare (OTuple T) first second = Eq ->
-    query_row_has_outputs
-      (query_expr_outputs (QExpr_Set Union left right)) first ->
-    accept values first = accept values second).
-  {
-    intros first second Hequal Hfirst_outputs.
-    rewrite <- (Haccept values Hvalues first),
-      <- (Haccept values Hvalues second).
-    apply f_equal.
-    eapply in_row_truth_congr; eassumption.
-  }
-  assert (Hexists : existsb (accept values) output =
-    existsb (accept values) (left_rows ++ right_rows)).
-  {
-    eapply existsb_rel_permut_with_left_property;
-      [|exact Hpermut|exact Houtput_rows].
-    exact Hproper.
-  }
-  rewrite Hexists.
-  transitivity
-    (Datatypes.orb
-      (existsb (accept values) left_rows)
-      (existsb (accept values) right_rows)).
-  + apply List.existsb_app.
-  + rewrite (Hleft_fixed values left_rows Hvalues Hleft),
-      (Hright_fixed values right_rows Hvalues Hright).
-    reflexivity.
-- exact Hargument_errors.
-- intros error Herror.
-  inversion Herror; subst.
-  + eapply Hleft_errors; eassumption.
-  + eapply Hright_errors; eassumption.
-Qed.
-
-End UnionAllMembershipAcceptance.
+End DistinctMembershipAcceptance.
 
 (** Exact typed-scalar lifts.  The fixed correlated environment is retained
     throughout; argument failures and child query errors remain observable.

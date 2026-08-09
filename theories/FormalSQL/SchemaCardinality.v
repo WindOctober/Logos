@@ -173,6 +173,31 @@ Definition int32_value_index (value : value TNull) : nat :=
   | _ => 0%nat
   end.
 
+Lemma conforming_nonnull_int32_index_lt :
+  forall name value,
+    value_conforms_attribute (Attr_int32 name) value ->
+    NullValues.is_null_value value = false ->
+    (int32_value_index value < int32_domain_size)%nat.
+Proof.
+intros name value Htyped Hnonnull.
+destruct (conforming_nonnull_int32_value name value Htyped Hnonnull)
+  as [integer ->].
+cbn [int32_value_index].
+apply int32_index_lt.
+Qed.
+
+Lemma conforming_nonnull_int32_index_in_domain :
+  forall name value,
+    value_conforms_attribute (Attr_int32 name) value ->
+    NullValues.is_null_value value = false ->
+    In (int32_value_index value) (seq 0 int32_domain_size).
+Proof.
+intros name value Htyped Hnonnull.
+rewrite in_seq.
+split; [lia |].
+now apply (conforming_nonnull_int32_index_lt name value).
+Qed.
+
 Lemma conforming_nonnull_int32_index_eq_iff :
   forall name left right,
     value_conforms_attribute (Attr_int32 name) left ->
@@ -298,13 +323,10 @@ assert
   intros code Hcode.
   apply in_map_iff in Hcode as [row [<- Hrow]].
   pose proof (primary_key_conforms_not_null _ _ Hprimary) as Hnonnull.
-  destruct
-    (conforming_nonnull_int32_value name
-      (dot TNull row (Attr_int32 name))
-      (Htyped row Hrow)
-      (Hnonnull row Hrow (Attr_int32 name) (or_introl eq_refl)))
-    as [integer ->].
-  apply int32_index_in_domain.
+  apply (conforming_nonnull_int32_index_in_domain name).
+  - now apply Htyped.
+  - exact
+      (Hnonnull row Hrow (Attr_int32 name) (or_introl eq_refl)).
 }
 pose proof (NoDup_incl_length Hcodes Hinside) as Hlength.
 rewrite length_map, length_seq in Hlength.

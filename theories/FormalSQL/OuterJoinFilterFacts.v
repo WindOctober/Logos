@@ -34,25 +34,6 @@ Definition join_unmatched_right_rows {A B C : Type}
         negb (existsb (fun left_row => accept left_row right_row) left))
       right).
 
-Definition left_outer_scheduler_rows {A B C : Type}
-    (join : A -> B -> C) (pad_left : A -> C)
-    (accept : A -> B -> bool) (left : list A) (right : list B) : list C :=
-  join_matched_rows join accept left right ++
-  join_unmatched_left_rows pad_left accept left right.
-
-Definition full_outer_scheduler_rows {A B C : Type}
-    (join : A -> B -> C) (pad_left : A -> C) (pad_right : B -> C)
-    (accept : A -> B -> bool) (left : list A) (right : list B) : list C :=
-  join_matched_rows join accept left right ++
-  join_unmatched_left_rows pad_left accept left right ++
-  join_unmatched_right_rows pad_right accept left right.
-
-Definition right_outer_scheduler_rows {A B C : Type}
-    (join : A -> B -> C) (pad_right : B -> C)
-    (accept : A -> B -> bool) (left : list A) (right : list B) : list C :=
-  join_matched_rows join accept left right ++
-  join_unmatched_right_rows pad_right accept left right.
-
 Local Lemma flat_map_optional_cons_Permutation :
   forall (A C : Type) (select : A -> bool)
       (head : A -> C) (tail : A -> list C) rows,
@@ -107,7 +88,7 @@ Proof.
         apply Permutation_refl.
 Qed.
 
-Local Lemma join_matched_rows_transpose_Permutation :
+Lemma join_matched_rows_transpose_Permutation :
   forall (A B C : Type) (join : A -> B -> C)
       (accept : A -> B -> bool) left right,
     Permutation
@@ -161,30 +142,7 @@ Proof.
       apply flat_map_optional_cons_Permutation.
 Qed.
 
-(** LEFT and RIGHT outer schedulers are exact occurrence permutations after
-    swapping operands and transposing both the match decision and matched-row
-    emitter.  The unmatched preserved-side emitter is literally the same
-    function.  This theorem is list-level only: SQL condition/projection
-    errors and semantic row equality must be transported separately. *)
-Theorem left_right_outer_scheduler_swap_Permutation :
-  forall (A B C : Type) (join : A -> B -> C) (pad_left : A -> C)
-      (accept : A -> B -> bool) left right,
-    Permutation
-      (left_outer_scheduler_rows join pad_left accept left right)
-      (right_outer_scheduler_rows
-        (fun right_row left_row => join left_row right_row)
-        pad_left
-        (fun right_row left_row => accept left_row right_row)
-        right left).
-Proof.
-  intros A B C join pad_left accept left right.
-  unfold left_outer_scheduler_rows, right_outer_scheduler_rows.
-  apply Permutation_app.
-  - apply join_matched_rows_transpose_Permutation.
-  - apply Permutation_refl.
-Qed.
-
-Local Lemma filter_join_matched_rows_guard_left :
+Lemma filter_join_matched_rows_guard_left :
   forall (A B C : Type) (join : A -> B -> C)
       (accept : A -> B -> bool) (guard_left : A -> bool)
       (guard_output : C -> bool) left right,
@@ -222,7 +180,7 @@ Proof.
     now rewrite Hempty.
 Qed.
 
-Local Lemma filter_join_unmatched_left_rows_guard_left :
+Lemma filter_join_unmatched_left_rows_guard_left :
   forall (A B C : Type) (pad_left : A -> C)
       (accept : A -> B -> bool) (guard_left : A -> bool)
       (guard_output : C -> bool) left right,
@@ -246,7 +204,7 @@ Proof.
   - intros left_row Hleft; apply Hguard.
 Qed.
 
-Local Lemma filter_join_unmatched_right_rows_false :
+Lemma filter_join_unmatched_right_rows_false :
   forall (A B C : Type) (pad_right : B -> C)
       (accept : A -> B -> bool) (guard_output : C -> bool) left right,
     (forall right_row, guard_output (pad_right right_row) = false) ->
@@ -265,71 +223,4 @@ Proof.
   { apply ListFacts.filter_false.
     intros right_row Hright; apply Hguard. }
   now rewrite Hempty.
-Qed.
-
-(** Filtering a FULL outer join by a proper total guard that observes only
-    the preserved left payload yields the same occurrence list as filtering
-    the left input before a LEFT outer join.  The right-padded branch must be
-    rejected explicitly.  This is a pure scheduler law: SQL formula
-    totality, non-volatility, and exact runtime-error equivalence remain
-    separate premises at the query-outcome boundary. *)
-Theorem full_outer_filter_to_left_outer_exact :
-  forall (A B C : Type) (join : A -> B -> C)
-      (pad_left : A -> C) (pad_right : B -> C)
-      (accept : A -> B -> bool) (guard_left : A -> bool)
-      (guard_output : C -> bool) left right,
-    (forall left_row right_row,
-      guard_output (join left_row right_row) = guard_left left_row) ->
-    (forall left_row,
-      guard_output (pad_left left_row) = guard_left left_row) ->
-    (forall right_row,
-      guard_output (pad_right right_row) = false) ->
-    filter guard_output
-      (full_outer_scheduler_rows
-        join pad_left pad_right accept left right) =
-    left_outer_scheduler_rows join pad_left accept
-      (filter guard_left left) right.
-Proof.
-  intros A B C join pad_left pad_right accept guard_left guard_output
-    left right Hmatched Hleft Hright.
-  unfold full_outer_scheduler_rows, left_outer_scheduler_rows.
-  rewrite !ListFacts.filter_app.
-  rewrite (filter_join_matched_rows_guard_left
-    A B C join accept guard_left guard_output left right Hmatched).
-  rewrite (filter_join_unmatched_left_rows_guard_left
-    A B C pad_left accept guard_left guard_output left right Hleft).
-  rewrite (filter_join_unmatched_right_rows_false
-    A B C pad_right accept guard_output left right Hright).
-  now rewrite app_nil_r.
-Qed.
-
-(** A total null-rejecting consumer removes precisely the NULL-padded branch
-    of a LEFT outer scheduler.  Matched-row filtering remains in place; moving
-    that predicate into a join condition or another input would require
-    additional properness, volatility, and runtime-error proofs. *)
-Theorem left_outer_null_reject_to_inner_exact :
-  forall (A B C : Type) (join : A -> B -> C) (pad_left : A -> C)
-      (accept : A -> B -> bool) (guard_output : C -> bool) left right,
-    (forall left_row, guard_output (pad_left left_row) = false) ->
-    filter guard_output
-      (left_outer_scheduler_rows join pad_left accept left right) =
-    filter guard_output (join_matched_rows join accept left right).
-Proof.
-  intros A B C join pad_left accept guard_output left right Hpad.
-  unfold left_outer_scheduler_rows.
-  rewrite ListFacts.filter_app.
-  assert (Hempty :
-    filter guard_output
-      (join_unmatched_left_rows pad_left accept left right) = []).
-  { unfold join_unmatched_left_rows.
-    rewrite ListFacts.filter_map.
-    assert (Hfiltered :
-      filter (fun left_row => guard_output (pad_left left_row))
-        (filter
-          (fun left_row => negb (existsb (accept left_row) right)) left) =
-      []).
-    { apply ListFacts.filter_false.
-      intros left_row Hleft; apply Hpad. }
-    now rewrite Hfiltered. }
-  now rewrite Hempty, app_nil_r.
 Qed.

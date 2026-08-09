@@ -81,6 +81,57 @@ Proof.
       exists member; split; [now right|exact Hmember].
 Qed.
 
+(** Exact failure observations retain the safe prefix that makes the reported
+    category the first reached error, rather than merely recording membership. *)
+Lemma first_runtime_error_some_iff :
+  forall (A : Type) (check : A -> option sql_runtime_error) values error,
+    first_runtime_error check values = Some error <->
+    exists prefix current suffix,
+      values = List.app prefix (current :: suffix) /\
+      Forall (fun value => check value = None) prefix /\
+      check current = Some error.
+Proof.
+  intros A check values error; split.
+  - revert error.
+    induction values as [|value values IH]; intros error Herror; cbn in Herror.
+    + discriminate.
+    + destruct (check value) as [head_error|] eqn:Hvalue.
+      * inversion Herror; subst.
+        exists [], value, values; cbn.
+        repeat split; [constructor|exact Hvalue].
+      * destruct (IH error Herror) as
+          [prefix [current [suffix [Hvalues [Hprefix Hcurrent]]]]].
+        exists (value :: prefix), current, suffix; cbn.
+        split; [now rewrite Hvalues|].
+        split; [now constructor|exact Hcurrent].
+  - intros [prefix [current [suffix [Hvalues [Hprefix Hcurrent]]]]].
+    subst values.
+    rewrite first_runtime_error_app.
+    rewrite (proj2 (first_runtime_error_none_iff A check prefix) Hprefix).
+    cbn; now rewrite Hcurrent.
+Qed.
+
+(** Pairwise preservation of each reached check preserves the exact first
+    error, without requiring a permutation or erasing the evaluation order. *)
+Lemma first_runtime_error_Forall2_congr :
+  forall (A B : Type)
+    (left_check : A -> option sql_runtime_error)
+    (right_check : B -> option sql_runtime_error)
+    left right,
+    Forall2
+      (fun left_value right_value =>
+        left_check left_value = right_check right_value)
+      left right ->
+    first_runtime_error left_check left =
+    first_runtime_error right_check right.
+Proof.
+  intros A B left_check right_check left right Hrelated.
+  induction Hrelated as
+    [|left_value right_value left right Hhead Htail IH]; cbn.
+  - reflexivity.
+  - now rewrite Hhead, IH.
+Qed.
+
 Lemma first_observation_error_as_first_runtime_error : forall observations,
   first_observation_error observations =
   first_runtime_error (fun observation => fst observation) observations.
@@ -109,11 +160,51 @@ Proof.
   now apply first_runtime_error_some_member in Herror.
 Qed.
 
+Lemma first_observation_error_some_iff : forall observations error,
+  first_observation_error observations = Some error <->
+  exists prefix current suffix,
+    observations = List.app prefix (current :: suffix) /\
+    Forall (fun observation => fst observation = None) prefix /\
+    fst current = Some error.
+Proof.
+  intros observations error.
+  rewrite first_observation_error_as_first_runtime_error.
+  apply first_runtime_error_some_iff.
+Qed.
+
+Lemma first_observation_error_Forall2_congr : forall left right,
+  Forall2
+    (fun left_observation right_observation =>
+      fst left_observation = fst right_observation)
+    left right ->
+  first_observation_error left = first_observation_error right.
+Proof.
+  intros left right Hrelated.
+  rewrite !first_observation_error_as_first_runtime_error.
+  now apply first_runtime_error_Forall2_congr.
+Qed.
+
 Lemma observation_values_length : forall observations,
   List.length (observation_values observations) = List.length observations.
 Proof.
   intro observations; unfold observation_values.
   apply length_map.
+Qed.
+
+Lemma observation_values_Forall2 :
+  forall (relation : value -> value -> Prop) left right,
+    Forall2
+      (fun left_observation right_observation =>
+        relation (snd left_observation) (snd right_observation))
+      left right ->
+    Forall2 relation
+      (observation_values left) (observation_values right).
+Proof.
+  intros relation left right Hrelated.
+  induction Hrelated as
+    [|left_observation right_observation left right Hhead Htail IH]; cbn.
+  - constructor.
+  - now constructor.
 Qed.
 
 (** Aggregate errors compose child errors with aggregate-local checks. *)
@@ -2194,6 +2285,30 @@ Qed.
 End GroupingSetsOutcomeFacts.
 
 (** Constructor and equivalence facts for deterministic SQL outcomes. *)
+
+Lemma outcome_equiv_success_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop) left right,
+    outcome_equiv value_equiv (SqlSuccess left) (SqlSuccess right) <->
+    value_equiv left right.
+Proof. reflexivity. Qed.
+
+Lemma outcome_equiv_error_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+    left_error right_error,
+    outcome_equiv value_equiv
+      (@SqlError A left_error) (@SqlError A right_error) <->
+    left_error = right_error.
+Proof. reflexivity. Qed.
+
+Lemma outcome_equiv_success_error :
+  forall (A : Type) (value_equiv : A -> A -> Prop) value error,
+    ~ outcome_equiv value_equiv (SqlSuccess value) (@SqlError A error).
+Proof. intros A value_equiv value error H; exact H. Qed.
+
+Lemma outcome_equiv_error_success :
+  forall (A : Type) (value_equiv : A -> A -> Prop) error value,
+    ~ outcome_equiv value_equiv (@SqlError A error) (SqlSuccess value).
+Proof. intros A value_equiv error value H; exact H. Qed.
 
 Lemma successful_outcome_equiv_implies_outcome_equiv :
   forall (A : Type) (value_equiv : A -> A -> Prop) left right,

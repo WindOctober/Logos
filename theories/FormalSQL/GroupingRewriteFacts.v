@@ -182,6 +182,38 @@ Proof.
   now left.
 Qed.
 
+(** Looking up one exact key in a partition exposes both absence and the
+    unique accumulator-ordered member list.  The result retains every matching
+    input occurrence and makes the implementation's reversal explicit. *)
+Theorem partition_lookup_key_exact :
+  forall (key_of : A -> Key) rows key,
+    filter
+      (fun group => Oset.eq_bool key_order (fst group) key)
+      (@Partition.partition A Key key_order key_of rows) =
+    match
+      filter
+        (fun row => Oset.eq_bool key_order (key_of row) key)
+        rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [(key,
+          rev
+            (filter
+              (fun row => Oset.eq_bool key_order (key_of row) key)
+              rows))]
+    end.
+Proof.
+  intros key_of rows key.
+  rewrite <- (partition_filter_by_key_exact
+    (fun candidate => Oset.eq_bool key_order candidate key)
+    key_of rows).
+  apply Partition.partition_cst.
+  intros row Hrow.
+  apply filter_In in Hrow as [_ Hkey].
+  now apply Oset.eq_bool_true_iff in Hkey.
+Qed.
+
 End PartitionFilter.
 
 (** Mapping partition members may change their type, provided that the map
@@ -682,37 +714,27 @@ Theorem partition_member_exact_key_filter :
           rows).
 Proof.
   intros A Key key_order key_of rows key members Hgroup.
-  set (keep := fun current => Oset.eq_bool key_order current key).
   assert (Hselected : In (key, members)
-    (filter (fun group => keep (fst group))
+    (filter
+      (fun group => Oset.eq_bool key_order (fst group) key)
       (@Partition.partition A Key key_order key_of rows))).
   {
     apply filter_In; split; [exact Hgroup|].
-    unfold keep; cbn.
+    cbn.
     apply Oset.eq_bool_refl.
   }
-  rewrite <- (@partition_filter_by_key_exact
-    A Key key_order keep key_of rows) in Hselected.
-  assert (Hconstant : forall row,
-    In row (filter (fun item => keep (key_of item)) rows) ->
-    key_of row = key).
-  {
-    intros row Hrow.
-    apply filter_In in Hrow as [_ Hkeep].
-    unfold keep in Hkeep.
-    now apply Oset.eq_bool_true_iff in Hkeep.
-  }
-  rewrite (@Partition.partition_cst
-    A Key key_order key_of key
-    (filter (fun item => keep (key_of item)) rows) Hconstant)
-    in Hselected.
-  destruct (filter (fun item => keep (key_of item)) rows)
-    as [|first rest] eqn:Hrows; cbn in Hselected; [contradiction|].
+  rewrite (@partition_lookup_key_exact
+    A Key key_order key_of rows key) in Hselected.
+  destruct
+    (filter
+      (fun row => Oset.eq_bool key_order (key_of row) key)
+      rows)
+    as [|first rest] eqn:Hrows;
+    cbn in Hselected; [contradiction|].
   destruct Hselected as [Hequal|[]].
   injection Hequal as Hmembers.
   subst members.
-  unfold keep in Hrows |- *.
-  now rewrite Hrows.
+  reflexivity.
 Qed.
 
 Local Lemma keyed_lists_Forall2_of_fst_eq :

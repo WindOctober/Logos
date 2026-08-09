@@ -2,11 +2,11 @@
 
 Route here for: success/error outcomes, safe vs error-preserving equivalence, rewrite contracts.
 
-This focused catalog contains 291 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 288 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `successful_outcome_equiv_implies_outcome_equiv`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2198`](../AggregateRuntimeFacts.v#L2198)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2313`](../AggregateRuntimeFacts.v#L2313)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -29,7 +29,7 @@ Lemma successful_outcome_equiv_implies_outcome_equiv :
 
 ## `outcome_equiv_eq_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2207`](../AggregateRuntimeFacts.v#L2207)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2322`](../AggregateRuntimeFacts.v#L2322)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -50,7 +50,7 @@ Lemma outcome_equiv_eq_iff : forall (A : Type) (left right : sql_outcome A),
 
 ## `outcome_equiv_symmetric`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2221`](../AggregateRuntimeFacts.v#L2221)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2336`](../AggregateRuntimeFacts.v#L2336)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -75,7 +75,7 @@ Lemma outcome_equiv_symmetric :
 
 ## `outcome_equiv_transitive`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2234`](../AggregateRuntimeFacts.v#L2234)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2349`](../AggregateRuntimeFacts.v#L2349)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -590,7 +590,7 @@ Lemma tuple_list_semantic_rel_trans :
 
 ## `query_expr_has_success_of_runtime_safe_and_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:126`](../OrderedQueryFacts.v#L126)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:116`](../OrderedQueryFacts.v#L116)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -614,7 +614,7 @@ Lemma query_expr_has_success_of_runtime_safe_and_outcome :
 
 ## `query_expr_has_outcome_of_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:140`](../OrderedQueryFacts.v#L140)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:130`](../OrderedQueryFacts.v#L130)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -637,7 +637,7 @@ Lemma query_expr_has_outcome_of_success :
 
 ## `query_expr_table_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:152`](../OrderedQueryFacts.v#L152)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:142`](../OrderedQueryFacts.v#L142)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -659,7 +659,7 @@ Lemma query_expr_table_runtime_safe :
 
 ## `query_expr_table_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:160`](../OrderedQueryFacts.v#L160)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:150`](../OrderedQueryFacts.v#L150)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -681,7 +681,7 @@ Lemma query_expr_table_has_outcome :
 
 ## `query_expr_values_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:171`](../OrderedQueryFacts.v#L171)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:161`](../OrderedQueryFacts.v#L161)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -703,7 +703,7 @@ Lemma query_expr_values_runtime_safe :
 
 ## `query_expr_values_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:189`](../OrderedQueryFacts.v#L189)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:179`](../OrderedQueryFacts.v#L179)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -725,7 +725,7 @@ Lemma query_expr_values_has_outcome :
 
 ## `query_expr_error_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:201`](../OrderedQueryFacts.v#L201)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:191`](../OrderedQueryFacts.v#L191)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -747,7 +747,7 @@ Lemma query_expr_error_has_outcome :
 
 ## `query_expr_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:209`](../OrderedQueryFacts.v#L209)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:199`](../OrderedQueryFacts.v#L199)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_refl` for the public result.
 
@@ -770,7 +770,7 @@ Lemma query_expr_outcome_equiv_refl :
 
 ## `query_expr_outcome_equiv_of_eval_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:226`](../OrderedQueryFacts.v#L226)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:216`](../OrderedQueryFacts.v#L216)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_exact_schedule_transport` for the public result.
 
@@ -796,7 +796,7 @@ Lemma query_expr_outcome_equiv_of_eval_iff :
 
 ## `query_expr_outcome_equiv_of_global_typed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:254`](../OrderedQueryFacts.v#L254)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:244`](../OrderedQueryFacts.v#L244)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_uniform_global_typed` for the public result.
 
@@ -822,7 +822,7 @@ Lemma query_expr_outcome_equiv_of_global_typed :
 
 ## `query_bag_closed_outcome_equiv_of_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:271`](../OrderedQueryFacts.v#L271)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:261`](../OrderedQueryFacts.v#L261)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -859,7 +859,7 @@ Theorem query_bag_closed_outcome_equiv_of_success_bags :
 
 ## `query_bag_reset_outcome_equiv_of_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:321`](../OrderedQueryFacts.v#L321)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:311`](../OrderedQueryFacts.v#L311)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -894,7 +894,7 @@ Corollary query_bag_reset_outcome_equiv_of_success_bags :
 
 ## `query_unary_success_bags_congr_from_characterizations`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:349`](../OrderedQueryFacts.v#L349)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:339`](../OrderedQueryFacts.v#L339)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -931,7 +931,7 @@ Lemma query_unary_success_bags_congr_from_characterizations :
 
 ## `query_binary_success_bags_congr_from_characterizations`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:378`](../OrderedQueryFacts.v#L378)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:368`](../OrderedQueryFacts.v#L368)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -972,7 +972,7 @@ Lemma query_binary_success_bags_congr_from_characterizations :
 
 ## `query_set_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:412`](../OrderedQueryFacts.v#L412)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:402`](../OrderedQueryFacts.v#L402)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1002,7 +1002,7 @@ Theorem query_set_success_bags_congr_extensional :
 
 ## `query_join_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:434`](../OrderedQueryFacts.v#L434)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:424`](../OrderedQueryFacts.v#L424)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1044,7 +1044,7 @@ Theorem query_join_success_bags_congr_extensional :
 
 ## `eval_query_expr_set_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:640`](../OrderedQueryFacts.v#L640)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:630`](../OrderedQueryFacts.v#L630)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1070,7 +1070,7 @@ Lemma eval_query_expr_set_error_iff :
 
 ## `eval_query_expr_cross_join_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:657`](../OrderedQueryFacts.v#L657)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:647`](../OrderedQueryFacts.v#L647)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1096,7 +1096,7 @@ Lemma eval_query_expr_cross_join_error_iff :
 
 ## `query_expr_set_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:674`](../OrderedQueryFacts.v#L674)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:664`](../OrderedQueryFacts.v#L664)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1120,7 +1120,7 @@ Lemma query_expr_set_runtime_safe :
 
 ## `query_expr_cross_join_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:687`](../OrderedQueryFacts.v#L687)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:677`](../OrderedQueryFacts.v#L677)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1144,7 +1144,7 @@ Lemma query_expr_cross_join_runtime_safe :
 
 ## `query_expr_set_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:778`](../OrderedQueryFacts.v#L778)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:768`](../OrderedQueryFacts.v#L768)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1168,7 +1168,7 @@ Lemma query_expr_set_has_outcome :
 
 ## `query_expr_cross_join_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:799`](../OrderedQueryFacts.v#L799)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:789`](../OrderedQueryFacts.v#L789)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1192,7 +1192,7 @@ Lemma query_expr_cross_join_has_outcome :
 
 ## `query_expr_set_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:824`](../OrderedQueryFacts.v#L824)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:814`](../OrderedQueryFacts.v#L814)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_set_possible_outcome_equiv_congr_uniform` for the public result.
 
@@ -1218,7 +1218,7 @@ Lemma query_expr_set_outcome_equiv_congr :
 
 ## `query_expr_cross_join_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:914`](../OrderedQueryFacts.v#L914)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:904`](../OrderedQueryFacts.v#L904)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_cross_join_possible_outcome_equiv_congr_uniform` for the public result.
 
@@ -1244,7 +1244,7 @@ Lemma query_expr_cross_join_outcome_equiv_congr :
 
 ## `query_expr_filter_outcome_equiv_of_global_expression`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1002`](../OrderedQueryFacts.v#L1002)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:992`](../OrderedQueryFacts.v#L992)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1276,7 +1276,7 @@ Lemma query_expr_filter_outcome_equiv_of_global_expression :
 
 ## `query_expr_outcome_equiv_sym`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1129`](../OrderedQueryFacts.v#L1129)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1119`](../OrderedQueryFacts.v#L1119)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_sym` for the public result.
 
@@ -1299,7 +1299,7 @@ Lemma query_expr_outcome_equiv_sym :
 
 ## `query_expr_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1155`](../OrderedQueryFacts.v#L1155)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1145`](../OrderedQueryFacts.v#L1145)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_trans` for the public result.
 
@@ -1323,7 +1323,7 @@ Lemma query_expr_outcome_equiv_trans :
 
 ## `query_expr_global_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1199`](../OrderedQueryFacts.v#L1199)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1189`](../OrderedQueryFacts.v#L1189)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_trans` for the public result.
 
@@ -1353,7 +1353,7 @@ Lemma query_expr_global_outcome_equiv_trans :
 
 ## `query_expr_global_typed_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1219`](../OrderedQueryFacts.v#L1219)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1209`](../OrderedQueryFacts.v#L1209)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_trans` for the public result.
 
@@ -1383,7 +1383,7 @@ Lemma query_expr_global_typed_outcome_equiv_trans :
 
 ## `query_expr_context_global_equiv_chain`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1237`](../OrderedQueryFacts.v#L1237)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1227`](../OrderedQueryFacts.v#L1227)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -1415,7 +1415,7 @@ Lemma query_expr_context_global_equiv_chain :
 
 ## `eval_query_expr_project_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1300`](../OrderedQueryFacts.v#L1300)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1290`](../OrderedQueryFacts.v#L1290)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1443,7 +1443,7 @@ Lemma eval_query_expr_project_error_iff :
 
 ## `eval_query_expr_filter_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1459`](../OrderedQueryFacts.v#L1459)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1449`](../OrderedQueryFacts.v#L1449)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1471,7 +1471,7 @@ Lemma eval_query_expr_filter_error_iff :
 
 ## `eval_filter_rows_has_outcome_of_scalar_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1483`](../OrderedQueryFacts.v#L1483)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1473`](../OrderedQueryFacts.v#L1473)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1502,7 +1502,7 @@ Lemma eval_filter_rows_has_outcome_of_scalar_total :
 
 ## `query_expr_filter_has_outcome_of_scalar_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1512`](../OrderedQueryFacts.v#L1512)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1502`](../OrderedQueryFacts.v#L1502)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1533,7 +1533,7 @@ Lemma query_expr_filter_has_outcome_of_scalar_total :
 
 ## `query_filter_success_bags_congr_extensional_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1610`](../OrderedQueryFacts.v#L1610)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1600`](../OrderedQueryFacts.v#L1600)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1572,7 +1572,7 @@ Theorem query_filter_success_bags_congr_extensional_exact :
 
 ## `query_filter_success_bags_congr_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1655`](../OrderedQueryFacts.v#L1655)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1645`](../OrderedQueryFacts.v#L1645)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1605,7 +1605,7 @@ Corollary query_filter_success_bags_congr_exact :
 
 ## `query_filter_success_bags_congr_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1699`](../OrderedQueryFacts.v#L1699)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1689`](../OrderedQueryFacts.v#L1689)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1631,7 +1631,7 @@ Theorem query_filter_success_bags_congr_of_contract :
 
 ## `query_filter_error_iff_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1716`](../OrderedQueryFacts.v#L1716)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1706`](../OrderedQueryFacts.v#L1706)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1662,7 +1662,7 @@ Theorem query_filter_error_iff_exact :
 
 ## `query_expr_filter_runtime_safe_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1776`](../OrderedQueryFacts.v#L1776)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1766`](../OrderedQueryFacts.v#L1766)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1690,7 +1690,7 @@ Lemma query_expr_filter_runtime_safe_exact :
 
 ## `query_expr_filter_has_outcome_exact`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1797`](../OrderedQueryFacts.v#L1797)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1787`](../OrderedQueryFacts.v#L1787)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1718,7 +1718,7 @@ Lemma query_expr_filter_has_outcome_exact :
 
 ## `query_list_transform_success_bags_congr_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2810`](../OrderedQueryFacts.v#L2810)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2720`](../OrderedQueryFacts.v#L2720)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1757,41 +1757,9 @@ Theorem query_list_transform_success_bags_congr_closed :
       (success_bags env right_parent).
 ```
 
-## `query_expr_filter_outcome_equiv_of_always_true`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3595`](../OrderedQueryFacts.v#L3595)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_filter_possible_outcome_equiv_of_always_true_uniform` for the public result.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_filter_outcome_equiv_of_always_true :
-  forall env formula input,
-    (exists outcome, eval_query env input outcome) ->
-    (forall rows,
-      eval_query env input (SqlSuccess rows) ->
-      forall row,
-        In row rows ->
-        forall outcome,
-          @eval_scalar_boolean_expr_outcome T relname basesort instance unknown symbol_runtime_error aggregate_runtime_error
-            value_is_null boolean_schedule (env_t T env row)
-            formula outcome <->
-          outcome = SqlSuccess (Bool.true (B T))) ->
-    query_outcome_equiv env (QExpr_Filter formula input) input.
-```
-
 ## `eval_project_rows_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3737`](../OrderedQueryFacts.v#L3737)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3490`](../OrderedQueryFacts.v#L3490)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1820,7 +1788,7 @@ Lemma eval_project_rows_runtime_safe :
 
 ## `query_expr_project_has_success_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3759`](../OrderedQueryFacts.v#L3759)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3512`](../OrderedQueryFacts.v#L3512)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1846,7 +1814,7 @@ Lemma query_expr_project_has_success_safe :
 
 ## `query_expr_project_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3776`](../OrderedQueryFacts.v#L3776)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3529`](../OrderedQueryFacts.v#L3529)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1872,7 +1840,7 @@ Lemma query_expr_project_runtime_safe :
 
 ## `eval_query_expr_project_error_iff_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3794`](../OrderedQueryFacts.v#L3794)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3547`](../OrderedQueryFacts.v#L3547)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1899,7 +1867,7 @@ Lemma eval_query_expr_project_error_iff_safe :
 
 ## `query_expr_project_has_outcome_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3814`](../OrderedQueryFacts.v#L3814)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3567`](../OrderedQueryFacts.v#L3567)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1925,7 +1893,7 @@ Lemma query_expr_project_has_outcome_safe :
 
 ## `row_map_rows_outcome_total_as`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3845`](../OrderedQueryFacts.v#L3845)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3598`](../OrderedQueryFacts.v#L3598)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1949,7 +1917,7 @@ Lemma row_map_rows_outcome_total_as :
 
 ## `query_row_map_bag_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3862`](../OrderedQueryFacts.v#L3862)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3615`](../OrderedQueryFacts.v#L3615)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1975,7 +1943,7 @@ Lemma query_row_map_bag_congr :
 
 ## `query_row_map_success_bags_congr_extensional_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3922`](../OrderedQueryFacts.v#L3922)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3675`](../OrderedQueryFacts.v#L3675)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2010,7 +1978,7 @@ Theorem query_row_map_success_bags_congr_extensional_total :
 
 ## `query_row_map_success_bags_congr_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3966`](../OrderedQueryFacts.v#L3966)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3719`](../OrderedQueryFacts.v#L3719)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2037,7 +2005,7 @@ Corollary query_row_map_success_bags_congr_total :
 
 ## `query_row_map_success_bags_congr_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3990`](../OrderedQueryFacts.v#L3990)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3743`](../OrderedQueryFacts.v#L3743)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2063,7 +2031,7 @@ Theorem query_row_map_success_bags_congr_of_contract :
 
 ## `query_row_map_success_bags_congr_extensional_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4055`](../OrderedQueryFacts.v#L4055)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3808`](../OrderedQueryFacts.v#L3808)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2090,7 +2058,7 @@ Theorem query_row_map_success_bags_congr_extensional_of_contract :
 
 ## `query_error_success_bags_empty`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4076`](../OrderedQueryFacts.v#L4076)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3829`](../OrderedQueryFacts.v#L3829)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2112,7 +2080,7 @@ Theorem query_error_success_bags_empty :
 
 ## `query_values_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4128`](../OrderedQueryFacts.v#L4128)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3881`](../OrderedQueryFacts.v#L3881)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2137,7 +2105,7 @@ Theorem query_values_success_bags_congr :
 
 ## `query_table_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4149`](../OrderedQueryFacts.v#L4149)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3902`](../OrderedQueryFacts.v#L3902)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2164,91 +2132,9 @@ Theorem query_table_success_bags_congr :
       (success_bags env (QExpr_Table right_outputs right_table)).
 ```
 
-## `query_expr_cross_join_union_right_equiv_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4199`](../OrderedQueryFacts.v#L4199)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform` for the public result.
-
-Purpose/direction: Assembles the right-hand CROSS JOIN/UNION ALL distribution law into a safe exact query equivalence with explicit runtime premises.
-
-Applicability: Use after the two sort equalities, duplicated-left functionality, complete source/target safety, and source-success premises are all available.
-
-Important premises: Retain both sort equalities, duplicated-left bag functionality, source and target safety, and the source-success witness.
-
-Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `cross product`, `CROSS JOIN`, `set operation`, `UNION`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_cross_join_union_right_equiv_safe :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall left_bag left_bag',
-      success_bags env left left_bag ->
-      success_bags env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    query_safe env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_safe env
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)) ->
-    query_has_success env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_equiv env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-```
-
-## `query_expr_cross_join_union_right_outcome_equiv_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4234`](../OrderedQueryFacts.v#L4234)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform` for the public result.
-
-Purpose/direction: Assembles the right-hand CROSS JOIN/UNION ALL distribution law into a safe exact query equivalence with explicit runtime premises.
-
-Applicability: Use after the two sort equalities, duplicated-left functionality, complete source/target safety, and source-success premises are all available.
-
-Important premises: Retain both sort equalities, duplicated-left bag functionality, source and target safety, and the source-success witness.
-
-Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `cross product`, `CROSS JOIN`, `set operation`, `UNION`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_cross_join_union_right_outcome_equiv_safe :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall left_bag left_bag',
-      success_bags env left left_bag ->
-      success_bags env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    query_safe env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_safe env
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)) ->
-    query_has_success env
-      (QExpr_CrossJoin left (QExpr_Set Union first second)) ->
-    query_outcome_equiv env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-```
-
 ## `query_possible_bag_closed_outcome_equiv_of_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4517`](../OrderedQueryFacts.v#L4517)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4204`](../OrderedQueryFacts.v#L4204)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2301,7 +2187,7 @@ Theorem query_possible_bag_closed_outcome_equiv_of_success_bags :
 
 ## `position_rows_from_nth_error`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5080`](../OrderedQueryFacts.v#L5080)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4767`](../OrderedQueryFacts.v#L4767)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2322,9 +2208,62 @@ Theorem position_rows_from_nth_error :
     option_map (fun row => (start + index, row)) (nth_error rows index).
 ```
 
-## `outcome_relation_equiv_transport_iff`
+## `successful_relation_equiv_transport_iff`
 
 Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:23`](../PossibleOutcomeFacts.v#L23)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL verification and runtime outcomes.
+
+Applicability: Use in either direction to invert or construct a goal about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `equivalence`, `congruence`
+
+```rocq
+Lemma successful_relation_equiv_transport_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+      (left left' right right' : sql_outcome A -> Prop),
+    successful_relation_equiv value_equiv left right ->
+    (forall outcome, left outcome <-> left' outcome) ->
+    (forall outcome, right outcome <-> right' outcome) ->
+    successful_relation_equiv value_equiv left' right'.
+```
+
+## `outcome_relation_equiv_implies_successful_relation_equiv_safe`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:57`](../PossibleOutcomeFacts.v#L57)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_relation_equiv_implies_successful_relation_equiv_safe :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_equiv value_equiv left right ->
+    (exists value, left (SqlSuccess value)) ->
+    (forall error, ~ left (SqlError error)) ->
+    (forall error, ~ right (SqlError error)) ->
+    successful_relation_equiv value_equiv left right.
+```
+
+## `outcome_relation_equiv_transport_iff`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:71`](../PossibleOutcomeFacts.v#L71)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2350,7 +2289,7 @@ Lemma outcome_relation_equiv_transport_iff :
 
 ## `outcome_relation_equiv_exists_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:60`](../PossibleOutcomeFacts.v#L60)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:108`](../PossibleOutcomeFacts.v#L108)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2384,7 +2323,7 @@ Theorem outcome_relation_equiv_exists_schedule_transport :
 
 ## `query_expr_possible_equiv_of_ordered_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:128`](../PossibleOutcomeFacts.v#L128)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:176`](../PossibleOutcomeFacts.v#L176)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2441,7 +2380,7 @@ Theorem query_expr_possible_equiv_of_ordered_observations :
 
 ## `query_expr_possible_equiv_of_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:174`](../PossibleOutcomeFacts.v#L174)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:222`](../PossibleOutcomeFacts.v#L222)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2485,7 +2424,7 @@ Theorem query_expr_possible_equiv_of_observations :
 
 ## `query_expr_possible_outcome_equiv_of_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:210`](../PossibleOutcomeFacts.v#L210)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:258`](../PossibleOutcomeFacts.v#L258)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2545,7 +2484,7 @@ Theorem query_expr_possible_outcome_equiv_of_observations :
 
 ## `scalar_expr_uniform_global_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:357`](../PossibleOutcomeFacts.v#L357)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:405`](../PossibleOutcomeFacts.v#L405)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2567,7 +2506,7 @@ Lemma scalar_expr_uniform_global_outcome_equiv_refl :
 
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:364`](../PossibleOutcomeFacts.v#L364)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:412`](../PossibleOutcomeFacts.v#L412)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2590,7 +2529,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_refl :
 
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:373`](../PossibleOutcomeFacts.v#L373)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:421`](../PossibleOutcomeFacts.v#L421)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2611,7 +2550,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:377`](../PossibleOutcomeFacts.v#L377)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:425`](../PossibleOutcomeFacts.v#L425)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2636,7 +2575,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_boolean_expr_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:385`](../PossibleOutcomeFacts.v#L385)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:433`](../PossibleOutcomeFacts.v#L433)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2657,7 +2596,7 @@ Lemma scalar_boolean_expr_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_boolean_expr_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:389`](../PossibleOutcomeFacts.v#L389)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:437`](../PossibleOutcomeFacts.v#L437)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2682,7 +2621,7 @@ Lemma scalar_boolean_expr_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:397`](../PossibleOutcomeFacts.v#L397)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:445`](../PossibleOutcomeFacts.v#L445)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2703,7 +2642,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:401`](../PossibleOutcomeFacts.v#L401)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:449`](../PossibleOutcomeFacts.v#L449)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2733,7 +2672,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_outputs`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:416`](../PossibleOutcomeFacts.v#L416)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:464`](../PossibleOutcomeFacts.v#L464)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2756,7 +2695,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_outputs :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_values`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:426`](../PossibleOutcomeFacts.v#L426)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:474`](../PossibleOutcomeFacts.v#L474)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2780,7 +2719,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_values :
 
 ## `eval_scalar_values_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:437`](../PossibleOutcomeFacts.v#L437)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:485`](../PossibleOutcomeFacts.v#L485)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2809,7 +2748,7 @@ Lemma eval_scalar_values_outcome_uniform_congr :
 
 ## `eval_scalar_boolean_operands_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:465`](../PossibleOutcomeFacts.v#L465)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:513`](../PossibleOutcomeFacts.v#L513)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2838,7 +2777,7 @@ Lemma eval_scalar_boolean_operands_outcome_uniform_congr :
 
 ## `insert_boolean_operand_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:506`](../PossibleOutcomeFacts.v#L506)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:554`](../PossibleOutcomeFacts.v#L554)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2865,7 +2804,7 @@ Lemma insert_boolean_operand_uniform_Forall2 :
 
 ## `schedule_boolean_operands_aux_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:528`](../PossibleOutcomeFacts.v#L528)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:576`](../PossibleOutcomeFacts.v#L576)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2894,7 +2833,7 @@ Lemma schedule_boolean_operands_aux_uniform_Forall2 :
 
 ## `schedule_boolean_operands_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:552`](../PossibleOutcomeFacts.v#L552)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:600`](../PossibleOutcomeFacts.v#L600)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2919,7 +2858,7 @@ Lemma schedule_boolean_operands_uniform_Forall2 :
 
 ## `scalar_expr_call_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:565`](../PossibleOutcomeFacts.v#L565)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:613`](../PossibleOutcomeFacts.v#L613)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2944,7 +2883,7 @@ Lemma scalar_expr_call_uniform_global_congr :
 
 ## `scalar_expr_case_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:588`](../PossibleOutcomeFacts.v#L588)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:636`](../PossibleOutcomeFacts.v#L636)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2973,7 +2912,7 @@ Lemma scalar_expr_case_uniform_global_congr :
 
 ## `scalar_expr_bool_value_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:624`](../PossibleOutcomeFacts.v#L624)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:672`](../PossibleOutcomeFacts.v#L672)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2998,7 +2937,7 @@ Lemma scalar_expr_bool_value_uniform_global_congr :
 
 ## `scalar_expr_value_bool_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:637`](../PossibleOutcomeFacts.v#L637)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:685`](../PossibleOutcomeFacts.v#L685)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3022,7 +2961,7 @@ Lemma scalar_expr_value_bool_uniform_global_congr :
 
 ## `scalar_expr_pred_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:649`](../PossibleOutcomeFacts.v#L649)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:697`](../PossibleOutcomeFacts.v#L697)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3046,7 +2985,7 @@ Lemma scalar_expr_pred_uniform_global_congr :
 
 ## `scalar_expr_conj_list_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:671`](../PossibleOutcomeFacts.v#L671)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:719`](../PossibleOutcomeFacts.v#L719)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3071,7 +3010,7 @@ Lemma scalar_expr_conj_list_uniform_global_congr :
 
 ## `scalar_expr_not_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:688`](../PossibleOutcomeFacts.v#L688)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:736`](../PossibleOutcomeFacts.v#L736)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3095,7 +3034,7 @@ Lemma scalar_expr_not_uniform_global_congr :
 
 ## `scalar_expr_subquery_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:709`](../PossibleOutcomeFacts.v#L709)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:757`](../PossibleOutcomeFacts.v#L757)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3120,7 +3059,7 @@ Lemma scalar_expr_subquery_uniform_global_congr :
 
 ## `scalar_expr_quant_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:727`](../PossibleOutcomeFacts.v#L727)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:775`](../PossibleOutcomeFacts.v#L775)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3147,7 +3086,7 @@ Lemma scalar_expr_quant_uniform_global_congr :
 
 ## `scalar_expr_in_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:766`](../PossibleOutcomeFacts.v#L766)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:814`](../PossibleOutcomeFacts.v#L814)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3173,7 +3112,7 @@ Lemma scalar_expr_in_uniform_global_congr :
 
 ## `scalar_expr_exists_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:806`](../PossibleOutcomeFacts.v#L806)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:854`](../PossibleOutcomeFacts.v#L854)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3197,7 +3136,7 @@ Lemma scalar_expr_exists_uniform_global_congr :
 
 ## `query_expr_possible_outcome_equiv_of_exact_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:828`](../PossibleOutcomeFacts.v#L828)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:876`](../PossibleOutcomeFacts.v#L876)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3243,7 +3182,7 @@ Theorem query_expr_possible_outcome_equiv_of_exact_schedule_transport :
 
 ## `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:884`](../PossibleOutcomeFacts.v#L884)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:932`](../PossibleOutcomeFacts.v#L932)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3286,7 +3225,7 @@ Theorem query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport :
 
 ## `query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:918`](../PossibleOutcomeFacts.v#L918)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:966`](../PossibleOutcomeFacts.v#L966)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3311,7 +3250,7 @@ Theorem query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv :
 
 ## `query_expr_scheduled_outcome_equiv_implies_possible_of_independent`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:936`](../PossibleOutcomeFacts.v#L936)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:984`](../PossibleOutcomeFacts.v#L984)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3340,7 +3279,7 @@ Theorem query_expr_scheduled_outcome_equiv_implies_possible_of_independent :
 
 ## `boolean_schedule_reindex_complete_id`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:971`](../PossibleOutcomeFacts.v#L971)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1019`](../PossibleOutcomeFacts.v#L1019)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3361,7 +3300,7 @@ Lemma boolean_schedule_reindex_complete_id :
 
 ## `eval_query_expr_possible_outcome_site_reindex_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:979`](../PossibleOutcomeFacts.v#L979)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1027`](../PossibleOutcomeFacts.v#L1027)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3391,7 +3330,7 @@ Lemma eval_query_expr_possible_outcome_site_reindex_iff :
 
 ## `query_expr_possible_outcome_equiv_of_uniform_global_typed`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1004`](../PossibleOutcomeFacts.v#L1004)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1052`](../PossibleOutcomeFacts.v#L1052)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3418,44 +3357,9 @@ Theorem query_expr_possible_outcome_equiv_of_uniform_global_typed :
       value_is_null env left right.
 ```
 
-## `query_expr_distinct_possible_outcome_equiv_inert_reset`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1045`](../PossibleOutcomeFacts.v#L1045)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `bag`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_distinct_possible_outcome_equiv_inert_reset :
-  forall env input,
-    query_expr_order_behavior input = BagReset ->
-    (forall (schedule : boolean_site -> boolean_evaluation_order)
-        current_env bag,
-      @query_success_bags T relname
-        basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null schedule current_env input bag ->
-      bag_eq T (query_distinct_bag bag) bag) ->
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname
-        basesort instance unknown symbol_runtime_error aggregate_runtime_error
-        value_is_null env input outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Distinct input) input.
-```
-
 ## `eval_project_rows_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1084`](../PossibleOutcomeFacts.v#L1084)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1092`](../PossibleOutcomeFacts.v#L1092)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3485,7 +3389,7 @@ Lemma eval_project_rows_outcome_uniform_congr :
 
 ## `query_expr_filter_uniform_global_typed_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1130`](../PossibleOutcomeFacts.v#L1130)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1138`](../PossibleOutcomeFacts.v#L1138)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3511,7 +3415,7 @@ Lemma query_expr_filter_uniform_global_typed_congr :
 
 ## `query_expr_project_uniform_global_typed_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1143`](../PossibleOutcomeFacts.v#L1143)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1151`](../PossibleOutcomeFacts.v#L1151)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3537,7 +3441,7 @@ Lemma query_expr_project_uniform_global_typed_congr :
 
 ## `query_expr_filter_predicate_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1167`](../PossibleOutcomeFacts.v#L1167)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1175`](../PossibleOutcomeFacts.v#L1175)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3569,7 +3473,7 @@ Theorem query_expr_filter_predicate_possible_outcome_equiv :
 
 ## `query_expr_project_select_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1187`](../PossibleOutcomeFacts.v#L1187)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1195`](../PossibleOutcomeFacts.v#L1195)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3601,7 +3505,7 @@ Theorem query_expr_project_select_possible_outcome_equiv :
 
 ## `eval_groups_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1212`](../PossibleOutcomeFacts.v#L1212)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1220`](../PossibleOutcomeFacts.v#L1220)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3646,7 +3550,7 @@ Lemma eval_groups_outcome_uniform_congr :
 
 ## `eval_group_bag_outcome_exact_local_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1372`](../PossibleOutcomeFacts.v#L1372)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1380`](../PossibleOutcomeFacts.v#L1380)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3681,7 +3585,7 @@ Lemma eval_group_bag_outcome_exact_local_congr :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1412`](../PossibleOutcomeFacts.v#L1412)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1420`](../PossibleOutcomeFacts.v#L1420)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3723,7 +3627,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_local_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1466`](../PossibleOutcomeFacts.v#L1466)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1474`](../PossibleOutcomeFacts.v#L1474)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3761,7 +3665,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_local_outcomes :
 
 ## `query_expr_group_clauses_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1495`](../PossibleOutcomeFacts.v#L1495)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1503`](../PossibleOutcomeFacts.v#L1503)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3808,7 +3712,7 @@ Theorem query_expr_group_clauses_possible_outcome_equiv :
 
 ## `query_expr_possible_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1533`](../PossibleOutcomeFacts.v#L1533)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1541`](../PossibleOutcomeFacts.v#L1541)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3836,7 +3740,7 @@ Lemma query_expr_possible_outcome_equiv_refl :
 
 ## `query_expr_possible_outcome_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1550`](../PossibleOutcomeFacts.v#L1550)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1558`](../PossibleOutcomeFacts.v#L1558)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3863,7 +3767,7 @@ Lemma query_expr_possible_outcome_equiv_sym :
 
 ## `query_expr_possible_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1572`](../PossibleOutcomeFacts.v#L1572)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1580`](../PossibleOutcomeFacts.v#L1580)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3893,7 +3797,7 @@ Lemma query_expr_possible_outcome_equiv_trans :
 
 ## `query_expr_context_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1619`](../PossibleOutcomeFacts.v#L1619)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1627`](../PossibleOutcomeFacts.v#L1627)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3925,7 +3829,7 @@ Theorem query_expr_context_possible_outcome_equiv :
 
 ## `query_expr_filter_possible_outcome_equiv_of_uniform_expression`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1640`](../PossibleOutcomeFacts.v#L1640)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1648`](../PossibleOutcomeFacts.v#L1648)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3957,7 +3861,7 @@ Theorem query_expr_filter_possible_outcome_equiv_of_uniform_expression :
 
 ## `query_expr_group_possible_outcome_equiv_of_uniform_having`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1661`](../PossibleOutcomeFacts.v#L1661)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1669`](../PossibleOutcomeFacts.v#L1669)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3989,7 +3893,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_uniform_having :
 
 ## `query_expr_join_possible_outcome_equiv_of_uniform_predicate`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1685`](../PossibleOutcomeFacts.v#L1685)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1693`](../PossibleOutcomeFacts.v#L1693)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4025,7 +3929,7 @@ Theorem query_expr_join_possible_outcome_equiv_of_uniform_predicate :
 
 ## `query_expr_filter_in_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1714`](../PossibleOutcomeFacts.v#L1714)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1722`](../PossibleOutcomeFacts.v#L1722)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4057,7 +3961,7 @@ Corollary query_expr_filter_in_subquery_possible_outcome_equiv :
 
 ## `query_expr_filter_exists_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1736`](../PossibleOutcomeFacts.v#L1736)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1744`](../PossibleOutcomeFacts.v#L1744)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4089,7 +3993,7 @@ Corollary query_expr_filter_exists_subquery_possible_outcome_equiv :
 
 ## `query_expr_set_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1760`](../PossibleOutcomeFacts.v#L1760)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1768`](../PossibleOutcomeFacts.v#L1768)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4117,7 +4021,7 @@ Theorem query_expr_set_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_cross_join_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1775`](../PossibleOutcomeFacts.v#L1775)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1783`](../PossibleOutcomeFacts.v#L1783)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4145,7 +4049,7 @@ Theorem query_expr_cross_join_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_group_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1790`](../PossibleOutcomeFacts.v#L1790)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1798`](../PossibleOutcomeFacts.v#L1798)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4176,7 +4080,7 @@ Theorem query_expr_group_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_window_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1811`](../PossibleOutcomeFacts.v#L1811)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1819`](../PossibleOutcomeFacts.v#L1819)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4209,187 +4113,9 @@ Theorem query_expr_window_possible_outcome_equiv_congr_uniform :
       (QExpr_Window partition_keys order_keys items right).
 ```
 
-## `query_expr_offset_zero_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1842`](../PossibleOutcomeFacts.v#L1842)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_offset_zero_possible_outcome_equiv :
-  forall env input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset 0 input) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Offset 0 input) input.
-```
-
-## `query_expr_offset_offset_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1861`](../PossibleOutcomeFacts.v#L1861)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `OFFSET`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_offset_offset_possible_outcome_equiv :
-  forall env outer inner input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset outer (QExpr_Offset inner input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Offset outer (QExpr_Offset inner input))
-      (QExpr_Offset (outer + inner) input).
-```
-
-## `query_expr_fetch_fetch_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1882`](../PossibleOutcomeFacts.v#L1882)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_fetch_fetch_possible_outcome_equiv :
-  forall env outer inner input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Fetch outer (QExpr_Fetch inner input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Fetch outer (QExpr_Fetch inner input))
-      (QExpr_Fetch (Nat.min outer inner) input).
-```
-
-## `query_expr_offset_fetch_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1903`](../PossibleOutcomeFacts.v#L1903)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `OFFSET`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_offset_fetch_possible_outcome_equiv :
-  forall env offset count input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Offset offset (QExpr_Fetch count input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Offset offset (QExpr_Fetch count input))
-      (QExpr_Fetch (count - offset) (QExpr_Offset offset input)).
-```
-
-## `query_expr_fetch_offset_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1924`](../PossibleOutcomeFacts.v#L1924)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `OFFSET`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_fetch_offset_possible_outcome_equiv :
-  forall env count offset input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_Fetch count (QExpr_Offset offset input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_Fetch count (QExpr_Offset offset input))
-      (QExpr_Offset offset (QExpr_Fetch (offset + count) input)).
-```
-
-## `query_expr_order_by_order_by_possible_outcome_equiv`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1945`](../PossibleOutcomeFacts.v#L1945)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_order_by_order_by_possible_outcome_equiv :
-  forall env outer_keys inner_keys input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null env
-        (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input)) outcome) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input))
-      (QExpr_OrderBy outer_keys input).
-```
-
 ## `query_expr_possible_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1985`](../PossibleOutcomeFacts.v#L1985)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1865`](../PossibleOutcomeFacts.v#L1865)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4415,7 +4141,7 @@ Lemma query_expr_possible_equiv_refl :
 
 ## `query_expr_possible_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2001`](../PossibleOutcomeFacts.v#L2001)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1881`](../PossibleOutcomeFacts.v#L1881)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4442,7 +4168,7 @@ Lemma query_expr_possible_equiv_sym :
 
 ## `query_expr_possible_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2030`](../PossibleOutcomeFacts.v#L2030)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1910`](../PossibleOutcomeFacts.v#L1910)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4472,7 +4198,7 @@ Lemma query_expr_possible_equiv_trans :
 
 ## `query_expr_possible_equiv_of_possible_outcome_equiv_safe`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2069`](../PossibleOutcomeFacts.v#L2069)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1949`](../PossibleOutcomeFacts.v#L1949)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4500,71 +4226,9 @@ Theorem query_expr_possible_equiv_of_possible_outcome_equiv_safe :
       value_is_null env left right.
 ```
 
-## `query_expr_fetch_zero_possible_outcome_equiv_safe`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2091`](../PossibleOutcomeFacts.v#L2091)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_fetch_zero_possible_outcome_equiv_safe :
-  forall env left right,
-    query_expr_outputs left = query_expr_outputs right ->
-    query_expr_possible_runtime_safe env left ->
-    query_expr_possible_runtime_safe env right ->
-    query_expr_possible_has_success env left ->
-    query_expr_possible_has_success env right ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Fetch 0 left) (QExpr_Fetch 0 right).
-```
-
-## `query_expr_order_by_possible_outcome_equiv_of_success_length_le_one`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2138`](../PossibleOutcomeFacts.v#L2138)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Provides the stated reusable upper bound for SQL verification and runtime outcomes.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_order_by_possible_outcome_equiv_of_success_length_le_one :
-  forall env keys input,
-    (exists outcome,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        env input outcome) ->
-    (forall rows,
-      @eval_query_expr_possible_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        env input (SqlSuccess rows) ->
-      (length rows <= 1)%nat) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_OrderBy keys input) input.
-```
-
 ## `query_expr_possible_outcome_equiv_of_shared_exact_error`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2189`](../PossibleOutcomeFacts.v#L2189)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1972`](../PossibleOutcomeFacts.v#L1972)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4613,7 +4277,7 @@ Theorem query_expr_possible_outcome_equiv_of_shared_exact_error :
 
 ## `query_expr_filter_possible_outcome_equiv_congr_stable_total`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2249`](../PossibleOutcomeFacts.v#L2249)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2032`](../PossibleOutcomeFacts.v#L2032)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4644,7 +4308,7 @@ Theorem query_expr_filter_possible_outcome_equiv_congr_stable_total :
 
 ## `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2378`](../PossibleOutcomeFacts.v#L2378)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2161`](../PossibleOutcomeFacts.v#L2161)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4709,101 +4373,9 @@ Theorem query_expr_group_possible_outcome_equiv_of_supported_child_outcomes :
       (QExpr_Group select_list group_terms having right).
 ```
 
-## `query_expr_filter_possible_outcome_equiv_of_always_true_uniform`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2535`](../PossibleOutcomeFacts.v#L2535)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `filter`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_filter_possible_outcome_equiv_of_always_true_uniform :
-  forall env formula input,
-    (forall schedule, exists outcome,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env input outcome) ->
-    (forall schedule rows,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env input (SqlSuccess rows) ->
-      forall row,
-        In row rows ->
-        forall outcome,
-          @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
-            symbol_runtime_error aggregate_runtime_error value_is_null
-            schedule (env_t T env row) formula outcome <->
-          outcome = SqlSuccess (Bool.true (B T))) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Filter formula input) input.
-```
-
-## `query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform`
-
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2568`](../PossibleOutcomeFacts.v#L2568)
-
-Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
-
-Purpose/direction: Transports or composes SQL bag/set operations across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about SQL bag/set operations.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary; supply the declared equivalence/properness relation.
-
-Cross-index: `possible`, `outcome`, `runtime`, `join`, `bag`
-
-Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `join`, `cross product`, `CROSS JOIN`, `set operation`, `UNION`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall schedule left_bag left_bag',
-      @query_success_bags T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env left left_bag ->
-      @query_success_bags T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        schedule env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    (forall schedule,
-      @query_expr_runtime_safe T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_CrossJoin left (QExpr_Set Union first second))) ->
-    (forall schedule,
-      @query_expr_runtime_safe T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_Set Union
-          (QExpr_CrossJoin left first)
-          (QExpr_CrossJoin left second))) ->
-    (forall schedule,
-      @query_expr_has_success T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-        (QExpr_CrossJoin left (QExpr_Set Union first second))) ->
-    @query_expr_possible_outcome_equiv T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env
-      (QExpr_CrossJoin left (QExpr_Set Union first second))
-      (QExpr_Set Union
-        (QExpr_CrossJoin left first)
-        (QExpr_CrossJoin left second)).
-```
-
 ## `query_program_possible_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2619`](../PossibleOutcomeFacts.v#L2619)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2321`](../PossibleOutcomeFacts.v#L2321)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4827,7 +4399,7 @@ Lemma query_program_possible_equiv_nil :
 
 ## `query_program_possible_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2628`](../PossibleOutcomeFacts.v#L2628)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2330`](../PossibleOutcomeFacts.v#L2330)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4858,7 +4430,7 @@ Lemma query_program_possible_equiv_cons :
 
 ## `query_program_possible_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2644`](../PossibleOutcomeFacts.v#L2644)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2346`](../PossibleOutcomeFacts.v#L2346)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4882,7 +4454,7 @@ Lemma query_program_possible_outcome_equiv_nil :
 
 ## `query_program_possible_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2653`](../PossibleOutcomeFacts.v#L2653)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2355`](../PossibleOutcomeFacts.v#L2355)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4913,7 +4485,7 @@ Lemma query_program_possible_outcome_equiv_cons :
 
 ## `query_program_possible_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2669`](../PossibleOutcomeFacts.v#L2669)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2371`](../PossibleOutcomeFacts.v#L2371)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4938,7 +4510,7 @@ Lemma query_program_possible_equiv_length :
 
 ## `query_program_possible_outcome_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2683`](../PossibleOutcomeFacts.v#L2683)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2385`](../PossibleOutcomeFacts.v#L2385)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4963,7 +4535,7 @@ Lemma query_program_possible_outcome_equiv_length :
 
 ## `query_program_possible_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2697`](../PossibleOutcomeFacts.v#L2697)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2399`](../PossibleOutcomeFacts.v#L2399)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4992,7 +4564,7 @@ Theorem query_program_possible_equiv_iff_Forall2 :
 
 ## `query_program_possible_outcome_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2719`](../PossibleOutcomeFacts.v#L2719)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2421`](../PossibleOutcomeFacts.v#L2421)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5021,7 +4593,7 @@ Theorem query_program_possible_outcome_equiv_iff_Forall2 :
 
 ## `query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2780`](../PossibleOutcomeFacts.v#L2780)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2482`](../PossibleOutcomeFacts.v#L2482)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5055,7 +4627,7 @@ Theorem query_rename_uniform_transport_implies_mapped_schema_possible_outcome_eq
 
 ## `query_mapped_schema_possible_outcome_equiv_mapped_schema`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2824`](../PossibleOutcomeFacts.v#L2824)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2526`](../PossibleOutcomeFacts.v#L2526)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5079,7 +4651,7 @@ Lemma query_mapped_schema_possible_outcome_equiv_mapped_schema :
 
 ## `query_expr_possible_bag_outcome_equiv_success_forward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2868`](../PossibleOutcomeFacts.v#L2868)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2570`](../PossibleOutcomeFacts.v#L2570)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5105,7 +4677,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_forward :
 
 ## `query_expr_possible_bag_outcome_equiv_success_backward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2895`](../PossibleOutcomeFacts.v#L2895)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2597`](../PossibleOutcomeFacts.v#L2597)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5131,7 +4703,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_backward :
 
 ## `query_expr_possible_bag_outcome_equiv_error_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2921`](../PossibleOutcomeFacts.v#L2921)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2623`](../PossibleOutcomeFacts.v#L2623)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5155,7 +4727,7 @@ Lemma query_expr_possible_bag_outcome_equiv_error_iff :
 
 ## `query_expr_possible_bag_outcome_equiv_inhabited`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2934`](../PossibleOutcomeFacts.v#L2934)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2636`](../PossibleOutcomeFacts.v#L2636)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5179,7 +4751,7 @@ Lemma query_expr_possible_bag_outcome_equiv_inhabited :
 
 ## `query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2966`](../PossibleOutcomeFacts.v#L2966)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2668`](../PossibleOutcomeFacts.v#L2668)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5205,7 +4777,7 @@ Theorem query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3036`](../PossibleOutcomeFacts.v#L3036)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2738`](../PossibleOutcomeFacts.v#L2738)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5232,7 +4804,7 @@ Theorem query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3187`](../PossibleOutcomeFacts.v#L3187)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2889`](../PossibleOutcomeFacts.v#L2889)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5258,7 +4830,7 @@ Theorem query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3257`](../PossibleOutcomeFacts.v#L3257)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2959`](../PossibleOutcomeFacts.v#L2959)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5288,7 +4860,7 @@ Theorem query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3277`](../PossibleOutcomeFacts.v#L3277)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2979`](../PossibleOutcomeFacts.v#L2979)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5562,9 +5134,86 @@ Lemma condition_true_holds :
     verification_condition_holds db ConditionTrue.
 ```
 
-## `condition_true_is_derived`
+## `condition_and_well_formed_iff`
 
 Source: [`theories/FormalSQL/VerificationConditions.v:224`](../VerificationConditions.v#L224)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL verification and runtime outcomes.
+
+Applicability: Use in either direction to invert or construct a goal about SQL verification and runtime outcomes.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `runtime`
+
+Search aliases: `verification and runtime semantics`
+
+```rocq
+Lemma condition_and_well_formed_iff :
+  forall expected first second,
+    verification_condition_well_formed
+      expected (ConditionAnd first second) <->
+    verification_condition_well_formed expected first /\
+    verification_condition_well_formed expected second.
+```
+
+## `condition_and_holds_iff`
+
+Source: [`theories/FormalSQL/VerificationConditions.v:234`](../VerificationConditions.v#L234)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL verification and runtime outcomes.
+
+Applicability: Use in either direction to invert or construct a goal about SQL verification and runtime outcomes.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `runtime`
+
+Search aliases: `verification and runtime semantics`
+
+```rocq
+Lemma condition_and_holds_iff :
+  forall db first second,
+    verification_condition_holds db (ConditionAnd first second) <->
+    verification_condition_holds db first /\
+    verification_condition_holds db second.
+```
+
+## `condition_and_is_derived`
+
+Source: [`theories/FormalSQL/VerificationConditions.v:243`](../VerificationConditions.v#L243)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the condition and is derived law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `condition_and_is_derived` direction for SQL verification and runtime outcomes; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `runtime`
+
+Search aliases: `verification and runtime semantics`
+
+```rocq
+Lemma condition_and_is_derived :
+  forall expected constraints first second,
+    precondition_source_obligation
+      expected constraints PreconditionDerived first ->
+    precondition_source_obligation
+      expected constraints PreconditionDerived second ->
+    precondition_source_obligation
+      expected constraints PreconditionDerived
+      (ConditionAnd first second).
+```
+
+## `condition_true_is_derived`
+
+Source: [`theories/FormalSQL/VerificationConditions.v:264`](../VerificationConditions.v#L264)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5669,9 +5318,101 @@ Lemma query_expr_global_typed_outcome_equiv_refl :
   forall query, query_expr_global_typed_outcome_equiv query query.
 ```
 
+## `query_expr_global_outcome_equiv_sym`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:164`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L164)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Reverses a proved SQL verification and runtime outcomes relation.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_outcome_equiv_sym :
+  forall left right,
+    query_expr_global_outcome_equiv left right ->
+    query_expr_global_outcome_equiv right left.
+```
+
+## `query_expr_global_cardinality_outcome_equiv_sym`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:172`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L172)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Reverses a proved SQL verification and runtime outcomes relation.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_cardinality_outcome_equiv_sym :
+  forall left right,
+    query_expr_global_cardinality_outcome_equiv left right ->
+    query_expr_global_cardinality_outcome_equiv right left.
+```
+
+## `query_expr_global_exists_outcome_equiv_sym`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:180`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L180)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Reverses a proved SQL verification and runtime outcomes relation.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_exists_outcome_equiv_sym :
+  forall left right,
+    query_expr_global_exists_outcome_equiv left right ->
+    query_expr_global_exists_outcome_equiv right left.
+```
+
+## `query_expr_global_typed_outcome_equiv_sym`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:188`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L188)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Reverses a proved SQL verification and runtime outcomes relation.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `schema`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_typed_outcome_equiv_sym :
+  forall left right,
+    query_expr_global_typed_outcome_equiv left right ->
+    query_expr_global_typed_outcome_equiv right left.
+```
+
 ## `scalar_expr_global_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:211`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L211)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:245`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L245)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5693,7 +5434,7 @@ Lemma scalar_expr_global_outcome_equiv_refl :
 
 ## `scalar_expr_global_outcome_equiv_sym`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:218`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L218)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:252`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L252)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5716,7 +5457,7 @@ Lemma scalar_expr_global_outcome_equiv_sym :
 
 ## `scalar_expr_global_group_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:226`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L226)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:260`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L260)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5738,7 +5479,7 @@ Lemma scalar_expr_global_group_outcome_equiv_refl :
 
 ## `scalar_expr_list_global_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:235`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L235)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:269`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L269)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5760,7 +5501,7 @@ Lemma scalar_expr_list_global_outcome_equiv_refl :
 
 ## `scalar_expr_list_context_global_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:243`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L243)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:277`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L277)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5785,7 +5526,7 @@ Lemma scalar_expr_list_context_global_outcome_equiv :
 
 ## `scalar_select_list_global_outcome_equiv_outputs`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:257`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L257)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:291`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L291)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5808,7 +5549,7 @@ Lemma scalar_select_list_global_outcome_equiv_outputs :
 
 ## `scalar_select_list_global_outcome_equiv_values`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:267`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L267)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:301`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L301)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5832,7 +5573,7 @@ Lemma scalar_select_list_global_outcome_equiv_values :
 
 ## `scalar_select_list_global_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:278`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L278)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:312`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L312)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5854,7 +5595,7 @@ Lemma scalar_select_list_global_outcome_equiv_refl :
 
 ## `scalar_select_list_global_outcome_equiv_sym`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:287`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L287)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:321`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L321)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5875,9 +5616,54 @@ Lemma scalar_select_list_global_outcome_equiv_sym :
     scalar_select_list_global_outcome_equiv right left.
 ```
 
+## `query_expr_global_demand_equiv_refl`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:344`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L344)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Establishes reflexivity for SQL verification and runtime outcomes.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_demand_equiv_refl :
+  forall demand query,
+    query_expr_global_demand_equiv demand query query.
+```
+
+## `query_expr_global_demand_equiv_sym`
+
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:353`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L353)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Reverses a proved SQL verification and runtime outcomes relation.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_global_demand_equiv_sym :
+  forall demand left right,
+    query_expr_global_demand_equiv demand left right ->
+    query_expr_global_demand_equiv demand right left.
+```
+
 ## `scalar_select_context_global_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:703`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L703)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:756`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L756)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5906,7 +5692,7 @@ Lemma scalar_select_context_global_outcome_equiv :
 
 ## `eval_scalar_values_outcome_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:726`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L726)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:779`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L779)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5935,7 +5721,7 @@ Lemma eval_scalar_values_outcome_global_congr :
 
 ## `eval_scalar_boolean_operands_outcome_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:754`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L754)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:807`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L807)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5964,7 +5750,7 @@ Lemma eval_scalar_boolean_operands_outcome_global_congr :
 
 ## `insert_boolean_operand_global_Forall2`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:790`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L790)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:843`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L843)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5992,7 +5778,7 @@ Lemma insert_boolean_operand_global_Forall2 :
 
 ## `schedule_boolean_operands_aux_global_Forall2`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:813`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L813)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:866`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L866)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6021,7 +5807,7 @@ Lemma schedule_boolean_operands_aux_global_Forall2 :
 
 ## `schedule_boolean_operands_global_Forall2`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:837`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L837)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:890`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L890)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6046,7 +5832,7 @@ Lemma schedule_boolean_operands_global_Forall2 :
 
 ## `scalar_expr_call_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:850`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L850)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:903`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L903)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6071,7 +5857,7 @@ Lemma scalar_expr_call_global_congr :
 
 ## `scalar_expr_case_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:873`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L873)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:926`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L926)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6099,7 +5885,7 @@ Lemma scalar_expr_case_global_congr :
 
 ## `scalar_expr_bool_value_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:908`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L908)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:961`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L961)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6124,7 +5910,7 @@ Lemma scalar_expr_bool_value_global_congr :
 
 ## `scalar_expr_value_bool_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:921`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L921)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:974`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L974)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6148,7 +5934,7 @@ Lemma scalar_expr_value_bool_global_congr :
 
 ## `scalar_expr_pred_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:933`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L933)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:986`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L986)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6172,7 +5958,7 @@ Lemma scalar_expr_pred_global_congr :
 
 ## `scalar_expr_conj_list_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:955`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L955)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1008`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1008)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6197,7 +5983,7 @@ Lemma scalar_expr_conj_list_global_congr :
 
 ## `scalar_expr_not_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:972`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L972)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1025`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1025)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6220,7 +6006,7 @@ Lemma scalar_expr_not_global_congr :
 
 ## `scalar_expr_subquery_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:985`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L985)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1038`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1038)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6245,7 +6031,7 @@ Lemma scalar_expr_subquery_global_congr :
 
 ## `scalar_expr_quant_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1002`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1002)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1055`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1055)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6272,7 +6058,7 @@ Lemma scalar_expr_quant_global_congr :
 
 ## `scalar_expr_in_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1040`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1040)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1093`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1093)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6298,7 +6084,7 @@ Lemma scalar_expr_in_global_congr :
 
 ## `scalar_expr_exists_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1077`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1077)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1130`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1130)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6322,7 +6108,7 @@ Lemma scalar_expr_exists_global_congr :
 
 ## `eval_project_rows_outcome_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1481`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1481)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1534`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1534)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6351,7 +6137,7 @@ Lemma eval_project_rows_outcome_global_congr :
 
 ## `query_expr_project_select_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1563`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1563)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1616`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1616)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6376,7 +6162,7 @@ Lemma query_expr_project_select_global_typed_congr :
 
 ## `query_expr_filter_expression_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1583`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1583)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1636`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1636)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6401,7 +6187,7 @@ Lemma query_expr_filter_expression_global_typed_congr :
 
 ## `eval_project_join_sources_global_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1667`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1667)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1720`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1720)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6433,7 +6219,7 @@ Lemma eval_project_join_sources_global_congr_forward :
 
 ## `eval_project_join_sources_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1732`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1732)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1785`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1785)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6465,7 +6251,7 @@ Lemma eval_project_join_sources_global_congr :
 
 ## `query_expr_join_scalar_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1817`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1817)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1870`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1870)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6497,7 +6283,7 @@ Lemma query_expr_join_scalar_global_typed_congr :
 
 ## `scalar_expr_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1861`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1861)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1914`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1914)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6523,7 +6309,7 @@ Theorem scalar_expr_context_global_congr :
 
 ## `first_runtime_error_context_eq`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1913`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1913)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1966`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1966)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6548,7 +6334,7 @@ Lemma first_runtime_error_context_eq :
 
 ## `scalar_expr_context_aggregate_runtime_error_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1926`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1926)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1979`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1979)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6576,7 +6362,7 @@ Theorem scalar_expr_context_aggregate_runtime_error_congr :
 
 ## `scalar_expr_context_global_group_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1960`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1960)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2013`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2013)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6602,7 +6388,7 @@ Corollary scalar_expr_context_global_group_congr :
 
 ## `scalar_select_context_aggregate_runtime_error_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1973`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1973)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2026`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2026)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6629,7 +6415,7 @@ Lemma scalar_select_context_aggregate_runtime_error_congr :
 
 ## `query_expr_group_scalar_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2146`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2146)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2199`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2199)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6662,7 +6448,7 @@ Lemma query_expr_group_scalar_global_typed_congr :
 
 ## `scalar_expr_context_group_key_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2190`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2190)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2243`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2243)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6686,7 +6472,7 @@ Lemma scalar_expr_context_group_key_none :
 
 ## `scalar_value_list_context_group_keys_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2199`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2199)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2252`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2252)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6709,7 +6495,7 @@ Lemma scalar_value_list_context_group_keys_none :
 
 ## `query_expr_group_invalid_keys_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2220`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2220)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2273`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2273)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6735,7 +6521,7 @@ Lemma query_expr_group_invalid_keys_global_typed_congr :
 
 ## `eval_grouping_sets_bag_branch_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2243`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2243)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2296`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2296)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6764,7 +6550,7 @@ Lemma eval_grouping_sets_bag_branch_congr_forward :
 
 ## `eval_grouping_sets_bag_branch_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2271`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2271)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2324`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2324)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6793,7 +6579,7 @@ Lemma eval_grouping_sets_bag_branch_congr :
 
 ## `query_expr_grouping_sets_branch_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2290`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2290)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2343`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2343)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6826,7 +6612,7 @@ Lemma query_expr_grouping_sets_branch_global_typed_congr :
 
 ## `query_expr_grouping_sets_select_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2326`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2326)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2379`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2379)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6859,7 +6645,7 @@ Lemma query_expr_grouping_sets_select_context_global_congr :
 
 ## `query_expr_grouping_sets_key_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2381`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2381)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2434`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2434)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6891,7 +6677,7 @@ Lemma query_expr_grouping_sets_key_context_global_congr :
 
 ## `query_expr_group_select_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2407`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2407)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2460`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2460)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6920,7 +6706,7 @@ Lemma query_expr_group_select_context_global_congr :
 
 ## `query_expr_group_having_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2430`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2430)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2483`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2483)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6949,7 +6735,7 @@ Lemma query_expr_group_having_context_global_congr :
 
 ## `query_expr_group_key_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2449`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2449)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2502`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2502)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6975,7 +6761,7 @@ Lemma query_expr_group_key_context_global_congr :
 
 ## `query_expr_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2463`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2463)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2516`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2516)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -7001,7 +6787,7 @@ Theorem query_expr_context_global_congr :
 
 ## `query_expr_observation_equiv_of_outcome_rel_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2511`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2511)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2564`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2564)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport` for the public result.
 
@@ -7028,7 +6814,7 @@ Lemma query_expr_observation_equiv_of_outcome_rel_equiv_safe :
 
 ## `query_expr_equiv_of_outcome_rel_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2536`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2536)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2589`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2589)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport` for the public result.
 
@@ -7056,7 +6842,7 @@ Lemma query_expr_equiv_of_outcome_rel_equiv_safe :
 
 ## `query_expr_context_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2551`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2551)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2604`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2604)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -7089,7 +6875,7 @@ Theorem query_expr_context_equiv_safe :
 
 ## `query_bag_closed_equiv_of_success_bags_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2578`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2578)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2631`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2631)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -7126,7 +6912,7 @@ Theorem query_bag_closed_equiv_of_success_bags_safe :
 
 ## `query_bag_reset_equiv_of_success_bags_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2627`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2627)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2680`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2680)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -7161,7 +6947,7 @@ Corollary query_bag_reset_equiv_of_success_bags_safe :
 
 ## `query_distinct_equiv_of_local_success_rel_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2655`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2655)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2708`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2708)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
@@ -7199,7 +6985,7 @@ Theorem query_distinct_equiv_of_local_success_rel_equiv :
 
 ## `query_distinct_local_list_equiv_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2692`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2692)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2745`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2745)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
@@ -7226,7 +7012,7 @@ Theorem query_distinct_local_list_equiv_congr :
 
 ## `plug_possible_bag_context_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2766`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2766)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2819`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2819)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7251,7 +7037,7 @@ Theorem plug_possible_bag_context_extensional :
 
 ## `possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2787`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2787)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2840`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2840)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7276,7 +7062,7 @@ Theorem possible_bag_context_congr :
 
 ## `outcome_alpha_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2805`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2805)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2858`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2858)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7299,7 +7085,7 @@ Lemma outcome_alpha_congr :
 
 ## `successful_relation_equiv_possible_bags_rel_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2819`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2819)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2872`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2872)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7324,7 +7110,7 @@ Lemma successful_relation_equiv_possible_bags_rel_equiv :
 
 ## `successful_possible_bags_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2845`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2845)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2898`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2898)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7346,7 +7132,7 @@ Lemma successful_possible_bags_extensional :
 
 ## `possible_bag_context_successful_plug_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2854`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2854)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2907`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2907)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7371,7 +7157,7 @@ Theorem possible_bag_context_successful_plug_extensional :
 
 ## `list_outcome_equiv_successful_possible_bags`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2866`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2866)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2919`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2919)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7396,7 +7182,7 @@ Lemma list_outcome_equiv_successful_possible_bags :
 
 ## `list_outcome_equiv_possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2877`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2877)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2930`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2930)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7421,7 +7207,7 @@ Theorem list_outcome_equiv_possible_bag_context_congr :
 
 ## `list_outcome_equiv_possible_bag_query_boundary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2896`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2896)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2949`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2949)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7448,7 +7234,7 @@ Theorem list_outcome_equiv_possible_bag_query_boundary_congr :
 
 ## `query_expr_equiv_possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2910`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2910)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2963`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2963)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7477,7 +7263,7 @@ Theorem query_expr_equiv_possible_bag_context_congr :
 
 ## `query_possible_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2978`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2978)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3031`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3031)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7500,7 +7286,7 @@ Definition query_possible_bag_outcomes
 
 ## `query_expr_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2985`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2985)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3038`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3038)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7525,7 +7311,7 @@ Definition query_expr_possible_bag_outcome_equiv
 
 ## `query_expr_possible_bag_outcome_equiv_intro`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2992`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2992)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3045`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3045)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7551,7 +7337,7 @@ Lemma query_expr_possible_bag_outcome_equiv_intro :
 
 ## `query_expr_possible_bag_outcome_equiv_outputs`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3003`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3003)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3056`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3056)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7574,7 +7360,7 @@ Lemma query_expr_possible_bag_outcome_equiv_outputs :
 
 ## `query_expr_possible_bag_outcome_equiv_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3011`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3011)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3064`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3064)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7599,7 +7385,7 @@ Lemma query_expr_possible_bag_outcome_equiv_outcomes :
 
 ## `query_expr_possible_bag_outcome_equiv_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3021`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3021)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3074`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3074)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7625,7 +7411,7 @@ Lemma query_expr_possible_bag_outcome_equiv_iff :
 
 ## `outcome_relation_equiv_implies_outcome_alpha_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3034`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3034)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3087`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3087)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7649,7 +7435,7 @@ Lemma outcome_relation_equiv_implies_outcome_alpha_equiv :
 
 ## `query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3074`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3074)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3127`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3127)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7674,7 +7460,7 @@ Theorem query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv :
 
 ## `query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3089`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3089)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3142`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3142)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7703,7 +7489,7 @@ Theorem query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv :
 
 ## `query_expr_possible_outcome_equiv_iff_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3110`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3110)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3163`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3163)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7732,7 +7518,7 @@ Corollary query_expr_possible_outcome_equiv_iff_possible_bag_outcome_equiv :
 
 ## `possible_bag_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3175`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3175)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3228`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3228)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7754,7 +7540,7 @@ Lemma possible_bag_outcome_equiv_refl :
 
 ## `possible_bag_outcome_relation_equiv_match_left`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3184`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3184)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3237`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3237)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7779,7 +7565,7 @@ Lemma possible_bag_outcome_relation_equiv_match_left :
 
 ## `possible_bag_outcome_relation_equiv_match_right`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3200`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3200)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3253`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3253)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7804,7 +7590,7 @@ Lemma possible_bag_outcome_relation_equiv_match_right :
 
 ## `lift_possible_bag_outcome_unary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3216`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3216)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3269`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3269)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7830,7 +7616,7 @@ Theorem lift_possible_bag_outcome_unary_congr :
 
 ## `lift_possible_bag_outcome_binary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3274`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3274)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3327`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3327)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7857,7 +7643,7 @@ Theorem lift_possible_bag_outcome_binary_congr :
 
 ## `possible_bag_outcome_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3410`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3410)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3463`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3463)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7883,7 +7669,7 @@ Theorem possible_bag_outcome_context_congr :
 
 ## `outcome_relation_equiv_rel_equiv_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3438`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3438)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3491`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3491)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7908,7 +7694,7 @@ Lemma outcome_relation_equiv_rel_equiv_transport :
 
 ## `query_expr_possible_bag_outcome_context_boundary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3468`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3468)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3521`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3521)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7941,7 +7727,7 @@ Theorem query_expr_possible_bag_outcome_context_boundary_congr :
 
 ## `query_expr_possible_bag_outcome_context_boundary_final`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3496`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3496)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3549`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3549)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7980,7 +7766,7 @@ Theorem query_expr_possible_bag_outcome_context_boundary_final :
 
 ## `query_scheduled_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3562`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3562)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3615`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3615)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -8004,7 +7790,7 @@ Definition query_scheduled_bag_outcomes
 
 ## `query_possible_bag_outcomes_iff_scheduled`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3570`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3570)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3623`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3623)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8030,7 +7816,7 @@ Lemma query_possible_bag_outcomes_iff_scheduled :
 
 ## `query_expr_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3594`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3594)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3647`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3647)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8062,7 +7848,7 @@ Definition query_expr_possible_bag_schedule_transport
 
 ## `query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3608`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3608)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3661`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3661)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8087,7 +7873,7 @@ Theorem query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_
 
 ## `query_expr_possible_bag_unary_wrapper_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3692`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3692)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3745`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3745)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8120,7 +7906,7 @@ Theorem query_expr_possible_bag_unary_wrapper_schedule_transport :
 
 ## `query_expr_possible_bag_unary_wrapper_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3721`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3721)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3774`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3774)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8154,7 +7940,7 @@ Theorem query_expr_possible_bag_unary_wrapper_congr :
 
 ## `query_expr_possible_bag_joint_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3748`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3748)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3801`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3801)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8195,7 +7981,7 @@ Definition query_expr_possible_bag_joint_schedule_transport
 
 ## `query_expr_possible_bag_binary_wrapper_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3774`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3774)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3827`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3827)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8232,7 +8018,7 @@ Theorem query_expr_possible_bag_binary_wrapper_schedule_transport :
 
 ## `query_expr_possible_bag_binary_wrapper_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3808`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3808)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3861`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3861)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8270,7 +8056,7 @@ Theorem query_expr_possible_bag_binary_wrapper_congr :
 
 ## `lift_possible_bag_outcome_binary_cross_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3963`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3963)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4016`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4016)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

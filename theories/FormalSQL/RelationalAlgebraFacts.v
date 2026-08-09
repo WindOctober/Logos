@@ -231,6 +231,55 @@ Definition list_support_rel {A B : Type} (R : A -> B -> Prop)
   (forall x, In x left -> exists y, In y right /\ R x y) /\
   (forall y, In y right -> exists x, In x left /\ R x y).
 
+(** Support is reflexive whenever the element relation is reflexive on the
+    rows that can actually occur. *)
+Lemma list_support_rel_refl :
+  forall A (R : A -> A -> Prop) rows,
+    (forall x, In x rows -> R x x) ->
+    list_support_rel R rows rows.
+Proof.
+intros A R rows Hrefl; split.
+- intros x Hx; exists x; split; [exact Hx | exact (Hrefl x Hx)].
+- intros x Hx; exists x; split; [exact Hx | exact (Hrefl x Hx)].
+Qed.
+
+(** Reversing the two presentations reverses only the direction of the
+    heterogeneous element relation. *)
+Lemma list_support_rel_converse :
+  forall A B (R : A -> B -> Prop) left right,
+    list_support_rel R left right <->
+    list_support_rel (fun y x => R x y) right left.
+Proof.
+intros A B R left right; split;
+  intros [Hforward Hbackward]; split; assumption.
+Qed.
+
+(** Corresponding support relations combine componentwise under append.
+    This remains a support-only law and therefore makes no claim about the
+    multiplicity or relative order of the two components. *)
+Lemma list_support_rel_app :
+  forall A B (R : A -> B -> Prop) left1 right1 left2 right2,
+    list_support_rel R left1 right1 ->
+    list_support_rel R left2 right2 ->
+    list_support_rel R (left1 ++ left2) (right1 ++ right2).
+Proof.
+intros A B R left1 right1 left2 right2
+  [Hforward1 Hbackward1] [Hforward2 Hbackward2].
+split.
+- intros x Hx.
+  apply List.in_app_iff in Hx; destruct Hx as [Hx | Hx].
+  + destruct (Hforward1 x Hx) as [y [Hy HR]].
+    exists y; split; [apply List.in_app_iff; now left | exact HR].
+  + destruct (Hforward2 x Hx) as [y [Hy HR]].
+    exists y; split; [apply List.in_app_iff; now right | exact HR].
+- intros y Hy.
+  apply List.in_app_iff in Hy; destruct Hy as [Hy | Hy].
+  + destruct (Hbackward1 y Hy) as [x [Hx HR]].
+    exists x; split; [apply List.in_app_iff; now left | exact HR].
+  + destruct (Hbackward2 y Hy) as [x [Hx HR]].
+    exists x; split; [apply List.in_app_iff; now right | exact HR].
+Qed.
+
 (** Bidirectional support relations compose without introducing multiplicity
     claims.  These list-level laws are useful when a semantic view crosses
     several projection, grouping, or aliasing boundaries before the next bag
@@ -3035,133 +3084,6 @@ assert (Hpermut :
 exact Hpermut.
 Qed.
 
-(** Crossing a bag with one right occurrence is just a semantic row map of
-    the left bag.  [Febag.elements] may choose an [OTuple]-equal singleton
-    representative, hence the conclusion is bag equality rather than Rocq
-    equality of the underlying bag implementations. *)
-Lemma query_cross_join_bag_singleton_right_map :
-  forall (left : bagT) right_row,
-    bag_eq T
-      (query_cross_join_bag left
-        (Febag.singleton (Fecol.CBag (CTuple T)) right_row))
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun left_row => join_tuple T left_row right_row) left).
-Proof.
-intros left right_row.
-destruct
-  (Febag.elements_singleton (Fecol.CBag (CTuple T)) right_row)
-  as [right_row' [Hright Hsingleton]].
-assert (Hright_permut :
-  Oeset.permut (OTuple T)
-    (Febag.elements (Fecol.CBag (CTuple T))
-      (Febag.singleton (Fecol.CBag (CTuple T)) right_row))
-    (right_row :: nil)).
-{
-  rewrite Hsingleton.
-  apply ListPermut.Pcons with (l1 := nil) (l2 := nil).
-  - now apply Oeset.compare_eq_sym.
-  - constructor.
-}
-apply bag_eq_iff_occurrences; intro output.
-unfold query_cross_join_bag, Febag.map.
-rewrite 2 Febag.nb_occ_mk_bag.
-assert (Hcross :
-  brute_left_join_list (tuple T) (join_tuple T)
-    (Febag.elements (Fecol.CBag (CTuple T)) left) (right_row :: nil) =
-  map (fun left_row => join_tuple T left_row right_row)
-    (Febag.elements (Fecol.CBag (CTuple T)) left)).
-{
-  unfold brute_left_join_list, theta_join_list.
-  induction (Febag.elements (Fecol.CBag (CTuple T)) left)
-    as [|left_row left_rows IH]; [reflexivity|].
-  rewrite ListFacts.flat_map_unfold.
-  cbn [d_join_list].
-  now f_equal.
-}
-apply Oeset.permut_nb_occ.
-unfold brute_left_join_list.
-eapply Oeset.permut_trans.
-- apply (theta_join_list_permut_eq
-    (tuple T) (OTuple T) (join_tuple T)
-    (join_tuple_eq_1 T) (join_tuple_eq_2 T)
-    (fun _ _ : tuple T => true)).
-  + intros; reflexivity.
-  + apply Oeset.permut_refl.
-  + exact Hright_permut.
-- rewrite <- Hcross.
-  apply Oeset.permut_refl.
-Qed.
-
-Local Lemma query_set_union_elements_permut :
-  forall left right : bagT,
-    Oeset.permut (OTuple T)
-      (Febag.elements (Fecol.CBag (CTuple T))
-        (query_set_bag Union left right))
-      (Febag.elements (Fecol.CBag (CTuple T)) left ++
-       Febag.elements (Fecol.CBag (CTuple T)) right).
-Proof.
-intros left right; apply Oeset.nb_occ_permut; intro row.
-rewrite Oeset.nb_occ_app.
-rewrite <- 3 Febag.nb_occ_elements.
-unfold query_set_bag, Febag.interp_set_op; cbn.
-apply Febag.nb_occ_union.
-Qed.
-
-Local Lemma query_cross_join_union_left :
-  forall first second right : bagT,
-    bag_eq T
-      (query_cross_join_bag (query_set_bag Union first second) right)
-      (query_set_bag Union
-        (query_cross_join_bag first right)
-        (query_cross_join_bag second right)).
-Proof.
-intros first second right.
-apply bag_eq_iff_occurrences; intro output.
-unfold query_cross_join_bag, query_set_bag, Febag.interp_set_op; cbn.
-rewrite Febag.nb_occ_union, 3 Febag.nb_occ_mk_bag.
-rewrite <- Oeset.nb_occ_app.
-apply Oeset.permut_nb_occ.
-unfold brute_left_join_list.
-eapply Oeset.permut_trans.
-- apply (theta_join_list_permut_eq
-    (tuple T) (OTuple T) (join_tuple T)
-    (join_tuple_eq_1 T) (join_tuple_eq_2 T)
-    (fun _ _ : tuple T => true)).
-  + intros; reflexivity.
-  + apply query_set_union_elements_permut.
-  + apply Oeset.permut_refl.
-- rewrite theta_join_list_app_1.
-  apply Oeset.permut_refl.
-Qed.
-
-Local Lemma query_cross_join_union_right :
-  forall left first second : bagT,
-    bag_eq T
-      (query_cross_join_bag left (query_set_bag Union first second))
-      (query_set_bag Union
-        (query_cross_join_bag left first)
-        (query_cross_join_bag left second)).
-Proof.
-intros left first second.
-apply bag_eq_iff_occurrences; intro output.
-unfold query_cross_join_bag, query_set_bag, Febag.interp_set_op; cbn.
-rewrite Febag.nb_occ_union, 3 Febag.nb_occ_mk_bag.
-rewrite <- Oeset.nb_occ_app.
-apply Oeset.permut_nb_occ.
-unfold brute_left_join_list.
-eapply Oeset.permut_trans.
-- apply (theta_join_list_permut_eq
-    (tuple T) (OTuple T) (join_tuple T)
-    (join_tuple_eq_1 T) (join_tuple_eq_2 T)
-    (fun _ _ : tuple T => true)).
-  + intros; reflexivity.
-  + apply Oeset.permut_refl.
-  + apply query_set_union_elements_permut.
-- apply _permut_incl with (@eq (tuple T)).
-  + intros first_row second_row ->; apply Oeset.compare_eq_refl.
-  + apply theta_join_list_app_2.
-Qed.
-
 End BagOperations.
 
 (** Query-level facts connect the exact semantics to its possible-bag
@@ -3592,200 +3514,6 @@ rewrite 2 length_app; cbn.
 lia.
 Qed.
 
-(** Internal list facts for the partial-functional LEFT JOIN bridge below.
-    They stay local so the agent-facing API exposes the semantic bag theorem,
-    not the condition-matrix implementation. *)
-Local Lemma query_join_matched_sources_length_exact :
-  forall left rights flags,
-    length flags = length rights ->
-    length (query_join_matched_sources T left rights flags) =
-    length (filter (fun flag : bool => flag) flags).
-Proof.
-intros left rights flags; revert flags.
-induction rights as [|right rights IH];
-  intros [|flag flags] Hlength; cbn in Hlength |- *;
-  try discriminate; try reflexivity.
-apply Nat.succ_inj in Hlength.
-destruct flag; cbn; rewrite (IH flags Hlength); reflexivity.
-Qed.
-
-Local Lemma query_join_matched_sources_shape :
-  forall left rights flags source,
-    In source (query_join_matched_sources T left rights flags) ->
-    exists right,
-      In right rights /\
-      source = JoinSourceMatched T (join_tuple T left right).
-Proof.
-intros left rights flags source; revert flags source.
-induction rights as [|right rights IH];
-  intros [|flag flags] source Hsource; cbn in Hsource;
-  try contradiction.
-destruct flag; cbn in Hsource.
-- destruct Hsource as [Hsource|Hsource].
-  + subst source; exists right; split; [now left|reflexivity].
-  + destruct (IH flags source Hsource) as [matched [Hmatched Hshape]].
-    exists matched; split; [now right|exact Hshape].
-- destruct (IH flags source Hsource) as [matched [Hmatched Hshape]].
-  exists matched; split; [now right|exact Hshape].
-Qed.
-
-Local Lemma query_join_left_row_sources_functional_singleton :
-  forall left rights flags,
-    length flags = length rights ->
-    (length (filter (fun flag : bool => flag) flags) <= 1)%nat ->
-    exists source,
-      query_join_left_sources T QueryJoinLeft (left :: nil) rights
-        (flags :: nil) = source :: nil /\
-      (source = JoinSourceLeft T left \/
-       exists right,
-         In right rights /\
-         source = JoinSourceMatched T (join_tuple T left right)).
-Proof.
-intros left rights flags Hdimension Hfunctional.
-unfold query_join_row_has_match.
-destruct (existsb (fun flag : bool => flag) flags) eqn:Hmatch.
-- assert (Hfilter_nonempty :
-    filter (fun flag : bool => flag) flags <> nil).
-  { intro Hempty.
-    apply existsb_exists in Hmatch as [flag [Hflag Htrue]].
-    assert (Hin : In flag (filter (fun flag : bool => flag) flags)).
-    { apply filter_In; now split. }
-    now rewrite Hempty in Hin. }
-  assert (Hfilter_length :
-    length (filter (fun flag : bool => flag) flags) = 1).
-  { destruct (filter (fun flag : bool => flag) flags)
-      as [|flag tail] eqn:Hfilter; [contradiction|].
-    destruct tail as [|second tail]; [reflexivity|].
-    cbn in Hfunctional; lia. }
-  pose proof
-    (query_join_matched_sources_length_exact left rights flags Hdimension)
-    as Hmatched_length.
-  rewrite Hfilter_length in Hmatched_length.
-  destruct (query_join_matched_sources T left rights flags)
-    as [|source tail] eqn:Hmatched; cbn in Hmatched_length; [discriminate|].
-  destruct tail as [|second tail]; [|cbn in Hmatched_length; discriminate].
-  exists source; split.
-  + cbn [query_join_left_sources].
-    unfold query_join_row_has_match; rewrite Hmatch, Hmatched; reflexivity.
-  + right.
-    apply query_join_matched_sources_shape with
-      (left := left) (flags := flags).
-    rewrite Hmatched; now left.
-- exists (JoinSourceLeft T left); split.
-  + cbn [query_join_left_sources].
-    unfold query_join_row_has_match; rewrite Hmatch; reflexivity.
-  + now left.
-Qed.
-
-Local Lemma query_join_left_functional_projected_rows_permut :
-  forall env matched_select left_select right_select
-      (project emit : tuple T -> tuple T) lefts rights matrix projected,
-    length matrix = length lefts ->
-    Forall (fun flags => length flags = length rights) matrix ->
-    Forall
-      (fun flags =>
-        (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
-      matrix ->
-    (forall left right values,
-      In left lefts ->
-      In right rights ->
-      @eval_scalar_values_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule (env_t T env (join_tuple T left right))
-        (map fst matched_select) (SqlSuccess values) ->
-      Oeset.compare (OTuple T)
-        (project (project_row matched_select values)) (emit left) = Eq) ->
-    (forall left values,
-      In left lefts ->
-      @eval_scalar_values_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule (env_t T env left)
-        (map fst left_select) (SqlSuccess values) ->
-      Oeset.compare (OTuple T)
-        (project (project_row left_select values)) (emit left) = Eq) ->
-    @eval_project_join_sources_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env matched_select left_select right_select
-      (query_join_sources T QueryJoinLeft lefts rights matrix)
-      (SqlSuccess projected) ->
-    Oeset.permut (OTuple T) (map project projected) (map emit lefts).
-Proof.
-intros env matched_select left_select right_select project emit lefts.
-induction lefts as [|left lefts IH];
-  intros rights matrix projected Hlength Hdimensions Hfunctional
-    Hmatched Hleft Hprojected.
-- destruct matrix as [|flags matrix]; cbn in Hlength; [|discriminate].
-  cbn [query_join_sources query_join_left_sources] in Hprojected.
-  inversion Hprojected; subst projected; apply Oeset.permut_refl.
-- destruct matrix as [|flags matrix]; cbn in Hlength; [discriminate|].
-  apply Nat.succ_inj in Hlength.
-  inversion Hdimensions as [|? ? Hdimension Hdimensions_tail]; subst.
-  inversion Hfunctional as [|? ? Hfunctional_head Hfunctional_tail]; subst.
-  assert (Hmatched_tail : forall tail_left right values,
-    In tail_left lefts ->
-    In right rights ->
-    @eval_scalar_values_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule (env_t T env (join_tuple T tail_left right))
-      (map fst matched_select) (SqlSuccess values) ->
-    Oeset.compare (OTuple T)
-      (project (project_row matched_select values)) (emit tail_left) = Eq).
-  { intros; eapply Hmatched; [now right|eassumption|eassumption]. }
-  assert (Hleft_tail : forall tail_left values,
-    In tail_left lefts ->
-    @eval_scalar_values_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule (env_t T env tail_left)
-      (map fst left_select) (SqlSuccess values) ->
-    Oeset.compare (OTuple T)
-      (project (project_row left_select values)) (emit tail_left) = Eq).
-  { intros; eapply Hleft; [now right|eassumption]. }
-  destruct
-    (query_join_left_row_sources_functional_singleton
-      left rights flags Hdimension Hfunctional_head)
-    as [source [Hrow_sources Hshape]].
-  assert (Hsources :
-    query_join_sources T QueryJoinLeft (left :: lefts) rights
-      (flags :: matrix) =
-    source :: query_join_sources T QueryJoinLeft lefts rights matrix).
-  { unfold query_join_sources.
-    cbn [query_join_left_sources] in Hrow_sources |- *.
-    rewrite app_nil_r in Hrow_sources.
-    now rewrite Hrow_sources. }
-  rewrite Hsources in Hprojected.
-  inversion Hprojected; subst.
-  try clear Hprojected.
-  cbn [project_cons_outcome] in *; try discriminate.
-  try match goal with
-  | Heq : SqlSuccess _ = SqlSuccess _ |- _ => inversion Heq; subst
-  end.
-  assert (Hhead :
-    Oeset.compare (OTuple T)
-      (project
-        (project_row
-          (query_join_source_select
-            matched_select left_select right_select source) values))
-      (emit left) = Eq).
-  {
-    destruct Hshape as [Hshape | [right [Hright Hshape]]]; subst source;
-      cbn [query_join_source_select query_join_source_row] in *.
-    - eapply Hleft; [now left|eassumption].
-    - eapply Hmatched; [now left|exact Hright|eassumption].
-  }
-  destruct tail as [outputs|tail_error];
-    cbn [project_cons_outcome] in H4; try discriminate.
-  inversion H4; subst projected.
-  apply (proj1
-    (Oeset.permut_cons (OTuple T)
-      (project
-        (project_row
-          (query_join_source_select
-            matched_select left_select right_select source) values))
-      (emit left) (map project outputs) (map emit lefts) Hhead)).
-  eapply IH; [exact Hlength|exact Hdimensions_tail|exact Hfunctional_tail|
-    exact Hmatched_tail|exact Hleft_tail|exact H6].
-Qed.
-
 Lemma query_same_rows_as_bag_map :
   forall (mapping : tuple T -> tuple T) rows bag,
     (forall first second,
@@ -3811,125 +3539,6 @@ apply (Oeset.nb_occ_map_eq_2_3 (OTuple T)).
   rewrite Febag.nb_occ_equal in Hrows.
   specialize (Hrows input).
   now rewrite Febag.nb_occ_mk_bag in Hrows.
-Qed.
-
-(** A successful partial-functional LEFT JOIN whose final projection erases
-    the right payload is bag-equivalent to mapping the left input directly.
-    The projection laws are scoped to representatives of the two input bags,
-    so callers may discharge them from schema facts that hold only for rows
-    produced by the input queries.  No total-match premise is present: a
-    zero-match left occurrence is emitted through [left_select].  Runtime-error
-    equivalence remains a separate obligation when this success-bag law is
-    lifted to outcome equivalence. *)
-Theorem query_join_left_functional_projection_bag_on_representatives :
-  forall env predicate matched_select left_select right_select
-      (project emit : tuple T -> tuple T) left_bag right_bag joined_bag,
-    (forall first second,
-      Oeset.compare (OTuple T) first second = Eq ->
-      Oeset.compare (OTuple T) (project first) (project second) = Eq) ->
-    (forall first second,
-      Oeset.compare (OTuple T) first second = Eq ->
-      Oeset.compare (OTuple T) (emit first) (emit second) = Eq) ->
-    (forall left_rows right_rows matrix,
-      query_same_rows_as_bag left_rows left_bag ->
-      query_same_rows_as_bag right_rows right_bag ->
-      @eval_join_conditions_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule env predicate left_rows right_rows
-        (SqlSuccess matrix) ->
-      Forall
-        (fun flags =>
-          (length (filter (fun flag : bool => flag) flags) <= 1)%nat)
-        matrix) ->
-    (forall left_rows right_rows left right values,
-      query_same_rows_as_bag left_rows left_bag ->
-      query_same_rows_as_bag right_rows right_bag ->
-      In left left_rows ->
-      In right right_rows ->
-      @eval_scalar_values_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule (env_t T env (join_tuple T left right))
-        (map fst matched_select) (SqlSuccess values) ->
-      Oeset.compare (OTuple T)
-        (project (project_row matched_select values)) (emit left) = Eq) ->
-    (forall left_rows left values,
-      query_same_rows_as_bag left_rows left_bag ->
-      In left left_rows ->
-      @eval_scalar_values_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule (env_t T env left)
-        (map fst left_select) (SqlSuccess values) ->
-      Oeset.compare (OTuple T)
-        (project (project_row left_select values)) (emit left) = Eq) ->
-    @eval_join_bag_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env QueryJoinLeft predicate matched_select left_select
-      right_select
-      left_bag right_bag (SqlSuccess joined_bag) ->
-    bag_eq T
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        project joined_bag)
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        emit left_bag).
-Proof.
-intros env predicate matched_select left_select right_select project emit
-  left_bag right_bag joined_bag Hproject_proper Hemit_proper Hfunctional
-  Hmatched Hleft Heval.
-inversion Heval; subst.
-pose proof (eval_join_conditions_success_dimensions H2)
-  as [Hmatrix_length Hmatrix_dimensions].
-pose proof (Hfunctional left_rows right_rows matrix H0 H1 H2)
-  as Hmatrix_functional.
-assert (Hmatched_rows :
-  forall left right values,
-    In left left_rows ->
-    In right right_rows ->
-    @eval_scalar_values_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule (env_t T env (join_tuple T left right))
-      (map fst matched_select) (SqlSuccess values) ->
-    Oeset.compare (OTuple T)
-      (project (project_row matched_select values)) (emit left) = Eq).
-{ intros left right values Hleft_in Hright_in Hsource.
-  eapply Hmatched; eassumption. }
-assert (Hleft_rows :
-  forall left values,
-    In left left_rows ->
-    @eval_scalar_values_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule (env_t T env left) (map fst left_select)
-      (SqlSuccess values) ->
-    Oeset.compare (OTuple T)
-      (project (project_row left_select values)) (emit left) = Eq).
-{ intros left values Hleft_in Hsource.
-  eapply Hleft; eassumption. }
-pose proof
-  (query_join_left_functional_projected_rows_permut
-    (env := env) (matched_select := matched_select)
-    (left_select := left_select) (right_select := right_select) project emit
-    left_rows right_rows (matrix := matrix) (projected := projected)
-    Hmatrix_length
-    Hmatrix_dimensions Hmatrix_functional Hmatched_rows Hleft_rows H3)
-  as Hpermut.
-pose proof
-  (query_same_rows_as_bag_map project
-    (rows := projected) (bag := joined_bag) Hproject_proper H11)
-  as Hjoined_map.
-pose proof
-  (query_same_rows_as_bag_map emit
-    (rows := left_rows) (bag := left_bag) Hemit_proper H0)
-  as Hleft_map.
-apply query_same_rows_as_bag_iff_bag_eq in Hjoined_map, Hleft_map.
-assert (Hrows :
-  bag_eq T
-    (rows_bag T (map project projected))
-    (rows_bag T (map emit left_rows))).
-{ unfold bag_eq, rows_bag.
-  rewrite Febag.nb_occ_equal; intro row.
-  rewrite 2 Febag.nb_occ_mk_bag.
-  now apply Oeset.permut_nb_occ. }
-eapply bag_eq_trans; [apply bag_eq_sym; exact Hjoined_map|].
-eapply bag_eq_trans; [exact Hrows|exact Hleft_map].
 Qed.
 
 Lemma project_join_sources_success_length :
@@ -4231,134 +3840,6 @@ intros env kind predicate matched_select left_select right_select
 apply query_join_success_bags_congr.
 - now apply query_expr_equiv_implies_success_bags.
 - now apply query_expr_equiv_implies_success_bags.
-Qed.
-
-(** CROSS JOIN distributes over right-hand UNION ALL at the possible-success
-    bag layer when the syntactically duplicated left child has a functional
-    possible-bag relation.  Both set-operation sort tests remain explicit. *)
-Theorem query_cross_join_union_right_success_bags :
-  forall env left first second,
-    query_expr_sort first =S= query_expr_sort second ->
-    query_expr_sort (QExpr_CrossJoin left first) =S=
-      query_expr_sort (QExpr_CrossJoin left second) ->
-    (forall left_bag left_bag',
-      success_bags env left left_bag ->
-      success_bags env left left_bag' ->
-      bag_eq T left_bag left_bag') ->
-    rel_equiv
-      (success_bags env
-        (QExpr_CrossJoin left (QExpr_Set Union first second)))
-      (success_bags env
-        (QExpr_Set Union
-          (QExpr_CrossJoin left first)
-          (QExpr_CrossJoin left second))).
-Proof.
-intros env left first second Hsource_sort Htarget_sort Hfunctional output.
-split; intro Houtput.
-- apply (proj1
-    (query_cross_join_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env left (QExpr_Set Union first second) output))
-    in Houtput.
-  destruct Houtput as [left_bag [union_bag [Hleft [Hunion Hcross]]]].
-  apply (proj1
-    (query_set_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env Union first second union_bag)) in Hunion.
-  destruct Hunion as [first_bag [second_bag
-    [Hfirst [Hsecond Hunion]]]].
-  unfold query_set_bag_relation, binary_bag_graph,
-    query_set_bag_function in Hunion.
-  rewrite (Fset.equal_eq_1 _ _ _ _ Hsource_sort), Fset.equal_refl in Hunion.
-  apply (proj2
-    (query_set_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env Union (QExpr_CrossJoin left first)
-      (QExpr_CrossJoin left second) output)).
-  exists (query_cross_join_bag left_bag first_bag).
-  exists (query_cross_join_bag left_bag second_bag).
-  split.
-  + apply (proj2
-      (query_cross_join_success_bags basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule env left first
-        (query_cross_join_bag left_bag first_bag))).
-    exists left_bag, first_bag; split; [exact Hleft |].
-    split; [exact Hfirst |].
-    unfold query_cross_join_bag_relation, binary_bag_graph.
-    apply bag_eq_refl.
-  + split.
-    * apply (proj2
-        (query_cross_join_success_bags basesort instance unknown
-          symbol_runtime_error aggregate_runtime_error value_is_null
-          boolean_schedule env left second
-          (query_cross_join_bag left_bag second_bag))).
-      exists left_bag, second_bag; split; [exact Hleft |].
-      split; [exact Hsecond |].
-      unfold query_cross_join_bag_relation, binary_bag_graph.
-      apply bag_eq_refl.
-    * unfold query_set_bag_relation, binary_bag_graph,
-        query_set_bag_function.
-      rewrite (Fset.equal_eq_1 _ _ _ _ Htarget_sort), Fset.equal_refl.
-      eapply bag_eq_trans.
-      -- apply bag_eq_sym, query_cross_join_union_right.
-      -- eapply bag_eq_trans.
-         ++ apply query_cross_join_bag_congr;
-              [apply bag_eq_refl | exact Hunion].
-         ++ exact Hcross.
-- apply (proj1
-    (query_set_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env Union (QExpr_CrossJoin left first)
-      (QExpr_CrossJoin left second) output)) in Houtput.
-  destruct Houtput as [first_cross [second_cross
-    [Hfirst_cross [Hsecond_cross Houter]]]].
-  apply (proj1
-    (query_cross_join_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env left first first_cross)) in Hfirst_cross.
-  apply (proj1
-    (query_cross_join_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env left second second_cross)) in Hsecond_cross.
-  destruct Hfirst_cross as [left_bag [first_bag
-    [Hleft [Hfirst Hfirst_cross]]]].
-  destruct Hsecond_cross as [left_bag' [second_bag
-    [Hleft' [Hsecond Hsecond_cross]]]].
-  pose proof (Hfunctional _ _ Hleft Hleft') as Hleft_bags.
-  apply (proj2
-    (query_cross_join_success_bags basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null
-      boolean_schedule env left (QExpr_Set Union first second) output)).
-  exists left_bag, (query_set_bag Union first_bag second_bag).
-  split; [exact Hleft |].
-  split.
-  + apply (proj2
-      (query_set_success_bags basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule env Union first second
-        (query_set_bag Union first_bag second_bag))).
-    exists first_bag, second_bag; split; [exact Hfirst |].
-    split; [exact Hsecond |].
-    unfold query_set_bag_relation, binary_bag_graph,
-      query_set_bag_function.
-    rewrite (Fset.equal_eq_1 _ _ _ _ Hsource_sort), Fset.equal_refl.
-    apply bag_eq_refl.
-  + unfold query_cross_join_bag_relation, binary_bag_graph.
-    eapply bag_eq_trans.
-    * apply query_cross_join_union_right.
-    * eapply bag_eq_trans.
-      -- apply query_set_bag_congr.
-         ++ exact Hfirst_cross.
-         ++ eapply bag_eq_trans.
-            ** apply query_cross_join_bag_congr;
-                 [exact Hleft_bags | apply bag_eq_refl].
-            ** exact Hsecond_cross.
-      -- unfold query_set_bag_relation, binary_bag_graph,
-           query_set_bag_function in Houter.
-         rewrite (Fset.equal_eq_1 _ _ _ _ Htarget_sort), Fset.equal_refl
-           in Houter.
-         exact Houter.
 Qed.
 
 End QueryBridges.

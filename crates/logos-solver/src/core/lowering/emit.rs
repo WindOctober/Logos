@@ -4,10 +4,9 @@ use super::*;
 use crate::core::VerificationMode;
 use crate::core::syntax::{
     FormalQueryBinding, FormalQueryDefinitionGraph, FormalQueryShapeDefinition,
-    FormalQueryShapeKind, FormalQueryStatementSymbols, FormalRowMapAdapter, FormalScalarExpr,
-    FormalScalarQuantifier, FormalScalarResultKind, FormalScalarSelectItem,
-    formal_query_expr_contains_analysis_error, query_expr_output_signature,
-    scalar_expr_contains_subquery, scalar_expr_requires_numeric_exp_model,
+    FormalQueryShapeKind, FormalQueryStatementSymbols, FormalScalarExpr, FormalScalarQuantifier,
+    FormalScalarResultKind, FormalScalarSelectItem, formal_query_expr_contains_analysis_error,
+    query_expr_output_signature, scalar_expr_contains_subquery,
 };
 
 const SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE: usize = 32;
@@ -899,8 +898,7 @@ fn query_table_relations(query: &FormalQueryExpr) -> Vec<(&str, &[FormalAttribut
                 }
                 query_expr(input, relations);
             }
-            FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
+            FormalQueryExpr::Rank { input, .. }
             | FormalQueryExpr::Window { input, .. }
             | FormalQueryExpr::Distinct { input }
             | FormalQueryExpr::OrderBy { input, .. }
@@ -994,22 +992,16 @@ fn emit_rocq_bound_program_side(
                 &binding.query_expr,
                 &binding.output_signature,
             );
-            let query_argument = if binding.query_expr.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             let binding_name = format!("{side}_query_binding_{statement_index}_{binding_index}");
             definitions.push(format!(
-                "Definition {binding_name} (generated_numeric_exp_model : NumericExpModel) : LocalQueryBinding :=\n  MakeLocalQueryBinding\n    (Rel {})\n    ({})\n    ({query_name}{query_argument}).",
+                "Definition {binding_name} : LocalQueryBinding :=\n  MakeLocalQueryBinding\n    (Rel {})\n    ({})\n    ({query_name}).",
                 rocq_string_literal(&binding.relation),
                 emit_rocq_query_attribute_list(&binding.output_signature),
             ));
-            binding_names.push(format!("{binding_name} generated_numeric_exp_model"));
+            binding_names.push(binding_name.clone());
             definitions.push(emit_local_query_binding_admissibility_certificate(
                 &binding_name,
                 &query_name,
-                binding.query_expr.requires_numeric_exp_model(),
             ));
             binding_certificates.push(BoundBindingCertificate {
                 binding_name,
@@ -1018,14 +1010,9 @@ fn emit_rocq_bound_program_side(
             });
         }
 
-        let body_argument = if body.requires_numeric_exp_model() {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
         let bound_name = format!("{side}_bound_query{suffix}");
         definitions.push(format!(
-            "Definition {bound_name} (generated_numeric_exp_model : NumericExpModel) : BoundQuery :=\n  MakeBoundQuery\n    ({})\n    ({body_name}{body_argument}).",
+            "Definition {bound_name} : BoundQuery :=\n  MakeBoundQuery\n    ({})\n    ({body_name}).",
             emit_rocq_list_expr(&binding_names)
         ));
         let admissibility_lemma = format!("{bound_name}_admissible_generated_schema");
@@ -1033,7 +1020,6 @@ fn emit_rocq_bound_program_side(
             &bound_name,
             &admissibility_lemma,
             &body_name,
-            body.requires_numeric_exp_model(),
             query_table_relations(body).len(),
             &binding_certificates,
             local_schema_count,
@@ -1047,18 +1033,14 @@ fn emit_rocq_bound_program_side(
             statement_index: statement_index + 1,
             root_symbol: body_name.clone(),
             output_signature_symbol: signature_name.clone(),
-            requires_numeric_exp_model: body.requires_numeric_exp_model()
-                || bindings
-                    .iter()
-                    .any(|binding| binding.query_expr.requires_numeric_exp_model()),
         });
-        bound_query_names.push(format!("{bound_name} generated_numeric_exp_model"));
+        bound_query_names.push(bound_name);
         signature_names.push(signature_name);
         statement_admissibility_lemmas.push(admissibility_lemma);
     }
 
     let program_definition = format!(
-        "Definition {side}_bound_query_program (generated_numeric_exp_model : NumericExpModel) : BoundQueryProgram :=\n  [{}].",
+        "Definition {side}_bound_query_program : BoundQueryProgram :=\n  [{}].",
         bound_query_names.join("; ")
     );
     let signatures_definition = format!(
@@ -1067,7 +1049,7 @@ fn emit_rocq_bound_program_side(
     );
     let generated_steps = statement_admissibility_lemmas
         .iter()
-        .map(|lemma| format!("apply ({lemma} generated_numeric_exp_model)."))
+        .map(|lemma| format!("apply {lemma}."))
         .collect::<Vec<_>>();
     let program_proof = rocq_conjunction_proof(vec![
         rocq_nodup_list_proof(
@@ -1079,7 +1061,7 @@ fn emit_rocq_bound_program_side(
         rocq_forall_list_proof(&generated_steps),
     ]);
     let program_admissibility_certificates = format!(
-        "Lemma {side}_bound_query_program_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  bound_query_program_admissible\n    Schema.generated_schema generated_local_query_schemas\n    ({side}_bound_query_program generated_numeric_exp_model).\nProof.\n  unfold {side}_bound_query_program, bound_query_program_admissible.\n  cbn [bound_query_program_binding_relations local_query_binding_relations\n    bound_query_bindings local_binding_relation].\n{}\nQed.\n\nLemma {side}_bound_query_program_admissible\n    (generated_numeric_exp_model : NumericExpModel) (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  bound_query_program_admissible\n    db generated_local_query_schemas\n    ({side}_bound_query_program generated_numeric_exp_model).\nProof.\n  intro Hschema.\n  eapply bound_query_program_admissible_database_schema_transport.\n  - exact Hschema.\n  - apply {side}_bound_query_program_admissible_generated_schema.\nQed.",
+        "Lemma {side}_bound_query_program_admissible_generated_schema :\n  bound_query_program_admissible\n    Schema.generated_schema generated_local_query_schemas\n    {side}_bound_query_program.\nProof.\n  unfold {side}_bound_query_program, bound_query_program_admissible.\n  cbn [bound_query_program_binding_relations local_query_binding_relations\n    bound_query_bindings local_binding_relation].\n{}\nQed.\n\nLemma {side}_bound_query_program_admissible\n    (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  bound_query_program_admissible\n    db generated_local_query_schemas\n    {side}_bound_query_program.\nProof.\n  intro Hschema.\n  eapply bound_query_program_admissible_database_schema_transport.\n  - exact Hschema.\n  - apply {side}_bound_query_program_admissible_generated_schema.\nQed.",
         indent_rocq_expr(&program_proof, 2)
     );
 
@@ -1121,15 +1103,9 @@ fn emit_bound_query_expr_definition(
 fn emit_local_query_binding_admissibility_certificate(
     binding_name: &str,
     query_name: &str,
-    query_requires_model: bool,
 ) -> String {
-    let query_argument = if query_requires_model {
-        " generated_numeric_exp_model"
-    } else {
-        ""
-    };
     format!(
-        "Lemma {binding_name}_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  local_query_binding_admissible\n    generated_binding_schema generated_local_query_schemas\n    ({binding_name} generated_numeric_exp_model).\nProof.\n  unfold local_query_binding_admissible, {binding_name},\n    local_query_binding_schema.\n  cbn [local_binding_relation local_binding_outputs local_binding_query].\n  split.\n  - solve_generated_query_metadata.\n  - split.\n    + exact (proj1 ({query_name}_admissible_with_outputs_generated_schema{query_argument})).\n    + split.\n      * reflexivity.\n      * exact (proj2 ({query_name}_admissible_with_outputs_generated_schema{query_argument})).\nQed."
+        "Lemma {binding_name}_admissible_generated_schema :\n  local_query_binding_admissible\n    generated_binding_schema generated_local_query_schemas\n    {binding_name}.\nProof.\n  unfold local_query_binding_admissible, {binding_name},\n    local_query_binding_schema.\n  cbn [local_binding_relation local_binding_outputs local_binding_query].\n  split.\n  - solve_generated_query_metadata.\n  - split.\n    + exact (proj1 {query_name}_admissible_with_outputs_generated_schema).\n    + split.\n      * reflexivity.\n      * exact (proj2 {query_name}_admissible_with_outputs_generated_schema).\nQed."
     )
 }
 
@@ -1156,7 +1132,6 @@ fn emit_bound_query_admissibility_certificate(
     bound_name: &str,
     lemma_name: &str,
     body_name: &str,
-    body_requires_model: bool,
     body_table_reference_count: usize,
     bindings: &[BoundBindingCertificate],
     local_schema_count: usize,
@@ -1165,16 +1140,11 @@ fn emit_bound_query_admissibility_certificate(
         .iter()
         .map(|binding| {
             format!(
-                "apply ({}_admissible_generated_schema generated_numeric_exp_model).",
+                "apply {}_admissible_generated_schema.",
                 binding.binding_name
             )
         })
         .collect::<Vec<_>>();
-    let body_argument = if body_requires_model {
-        " generated_numeric_exp_model"
-    } else {
-        ""
-    };
     let binding_names = bindings
         .iter()
         .map(|binding| binding.binding_name.as_str())
@@ -1213,12 +1183,10 @@ fn emit_bound_query_admissibility_certificate(
         ),
         rocq_metadata_proof(),
         site_proof,
-        format!(
-            "exact (proj1 ({body_name}_admissible_with_outputs_generated_schema{body_argument}))."
-        ),
+        format!("exact (proj1 {body_name}_admissible_with_outputs_generated_schema)."),
     ]);
     format!(
-        "Lemma {lemma_name} (generated_numeric_exp_model : NumericExpModel) :\n  bound_query_admissible\n    Schema.generated_schema generated_local_query_schemas\n    ({bound_name} generated_numeric_exp_model).\nProof.\n  unfold bound_query_admissible, {bound_name}.\n  cbn [bound_query_bindings bound_query_body local_query_binding_relations\n    local_binding_relation {binding_names}].\n{}\nQed.",
+        "Lemma {lemma_name} :\n  bound_query_admissible\n    Schema.generated_schema generated_local_query_schemas\n    {bound_name}.\nProof.\n  unfold bound_query_admissible, {bound_name}.\n  cbn [bound_query_bindings bound_query_body local_query_binding_relations\n    local_binding_relation {binding_names}].\n{}\nQed.",
         indent_rocq_expr(&proof, 2)
     )
 }
@@ -1382,8 +1350,7 @@ fn compact_boolean_site_names(
                 }
                 relational(input, names);
             }
-            FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
+            FormalQueryExpr::Rank { input, .. }
             | FormalQueryExpr::Window { input, .. }
             | FormalQueryExpr::Distinct { input }
             | FormalQueryExpr::OrderBy { input, .. }
@@ -1555,8 +1522,7 @@ fn validate_boolean_sites_into<'a>(
                 }
                 query_expr(input, sites)
             }
-            FormalQueryExpr::RowMap { input, .. }
-            | FormalQueryExpr::Rank { input, .. }
+            FormalQueryExpr::Rank { input, .. }
             | FormalQueryExpr::Window { input, .. }
             | FormalQueryExpr::Distinct { input }
             | FormalQueryExpr::OrderBy { input, .. }
@@ -1618,27 +1584,18 @@ fn emit_rocq_program_side(
         ));
         definitions.push(emit_query_expr_schema_admissibility_certificate(
             &query_name,
-            query.requires_numeric_exp_model(),
         ));
         statement_symbols.push(FormalQueryStatementSymbols {
             statement_index: index + 1,
             root_symbol: query_name.clone(),
             output_signature_symbol: signature_name.clone(),
-            requires_numeric_exp_model: query.requires_numeric_exp_model(),
         });
-        query_names.push(if query.requires_numeric_exp_model() {
-            format!("{query_name} generated_numeric_exp_model")
-        } else {
-            query_name
-        });
-        statement_admissibility.push((
-            format!("{side}_query_expr{suffix}"),
-            query.requires_numeric_exp_model(),
-        ));
+        query_names.push(query_name);
+        statement_admissibility.push(format!("{side}_query_expr{suffix}"));
         signature_names.push(signature_name);
     }
     let program_definition = format!(
-        "Definition {side}_query_program (generated_numeric_exp_model : NumericExpModel) : list QueryExpr :=\n  [{}].",
+        "Definition {side}_query_program : list QueryExpr :=\n  [{}].",
         query_names.join("; ")
     );
     let signatures_definition = format!(
@@ -1665,12 +1622,11 @@ pub(super) fn emit_rocq_query_expr_proof_module() -> FormalProofModule {
 pub(crate) fn emit_rocq_query_expr_proof_module_for_mode(
     verification_mode: VerificationMode,
 ) -> FormalProofModule {
-    let equivalence_input = "Definition generated_equivalence_input
-    (generated_numeric_exp_model : NumericExpModel) :=
+    let equivalence_input = "Definition generated_equivalence_input :=
   (Schema.generated_schema,
    Schema.generated_schema_constraints,
-   source_query_program generated_numeric_exp_model,
-   target_query_program generated_numeric_exp_model).";
+   source_query_program,
+   target_query_program).";
     let (query_equivalence, program_equivalence) = match verification_mode {
         VerificationMode::SafeUnconditional => {
             ("query_expr_possible_equiv", "query_program_possible_equiv")
@@ -1683,23 +1639,22 @@ pub(crate) fn emit_rocq_query_expr_proof_module_for_mode(
     let equivalence_goal = match verification_mode {
         VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
             "Definition generated_equivalence_goal : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     source_program_output_signatures =
       map query_expr_outputs
-        (source_query_program generated_numeric_exp_model) /\\
+        (source_query_program) /\\
     target_program_output_signatures =
       map query_expr_outputs
-        (target_query_program generated_numeric_exp_model) /\\
+        (target_query_program) /\\
     source_program_output_signatures = target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
       generated_query_program_admissible
-        db (source_query_program generated_numeric_exp_model) /\\
+        db (source_query_program) /\\
       generated_query_program_admissible
-        db (target_query_program generated_numeric_exp_model) /\\
+        db (target_query_program) /\\
       generated_query_program_equiv db
-        (source_query_program generated_numeric_exp_model)
-        (target_query_program generated_numeric_exp_model))."
+        (source_query_program)
+        (target_query_program))."
                 .to_owned()
         }
         VerificationMode::Conditional => "Definition generated_precondition_obligation
@@ -1713,37 +1668,36 @@ pub(crate) fn emit_rocq_query_expr_proof_module_for_mode(
 
 Definition generated_equivalence_goal
     (condition : verification_condition) : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     source_program_output_signatures =
       map query_expr_outputs
-        (source_query_program generated_numeric_exp_model) /\\
+        (source_query_program) /\\
     target_program_output_signatures =
       map query_expr_outputs
-        (target_query_program generated_numeric_exp_model) /\\
+        (target_query_program) /\\
     source_program_output_signatures = target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
       verification_condition_holds db condition ->
       generated_query_program_admissible
-        db (source_query_program generated_numeric_exp_model) /\\
+        db (source_query_program) /\\
       generated_query_program_admissible
-        db (target_query_program generated_numeric_exp_model) /\\
+        db (target_query_program) /\\
       generated_query_program_equiv db
-        (source_query_program generated_numeric_exp_model)
-        (target_query_program generated_numeric_exp_model))."
+        (source_query_program)
+        (target_query_program))."
             .to_owned(),
     };
     let equivalence_goal_intro = match verification_mode {
         VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
             "Lemma generated_equivalence_goal_intro :
-  (forall generated_numeric_exp_model db,
+  (forall db,
     Schema.generated_schema_conforms db ->
     generated_query_program_equiv db
-      (source_query_program generated_numeric_exp_model)
-      (target_query_program generated_numeric_exp_model)) ->
+      (source_query_program)
+      (target_query_program)) ->
   generated_equivalence_goal.
 Proof.
-intros Hcore generated_numeric_exp_model.
+intros Hcore.
 split; [reflexivity|].
 split; [reflexivity|].
 split; [reflexivity|].
@@ -1754,21 +1708,21 @@ split.
 - split.
   + apply target_query_program_admissible.
     exact Hschema.
-  + exact (Hcore generated_numeric_exp_model db Hschema).
+  + exact (Hcore db Hschema).
 Qed."
         }
         VerificationMode::Conditional => {
             "Lemma generated_equivalence_goal_intro :
   forall condition,
-  (forall generated_numeric_exp_model db,
+  (forall db,
     Schema.generated_schema_conforms db ->
     verification_condition_holds db condition ->
     generated_query_program_equiv db
-      (source_query_program generated_numeric_exp_model)
-      (target_query_program generated_numeric_exp_model)) ->
+      (source_query_program)
+      (target_query_program)) ->
   generated_equivalence_goal condition.
 Proof.
-intros condition Hcore generated_numeric_exp_model.
+intros condition Hcore.
 split; [reflexivity|].
 split; [reflexivity|].
 split; [reflexivity|].
@@ -1779,7 +1733,7 @@ split.
 - split.
   + apply target_query_program_admissible.
     exact Hschema.
-  + exact (Hcore generated_numeric_exp_model db Hschema Hcondition).
+  + exact (Hcore db Hschema Hcondition).
 Qed."
         }
     };
@@ -1788,23 +1742,22 @@ Qed."
             "Definition generated_countermodel_goal : Prop :=
   Witness.generated_witness_available = true /\\
   Schema.generated_schema_conforms Witness.generated_witness_db /\\
-  forall generated_numeric_exp_model : NumericExpModel,
       generated_query_program_admissible
         Witness.generated_witness_db
-        (source_query_program generated_numeric_exp_model) /\\
+        (source_query_program) /\\
       generated_query_program_admissible
         Witness.generated_witness_db
-        (target_query_program generated_numeric_exp_model) /\\
+        (target_query_program) /\\
       ~ generated_query_program_outcome_equiv Witness.generated_witness_db
-          (source_query_program generated_numeric_exp_model)
-          (target_query_program generated_numeric_exp_model).
+          (source_query_program)
+          (target_query_program).
 
 Lemma generated_countermodel_goal_intro :
   Witness.generated_witness_available = true ->
-    (forall generated_numeric_exp_model : NumericExpModel,
+    (
       ~ generated_query_program_outcome_equiv Witness.generated_witness_db
-          (source_query_program generated_numeric_exp_model)
-          (target_query_program generated_numeric_exp_model)) ->
+          (source_query_program)
+          (target_query_program)) ->
     generated_countermodel_goal.
 Proof.
 intros Havailable Hseparation.
@@ -1812,14 +1765,13 @@ split; [exact Havailable|].
 pose proof
   (Witness.generated_witness_schema_conforms Havailable) as Hschema.
 split; [exact Hschema|].
-intro generated_numeric_exp_model.
 split.
 - apply source_query_program_admissible.
   exact Hschema.
 - split.
   + apply target_query_program_admissible.
     exact Hschema.
-  + exact (Hseparation generated_numeric_exp_model).
+  + exact (Hseparation).
 Qed.
 
 Definition generated_verification_goal
@@ -1855,7 +1807,7 @@ Definition generated_verification_goal
    [apply generated_countermodel_goal_intro; [reflexivity|]].  Do not rebuild
    a second database or re-prove schema conformance: prove only complete
    possible-outcome separation on that fixed witness, for every
-   [NumericExpModel].  Finish the selected theorem with [Qed]. *)"
+   the generated query programs.  Finish the selected theorem with [Qed]. *)"
         }
         VerificationMode::OutcomeUnconditional => {
             "(* LOGOS_PROOF_HOLE: define exactly one direct claim selector and
@@ -1884,7 +1836,7 @@ Definition generated_verification_goal
    [apply generated_countermodel_goal_intro; [reflexivity|]].  Do not rebuild
    a second database or re-prove schema conformance: prove only complete
    possible-outcome separation on that fixed witness, for every
-   [NumericExpModel].  Finish the selected theorem with [Qed]. *)"
+   the generated query programs.  Finish the selected theorem with [Qed]. *)"
         }
         VerificationMode::Conditional => {
             "(* LOGOS_PROOF_HOLE: define exactly
@@ -2033,23 +1985,22 @@ pub(crate) fn emit_rocq_bound_query_proof_module_for_mode(
     let equivalence_goal = match verification_mode {
         VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => format!(
             "Definition generated_equivalence_goal : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     source_program_output_signatures =
       map bound_query_outputs
-        (source_bound_query_program generated_numeric_exp_model) /\\
+        (source_bound_query_program) /\\
     target_program_output_signatures =
       map bound_query_outputs
-        (target_bound_query_program generated_numeric_exp_model) /\\
+        (target_bound_query_program) /\\
     source_program_output_signatures = target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
       generated_query_program_admissible
-        db (source_bound_query_program generated_numeric_exp_model) /\\
+        db (source_bound_query_program) /\\
       generated_query_program_admissible
-        db (target_bound_query_program generated_numeric_exp_model) /\\
+        db (target_bound_query_program) /\\
       generated_query_program_equiv db
-        (source_bound_query_program generated_numeric_exp_model)
-        (target_bound_query_program generated_numeric_exp_model))."
+        (source_bound_query_program)
+        (target_bound_query_program))."
         ),
         VerificationMode::Conditional => "Definition generated_precondition_obligation
     (source : precondition_source)
@@ -2062,37 +2013,36 @@ pub(crate) fn emit_rocq_bound_query_proof_module_for_mode(
 
 Definition generated_equivalence_goal
     (condition : verification_condition) : Prop :=
-  forall generated_numeric_exp_model : NumericExpModel,
     source_program_output_signatures =
       map bound_query_outputs
-        (source_bound_query_program generated_numeric_exp_model) /\\
+        (source_bound_query_program) /\\
     target_program_output_signatures =
       map bound_query_outputs
-        (target_bound_query_program generated_numeric_exp_model) /\\
+        (target_bound_query_program) /\\
     source_program_output_signatures = target_program_output_signatures /\\
     (forall db : db_state,
       Schema.generated_schema_conforms db ->
       verification_condition_holds db condition ->
       generated_query_program_admissible
-        db (source_bound_query_program generated_numeric_exp_model) /\\
+        db (source_bound_query_program) /\\
       generated_query_program_admissible
-        db (target_bound_query_program generated_numeric_exp_model) /\\
+        db (target_bound_query_program) /\\
       generated_query_program_equiv db
-        (source_bound_query_program generated_numeric_exp_model)
-        (target_bound_query_program generated_numeric_exp_model))."
+        (source_bound_query_program)
+        (target_bound_query_program))."
             .to_owned(),
     };
     let equivalence_goal_intro = match verification_mode {
         VerificationMode::SafeUnconditional | VerificationMode::OutcomeUnconditional => {
             "Lemma generated_equivalence_goal_intro :
-  (forall generated_numeric_exp_model db,
+  (forall db,
     Schema.generated_schema_conforms db ->
     generated_query_program_equiv db
-      (source_bound_query_program generated_numeric_exp_model)
-      (target_bound_query_program generated_numeric_exp_model)) ->
+      (source_bound_query_program)
+      (target_bound_query_program)) ->
   generated_equivalence_goal.
 Proof.
-intros Hcore generated_numeric_exp_model.
+intros Hcore.
 split; [reflexivity|].
 split; [reflexivity|].
 split; [reflexivity|].
@@ -2101,21 +2051,21 @@ split.
 - apply source_bound_query_program_admissible; exact Hschema.
 - split.
   + apply target_bound_query_program_admissible; exact Hschema.
-  + exact (Hcore generated_numeric_exp_model db Hschema).
+  + exact (Hcore db Hschema).
 Qed."
         }
         VerificationMode::Conditional => {
             "Lemma generated_equivalence_goal_intro :
   forall condition,
-  (forall generated_numeric_exp_model db,
+  (forall db,
     Schema.generated_schema_conforms db ->
     verification_condition_holds db condition ->
     generated_query_program_equiv db
-      (source_bound_query_program generated_numeric_exp_model)
-      (target_bound_query_program generated_numeric_exp_model)) ->
+      (source_bound_query_program)
+      (target_bound_query_program)) ->
   generated_equivalence_goal condition.
 Proof.
-intros condition Hcore generated_numeric_exp_model.
+intros condition Hcore.
 split; [reflexivity|].
 split; [reflexivity|].
 split; [reflexivity|].
@@ -2124,7 +2074,7 @@ split.
 - apply source_bound_query_program_admissible; exact Hschema.
 - split.
   + apply target_bound_query_program_admissible; exact Hschema.
-  + exact (Hcore generated_numeric_exp_model db Hschema Hcondition).
+  + exact (Hcore db Hschema Hcondition).
 Qed."
         }
     };
@@ -2133,35 +2083,34 @@ Qed."
             "Definition generated_countermodel_goal : Prop :=
   Witness.generated_witness_available = true /\\
   Schema.generated_schema_conforms Witness.generated_witness_db /\\
-  forall generated_numeric_exp_model : NumericExpModel,
       generated_query_program_admissible
         Witness.generated_witness_db
-        (source_bound_query_program generated_numeric_exp_model) /\\
+        (source_bound_query_program) /\\
       generated_query_program_admissible
         Witness.generated_witness_db
-        (target_bound_query_program generated_numeric_exp_model) /\\
+        (target_bound_query_program) /\\
       generated_query_program_materialization_safe
         Witness.generated_witness_db
-        (source_bound_query_program generated_numeric_exp_model) /\\
+        (source_bound_query_program) /\\
       generated_query_program_materialization_safe
         Witness.generated_witness_db
-        (target_bound_query_program generated_numeric_exp_model) /\\
+        (target_bound_query_program) /\\
       ~ generated_query_program_outcome_equiv Witness.generated_witness_db
-          (source_bound_query_program generated_numeric_exp_model)
-          (target_bound_query_program generated_numeric_exp_model).
+          (source_bound_query_program)
+          (target_bound_query_program).
 
 Lemma generated_countermodel_goal_intro :
   Witness.generated_witness_available = true ->
-    (forall generated_numeric_exp_model : NumericExpModel,
+    (
       generated_query_program_materialization_safe Witness.generated_witness_db
-        (source_bound_query_program generated_numeric_exp_model)) ->
-    (forall generated_numeric_exp_model : NumericExpModel,
+        (source_bound_query_program)) ->
+    (
       generated_query_program_materialization_safe Witness.generated_witness_db
-        (target_bound_query_program generated_numeric_exp_model)) ->
-    (forall generated_numeric_exp_model : NumericExpModel,
+        (target_bound_query_program)) ->
+    (
       ~ generated_query_program_outcome_equiv Witness.generated_witness_db
-          (source_bound_query_program generated_numeric_exp_model)
-          (target_bound_query_program generated_numeric_exp_model)) ->
+          (source_bound_query_program)
+          (target_bound_query_program)) ->
     generated_countermodel_goal.
 Proof.
 intros Havailable Hsource_safe Htarget_safe Hseparation.
@@ -2169,16 +2118,15 @@ split; [exact Havailable|].
 pose proof
   (Witness.generated_witness_schema_conforms Havailable) as Hschema.
 split; [exact Hschema|].
-intro generated_numeric_exp_model.
 split.
 - apply source_bound_query_program_admissible; exact Hschema.
 - split.
   + apply target_bound_query_program_admissible; exact Hschema.
   + split.
-    * exact (Hsource_safe generated_numeric_exp_model).
+    * exact (Hsource_safe).
     * split.
-      -- exact (Htarget_safe generated_numeric_exp_model).
-      -- exact (Hseparation generated_numeric_exp_model).
+      -- exact (Htarget_safe).
+      -- exact (Hseparation).
 Qed.
 
 Definition generated_verification_goal
@@ -2243,13 +2191,12 @@ Definition generated_query_program_admissible
     (db : db_state) (program : BoundQueryProgram) : Prop :=
   bound_query_program_admissible db generated_local_query_schemas program.
 
-Definition generated_equivalence_input
-    (generated_numeric_exp_model : NumericExpModel) :=
+Definition generated_equivalence_input :=
   (Schema.generated_schema,
    Schema.generated_schema_constraints,
    generated_local_query_schemas,
-   source_bound_query_program generated_numeric_exp_model,
-   target_bound_query_program generated_numeric_exp_model).
+   source_bound_query_program,
+   target_bound_query_program).
 
 {equivalence_goal}
 
@@ -2398,55 +2345,23 @@ fn rocq_window_outputs_all_diff_proof(item_count: usize) -> String {
     )
 }
 
-fn emit_query_expr_schema_admissibility_certificate(
-    query_name: &str,
-    requires_numeric_exp_model: bool,
-) -> String {
-    let model_binder = if requires_numeric_exp_model {
-        "\n    (generated_numeric_exp_model : NumericExpModel)"
-    } else {
-        ""
-    };
-    let model_argument = if requires_numeric_exp_model {
-        " generated_numeric_exp_model"
-    } else {
-        ""
-    };
+fn emit_query_expr_schema_admissibility_certificate(query_name: &str) -> String {
     format!(
-        "Lemma {query_name}_admissible{model_binder} (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  TNullQueryExprAdmissible (@_basesort TNull db)\n    ({query_name}{model_argument}).\nProof.\n  intro Hschema.\n  apply (query_expr_admissible_database_schema_transport\n    Schema.generated_schema Schema.generated_schema_constraints db).\n  {{ exact Hschema. }}\n  {{ exact (proj1 ({query_name}_admissible_with_outputs_generated_schema{model_argument})). }}\nQed."
+        "Lemma {query_name}_admissible (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  TNullQueryExprAdmissible (@_basesort TNull db)\n    {query_name}.\nProof.\n  intro Hschema.\n  apply (query_expr_admissible_database_schema_transport\n    Schema.generated_schema Schema.generated_schema_constraints db).\n  {{ exact Hschema. }}\n  {{ exact (proj1 {query_name}_admissible_with_outputs_generated_schema). }}\nQed."
     )
 }
 
-fn emit_query_program_admissibility_certificates(
-    side: &str,
-    statements: &[(String, bool)],
-) -> String {
+fn emit_query_program_admissibility_certificates(side: &str, statements: &[String]) -> String {
     let generated_steps = statements
         .iter()
-        .map(|(lemma, requires_model)| {
-            let model_argument = if *requires_model {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            format!(
-                "exact (proj1 ({lemma}_admissible_with_outputs_generated_schema{model_argument}))."
-            )
-        })
+        .map(|lemma| format!("exact (proj1 {lemma}_admissible_with_outputs_generated_schema)."))
         .collect::<Vec<_>>();
     let schema_steps = statements
         .iter()
-        .map(|(lemma, requires_model)| {
-            let model_argument = if *requires_model {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            format!("apply ({lemma}_admissible{model_argument} db Hschema).")
-        })
+        .map(|lemma| format!("apply ({lemma}_admissible db Hschema)."))
         .collect::<Vec<_>>();
     format!(
-        "Lemma {side}_query_program_admissible_generated_schema\n    (generated_numeric_exp_model : NumericExpModel) :\n  Forall\n    (TNullQueryExprAdmissible\n      (@_basesort TNull Schema.generated_schema))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  unfold {side}_query_program.\n{}\nQed.\n\nLemma {side}_query_program_admissible\n    (generated_numeric_exp_model : NumericExpModel) (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  Forall\n    (TNullQueryExprAdmissible (@_basesort TNull db))\n    ({side}_query_program generated_numeric_exp_model).\nProof.\n  intro Hschema.\n  unfold {side}_query_program.\n{}\nQed.",
+        "Lemma {side}_query_program_admissible_generated_schema :\n  Forall\n    (TNullQueryExprAdmissible\n      (@_basesort TNull Schema.generated_schema))\n    {side}_query_program.\nProof.\n  unfold {side}_query_program.\n{}\nQed.\n\nLemma {side}_query_program_admissible\n    (db : db_state) :\n  Schema.generated_schema_conforms db ->\n  Forall\n    (TNullQueryExprAdmissible (@_basesort TNull db))\n    {side}_query_program.\nProof.\n  intro Hschema.\n  unfold {side}_query_program.\n{}\nQed.",
         indent_rocq_expr(&rocq_forall_list_proof(&generated_steps), 2),
         indent_rocq_expr(&rocq_forall_list_proof(&schema_steps), 2),
     )
@@ -2604,7 +2519,6 @@ impl RocqQueryDefinitions {
                 );
                 self.collect_query_expr(input);
             }
-            FormalQueryExpr::RowMap { input, .. } => self.collect_query_expr(input),
             FormalQueryExpr::Selection { predicate, input } => {
                 push_unique(&mut self.scalar_expr_predicates, predicate.clone());
                 push_unique(
@@ -2735,17 +2649,6 @@ impl RocqQueryDefinitions {
         let prefix_parents = self.scalar_select_list_prefix_parents();
         for index in self.scalar_select_list_emission_order() {
             let select = &self.scalar_select_lists[index];
-            let requires_model = scalar_select_requires_numeric_exp_model(select);
-            let model_parameter = if requires_model {
-                " (generated_numeric_exp_model : NumericExpModel)"
-            } else {
-                ""
-            };
-            let model_argument = if requires_model {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             let body = if self.scalar_select_list_uses_chunks(index, &prefix_parents) {
                 let chunk_symbols = select
                     .chunks(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE)
@@ -2753,51 +2656,36 @@ impl RocqQueryDefinitions {
                     .map(|(chunk_index, chunk)| {
                         let symbol = format!("scalar_select_list_{index}_chunk_{chunk_index}");
                         definitions.push(format!(
-                            "Definition {symbol}{model_parameter} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
+                            "Definition {symbol} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
                             indent_rocq_expr(&self.emit_scalar_select_list_inline(chunk), 2)
                         ));
-                        format!("{symbol}{model_argument}")
+                        symbol
                     })
                     .collect::<Vec<_>>();
                 rocq_append_chain(&chunk_symbols)
             } else if let Some(parent) = prefix_parents[index] {
                 format!(
-                    "firstn ({}%nat) (scalar_select_list_{parent}{model_argument})",
+                    "firstn ({}%nat) (scalar_select_list_{parent})",
                     select.len()
                 )
             } else {
                 self.emit_scalar_select_list_inline(select)
             };
             definitions.push(format!(
-                "Definition scalar_select_list_{index}{model_parameter} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
+                "Definition scalar_select_list_{index} :\n    list ((@scalar_expr TNull relname ScalarResultValue * Tuple.attribute TNull)%type) :=\n{}.",
                 indent_rocq_expr(&body, 2)
             ));
         }
         for (index, expression) in self.scalar_expr_predicates.iter().enumerate() {
-            let model_parameter = if scalar_expr_requires_numeric_exp_model(expression) {
-                " (generated_numeric_exp_model : NumericExpModel)"
-            } else {
-                ""
-            };
             definitions.push(format!(
-                "Definition scalar_expr_predicate_{index}{model_parameter} :\n    @scalar_expr TNull relname ScalarResultBoolean :=\n{}.",
+                "Definition scalar_expr_predicate_{index} :\n    @scalar_expr TNull relname ScalarResultBoolean :=\n{}.",
                 indent_rocq_expr(&self.emit_scalar_expr(expression, false), 2)
             ));
         }
         for index in self.shared_query_expr_emission_order() {
             let query = &self.shared_query_exprs[index];
-            let model_parameter = if query.requires_numeric_exp_model() {
-                " (generated_numeric_exp_model : NumericExpModel)"
-            } else {
-                ""
-            };
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             definitions.push(format!(
-                "Definition shared_query_expr_{index}{model_parameter} : QueryExpr :=\n{}.",
+                "Definition shared_query_expr_{index} : QueryExpr :=\n{}.",
                 indent_rocq_expr(
                     &self.emit_query_expr_body(query, QueryExprReferencePolicy::uniform(true)),
                     2,
@@ -2806,7 +2694,7 @@ impl RocqQueryDefinitions {
             definitions.push(format!(
                 "Definition shared_query_expr_{index}_expected_outputs :\n    list (Tuple.attribute TNull) :=\n{}.",
                 indent_rocq_expr(
-                    &format!("query_expr_outputs (shared_query_expr_{index}{model_argument})"),
+                    &format!("query_expr_outputs shared_query_expr_{index}"),
                     2,
                 )
             ));
@@ -2872,19 +2760,8 @@ impl RocqQueryDefinitions {
         phase: ScalarPhase,
         allow_scalar_refs: bool,
     ) -> String {
-        let requires_model = scalar_expr_requires_numeric_exp_model(expression);
-        let model_binder = if requires_model {
-            "\n    (generated_numeric_exp_model : NumericExpModel)"
-        } else {
-            ""
-        };
-        let model_argument = if requires_model {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
         format!(
-            "Lemma {symbol}_admissible_{}_generated_schema{model_binder} :\n  TNullScalarExprAdmissible\n    (@_basesort TNull {}) {} ({symbol}{model_argument}).\nProof.\n  unfold TNullScalarExprAdmissible, {symbol}.\n{}\nQed.",
+            "Lemma {symbol}_admissible_{}_generated_schema :\n  TNullScalarExprAdmissible\n    (@_basesort TNull {}) {} {symbol}.\nProof.\n  unfold TNullScalarExprAdmissible, {symbol}.\n{}\nQed.",
             phase.slug(),
             self.admissibility_schema,
             phase.rocq_constructor(),
@@ -2927,13 +2804,8 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == expression)
         {
-            let model_argument = if scalar_expr_requires_numeric_exp_model(expression) {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             return format!(
-                "apply (scalar_expr_predicate_{index}_admissible_{}_generated_schema{model_argument}).",
+                "apply (scalar_expr_predicate_{index}_admissible_{}_generated_schema).",
                 phase.slug()
             );
         }
@@ -3064,13 +2936,8 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == select)
         {
-            let model_argument = if scalar_select_requires_numeric_exp_model(select) {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             return format!(
-                "apply (scalar_select_list_{index}_admissible_{}_generated_schema{model_argument}).",
+                "apply (scalar_select_list_{index}_admissible_{}_generated_schema).",
                 phase.slug()
             );
         }
@@ -3121,21 +2988,10 @@ impl RocqQueryDefinitions {
         lemma_symbol: &str,
         list_symbol: &str,
         phase: ScalarPhase,
-        requires_model: bool,
         proof: &str,
     ) -> String {
-        let model_binder = if requires_model {
-            "\n    (generated_numeric_exp_model : NumericExpModel)"
-        } else {
-            ""
-        };
-        let model_argument = if requires_model {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
         format!(
-            "Lemma {lemma_symbol}{model_binder} :\n  prop_forall\n    (fun item =>\n      @scalar_expr_admissible TNull relname\n        (@_basesort TNull {})\n        TNullLeafHasType TNullCallHasType TNullPredicateHasTypes\n        type_int64 type_bool NullValues.is_null_value\n        {} ScalarResultValue (fst item) /\\\n      scalar_expr_type (fst item) =\n        Tuple.type_of_attribute TNull (snd item))\n    ({list_symbol}{model_argument}).\nProof.\n{}\nQed.",
+            "Lemma {lemma_symbol} :\n  prop_forall\n    (fun item =>\n      @scalar_expr_admissible TNull relname\n        (@_basesort TNull {})\n        TNullLeafHasType TNullCallHasType TNullPredicateHasTypes\n        type_int64 type_bool NullValues.is_null_value\n        {} ScalarResultValue (fst item) /\\\n      scalar_expr_type (fst item) =\n        Tuple.type_of_attribute TNull (snd item))\n    {list_symbol}.\nProof.\n{}\nQed.",
             self.admissibility_schema,
             phase.rocq_constructor(),
             indent_rocq_expr(proof, 2),
@@ -3147,35 +3003,30 @@ impl RocqQueryDefinitions {
         index: usize,
         chunk_count: usize,
         phase: ScalarPhase,
-        model_argument: &str,
     ) -> String {
         fn assemble(
             index: usize,
             chunk_index: usize,
             chunk_count: usize,
             phase: ScalarPhase,
-            model_argument: &str,
         ) -> String {
             let symbol = format!("scalar_select_list_{index}_chunk_{chunk_index}");
-            let certificate = format!(
-                "{symbol}_admissible_{}_generated_schema{model_argument}",
-                phase.slug()
-            );
+            let certificate = format!("{symbol}_admissible_{}_generated_schema", phase.slug());
             if chunk_index + 1 == chunk_count {
                 return format!("exact ({certificate}).");
             }
             rocq_focused_subproofs(
-                &format!("eapply (@prop_forall_app _ _ ({symbol}{model_argument}) _)."),
+                &format!("eapply (@prop_forall_app _ _ ({symbol}) _)."),
                 &[
                     format!("exact ({certificate})."),
-                    assemble(index, chunk_index + 1, chunk_count, phase, model_argument),
+                    assemble(index, chunk_index + 1, chunk_count, phase),
                 ],
             )
         }
 
         format!(
             "unfold scalar_select_list_{index}.\n{}",
-            assemble(index, 0, chunk_count, phase, model_argument)
+            assemble(index, 0, chunk_count, phase)
         )
     }
 
@@ -3185,12 +3036,6 @@ impl RocqQueryDefinitions {
         select: &[FormalScalarSelectItem],
         phase: ScalarPhase,
     ) -> String {
-        let requires_model = scalar_select_requires_numeric_exp_model(select);
-        let model_argument = if requires_model {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
         let prefix_parents = self.scalar_select_list_prefix_parents();
         let mut certificates = Vec::new();
         let proof = if self.scalar_select_list_uses_chunks(index, &prefix_parents) {
@@ -3209,7 +3054,6 @@ impl RocqQueryDefinitions {
                         &lemma,
                         &symbol,
                         phase,
-                        requires_model,
                         &chunk_proof,
                     ),
                 );
@@ -3218,7 +3062,6 @@ impl RocqQueryDefinitions {
                 index,
                 select.len().div_ceil(SCALAR_SELECT_CERTIFICATE_CHUNK_SIZE),
                 phase,
-                model_argument,
             )
         } else if let Some(parent) = prefix_parents[index].filter(|parent| {
             let parent_select = &self.scalar_select_lists[*parent];
@@ -3229,7 +3072,7 @@ impl RocqQueryDefinitions {
                 })
         }) {
             format!(
-                "unfold scalar_select_list_{index}.\neapply (@prop_forall_firstn\n  _ _ {}%nat (scalar_select_list_{parent}{model_argument})).\nexact (scalar_select_list_{parent}_admissible_{}_generated_schema{model_argument}).",
+                "unfold scalar_select_list_{index}.\neapply (@prop_forall_firstn\n  _ _ {}%nat (scalar_select_list_{parent})).\nexact (scalar_select_list_{parent}_admissible_{}_generated_schema).",
                 select.len(),
                 phase.slug()
             )
@@ -3245,7 +3088,6 @@ impl RocqQueryDefinitions {
                 &lemma,
                 &format!("scalar_select_list_{index}"),
                 phase,
-                requires_model,
                 &proof,
             ),
         );
@@ -3305,17 +3147,6 @@ impl RocqQueryDefinitions {
         query: &FormalQueryExpr,
         admissibility_proof: String,
     ) -> String {
-        let requires_model = query.requires_numeric_exp_model();
-        let model_binder = if requires_model {
-            "\n    (generated_numeric_exp_model : NumericExpModel)"
-        } else {
-            ""
-        };
-        let model_argument = if requires_model {
-            " generated_numeric_exp_model"
-        } else {
-            ""
-        };
         let schema = &self.admissibility_schema;
         let analysis_error_proof = if matches!(query, FormalQueryExpr::Error { .. }) {
             "constructor."
@@ -3323,7 +3154,7 @@ impl RocqQueryDefinitions {
             "reflexivity."
         };
         format!(
-            "Lemma {symbol}_admissible_with_outputs_generated_schema{model_binder} :\n  TNullQueryExprAdmissibleWithOutputs\n    (@_basesort TNull {schema})\n    ({symbol}{model_argument}) {symbol}_expected_outputs.\nProof.\n  unfold {symbol}, {symbol}_expected_outputs.\n  eapply TNullQueryExprAdmissibleWithOutputs_intro.\n  - {}\n  - {}\n  - unfold query_expr_boolean_sites_well_formed.\n    apply boolean_sites_well_formedb_sound.\n    reflexivity.\nQed.",
+            "Lemma {symbol}_admissible_with_outputs_generated_schema :\n  TNullQueryExprAdmissibleWithOutputs\n    (@_basesort TNull {schema})\n    {symbol} {symbol}_expected_outputs.\nProof.\n  unfold {symbol}, {symbol}_expected_outputs.\n  eapply TNullQueryExprAdmissibleWithOutputs_intro.\n  - {}\n  - {}\n  - unfold query_expr_boolean_sites_well_formed.\n    apply boolean_sites_well_formedb_sound.\n    reflexivity.\nQed.",
             admissibility_proof, analysis_error_proof,
         )
     }
@@ -3418,19 +3249,14 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == query)
         {
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             return rocq_focused_subproofs(
                 "split.",
                 &[
                     format!(
-                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument})))."
+                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema)))."
                     ),
                     format!(
-                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument}))."
+                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema))."
                     ),
                 ],
             );
@@ -3462,19 +3288,14 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == query)
         {
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
             return rocq_focused_subproofs(
                 "split.",
                 &[
                     format!(
-                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument})))."
+                        "exact (proj1 (proj1 (shared_query_expr_{index}_admissible_with_outputs_generated_schema)))."
                     ),
                     format!(
-                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema{model_argument}))."
+                        "exact (proj2 (shared_query_expr_{index}_admissible_with_outputs_generated_schema))."
                     ),
                 ],
             );
@@ -3571,15 +3392,6 @@ impl RocqQueryDefinitions {
                         ScalarPhase::RowSelect,
                         reference_policy.scalar_select_lists,
                     ),
-                ],
-            ),
-            FormalQueryExpr::RowMap { input, .. } => rocq_focused_subproofs(
-                "unfold NumericExpRowMapExpr, RowMapExpr.\n\
-                 eapply query_expr_admissible_with_outputs_row_map.",
-                &[
-                    self.emit_query_expr_child_admissibility_proof(input, reference_policy),
-                    rocq_metadata_proof(),
-                    "apply NumericExpRowAdapter_well_sorted.".to_owned(),
                 ],
             ),
             FormalQueryExpr::Selection { predicate, input } => rocq_focused_subproofs(
@@ -3847,7 +3659,6 @@ impl RocqQueryDefinitions {
             if select.is_empty() {
                 continue;
             }
-            let requires_model = scalar_select_requires_numeric_exp_model(select);
             let mut candidates = self
                 .scalar_select_lists
                 .iter()
@@ -3855,7 +3666,6 @@ impl RocqQueryDefinitions {
                 .filter(|(parent, candidate)| {
                     *parent != index
                         && candidate.len() > select.len()
-                        && scalar_select_requires_numeric_exp_model(candidate) == requires_model
                         && candidate.starts_with(select)
                 })
                 .map(|(parent, candidate)| (candidate.len(), parent))
@@ -4046,13 +3856,6 @@ impl RocqQueryDefinitions {
                     self.shape_query_expr_with_policy(input, reference_policy),
                 ],
             ),
-            FormalQueryExpr::RowMap { adapter, input } => match adapter {
-                FormalRowMapAdapter::NumericExp { passthrough, .. } => shape_node_with_fields(
-                    "NumericExpRowMapExpr",
-                    &[format!("passthrough={}", passthrough.len())],
-                    &[self.shape_query_expr_with_policy(input, reference_policy)],
-                ),
-            },
             FormalQueryExpr::Selection { predicate, input } => shape_node(
                 "QExpr_Filter",
                 &[
@@ -4302,13 +4105,8 @@ impl RocqQueryDefinitions {
     }
 
     fn emit_query_expr_definition(&self, name: &str, query: &FormalQueryExpr) -> String {
-        let model_parameter = if query.requires_numeric_exp_model() {
-            " (generated_numeric_exp_model : NumericExpModel)"
-        } else {
-            ""
-        };
         format!(
-            "Definition {name}{model_parameter} : QueryExpr :=\n{}.",
+            "Definition {name} : QueryExpr :=\n{}.",
             indent_rocq_expr(&self.emit_query_expr(query, true), 2)
         )
     }
@@ -4331,12 +4129,7 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == query)
         {
-            let model_argument = if query.requires_numeric_exp_model() {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!("shared_query_expr_{index}{model_argument}");
+            return format!("shared_query_expr_{index}");
         }
 
         self.emit_query_expr_body(query, reference_policy)
@@ -4398,9 +4191,6 @@ impl RocqQueryDefinitions {
                 self.emit_scalar_select_list(select),
                 self.emit_query_expr_with_policy(input, reference_policy)
             ),
-            FormalQueryExpr::RowMap { adapter, input } => {
-                self.emit_row_map(adapter, input, reference_policy)
-            }
             FormalQueryExpr::Selection { predicate, input } => format!(
                 "QExpr_Filter ({}) ({})",
                 self.emit_scalar_expr(predicate, reference_policy.scalar_exprs),
@@ -4475,31 +4265,6 @@ impl RocqQueryDefinitions {
                     self.emit_query_expr_with_policy(input, reference_policy)
                 )
             }
-        }
-    }
-
-    fn emit_row_map(
-        &self,
-        adapter: &FormalRowMapAdapter,
-        input: &FormalQueryExpr,
-        reference_policy: QueryExprReferencePolicy,
-    ) -> String {
-        match adapter {
-            FormalRowMapAdapter::NumericExp {
-                passthrough,
-                avg_value,
-                avg_dscale,
-                output_numeric,
-                output_dscale,
-            } => format!(
-                "NumericExpRowMapExpr ({}) ({}) ({}) ({}) ({}) generated_numeric_exp_model ({})",
-                emit_rocq_query_attribute_list(passthrough),
-                emit_rocq_attribute(avg_value.ty, &avg_value.name),
-                emit_rocq_attribute(avg_dscale.ty, &avg_dscale.name),
-                emit_rocq_attribute(output_numeric.ty, &output_numeric.name),
-                emit_rocq_attribute(output_dscale.ty, &output_dscale.name),
-                self.emit_query_expr_with_policy(input, reference_policy)
-            ),
         }
     }
 
@@ -4588,12 +4353,7 @@ impl RocqQueryDefinitions {
                 .iter()
                 .position(|candidate| candidate == expression)
         {
-            let model_argument = if scalar_expr_requires_numeric_exp_model(expression) {
-                " generated_numeric_exp_model"
-            } else {
-                ""
-            };
-            return format!("scalar_expr_predicate_{index}{model_argument}");
+            return format!("scalar_expr_predicate_{index}");
         }
 
         match expression {
@@ -4716,14 +4476,7 @@ impl RocqQueryDefinitions {
         self.scalar_select_lists
             .iter()
             .position(|candidate| candidate == select)
-            .map(|index| {
-                let model_argument = if scalar_select_requires_numeric_exp_model(select) {
-                    " generated_numeric_exp_model"
-                } else {
-                    ""
-                };
-                format!("scalar_select_list_{index}{model_argument}")
-            })
+            .map(|index| format!("scalar_select_list_{index}"))
             .unwrap_or_else(|| self.emit_scalar_select_list_inline(select))
     }
 
@@ -4863,8 +4616,7 @@ fn collect_query_expr_counts(
         FormalQueryExpr::Rank { input, .. } | FormalQueryExpr::Window { input, .. } => {
             collect_query_expr_counts(input, counts, order)
         }
-        FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::Distinct { input }
+        FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
         | FormalQueryExpr::Offset { input, .. }
         | FormalQueryExpr::Fetch { input, .. } => collect_query_expr_counts(input, counts, order),
@@ -5035,8 +4787,7 @@ fn query_expr_contains_scalar_select_list(
                         .any(|key| scalar_expr_contains_scalar_select_list(key, needle))
             }) || query_expr_contains_scalar_select_list(input, needle)
         }
-        FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::Rank { input, .. }
+        FormalQueryExpr::Rank { input, .. }
         | FormalQueryExpr::Window { input, .. }
         | FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
@@ -5161,8 +4912,7 @@ fn proper_query_expr_subquery_occurrences(
         FormalQueryExpr::Rank { input, .. } | FormalQueryExpr::Window { input, .. } => {
             query_expr_occurrences(input, needle)
         }
-        FormalQueryExpr::RowMap { input, .. }
-        | FormalQueryExpr::Distinct { input }
+        FormalQueryExpr::Distinct { input }
         | FormalQueryExpr::OrderBy { input, .. }
         | FormalQueryExpr::Offset { input, .. }
         | FormalQueryExpr::Fetch { input, .. } => query_expr_occurrences(input, needle),
@@ -5213,12 +4963,6 @@ fn scalar_expr_query_occurrences(expression: &FormalScalarExpr, needle: &FormalQ
             query_expr_occurrences(query, needle)
         }
     }
-}
-
-fn scalar_select_requires_numeric_exp_model(select: &[FormalScalarSelectItem]) -> bool {
-    select
-        .iter()
-        .any(|item| scalar_expr_requires_numeric_exp_model(&item.expr))
 }
 
 fn emit_rocq_set_op(op: FormalSetOp) -> &'static str {
@@ -5488,7 +5232,6 @@ fn emit_rocq_scalar_operator(operator: ScalarOperator) -> String {
         }
         ScalarOperator::NumericDivideResultScale => "ScalarNumericDivideResultScale".to_owned(),
         ScalarOperator::NumericDivideTypmod => "ScalarNumericDivideTypmod".to_owned(),
-        ScalarOperator::PowerHalfInt64ToInt32 => "ScalarPowerHalfInt64ToInt32".to_owned(),
         ScalarOperator::StringConcat => "ScalarStringConcat".to_owned(),
         ScalarOperator::SubstringNonnegative => "ScalarSubstringNonnegative".to_owned(),
         ScalarOperator::TimestampAdd(unit) => format!(

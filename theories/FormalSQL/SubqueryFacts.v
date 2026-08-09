@@ -1497,6 +1497,65 @@ Proof.
   now apply eval_scalar_boolean_exists_env_congr.
 Qed.
 
+(** A quantified predicate is stable across correlated environments when its
+    argument evaluator and query child expose the same complete outcomes.
+    Exact outcomes retain argument errors, child errors, row multiplicity,
+    and the Bool3 result computed by the selected quantifier. *)
+Lemma eval_scalar_boolean_quant_env_congr_safe :
+  forall left_env right_env which_quantifier which_predicate
+      arguments subquery,
+    (forall outcome,
+      eval_scalar_values left_env arguments outcome <->
+      eval_scalar_values right_env arguments outcome) ->
+    (forall outcome,
+      eval_query left_env subquery outcome <->
+      eval_query right_env subquery outcome) ->
+    forall outcome,
+      eval_scalar_boolean left_env
+        (SExpr_Quant which_quantifier which_predicate arguments subquery)
+        outcome <->
+      eval_scalar_boolean right_env
+        (SExpr_Quant which_quantifier which_predicate arguments subquery)
+        outcome.
+Proof.
+intros left_env right_env which_quantifier which_predicate arguments subquery
+  Harguments Hquery outcome.
+split; intro Heval; inversion Heval; subst.
+- apply EScalar_QuantArgumentsError.
+  now apply (proj1 (Harguments _)).
+- eapply EScalar_QuantSubqueryError.
+  + eapply (proj1 (Harguments _)); eassumption.
+  + eapply (proj1 (Hquery _)); eassumption.
+- eapply EScalar_QuantSuccess.
+  + eapply (proj1 (Harguments _)); eassumption.
+  + eapply (proj1 (Hquery _)); eassumption.
+- apply EScalar_QuantArgumentsError.
+  now apply (proj2 (Harguments _)).
+- eapply EScalar_QuantSubqueryError.
+  + eapply (proj2 (Harguments _)); eassumption.
+  + eapply (proj2 (Hquery _)); eassumption.
+- eapply EScalar_QuantSuccess.
+  + eapply (proj2 (Harguments _)); eassumption.
+  + eapply (proj2 (Hquery _)); eassumption.
+Qed.
+
+(** Constructor-level form of
+    [eval_scalar_boolean_quant_env_congr_safe]. *)
+Lemma scalar_expr_quant_env_congr_safe :
+  forall left_env right_env which_quantifier which_predicate
+      arguments subquery,
+    (forall outcome,
+      eval_scalar_values left_env arguments outcome <->
+      eval_scalar_values right_env arguments outcome) ->
+    query_expr_env_outcome_equiv left_env right_env subquery ->
+    scalar_expr_env_outcome_equiv left_env right_env
+      (SExpr_Quant which_quantifier which_predicate arguments subquery).
+Proof.
+  intros left_env right_env which_quantifier which_predicate arguments
+    subquery Harguments Hquery outcome.
+  now apply eval_scalar_boolean_quant_env_congr_safe.
+Qed.
+
 (** A typed IN expression is stable across correlated environments when both
     its relational argument evaluator and its query child expose exactly the
     same outcomes.  This includes argument-side scalar-subquery errors. *)

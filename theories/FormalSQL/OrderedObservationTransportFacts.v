@@ -220,6 +220,22 @@ Inductive peer_order_permutation {A : Type} (peer : A -> A -> Prop) :
     peer_order_permutation peer second third ->
     peer_order_permutation peer first third.
 
+(** Forgetting the peer justification yields an ordinary occurrence-preserving
+    permutation.  This bridge exposes the multiplicity and length invariants
+    of a legal peer reorder without claiming that every permutation is legal. *)
+Lemma peer_order_permutation_implies_Permutation :
+  forall (A : Type) (peer : A -> A -> Prop) left right,
+    peer_order_permutation peer left right ->
+    Permutation left right.
+Proof.
+intros A peer left right Hpeer.
+induction Hpeer.
+- apply Permutation_refl.
+- apply Permutation_app_head, perm_swap.
+- now apply Permutation_sym.
+- eapply Permutation_trans; eassumption.
+Qed.
+
 Theorem prefix_scan_observation_adjacent_peer_transport :
   forall (T : Tuple.Rcd) (A : Type)
       (peer : A -> A -> Prop)

@@ -33,51 +33,6 @@ intros Row Key key_relation key_of rows keep matches outer Hkeys Houter
 eapply key_unique_self_filter_existsb_exact; eassumption.
 Qed.
 
-(** Primary-key self-membership exposes both reached TRUE acceptance and the
-    NOT NULL key boundary.  Candidate projection remains arbitrary. *)
-Lemma primary_key_self_in_true_route_regression :
-  forall {relname : Type} key rows (keep : tuple TNull -> bool) outer
-      (values : list (value TNull)) (subquery : query_expr TNull relname)
-      (project_candidate : tuple TNull -> tuple TNull),
-    primary_key_conforms key rows ->
-    In outer rows ->
-    keep outer = true ->
-    Forall
-      (query_row_has_outputs
-        (SqlQuerySemantics.query_expr_outputs subquery))
-      (map project_candidate (filter keep rows)) ->
-    Bool.is_true Bool3
-      (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery (project_candidate outer)) = true ->
-    (forall candidate,
-      In candidate rows ->
-      Bool.is_true Bool3
-        (@in_row_truth TNull relname unknown3 NullValues.is_null_value
-          values subquery (project_candidate candidate)) = true ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate)) ->
-    (forall candidate,
-      In candidate rows ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key outer)
-        (SchemaConstraints.project_row key candidate) ->
-      sql_key_equal_true
-        (SchemaConstraints.project_row key candidate)
-        (SchemaConstraints.project_row key outer)) ->
-    Bool.is_true Bool3
-      (@in_rows_truth TNull relname unknown3 NullValues.is_null_value
-        values subquery
-        (map project_candidate (filter keep rows))) = true /\
-    Forall
-      (fun cell => NullValues.is_null_value cell = false)
-      (SchemaConstraints.project_row key outer).
-Proof.
-intros relname key rows keep outer values subquery project_candidate Hprimary
-  Houter Hkeep Houtputs Hself Hreflect Hreverse.
-eapply tnull_primary_key_self_in_rows_true; eassumption.
-Qed.
-
 Section CorrelatedGuardEagerRoute.
 
 Context {T : Tuple.Rcd} {relname : Type}.
@@ -165,5 +120,3 @@ Print Assumptions correlated_inner_guard_relation_of_outer_match.
 Print Assumptions NoDupA_bidirectionally_related_members_eq.
 Print Assumptions key_unique_self_filter_existsb_exact.
 Print Assumptions primary_key_self_filter_existsb_exact.
-Print Assumptions tnull_primary_key_self_in_rows_acceptance_exact.
-Print Assumptions tnull_primary_key_self_in_rows_true.

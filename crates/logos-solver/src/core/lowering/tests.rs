@@ -3,9 +3,7 @@ use super::rel::{
 };
 use super::scalar::{rel_expr_may_raise_runtime, scalar_ast_may_raise_runtime_for_input};
 use super::*;
-use crate::core::syntax::{
-    FormalRowMapAdapter, FormalScalarQuantifier, query_expr_output_signature,
-};
+use crate::core::syntax::{FormalScalarQuantifier, query_expr_output_signature};
 use std::fs;
 use std::process::Command;
 
@@ -113,7 +111,7 @@ fn lowers_query_local_binding_once_and_emits_bound_query_program() {
     assert_eq!(
         module
             .rocq_module
-            .matches("Definition source_query_binding_0_0 (")
+            .matches("Definition source_query_binding_0_0 :")
             .count(),
         1,
         "one CTE definition must be represented by one materialized binding"
@@ -693,12 +691,12 @@ fn proof_emitters_select_success_outcome_and_conditional_goals() {
     let fixed_db = safe.rocq_module[countermodel..]
         .find("Witness.generated_witness_db")
         .expect("one host-frozen database witness");
-    let all_models = safe.rocq_module[countermodel..]
-        .find("forall generated_numeric_exp_model : NumericExpModel")
-        .expect("numeric-model universal quantifier");
+    let source_program = safe.rocq_module[countermodel..]
+        .find("source_query_program")
+        .expect("source program in the countermodel contract");
     assert!(
-        fixed_db < all_models,
-        "the database must not depend on the model"
+        fixed_db < source_program,
+        "the fixed database witness must precede the compared programs"
     );
 
     let outcome =
@@ -800,7 +798,6 @@ fn scalar_operator_arity_table_rejects_nearby_malformed_calls() {
         (ScalarOperator::Negate(ScalarNumericKind::Int64), 1),
         (ScalarOperator::NumericDivideResultScale, 4),
         (ScalarOperator::NumericDivideTypmod, 6),
-        (ScalarOperator::PowerHalfInt64ToInt32, 1),
         (ScalarOperator::StringConcat, 2),
         (ScalarOperator::SubstringNonnegative, 3),
         (ScalarOperator::TimestampAdd(ScalarTimestampUnit::Second), 2),
@@ -1664,173 +1661,17 @@ fn malformed_predicate_arity_is_rejected_during_lowering() {
     );
 }
 
-#[test]
-fn emits_declarative_numeric_exp_row_map_with_one_shared_model() {
-    let passthrough = FormalAttribute {
-        name: "group_key".to_owned(),
-        ty: FormalAttributeType::Int32,
-    };
-    let avg_value = FormalAttribute {
-        name: "avg_value".to_owned(),
-        ty: FormalAttributeType::Numeric,
-    };
-    let avg_dscale = FormalAttribute {
-        name: "avg_dscale".to_owned(),
-        ty: FormalAttributeType::Z,
-    };
-    let output_numeric = FormalAttribute {
-        name: "exp_value".to_owned(),
-        ty: FormalAttributeType::Numeric,
-    };
-    let output_dscale = FormalAttribute {
-        name: "exp_dscale".to_owned(),
-        ty: FormalAttributeType::Z,
-    };
-    let query = FormalQueryExpr::RowMap {
-        adapter: FormalRowMapAdapter::NumericExp {
-            passthrough: vec![passthrough.clone()],
-            avg_value: avg_value.clone(),
-            avg_dscale: avg_dscale.clone(),
-            output_numeric: output_numeric.clone(),
-            output_dscale: output_dscale.clone(),
-        },
-        input: Box::new(FormalQueryExpr::Empty {
-            columns: vec![passthrough, avg_value, avg_dscale],
-        }),
-    };
-    let scope = LoweringContext::new(LoweringConfig::default(), None)
-        .scope_from_query_expr("rowMap", &query)
-        .expect("row map output scope");
-    assert_eq!(
-        scope
-            .attributes
-            .iter()
-            .map(|attribute| (attribute.name.as_str(), attribute.formal_ty))
-            .collect::<Vec<_>>(),
-        vec![
-            ("group_key", FormalAttributeType::Int32),
-            ("exp_value", FormalAttributeType::Numeric),
-            ("exp_dscale", FormalAttributeType::Z),
-        ]
-    );
-    assert_eq!(
-        scope.attributes[1].numeric_dscale,
-        Some(NumericDscaleProvenance::Attribute("exp_dscale".to_owned()))
-    );
-    let module = emit_rocq_query_module(&query, &query);
-    assert!(
-        module.rocq_module.contains(
-            "Definition source_query_expr (generated_numeric_exp_model : NumericExpModel)"
-        )
-    );
-    assert!(module.rocq_module.contains("NumericExpRowMapExpr"));
-    assert!(module.rocq_module.contains(
-        "Definition source_query_program (generated_numeric_exp_model : NumericExpModel)"
-    ));
-
-    let proof = emit_rocq_query_expr_proof_module();
-    assert!(
-        proof
-            .rocq_module
-            .contains("forall generated_numeric_exp_model : NumericExpModel")
-    );
-    assert!(
-        proof
-            .rocq_module
-            .contains("(source_query_program generated_numeric_exp_model)")
-    );
-    assert!(
-        proof
-            .rocq_module
-            .contains("(target_query_program generated_numeric_exp_model)")
-    );
-}
-
-fn numeric_model_test_term(name: &str) -> FormalAggregateTerm {
-    FormalAggregateTerm::Expr {
-        term: FormalFunctionTerm::Attribute {
-            name: name.to_owned(),
-            ty: FormalAttributeType::Numeric,
-        },
+fn nested_scalar_query(relation: &str) -> FormalQueryExpr {
+    FormalQueryExpr::Table {
+        relation: relation.to_owned(),
+        columns: vec![formal_attribute("value", FormalAttributeType::Numeric)],
     }
 }
 
-fn numeric_model_test_select_item(name: &str) -> FormalScalarSelectItem {
-    FormalScalarSelectItem {
-        expr: FormalScalarExpr::Leaf {
-            result_ty: FormalAttributeType::Numeric,
-            term: numeric_model_test_term(name),
-        },
-        alias: name.to_owned(),
-        alias_ty: FormalAttributeType::Numeric,
-        numeric_dscale: None,
-    }
-}
-
-/// A one-column SQL-visible subquery whose hidden implementation uses the
-/// abstract NumericExp model. Varying `relation` creates a structural CSE
-/// near-miss without changing the surrounding scalar constructor.
-fn nested_numeric_exp_model_query(relation: &str) -> FormalQueryExpr {
-    let avg_value = formal_attribute("avg_value", FormalAttributeType::Numeric);
-    let avg_dscale = formal_attribute("avg_dscale", FormalAttributeType::Z);
-    let exp_value = formal_attribute("exp_value", FormalAttributeType::Numeric);
-    let exp_dscale = formal_attribute("exp_dscale", FormalAttributeType::Z);
-    FormalQueryExpr::Projection {
-        select: vec![FormalScalarSelectItem {
-            expr: FormalScalarExpr::Leaf {
-                result_ty: FormalAttributeType::Numeric,
-                term: numeric_model_test_term("exp_value"),
-            },
-            alias: "exp_value".to_owned(),
-            alias_ty: FormalAttributeType::Numeric,
-            numeric_dscale: Some(NumericDscaleProvenance::Attribute("exp_dscale".to_owned())),
-        }],
-        input: Box::new(FormalQueryExpr::RowMap {
-            adapter: FormalRowMapAdapter::NumericExp {
-                passthrough: Vec::new(),
-                avg_value: avg_value.clone(),
-                avg_dscale: avg_dscale.clone(),
-                output_numeric: exp_value,
-                output_dscale: exp_dscale,
-            },
-            input: Box::new(FormalQueryExpr::Table {
-                relation: relation.to_owned(),
-                columns: vec![avg_value, avg_dscale],
-            }),
-        }),
-    }
-}
-
-#[test]
-fn numeric_exp_model_requirement_reaches_join_select_scalar_subqueries() {
-    let join = FormalQueryExpr::Join {
-        join_kind: FormalQueryJoinKind::Left,
-        predicate: FormalScalarExpr::True,
-        matched_select: vec![FormalScalarSelectItem {
-            expr: FormalScalarExpr::Subquery {
-                result_ty: FormalAttributeType::Numeric,
-                query: Box::new(nested_numeric_exp_model_query("JOIN_MODEL_INPUT")),
-            },
-            alias: "modeled".to_owned(),
-            alias_ty: FormalAttributeType::Numeric,
-            numeric_dscale: None,
-        }],
-        left_select: vec![numeric_model_test_select_item("modeled")],
-        right_select: Vec::new(),
-        left: Box::new(FormalQueryExpr::EmptyTuple),
-        right: Box::new(FormalQueryExpr::EmptyTuple),
-    };
-
-    assert!(
-        join.requires_numeric_exp_model(),
-        "NumericExp hidden only in a JOIN projection scalar subquery still owns a model parameter"
-    );
-}
-
-fn numeric_model_exists_selection(outer_relation: &str, model_relation: &str) -> FormalQueryExpr {
+fn nested_exists_selection(outer_relation: &str, inner_relation: &str) -> FormalQueryExpr {
     FormalQueryExpr::Selection {
         predicate: FormalScalarExpr::Exists {
-            query: Box::new(nested_numeric_exp_model_query(model_relation)),
+            query: Box::new(nested_scalar_query(inner_relation)),
         },
         input: Box::new(FormalQueryExpr::Table {
             relation: outer_relation.to_owned(),
@@ -1840,111 +1681,8 @@ fn numeric_model_exists_selection(outer_relation: &str, model_relation: &str) ->
 }
 
 #[test]
-fn numeric_exp_model_reaches_selection_and_group_through_all_scalar_subqueries() {
-    let shared = nested_numeric_exp_model_query("MODEL_INPUT");
-    let probe = numeric_model_test_select_item("probe");
-    let source = FormalQueryExpr::Selection {
-        predicate: FormalScalarExpr::And {
-            insertion_sites: vec![Vec::new(), vec!["test.selection.and".to_owned()]],
-            operands: vec![
-                FormalScalarExpr::In {
-                    args: vec![probe.expr.clone()],
-                    query: Box::new(shared.clone()),
-                },
-                FormalScalarExpr::Exists {
-                    query: Box::new(shared.clone()),
-                },
-            ],
-        },
-        input: Box::new(FormalQueryExpr::Table {
-            relation: "OUTER_SELECTION".to_owned(),
-            columns: vec![formal_attribute("probe", FormalAttributeType::Numeric)],
-        }),
-    };
-    let target = FormalQueryExpr::Group {
-        select: vec![probe.clone()],
-        group_by: vec![probe.expr.clone()],
-        having: FormalScalarExpr::QuantifiedComparison {
-            quantifier: FormalScalarQuantifier::Exists,
-            predicate: FormalPredicate::Eq,
-            args: vec![probe.expr.clone()],
-            query: Box::new(shared),
-        },
-        input: Box::new(FormalQueryExpr::Table {
-            relation: "OUTER_GROUP".to_owned(),
-            columns: vec![formal_attribute("probe", FormalAttributeType::Numeric)],
-        }),
-    };
-
-    assert!(source.requires_numeric_exp_model());
-    assert!(target.requires_numeric_exp_model());
-
-    // Select/group terms alone do not acquire a NumericExp dependency: only
-    // their input and query-bearing predicate/HAVING scalar expression can introduce it.
-    let model_free_projection = FormalQueryExpr::Projection {
-        select: vec![probe.clone()],
-        input: Box::new(FormalQueryExpr::Table {
-            relation: "MODEL_FREE_PROJECTION".to_owned(),
-            columns: vec![formal_attribute("probe", FormalAttributeType::Numeric)],
-        }),
-    };
-    let model_free_group = FormalQueryExpr::Group {
-        select: vec![probe.clone()],
-        group_by: vec![probe.expr],
-        having: FormalScalarExpr::True,
-        input: Box::new(FormalQueryExpr::Table {
-            relation: "MODEL_FREE_GROUP".to_owned(),
-            columns: vec![formal_attribute("probe", FormalAttributeType::Numeric)],
-        }),
-    };
-    assert!(!model_free_projection.requires_numeric_exp_model());
-    assert!(!model_free_group.requires_numeric_exp_model());
-
-    let module = emit_rocq_query_module(&source, &target);
-    let repeated = emit_rocq_query_module(&source, &target);
-    assert_eq!(module.rocq_module, repeated.rocq_module);
-    assert_eq!(module.definition_graph, repeated.definition_graph);
-    for definition in [
-        "Definition source_query_expr (generated_numeric_exp_model : NumericExpModel)",
-        "Definition target_query_expr (generated_numeric_exp_model : NumericExpModel)",
-        "Definition scalar_expr_predicate_0 (generated_numeric_exp_model : NumericExpModel)",
-        "Definition scalar_expr_predicate_1 (generated_numeric_exp_model : NumericExpModel)",
-    ] {
-        assert!(
-            module.rocq_module.contains(definition),
-            "missing {definition}"
-        );
-    }
-    for constructor in ["SExpr_In", "SExpr_Exists", "SExpr_Quant", "Exists_F"] {
-        assert!(
-            module.rocq_module.contains(constructor),
-            "missing {constructor}"
-        );
-    }
-
-    // The three exact nested occurrences select one deterministic shared
-    // QueryExpr. Its own definition must carry the same model parameter.
-    let shared_definitions = module
-        .definition_graph
-        .definitions
-        .iter()
-        .filter(|definition| definition.symbol.starts_with("shared_query_expr_"))
-        .collect::<Vec<_>>();
-    assert_eq!(shared_definitions.len(), 1);
-    assert!(shared_definitions[0].tree.contains("NumericExpRowMapExpr"));
-    assert!(module.rocq_module.contains(
-        "Definition shared_query_expr_0 (generated_numeric_exp_model : NumericExpModel)"
-    ));
-    assert!(
-        module
-            .rocq_module
-            .contains("shared_query_expr_0_admissible_with_outputs_generated_schema")
-    );
-}
-
-#[test]
 fn generated_metadata_solver_uses_only_structural_and_local_cbn_closure() {
-    let query = numeric_model_exists_selection("OUTER", "MODEL");
+    let query = nested_exists_selection("OUTER", "INNER");
     let module = emit_rocq_query_module(&query, &query);
     let tactic = module
         .rocq_module
@@ -1972,11 +1710,11 @@ fn nested_not_exists_admissibility_stays_compositional() {
             operands: vec![
                 FormalScalarExpr::Not {
                     expression: Box::new(FormalScalarExpr::Exists {
-                        query: Box::new(nested_numeric_exp_model_query("MODEL_LEFT")),
+                        query: Box::new(nested_scalar_query("INNER_LEFT")),
                     }),
                 },
                 FormalScalarExpr::Exists {
-                    query: Box::new(nested_numeric_exp_model_query("MODEL_RIGHT")),
+                    query: Box::new(nested_scalar_query("INNER_RIGHT")),
                 },
             ],
         },
@@ -2039,476 +1777,6 @@ fn rocq_emission_compacts_boolean_sites_injectively_across_query_sides() {
     assert!(module.rocq_module.contains("[[]; [\"b1\"]]"));
     assert!(!module.rocq_module.contains(source_site));
     assert!(!module.rocq_module.contains(target_site));
-}
-
-#[test]
-fn nested_numeric_exp_model_cse_rejects_structural_near_misses() {
-    let source = numeric_model_exists_selection("OUTER_A", "MODEL_A");
-    let target = numeric_model_exists_selection("OUTER_B", "MODEL_B");
-    assert!(source.requires_numeric_exp_model());
-    assert!(target.requires_numeric_exp_model());
-
-    let module = emit_rocq_query_module(&source, &target);
-    let repeated = emit_rocq_query_module(&source, &target);
-    assert_eq!(module.rocq_module, repeated.rocq_module);
-    assert_eq!(module.definition_graph, repeated.definition_graph);
-    assert!(
-        module
-            .definition_graph
-            .definitions
-            .iter()
-            .all(|definition| !definition.symbol.starts_with("shared_query_expr_"))
-    );
-    assert!(!module.rocq_module.contains("Definition shared_query_expr_"));
-    assert!(module.rocq_module.contains("Rel \"MODEL_A\""));
-    assert!(module.rocq_module.contains("Rel \"MODEL_B\""));
-    assert!(
-        module.rocq_module.contains(
-            "Definition source_query_expr (generated_numeric_exp_model : NumericExpModel)"
-        )
-    );
-    assert!(
-        module.rocq_module.contains(
-            "Definition target_query_expr (generated_numeric_exp_model : NumericExpModel)"
-        )
-    );
-}
-
-#[test]
-fn lowers_source_attested_numeric_exp_avg_and_carries_runtime_scale_to_division() {
-    fn query() -> Query {
-        let avg_modifiers = AggregateModifiers {
-            source_distinct: Some(false),
-            source: Some(exact_source_node(
-                "AVG(msecs)",
-                "1:10-1:19",
-                "OTHER_FUNCTION",
-                Some("avg"),
-                vec![exact_source_node(
-                    "msecs",
-                    "1:14-1:18",
-                    "IDENTIFIER",
-                    None,
-                    Vec::new(),
-                )],
-            )),
-            ..Default::default()
-        };
-        let aggregate_output = vec![
-            typed_column("group_key", SqlType::Integer),
-            typed_column("$f1", SqlType::decimal(None, None)),
-        ];
-        let aggregate = RelExpr::Aggregate {
-            input: Box::new(RelExpr::TableScan {
-                table: vec!["measurements".to_owned()],
-                output: vec![
-                    typed_column("group_key", SqlType::Integer),
-                    typed_column("msecs", SqlType::Integer),
-                ],
-            }),
-            group_keys: vec![0],
-            grouping_sets: vec![vec![0]],
-            agg_calls: vec![AggregateCall {
-                raw: "AVG($1)".to_owned(),
-                function: "AVG".to_owned(),
-                distinct: false,
-                modifiers: avg_modifiers,
-                args: vec![scalar(ScalarAst::InputRef { index: 1 })],
-                filter: None,
-            }],
-            output: aggregate_output,
-        };
-        let projected_output = vec![
-            typed_column("group_key", SqlType::Integer),
-            typed_column("gmean", SqlType::Double),
-        ];
-        let exp_project = RelExpr::Project {
-            input: Box::new(aggregate),
-            exprs: vec![
-                scalar(ScalarAst::InputRef { index: 0 }),
-                scalar_with_source(
-                    ScalarAst::Call {
-                        operator: "EXP".to_owned(),
-                        op: ScalarOp::Exp,
-                        args: vec![ScalarAst::InputRef { index: 1 }],
-                    },
-                    exact_source_node(
-                        "EXP(AVG(msecs))",
-                        "1:6-1:20",
-                        "OTHER_FUNCTION",
-                        Some("exp"),
-                        vec![exact_source_node(
-                            "AVG(msecs)",
-                            "1:10-1:19",
-                            "OTHER_FUNCTION",
-                            Some("avg"),
-                            vec![exact_source_node(
-                                "msecs",
-                                "1:14-1:18",
-                                "IDENTIFIER",
-                                None,
-                                Vec::new(),
-                            )],
-                        )],
-                    ),
-                ),
-            ],
-            correlations: Vec::new(),
-            output: projected_output.clone(),
-        };
-        let predicate = scalar_with_source(
-            ScalarAst::Call {
-                operator: "<>".to_owned(),
-                op: ScalarOp::NotEq,
-                args: vec![
-                    ScalarAst::TypeAnnotation {
-                        expr: Box::new(ScalarAst::Call {
-                            operator: "CAST".to_owned(),
-                            op: ScalarOp::Cast,
-                            args: vec![ScalarAst::InputRef { index: 0 }],
-                        }),
-                        ty: "DOUBLE".to_owned(),
-                    },
-                    ScalarAst::Call {
-                        operator: "/".to_owned(),
-                        op: ScalarOp::Divide,
-                        args: vec![
-                            ScalarAst::InputRef { index: 1 },
-                            ScalarAst::TypeAnnotation {
-                                expr: Box::new(ScalarAst::Literal {
-                                    raw: "1000".to_owned(),
-                                }),
-                                ty: "INTEGER".to_owned(),
-                            },
-                        ],
-                    },
-                ],
-            },
-            source_node(
-                "group_key <> gmean / 1000",
-                "NOT_EQUALS",
-                Some("<>"),
-                vec![
-                    source_node("group_key", "IDENTIFIER", None, Vec::new()),
-                    source_node(
-                        "gmean / 1000",
-                        "DIVIDE",
-                        Some("/"),
-                        vec![
-                            source_node("gmean", "IDENTIFIER", None, Vec::new()),
-                            source_node("1000", "LITERAL", None, Vec::new()),
-                        ],
-                    ),
-                ],
-            ),
-        );
-        let filtered = RelExpr::Filter {
-            input: Box::new(exp_project),
-            predicate,
-            correlations: Vec::new(),
-            output: projected_output.clone(),
-        };
-        query_for_rel(
-            RelExpr::Project {
-                input: Box::new(filtered),
-                exprs: vec![
-                    scalar(ScalarAst::InputRef { index: 0 }),
-                    scalar(ScalarAst::InputRef { index: 1 }),
-                ],
-                correlations: Vec::new(),
-                output: projected_output.clone(),
-            },
-            projected_output,
-        )
-    }
-
-    let baseline = query();
-    let lowered = lower_query(&baseline);
-    assert_eq!(
-        lowered.status,
-        LoweringStatus::Lowered,
-        "{:#?}",
-        lowered.diagnostics
-    );
-    let module = emit_rocq_query_module_for_test(&baseline);
-    assert!(module.rocq_module.contains("NumericExpRowMapExpr"));
-    assert!(
-        module
-            .rocq_module
-            .contains("AggregateNumericDisplayScale NumericAverageInt32")
-    );
-    assert!(
-        module
-            .rocq_module
-            .contains("DotZ \"__logos_numeric_exp_result_dscale\"")
-    );
-
-    let mut through_projection = query();
-    let RelExpr::Project {
-        input: outer_input, ..
-    } = &mut through_projection.rel
-    else {
-        unreachable!()
-    };
-    let RelExpr::Filter {
-        input: filter_input,
-        output: filter_output,
-        ..
-    } = outer_input.as_mut()
-    else {
-        unreachable!()
-    };
-    let exp_projection = filter_input.as_ref().clone();
-    **filter_input = RelExpr::Project {
-        input: Box::new(exp_projection),
-        exprs: vec![
-            scalar(ScalarAst::InputRef { index: 0 }),
-            scalar(ScalarAst::InputRef { index: 1 }),
-        ],
-        correlations: Vec::new(),
-        output: filter_output.clone(),
-    };
-    let projected = lower_query(&through_projection);
-    assert_eq!(
-        projected.status,
-        LoweringStatus::Lowered,
-        "{:#?}",
-        projected.diagnostics
-    );
-    let Some(FormalQueryExpr::Projection {
-        select: root_select,
-        input: root_input,
-    }) = projected.query_expr.as_ref()
-    else {
-        panic!("the SQL root must strip its hidden runtime scale")
-    };
-    assert_eq!(root_select.len(), 2);
-    let FormalQueryExpr::Projection {
-        select: outer_select,
-        input: outer_input,
-    } = root_input.as_ref()
-    else {
-        panic!("the outer projection must retain its live runtime scale")
-    };
-    let FormalQueryExpr::Selection {
-        input: selected_input,
-        ..
-    } = outer_input.as_ref()
-    else {
-        panic!("the numeric consumer must remain above the intermediate projection")
-    };
-    let FormalQueryExpr::Projection {
-        select: intermediate_select,
-        ..
-    } = selected_input.as_ref()
-    else {
-        panic!("the intermediate projection must retain its live runtime scale")
-    };
-    for select in [outer_select, intermediate_select] {
-        assert_eq!(select.len(), 3);
-        let Some(NumericDscaleProvenance::Attribute(scale_name)) =
-            select[1].numeric_dscale.as_ref()
-        else {
-            panic!("the projected NUMERIC value must reference its hidden scale")
-        };
-        assert_eq!(select[2].alias, *scale_name);
-        assert_eq!(select[2].alias_ty, FormalAttributeType::Z);
-    }
-
-    let direct_rel = match &baseline.rel {
-        RelExpr::Project { input, .. } => match input.as_ref() {
-            RelExpr::Filter { input, .. } => input.as_ref().clone(),
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
-    let mut direct = baseline.clone();
-    direct.rel = direct_rel.clone();
-    let direct_lowered = lower_query(&direct);
-    assert_eq!(
-        direct_lowered.status,
-        LoweringStatus::Lowered,
-        "{:#?}",
-        direct_lowered.diagnostics
-    );
-    assert_eq!(
-        direct_lowered.output_signature.as_deref(),
-        Some(
-            [
-                FormalAttribute {
-                    name: "group_key".to_owned(),
-                    ty: FormalAttributeType::Int32,
-                },
-                FormalAttribute {
-                    name: "gmean".to_owned(),
-                    ty: FormalAttributeType::Numeric,
-                },
-            ]
-            .as_slice()
-        ),
-        "the hidden NumericExp runtime scale must not cross the SQL query boundary"
-    );
-    let Some(FormalQueryExpr::Projection { select, input }) = &direct_lowered.query_expr else {
-        panic!("the NumericExp root must be closed by a SQL-visible projection")
-    };
-    assert_eq!(select.len(), 2);
-    assert!(input.requires_numeric_exp_model());
-    let root_scope = LoweringContext::new(LoweringConfig::default(), None)
-        .scope_from_query_expr("directRoot", direct_lowered.query_expr.as_ref().unwrap())
-        .expect("closed NumericExp root scope");
-    assert_eq!(root_scope.attributes.len(), 2);
-    assert!(
-        root_scope
-            .attributes
-            .iter()
-            .all(|attribute| attribute.numeric_dscale.is_none())
-    );
-
-    // GROUPING SETS cannot silently drop the hidden runtime scale of a
-    // NUMERIC key. Carrying that scale as another group key would also be
-    // wrong because PostgreSQL groups numerically equal values independently
-    // of their display scale, so this shape remains conservatively blocked.
-    let grouping_output = vec![typed_column("gmean", SqlType::Double)];
-    let dynamic_grouping_sets = Query {
-        source_sql: None,
-        rel: RelExpr::Project {
-            input: Box::new(RelExpr::Aggregate {
-                input: Box::new(direct_rel.clone()),
-                group_keys: vec![1],
-                grouping_sets: vec![vec![1], Vec::new()],
-                agg_calls: Vec::new(),
-                output: grouping_output.clone(),
-            }),
-            exprs: vec![scalar(ScalarAst::Call {
-                operator: "/".to_owned(),
-                op: ScalarOp::Divide,
-                args: vec![
-                    ScalarAst::InputRef { index: 0 },
-                    ScalarAst::TypeAnnotation {
-                        expr: Box::new(ScalarAst::Literal {
-                            raw: "2".to_owned(),
-                        }),
-                        ty: "INTEGER".to_owned(),
-                    },
-                ],
-            })],
-            correlations: Vec::new(),
-            output: vec![decimal_column_unconstrained("quotient")],
-        },
-        analysis_errors: Vec::new(),
-    };
-    let blocked_grouping_sets = lower_query(&dynamic_grouping_sets);
-    assert_eq!(blocked_grouping_sets.status, LoweringStatus::Blocked);
-    assert!(
-        blocked_grouping_sets
-            .diagnostics
-            .iter()
-            .any(|diagnostic| { diagnostic.code == "numeric_dscale_scope_reference_invalid" })
-    );
-
-    // A window expansion renames its complete input row. The runtime scale
-    // carrier must be renamed with the NUMERIC value because an ordinary
-    // sibling expression can consume it even when its Boolean output carries
-    // no scale provenance of its own.
-    let window_output = vec![
-        typed_column("positive", SqlType::Boolean),
-        typed_column("row_count", SqlType::BigInt),
-    ];
-    let dynamic_window = Query {
-        source_sql: None,
-        rel: RelExpr::Project {
-            input: Box::new(direct_rel),
-            exprs: vec![
-                scalar(ScalarAst::Call {
-                    operator: ">".to_owned(),
-                    op: ScalarOp::Gt,
-                    args: vec![
-                        ScalarAst::Call {
-                            operator: "/".to_owned(),
-                            op: ScalarOp::Divide,
-                            args: vec![
-                                ScalarAst::InputRef { index: 1 },
-                                ScalarAst::TypeAnnotation {
-                                    expr: Box::new(ScalarAst::Literal {
-                                        raw: "2".to_owned(),
-                                    }),
-                                    ty: "INTEGER".to_owned(),
-                                },
-                            ],
-                        },
-                        ScalarAst::TypeAnnotation {
-                            expr: Box::new(ScalarAst::Literal {
-                                raw: "0".to_owned(),
-                            }),
-                            ty: "INTEGER".to_owned(),
-                        },
-                    ],
-                }),
-                global_full_count_window(0),
-            ],
-            correlations: Vec::new(),
-            output: window_output.clone(),
-        },
-        analysis_errors: Vec::new(),
-    };
-    let lowered_window = lower_query(&dynamic_window);
-    assert_eq!(
-        lowered_window.status,
-        LoweringStatus::Lowered,
-        "{:#?}",
-        lowered_window.diagnostics
-    );
-    let Some(FormalQueryExpr::Projection { input, .. }) = lowered_window.query_expr.as_ref() else {
-        panic!("the COUNT window must end in its SQL-visible projection")
-    };
-    let FormalQueryExpr::Window {
-        items,
-        input: window_input,
-        ..
-    } = input.as_ref()
-    else {
-        panic!("the global COUNT window must consume one shared child")
-    };
-    assert!(matches!(
-        items.as_slice(),
-        [FormalWindowItem {
-            function: FormalWindowFunction::FullPartitionAggregate { .. },
-            ..
-        }]
-    ));
-    assert!(window_input.requires_numeric_exp_model());
-    let module = emit_rocq_query_module_for_test(&dynamic_window);
-    assert!(
-        module
-            .rocq_module
-            .contains("WindowFullPartitionAggregateItem")
-    );
-    assert!(!module.rocq_module.contains("QExpr_CrossJoin"));
-    assert!(
-        module
-            .rocq_module
-            .contains("DotZ \"__logos_numeric_exp_result_dscale\"")
-    );
-
-    let mut forged = query();
-    let RelExpr::Project { input, .. } = &mut forged.rel else {
-        unreachable!()
-    };
-    let RelExpr::Filter { input, .. } = input.as_mut() else {
-        unreachable!()
-    };
-    let RelExpr::Project { exprs, .. } = input.as_mut() else {
-        unreachable!()
-    };
-    exprs[1].source.as_mut().unwrap().text = Some("EXP(CAST(AVG(msecs) AS DOUBLE))".to_owned());
-    let blocked = lower_query(&forged);
-    assert_eq!(blocked.status, LoweringStatus::Blocked);
-    assert!(
-        blocked
-            .diagnostics
-            .iter()
-            .any(|diagnostic| { diagnostic.code == "numeric_exp_source_not_attested" })
-    );
 }
 
 fn lowered_query_expr(lowered: &LoweredQuery) -> Option<&FormalQueryExpr> {
@@ -8111,6 +7379,71 @@ fn emitted_constrained_schema_module_compiles() {
 }
 
 #[test]
+#[ignore = "requires the repository Rocq switch and compiled FormalSQL/Logos objects"]
+fn emitted_unparameterized_query_module_compiles() {
+    let lowered_schema = lower_schema(&Schema { tables: Vec::new() });
+    assert_eq!(
+        lowered_schema.status,
+        LoweringStatus::Lowered,
+        "{lowered_schema:#?}"
+    );
+    let query = FormalQueryExpr::EmptyTuple;
+    let query_module = emit_rocq_query_module(&query, &query);
+
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("workspace root");
+    let switch = repo.join(".opam-rocq/_opam");
+    let rocq = switch.join("bin/rocq");
+    assert!(
+        rocq.is_file(),
+        "repository Rocq switch is required for this ignored regression"
+    );
+    let temp = std::env::temp_dir().join(format!(
+        "logos-solver-unparameterized-query-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&temp);
+    fs::create_dir_all(&temp).unwrap();
+    fs::write(
+        temp.join("Schema.v"),
+        &lowered_schema.schema.as_ref().unwrap().rocq_module,
+    )
+    .unwrap();
+    fs::write(temp.join("Queries.v"), &query_module.rocq_module).unwrap();
+
+    let rocqlib = switch.join("lib/coq");
+    for module in ["Schema.v", "Queries.v"] {
+        let output = Command::new(&rocq)
+            .arg("compile")
+            .arg("-Q")
+            .arg(repo.join("vendor/FormalSQL/src"))
+            .arg("SQLFS")
+            .arg("-Q")
+            .arg(repo.join("theories"))
+            .arg("Logos")
+            .arg("-Q")
+            .arg(&temp)
+            .arg("LogosGenerated")
+            .arg(temp.join(module))
+            .env("ROCQLIB", &rocqlib)
+            .env("COQLIB", &rocqlib)
+            .env("OCAMLFIND_CONF", switch.join("lib/findlib.conf"))
+            .current_dir(&temp)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "generated {module} failed Rocq compilation: stdout={:?}, stderr={:?}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    fs::remove_dir_all(&temp).unwrap();
+}
+
+#[test]
 fn lowers_all_postgres_string_typmods_into_one_string_domain() {
     let schema = Schema {
         tables: vec![Table {
@@ -9450,7 +8783,7 @@ fn infers_integral_power_arguments_as_postgres_double_overload() {
 }
 
 #[test]
-fn lowers_postgres_numeric_power_half_of_int64_directly_to_checked_int32() {
+fn rejects_fixed_half_postgres_numeric_power_without_generic_power_semantics() {
     let input = vec![typed_column("amount", SqlType::BigInt)];
     let query = Query {
         source_sql: None,
@@ -9487,16 +8820,17 @@ fn lowers_postgres_numeric_power_half_of_int64_directly_to_checked_int32() {
 
     let lowered = lower_query(&query);
 
-    assert_eq!(lowered.status, LoweringStatus::Lowered);
-    let module = emit_rocq_query_module(
-        lowered.query_expr.as_ref().unwrap(),
-        lowered.query_expr.as_ref().unwrap(),
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "decimal_function_not_supported")
     );
-    assert!(module.rocq_module.contains("ScalarPowerHalfInt64ToInt32"));
 }
 
 #[test]
-fn rejects_general_postgres_numeric_power_despite_power_half_support() {
+fn rejects_general_postgres_numeric_power() {
     let input = vec![typed_column("amount", SqlType::BigInt)];
     let query = Query {
         source_sql: None,
@@ -12311,7 +11645,7 @@ fn emits_proof_rocq_module_with_schema_and_query_pair() {
     assert!(
         module
             .rocq_module
-            .contains("Definition generated_equivalence_input\n    (generated_numeric_exp_model : NumericExpModel) :=")
+            .contains("Definition generated_equivalence_input :=")
     );
     assert!(
         module
@@ -12338,9 +11672,11 @@ fn emits_proof_rocq_module_with_schema_and_query_pair() {
             .rocq_module
             .contains("Definition generated_equivalence_goal : Prop :=")
     );
-    assert!(module.rocq_module.contains(
-        "Lemma generated_equivalence_goal_intro :\n  (forall generated_numeric_exp_model db,"
-    ));
+    assert!(
+        module
+            .rocq_module
+            .contains("Lemma generated_equivalence_goal_intro :\n  (forall db,")
+    );
     assert!(
         module
             .rocq_module
@@ -12354,16 +11690,13 @@ fn emits_proof_rocq_module_with_schema_and_query_pair() {
     assert!(
         module
             .rocq_module
-            .contains("forall generated_numeric_exp_model : NumericExpModel")
+            .contains("Definition generated_query_program_admissible")
     );
     assert!(
         module
             .rocq_module
-            .contains("Definition generated_query_program_admissible")
+            .contains("generated_query_program_admissible\n        db (source_query_program) /\\")
     );
-    assert!(module.rocq_module.contains(
-        "generated_query_program_admissible\n        db (source_query_program generated_numeric_exp_model) /\\"
-    ));
     assert!(
         module
             .rocq_module
@@ -12404,13 +11737,13 @@ fn every_problem_template_uses_the_trusted_generated_schema_constraints() {
     );
     assert!(
             module.rocq_module.contains(
-                "source_program_output_signatures =\n      map query_expr_outputs\n        (source_query_program generated_numeric_exp_model) /\\"
+                "source_program_output_signatures =\n      map query_expr_outputs\n        (source_query_program) /\\"
             ),
             "{label}"
         );
     assert!(
             module.rocq_module.contains(
-                "target_program_output_signatures =\n      map query_expr_outputs\n        (target_query_program generated_numeric_exp_model) /\\"
+                "target_program_output_signatures =\n      map query_expr_outputs\n        (target_query_program) /\\"
             ),
             "{label}"
         );
@@ -12500,11 +11833,8 @@ fn emits_typed_query_observation_proof_obligations() {
     assert!(
         module
             .rocq_module
-            .contains("forall generated_numeric_exp_model : NumericExpModel")
+            .contains("generated_query_program_admissible\n        db (target_query_program) /\\")
     );
-    assert!(module.rocq_module.contains(
-        "generated_query_program_admissible\n        db (target_query_program generated_numeric_exp_model) /\\"
-    ));
     assert!(
         module
             .rocq_module
@@ -20820,10 +20150,10 @@ fn lowers_ordered_query_programs_without_flattening_statement_signatures() {
     assert!(module.contains("Definition target_query_expr_0 : QueryExpr"));
     assert!(module.contains("Definition target_query_expr_1 : QueryExpr"));
     assert!(module.contains(
-        "Definition source_query_program (generated_numeric_exp_model : NumericExpModel) : list QueryExpr :=\n  [source_query_expr_0; source_query_expr_1]."
+        "Definition source_query_program : list QueryExpr :=\n  [source_query_expr_0; source_query_expr_1]."
     ));
     assert!(module.contains(
-        "Definition target_query_program (generated_numeric_exp_model : NumericExpModel) : list QueryExpr :=\n  [target_query_expr_0; target_query_expr_1]."
+        "Definition target_query_program : list QueryExpr :=\n  [target_query_expr_0; target_query_expr_1]."
     ));
     assert!(module.contains(
         "Definition source_program_output_signatures : list (list (Tuple.attribute TNull)) :=\n  [source_output_signature_0; source_output_signature_1]."
@@ -20953,7 +20283,7 @@ fn unequal_program_lengths_remain_fully_emitted_and_cannot_be_truncated() {
             .as_ref()
             .unwrap()
             .rocq_module
-            .contains("generated_query_program_equiv db\n        (source_query_program generated_numeric_exp_model)\n        (target_query_program generated_numeric_exp_model)")
+            .contains("generated_query_program_equiv db\n        (source_query_program)\n        (target_query_program)")
     );
 }
 

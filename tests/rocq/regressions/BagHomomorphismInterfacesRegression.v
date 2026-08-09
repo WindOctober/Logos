@@ -1,5 +1,5 @@
 (******************************************************************************)
-(** Regressions for reusable finite-bag homomorphism and singleton-cross APIs. *)
+(** Regressions for reusable finite-bag homomorphism interfaces. *)
 (******************************************************************************)
 
 Set Implicit Arguments.
@@ -145,17 +145,6 @@ Proof.
 intros; now apply query_bag_map_pairwise_equiv_of_cardinal.
 Qed.
 
-Example right_singleton_cross_regression :
-  forall (left : bagT) right_row,
-    bag_eq T
-      (query_cross_join_bag left
-        (Febag.singleton (Fecol.CBag (CTuple T)) right_row))
-      (Febag.map (Fecol.CBag (CTuple T)) (Fecol.CBag (CTuple T))
-        (fun left_row => join_tuple T left_row right_row) left).
-Proof.
-intros; now apply query_cross_join_bag_singleton_right_map.
-Qed.
-
 End BagHomomorphismInterfacesRegression.
 
 Check query_bag_map_union.
@@ -168,6 +157,5 @@ Print Assumptions query_bag_map_congr.
 Print Assumptions query_bag_filter_commute.
 Print Assumptions query_bag_filter_map_fusion.
 Print Assumptions query_bag_map_pairwise_equiv_of_cardinal.
-Print Assumptions query_cross_join_bag_singleton_right_map.
 Print Assumptions list_flat_map_permut_rel.
 Print Assumptions theta_filter_map_permut_rel.

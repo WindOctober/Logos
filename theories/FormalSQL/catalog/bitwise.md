@@ -2,7 +2,7 @@
 
 Route here for: integer bit operations, shifts, BIT_AND/BIT_OR aggregate laws.
 
-This focused catalog contains 43 declarations routed at declaration granularity from `BitwiseFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 47 declarations routed at declaration granularity from `BitwiseFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `int32_from_twos_complement_as_word`
 
@@ -88,9 +88,93 @@ Lemma int64_from_twos_complement_value : forall x,
   int64_from_twos_complement (int64_value x) = x.
 ```
 
-## `bits_of_Z_land`
+## `int32_from_word_to_word`
 
 Source: [`theories/FormalSQL/BitwiseFacts.v:79`](../BitwiseFacts.v#L79)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the int32 from word to word law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `int32_from_word_to_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `bitwise semantics`, `INTEGER`, `int32`
+
+```rocq
+Lemma int32_from_word_to_word : forall x,
+  int32_from_word (int32_to_word x) = x.
+```
+
+## `int64_from_word_to_word`
+
+Source: [`theories/FormalSQL/BitwiseFacts.v:87`](../BitwiseFacts.v#L87)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the int64 from word to word law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `int64_from_word_to_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `bitwise semantics`, `BIGINT`, `int64`
+
+```rocq
+Lemma int64_from_word_to_word : forall x,
+  int64_from_word (int64_to_word x) = x.
+```
+
+## `int32_to_word_from_word`
+
+Source: [`theories/FormalSQL/BitwiseFacts.v:95`](../BitwiseFacts.v#L95)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the int32 to word from word law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `int32_to_word_from_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `bitwise semantics`, `INTEGER`, `int32`
+
+```rocq
+Lemma int32_to_word_from_word : forall word,
+  int32_to_word (int32_from_word word) = word.
+```
+
+## `int64_to_word_from_word`
+
+Source: [`theories/FormalSQL/BitwiseFacts.v:104`](../BitwiseFacts.v#L104)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the int64 to word from word law for bitwise scalar and aggregate semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `int64_to_word_from_word` direction for bitwise scalar and aggregate semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `bitwise semantics`, `BIGINT`, `int64`
+
+```rocq
+Lemma int64_to_word_from_word : forall word,
+  int64_to_word (int64_from_word word) = word.
+```
+
+## `bits_of_Z_land`
+
+Source: [`theories/FormalSQL/BitwiseFacts.v:113`](../BitwiseFacts.v#L113)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -113,7 +197,7 @@ Lemma bits_of_Z_land : forall n x y,
 
 ## `bits_of_Z_lor`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:99`](../BitwiseFacts.v#L99)
+Source: [`theories/FormalSQL/BitwiseFacts.v:133`](../BitwiseFacts.v#L133)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -136,7 +220,7 @@ Lemma bits_of_Z_lor : forall n x y,
 
 ## `int32_bit_and_as_word`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:119`](../BitwiseFacts.v#L119)
+Source: [`theories/FormalSQL/BitwiseFacts.v:153`](../BitwiseFacts.v#L153)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -158,7 +242,7 @@ Lemma int32_bit_and_as_word : forall x y,
 
 ## `int32_bit_or_as_word`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:132`](../BitwiseFacts.v#L132)
+Source: [`theories/FormalSQL/BitwiseFacts.v:166`](../BitwiseFacts.v#L166)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -180,7 +264,7 @@ Lemma int32_bit_or_as_word : forall x y,
 
 ## `int64_bit_and_as_word`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:145`](../BitwiseFacts.v#L145)
+Source: [`theories/FormalSQL/BitwiseFacts.v:179`](../BitwiseFacts.v#L179)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -202,7 +286,7 @@ Lemma int64_bit_and_as_word : forall x y,
 
 ## `int64_bit_or_as_word`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:158`](../BitwiseFacts.v#L158)
+Source: [`theories/FormalSQL/BitwiseFacts.v:192`](../BitwiseFacts.v#L192)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -224,7 +308,7 @@ Lemma int64_bit_or_as_word : forall x y,
 
 ## `int32_bit_and_associative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:171`](../BitwiseFacts.v#L171)
+Source: [`theories/FormalSQL/BitwiseFacts.v:205`](../BitwiseFacts.v#L205)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -246,7 +330,7 @@ Lemma int32_bit_and_associative : forall x y z,
 
 ## `int32_bit_or_associative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:179`](../BitwiseFacts.v#L179)
+Source: [`theories/FormalSQL/BitwiseFacts.v:213`](../BitwiseFacts.v#L213)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -268,7 +352,7 @@ Lemma int32_bit_or_associative : forall x y z,
 
 ## `int64_bit_and_associative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:187`](../BitwiseFacts.v#L187)
+Source: [`theories/FormalSQL/BitwiseFacts.v:221`](../BitwiseFacts.v#L221)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -290,7 +374,7 @@ Lemma int64_bit_and_associative : forall x y z,
 
 ## `int64_bit_or_associative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:195`](../BitwiseFacts.v#L195)
+Source: [`theories/FormalSQL/BitwiseFacts.v:229`](../BitwiseFacts.v#L229)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -312,7 +396,7 @@ Lemma int64_bit_or_associative : forall x y z,
 
 ## `int32_bit_and_commutative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:203`](../BitwiseFacts.v#L203)
+Source: [`theories/FormalSQL/BitwiseFacts.v:237`](../BitwiseFacts.v#L237)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -333,7 +417,7 @@ Lemma int32_bit_and_commutative : forall x y,
 
 ## `int32_bit_or_commutative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:210`](../BitwiseFacts.v#L210)
+Source: [`theories/FormalSQL/BitwiseFacts.v:244`](../BitwiseFacts.v#L244)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -354,7 +438,7 @@ Lemma int32_bit_or_commutative : forall x y,
 
 ## `int64_bit_and_commutative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:217`](../BitwiseFacts.v#L217)
+Source: [`theories/FormalSQL/BitwiseFacts.v:251`](../BitwiseFacts.v#L251)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -375,7 +459,7 @@ Lemma int64_bit_and_commutative : forall x y,
 
 ## `int64_bit_or_commutative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:224`](../BitwiseFacts.v#L224)
+Source: [`theories/FormalSQL/BitwiseFacts.v:258`](../BitwiseFacts.v#L258)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -396,7 +480,7 @@ Lemma int64_bit_or_commutative : forall x y,
 
 ## `int32_bit_and_idempotent`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:231`](../BitwiseFacts.v#L231)
+Source: [`theories/FormalSQL/BitwiseFacts.v:265`](../BitwiseFacts.v#L265)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -416,7 +500,7 @@ Lemma int32_bit_and_idempotent : forall x, int32_bit_and x x = x.
 
 ## `int32_bit_or_idempotent`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:237`](../BitwiseFacts.v#L237)
+Source: [`theories/FormalSQL/BitwiseFacts.v:271`](../BitwiseFacts.v#L271)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -436,7 +520,7 @@ Lemma int32_bit_or_idempotent : forall x, int32_bit_or x x = x.
 
 ## `int64_bit_and_idempotent`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:243`](../BitwiseFacts.v#L243)
+Source: [`theories/FormalSQL/BitwiseFacts.v:277`](../BitwiseFacts.v#L277)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -456,7 +540,7 @@ Lemma int64_bit_and_idempotent : forall x, int64_bit_and x x = x.
 
 ## `int64_bit_or_idempotent`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:249`](../BitwiseFacts.v#L249)
+Source: [`theories/FormalSQL/BitwiseFacts.v:283`](../BitwiseFacts.v#L283)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -476,7 +560,7 @@ Lemma int64_bit_or_idempotent : forall x, int64_bit_or x x = x.
 
 ## `int32_bit_and_closed`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:255`](../BitwiseFacts.v#L255)
+Source: [`theories/FormalSQL/BitwiseFacts.v:289`](../BitwiseFacts.v#L289)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -497,7 +581,7 @@ Lemma int32_bit_and_closed : forall x y,
 
 ## `int32_bit_or_closed`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:259`](../BitwiseFacts.v#L259)
+Source: [`theories/FormalSQL/BitwiseFacts.v:293`](../BitwiseFacts.v#L293)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -518,7 +602,7 @@ Lemma int32_bit_or_closed : forall x y,
 
 ## `int64_bit_and_closed`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:263`](../BitwiseFacts.v#L263)
+Source: [`theories/FormalSQL/BitwiseFacts.v:297`](../BitwiseFacts.v#L297)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -539,7 +623,7 @@ Lemma int64_bit_and_closed : forall x y,
 
 ## `int64_bit_or_closed`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:267`](../BitwiseFacts.v#L267)
+Source: [`theories/FormalSQL/BitwiseFacts.v:301`](../BitwiseFacts.v#L301)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -560,7 +644,7 @@ Lemma int64_bit_or_closed : forall x y,
 
 ## `combine_nullable_state_associative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:280`](../BitwiseFacts.v#L280)
+Source: [`theories/FormalSQL/BitwiseFacts.v:314`](../BitwiseFacts.v#L314)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -584,7 +668,7 @@ Lemma combine_nullable_state_associative : forall A (op : A -> A -> A),
 
 ## `combine_nullable_state_commutative`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:290`](../BitwiseFacts.v#L290)
+Source: [`theories/FormalSQL/BitwiseFacts.v:324`](../BitwiseFacts.v#L324)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -607,7 +691,7 @@ Lemma combine_nullable_state_commutative : forall A (op : A -> A -> A),
 
 ## `fold_nullable_state_partition`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:299`](../BitwiseFacts.v#L299)
+Source: [`theories/FormalSQL/BitwiseFacts.v:333`](../BitwiseFacts.v#L333)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -632,7 +716,7 @@ Lemma fold_nullable_state_partition : forall A (op : A -> A -> A),
 
 ## `fold_nullable_state_permutation`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:319`](../BitwiseFacts.v#L319)
+Source: [`theories/FormalSQL/BitwiseFacts.v:353`](../BitwiseFacts.v#L353)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -657,7 +741,7 @@ Lemma fold_nullable_state_permutation : forall A (op : A -> A -> A),
 
 ## `fold_nullable_state_adjacent_duplicate`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:341`](../BitwiseFacts.v#L341)
+Source: [`theories/FormalSQL/BitwiseFacts.v:375`](../BitwiseFacts.v#L375)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -682,7 +766,7 @@ Lemma fold_nullable_state_adjacent_duplicate : forall A (op : A -> A -> A),
 
 ## `int32_bit_and_fold_partition`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:362`](../BitwiseFacts.v#L362)
+Source: [`theories/FormalSQL/BitwiseFacts.v:396`](../BitwiseFacts.v#L396)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -706,7 +790,7 @@ Lemma int32_bit_and_fold_partition : forall left right,
 
 ## `int32_bit_or_fold_partition`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:369`](../BitwiseFacts.v#L369)
+Source: [`theories/FormalSQL/BitwiseFacts.v:403`](../BitwiseFacts.v#L403)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -730,7 +814,7 @@ Lemma int32_bit_or_fold_partition : forall left right,
 
 ## `int64_bit_and_fold_partition`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:376`](../BitwiseFacts.v#L376)
+Source: [`theories/FormalSQL/BitwiseFacts.v:410`](../BitwiseFacts.v#L410)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -754,7 +838,7 @@ Lemma int64_bit_and_fold_partition : forall left right,
 
 ## `int64_bit_or_fold_partition`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:383`](../BitwiseFacts.v#L383)
+Source: [`theories/FormalSQL/BitwiseFacts.v:417`](../BitwiseFacts.v#L417)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -778,7 +862,7 @@ Lemma int64_bit_or_fold_partition : forall left right,
 
 ## `int32_bit_and_fold_permutation`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:390`](../BitwiseFacts.v#L390)
+Source: [`theories/FormalSQL/BitwiseFacts.v:424`](../BitwiseFacts.v#L424)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -801,7 +885,7 @@ Lemma int32_bit_and_fold_permutation : forall left right,
 
 ## `int32_bit_or_fold_permutation`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:399`](../BitwiseFacts.v#L399)
+Source: [`theories/FormalSQL/BitwiseFacts.v:433`](../BitwiseFacts.v#L433)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -824,7 +908,7 @@ Lemma int32_bit_or_fold_permutation : forall left right,
 
 ## `int64_bit_and_fold_permutation`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:408`](../BitwiseFacts.v#L408)
+Source: [`theories/FormalSQL/BitwiseFacts.v:442`](../BitwiseFacts.v#L442)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -847,7 +931,7 @@ Lemma int64_bit_and_fold_permutation : forall left right,
 
 ## `int64_bit_or_fold_permutation`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:417`](../BitwiseFacts.v#L417)
+Source: [`theories/FormalSQL/BitwiseFacts.v:451`](../BitwiseFacts.v#L451)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -870,7 +954,7 @@ Lemma int64_bit_or_fold_permutation : forall left right,
 
 ## `int32_bit_and_fold_distinct_invariant`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:426`](../BitwiseFacts.v#L426)
+Source: [`theories/FormalSQL/BitwiseFacts.v:460`](../BitwiseFacts.v#L460)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -892,7 +976,7 @@ Lemma int32_bit_and_fold_distinct_invariant : forall prefix suffix x,
 
 ## `int32_bit_or_fold_distinct_invariant`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:434`](../BitwiseFacts.v#L434)
+Source: [`theories/FormalSQL/BitwiseFacts.v:468`](../BitwiseFacts.v#L468)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -914,7 +998,7 @@ Lemma int32_bit_or_fold_distinct_invariant : forall prefix suffix x,
 
 ## `int64_bit_and_fold_distinct_invariant`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:442`](../BitwiseFacts.v#L442)
+Source: [`theories/FormalSQL/BitwiseFacts.v:476`](../BitwiseFacts.v#L476)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -936,7 +1020,7 @@ Lemma int64_bit_and_fold_distinct_invariant : forall prefix suffix x,
 
 ## `int64_bit_or_fold_distinct_invariant`
 
-Source: [`theories/FormalSQL/BitwiseFacts.v:450`](../BitwiseFacts.v#L450)
+Source: [`theories/FormalSQL/BitwiseFacts.v:484`](../BitwiseFacts.v#L484)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

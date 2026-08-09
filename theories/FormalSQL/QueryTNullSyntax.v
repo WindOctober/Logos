@@ -57,10 +57,56 @@ Fixpoint TNullTypeListEqb
   | _, _ => false
   end.
 
+(** Reflection laws for the closed TNull type catalog.  These let admission
+    proofs reason about signatures without unfolding the catalog cases. *)
+Lemma TNullTypeEqb_eq :
+  forall left right,
+    TNullTypeEqb left right = true <-> left = right.
+Proof.
+intros left right; destruct left, right; cbn; split;
+  intro H; try discriminate; reflexivity.
+Qed.
+
+Lemma TNullTypeListEqb_eq :
+  forall left right,
+    TNullTypeListEqb left right = true <-> left = right.
+Proof.
+induction left as [|left_type left_rest IH];
+  destruct right as [|right_type right_rest]; cbn.
+- split; reflexivity.
+- split; intro H; discriminate.
+- split; intro H; discriminate.
+- rewrite Bool.Bool.andb_true_iff, TNullTypeEqb_eq, IH.
+  split.
+  + intros [-> ->]; reflexivity.
+  + intro H; inversion H; now split.
+Qed.
+
 Definition TNullRequireArgumentTypes
     (expected actual : list (type TNull)) (result_type : type TNull) :
     option (type TNull) :=
   if TNullTypeListEqb expected actual then Some result_type else None.
+
+Lemma TNullRequireArgumentTypes_some_iff :
+  forall expected actual result_type inferred_type,
+    TNullRequireArgumentTypes expected actual result_type =
+      Some inferred_type <->
+    expected = actual /\ result_type = inferred_type.
+Proof.
+intros expected actual result_type inferred_type.
+unfold TNullRequireArgumentTypes.
+destruct (TNullTypeListEqb expected actual) eqn:Htypes.
+- apply TNullTypeListEqb_eq in Htypes; subst actual.
+  split.
+  + intro H; inversion H; now split.
+  + intros [_ ->]; reflexivity.
+- split.
+  + discriminate.
+  + intros [Hequal _]; subst actual.
+    pose proof
+      (proj2 (TNullTypeListEqb_eq expected expected) eq_refl) as Hrefl.
+    congruence.
+Qed.
 
 Definition TNullIntegralType (argument_type : type TNull) : bool :=
   match argument_type with
@@ -224,8 +270,6 @@ Definition TNullScalarOperatorOutputType
       TNullRequireArgumentTypes
         [type_numeric; type_Z; type_numeric; type_Z; type_Z; type_Z]
         argument_types type_numeric
-  | ScalarPowerHalfInt64ToInt32 =>
-      TNullRequireArgumentTypes [type_int64] argument_types type_int32
   | ScalarStringConcat =>
       TNullRequireArgumentTypes [type_string; type_string]
         argument_types type_string
@@ -393,6 +437,57 @@ with TNullAggTermTypesFuel (fuel : nat) (terms : list AggTerm) :
 Definition TNullAggTermType (term : AggTerm) : option (type TNull) :=
   TNullAggTermTypeFuel (S (size_aggterm TNull term)) term.
 
+(** Primitive syntax/type bridges for the TNull constructors exposed by
+    [TNullSyntax].  Aggregate validity remains an explicit premise. *)
+Lemma TNullFunTermType_Constant :
+  forall value,
+    TNullFunTermType (Constant value) =
+      Some (NullValues.type_of_value value).
+Proof.
+reflexivity.
+Qed.
+
+Lemma TNullFunTermType_Dot :
+  forall attribute,
+    TNullFunTermType (Dot attribute) =
+      Some (type_of_attribute TNull attribute).
+Proof.
+reflexivity.
+Qed.
+
+Lemma TNullAggTermType_AExpr :
+  forall term,
+    TNullAggTermType (AExpr term) = TNullFunTermType term.
+Proof.
+reflexivity.
+Qed.
+
+Lemma TNullAggTermType_AAggregate :
+  forall function quantifier argument argument_type,
+    TNullFunTermType argument = Some argument_type ->
+    TNullAggTermType (AAggregate function quantifier argument) =
+      if TNullAggregateFunctionArgumentTypeValid function argument_type
+      then Some (TNullAggregateFunctionOutputType function) else None.
+Proof.
+intros function quantifier argument argument_type Htype.
+change
+  (match TNullFunTermType argument with
+   | Some actual_type =>
+       if TNullAggregateFunctionArgumentTypeValid function actual_type
+       then Some (TNullAggregateFunctionOutputType function) else None
+   | None => None
+   end =
+   if TNullAggregateFunctionArgumentTypeValid function argument_type
+   then Some (TNullAggregateFunctionOutputType function) else None).
+now rewrite Htype.
+Qed.
+
+Lemma TNullAggTermType_ACountStar :
+  TNullAggTermType ACountStar = Some type_int64.
+Proof.
+reflexivity.
+Qed.
+
 (** A strict flat function term remains useful inside the reviewed aggregate
     kernel, but it must not smuggle lazy CASE, schedule-sensitive Boolean
     evaluation, or predicate-to-value conversion below the typed scalar AST. *)
@@ -523,249 +618,6 @@ Definition RowMapExpr
     (input : QueryExpr) : QueryExpr :=
   @QExpr_RowMap TNull relname
     output_attributes row_map input.
-
-(** Abstract result of PostgreSQL's exact NUMERIC [exp] language operation.
-    The model supplies both the finite value and PostgreSQL display scale, or
-    reports SQLSTATE 22003. *)
-Inductive NumericExpResult : Type :=
-  | NumericExpSuccess : numeric -> Z -> NumericExpResult
-  | NumericExpValueOutOfRange : NumericExpResult.
-
-Definition NumericExpModel : Type := numeric -> Z -> NumericExpResult.
-
-Definition NumericExpOutputAttributes
-    (passthrough : list (attribute TNull))
-    (output_numeric_attribute output_dscale_attribute : attribute TNull) :
-    list (attribute TNull) :=
-  passthrough ++ [output_numeric_attribute; output_dscale_attribute].
-
-Definition NumericExpOutputRow
-    (passthrough : list (attribute TNull))
-    (output_numeric_attribute output_dscale_attribute : attribute TNull)
-    (input : tuple TNull)
-    (result : option numeric) (dscale : option Z) : tuple TNull :=
-  mk_tuple_lists
-    (NumericExpOutputAttributes passthrough
-      output_numeric_attribute output_dscale_attribute)
-    (map (dot TNull input) passthrough ++
-      [NullValues.Value_numeric result; NullValues.Value_Z dscale]).
-
-(** A successful abstract model result is admitted only when it is an exact
-    PostgreSQL-storable finite NUMERIC at the supplied display scale.  Requiring
-    a fixed point of [numeric_round_to_scale] prevents a model from attaching
-    stale scale metadata to a more precise value. *)
-Definition NumericExpSuccessValid (result : numeric) (dscale : Z) : bool :=
-  match result with
-  | NumericFinite _ =>
-      numeric_display_scale_valid_bool dscale &&
-      (dscale <=? postgres_numeric_max_display_scale) &&
-      numeric_runtime_fits_bool result &&
-      numeric_eqb (numeric_round_to_scale result dscale) result
-  | NumericNegInfinity | NumericPosInfinity | NumericNaN => false
-  end.
-
-Definition NumericExpRangeError {A : Type} : sql_outcome A :=
-  SqlError (DataException NumericValueOutOfRange).
-
-(** Declarative adapter for [EXP(AVG(int4))].  NULL AVG bypasses the abstract
-    EXP model and produces NULL value/scale.  Every non-NULL path consumes the
-    AVG display scale explicitly and validates the model result before exposing
-    it as SQL data. *)
-Definition NumericExpRowAdapter
-    (passthrough : list (attribute TNull))
-    (avg_value_attribute avg_dscale_attribute : attribute TNull)
-    (output_numeric_attribute output_dscale_attribute : attribute TNull)
-    (model : NumericExpModel)
-    (row : tuple TNull) : sql_outcome (tuple TNull) :=
-  match dot TNull row avg_value_attribute with
-  | NullValues.Value_numeric None =>
-      SqlSuccess
-        (NumericExpOutputRow passthrough
-          output_numeric_attribute output_dscale_attribute row None None)
-  | NullValues.Value_numeric (Some average) =>
-      match dot TNull row avg_dscale_attribute with
-      | NullValues.Value_Z (Some average_dscale) =>
-          match model average average_dscale with
-          | NumericExpValueOutOfRange => NumericExpRangeError
-          | NumericExpSuccess result result_dscale =>
-              if NumericExpSuccessValid result result_dscale
-              then
-                SqlSuccess
-                  (NumericExpOutputRow passthrough
-                    output_numeric_attribute output_dscale_attribute row
-                    (Some result) (Some result_dscale))
-              else NumericExpRangeError
-          end
-      | _ => NumericExpRangeError
-      end
-  | _ => NumericExpRangeError
-  end.
-
-Definition NumericExpRowMapExpr
-    (passthrough : list (attribute TNull))
-    (avg_value_attribute avg_dscale_attribute : attribute TNull)
-    (output_numeric_attribute output_dscale_attribute : attribute TNull)
-    (model : NumericExpModel)
-    (input : QueryExpr) : QueryExpr :=
-  RowMapExpr
-    (NumericExpOutputAttributes passthrough
-      output_numeric_attribute output_dscale_attribute)
-    (NumericExpRowAdapter passthrough avg_value_attribute avg_dscale_attribute
-      output_numeric_attribute output_dscale_attribute model)
-    input.
-
-Lemma NumericExpOutputRow_labels :
-  forall passthrough output_numeric_attribute output_dscale_attribute
-         input result dscale,
-    labels TNull
-      (NumericExpOutputRow passthrough
-        output_numeric_attribute output_dscale_attribute input result dscale)
-    =S=
-    Fset.mk_set (A TNull)
-      (NumericExpOutputAttributes passthrough
-        output_numeric_attribute output_dscale_attribute).
-Proof.
-intros; unfold NumericExpOutputRow, mk_tuple_lists.
-apply labels_mk_tuple.
-Qed.
-
-Lemma NumericExpRowAdapter_well_sorted :
-  forall passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model,
-    @query_row_map_well_sorted TNull
-      (Fset.mk_set (A TNull)
-        (NumericExpOutputAttributes passthrough
-          output_numeric_attribute output_dscale_attribute))
-      (NumericExpRowAdapter passthrough avg_value_attribute
-        avg_dscale_attribute output_numeric_attribute
-        output_dscale_attribute model).
-Proof.
-intros passthrough avg_value_attribute avg_dscale_attribute
-  output_numeric_attribute output_dscale_attribute model input output Houtput.
-unfold NumericExpRowAdapter in Houtput.
-repeat
-  match type of Houtput with
-  | context [match ?scrutinee with _ => _ end] =>
-      destruct scrutinee eqn:?
-  end;
-  try discriminate;
-  inversion Houtput; subst;
-  apply NumericExpOutputRow_labels.
-Qed.
-
-Lemma NumericExpRowMapExpr_admissible :
-  forall basesort passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model input,
-    TNullQueryExprAdmissible basesort input ->
-    query_expr_contains_analysis_error input = false ->
-    @query_output_attributes_unique TNull
-      (NumericExpOutputAttributes passthrough
-        output_numeric_attribute output_dscale_attribute) ->
-    TNullQueryExprAdmissible basesort
-      (NumericExpRowMapExpr passthrough avg_value_attribute
-        avg_dscale_attribute output_numeric_attribute
-        output_dscale_attribute model input).
-Proof.
-intros basesort passthrough avg_value_attribute avg_dscale_attribute
-  output_numeric_attribute output_dscale_attribute model input
-  Hinput Herror_free Hunique.
-unfold TNullQueryExprAdmissible in Hinput |- *.
-destruct Hinput as [Hinput [_ Hsites]].
-unfold NumericExpRowMapExpr.
-split.
-- cbn [query_expr_admissible].
-  repeat split; try assumption.
-  apply NumericExpRowAdapter_well_sorted.
-- split.
-  + exact Herror_free.
-  + change (query_expr_boolean_sites_well_formed input); exact Hsites.
-Qed.
-
-Lemma NumericExpRowAdapter_null :
-  forall passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model row,
-    dot TNull row avg_value_attribute = NullValues.Value_numeric None ->
-    NumericExpRowAdapter passthrough avg_value_attribute avg_dscale_attribute
-      output_numeric_attribute output_dscale_attribute model row =
-    SqlSuccess
-      (NumericExpOutputRow passthrough
-        output_numeric_attribute output_dscale_attribute row None None).
-Proof.
-intros; unfold NumericExpRowAdapter; now rewrite H.
-Qed.
-
-Lemma NumericExpRowAdapter_success :
-  forall passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model row
-         average average_dscale result result_dscale,
-    dot TNull row avg_value_attribute =
-      NullValues.Value_numeric (Some average) ->
-    dot TNull row avg_dscale_attribute =
-      NullValues.Value_Z (Some average_dscale) ->
-    model average average_dscale =
-      NumericExpSuccess result result_dscale ->
-    NumericExpSuccessValid result result_dscale = true ->
-    NumericExpRowAdapter passthrough avg_value_attribute avg_dscale_attribute
-      output_numeric_attribute output_dscale_attribute model row =
-    SqlSuccess
-      (NumericExpOutputRow passthrough
-        output_numeric_attribute output_dscale_attribute row
-        (Some result) (Some result_dscale)).
-Proof.
-intros; unfold NumericExpRowAdapter; now rewrite H, H0, H1, H2.
-Qed.
-
-Lemma NumericExpRowAdapter_invalid_success :
-  forall passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model row
-         average average_dscale result result_dscale,
-    dot TNull row avg_value_attribute =
-      NullValues.Value_numeric (Some average) ->
-    dot TNull row avg_dscale_attribute =
-      NullValues.Value_Z (Some average_dscale) ->
-    model average average_dscale =
-      NumericExpSuccess result result_dscale ->
-    NumericExpSuccessValid result result_dscale = false ->
-    NumericExpRowAdapter passthrough avg_value_attribute avg_dscale_attribute
-      output_numeric_attribute output_dscale_attribute model row =
-    @NumericExpRangeError (tuple TNull).
-Proof.
-intros; unfold NumericExpRowAdapter; now rewrite H, H0, H1, H2.
-Qed.
-
-Lemma NumericExpRowAdapter_out_of_range :
-  forall passthrough avg_value_attribute avg_dscale_attribute
-         output_numeric_attribute output_dscale_attribute model row
-         average average_dscale,
-    dot TNull row avg_value_attribute =
-      NullValues.Value_numeric (Some average) ->
-    dot TNull row avg_dscale_attribute =
-      NullValues.Value_Z (Some average_dscale) ->
-    model average average_dscale = NumericExpValueOutOfRange ->
-    NumericExpRowAdapter passthrough avg_value_attribute avg_dscale_attribute
-      output_numeric_attribute output_dscale_attribute model row =
-    @NumericExpRangeError (tuple TNull).
-Proof.
-intros; unfold NumericExpRowAdapter; now rewrite H, H0, H1.
-Qed.
-
-Lemma NumericExpSuccessValid_invalid_scale :
-  forall result dscale,
-    numeric_display_scale_valid_bool dscale = false ->
-    NumericExpSuccessValid result dscale = false.
-Proof.
-intros [| finite | |] dscale Hscale; try reflexivity.
-unfold NumericExpSuccessValid; now rewrite Hscale.
-Qed.
-
-Lemma NumericExpSuccessValid_nonfinite :
-  forall dscale,
-    NumericExpSuccessValid NumericNegInfinity dscale = false /\
-    NumericExpSuccessValid NumericPosInfinity dscale = false /\
-    NumericExpSuccessValid NumericNaN dscale = false.
-Proof.
-intro; repeat split; reflexivity.
-Qed.
 
 Definition eval_query_expr_outcome_in_env
     (db : db_state)

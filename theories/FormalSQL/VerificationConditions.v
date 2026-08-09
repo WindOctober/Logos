@@ -221,6 +221,46 @@ Proof.
 intros; exact I.
 Qed.
 
+Lemma condition_and_well_formed_iff :
+  forall expected first second,
+    verification_condition_well_formed
+      expected (ConditionAnd first second) <->
+    verification_condition_well_formed expected first /\
+    verification_condition_well_formed expected second.
+Proof.
+intros; reflexivity.
+Qed.
+
+Lemma condition_and_holds_iff :
+  forall db first second,
+    verification_condition_holds db (ConditionAnd first second) <->
+    verification_condition_holds db first /\
+    verification_condition_holds db second.
+Proof.
+intros; reflexivity.
+Qed.
+
+Lemma condition_and_is_derived :
+  forall expected constraints first second,
+    precondition_source_obligation
+      expected constraints PreconditionDerived first ->
+    precondition_source_obligation
+      expected constraints PreconditionDerived second ->
+    precondition_source_obligation
+      expected constraints PreconditionDerived
+      (ConditionAnd first second).
+Proof.
+intros expected constraints first second
+  [Hfirst_well_formed Hfirst_derived]
+  [Hsecond_well_formed Hsecond_derived].
+split.
+- now apply (proj2
+    (condition_and_well_formed_iff expected first second)).
+- intros db Hconforms.
+  apply (proj2 (condition_and_holds_iff db first second)).
+  split; [now apply Hfirst_derived|now apply Hsecond_derived].
+Qed.
+
 Lemma condition_true_is_derived :
   forall expected constraints,
     precondition_source_obligation

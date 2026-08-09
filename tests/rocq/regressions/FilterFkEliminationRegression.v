@@ -8,23 +8,6 @@ From Logos.FormalSQL Require Import
 Import ListNotations.
 Import FTuples.Tuple.
 
-(** The post-filter factorization retains both copies of every duplicate
-    input occurrence. *)
-Example duplicate_filter_movement_regression :
-  forall (left right : list bool),
-    filter
-      (fun pair => andb (fst pair) (negb (snd pair)))
-      (join_matched_rows pair Bool.eqb left right) =
-    join_matched_rows pair Bool.eqb
-      (filter (fun value => value) left)
-      (filter (fun value => negb value) right).
-Proof.
-intros left right.
-apply inner_filter_to_input_filters_exact.
-intros left_row right_row.
-destruct left_row, right_row; reflexivity.
-Qed.
-
 (** Reflexive equality witnesses that both pre-join guard schedules reach
     exactly the rows reached by the corresponding post-join guard. *)
 Example self_match_reaches_both_sides_regression :
@@ -101,25 +84,6 @@ Local Lemma regression_joined_filter_bad_member :
 Proof.
 cbn [regression_joined_filter_rows join_matched_rows].
 now left.
-Qed.
-
-(** This specifically exercises the accepted-cell reachability bridge rather
-    than asserting an opaque equality between two error relations. *)
-Example joined_filter_witness_error_regression :
-  eval_filter_rows env formula regression_joined_filter_rows
-    (SqlError expected).
-Proof.
-unfold regression_joined_filter_rows.
-eapply eval_filter_rows_uniform_error_of_join_witness
-  with (left_row := row) (right_row := row).
-- now left.
-- now left.
-- reflexivity.
-- exact row_errors.
-- intros candidate Hcandidate; right.
-  cbn [join_matched_rows] in Hcandidate.
-  destruct Hcandidate as [Hcandidate|[Hcandidate|[]]];
-    subst candidate; exact row_errors.
 Qed.
 
 (** The post-join duplicate schedule and the one-row input schedule both
@@ -208,12 +172,9 @@ Check query_filter_error_iff_of_stable_total_acceptance.
 Check eval_filter_rows_uniform_error_of_reached_member.
 Check eval_filter_rows_error_category_of_reached_categories.
 Check eval_filter_rows_success_excludes_reached_exact_error.
-Check eval_filter_rows_uniform_error_of_self_match.
 Check query_expr_outcome_equiv_of_shared_exact_error.
 
-Print Assumptions duplicate_filter_movement_regression.
 Print Assumptions self_match_reaches_both_sides_regression.
-Print Assumptions joined_filter_witness_error_regression.
 Print Assumptions structurally_different_filter_error_exact_regression.
 Print Assumptions exact_error_only_query_lift_regression.
 Print Assumptions query_filter_success_bags_of_stable_total_acceptance.

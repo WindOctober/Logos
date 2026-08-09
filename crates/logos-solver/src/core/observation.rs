@@ -295,40 +295,6 @@ fn analyze_query(schema: Option<&FormalSchema>, query: &FormalQueryExpr) -> Fact
                 keys,
             }
         }
-        FormalQueryExpr::RowMap { input, .. } => {
-            let child = analyze_query(schema, input);
-            let outputs = query_expr_output_signature(query).unwrap_or_default();
-            let keys = child
-                .keys
-                .iter()
-                .filter(|key| key.attributes.iter().all(|item| outputs.contains(item)))
-                .cloned()
-                .collect();
-            Facts {
-                permutation_closed: child.permutation_closed,
-                bag_functional: child.bag_functional,
-                bag_rule: if child.bag_functional {
-                    "the closed deterministic row adapter preserves a functional success bag"
-                        .to_owned()
-                } else {
-                    format!(
-                        "row mapping still needs child bag uniqueness: {}",
-                        child.bag_rule
-                    )
-                },
-                observation_functional: child.observation_functional,
-                observation_rule: if child.observation_functional {
-                    "order-preserving row mapping preserves a functional observation".to_owned()
-                } else {
-                    format!(
-                        "row mapping preserves rather than resolves child order choices: {}",
-                        child.observation_rule
-                    )
-                },
-                max_rows: child.max_rows,
-                keys,
-            }
-        }
         FormalQueryExpr::Selection { predicate, input } => {
             let child = analyze_query(schema, input);
             if !scalar_expr_is_row_local(predicate) {

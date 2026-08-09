@@ -31,31 +31,6 @@ Proof.
   inversion Hchecked; reflexivity.
 Qed.
 
-(** A non-NULL INTEGER cannot equal two unequal INTEGER constants.  Keeping
-    this fact at the typed integer layer prevents proofs from unfolding the
-    complete heterogeneous-value comparison dispatcher. *)
-Lemma interp_int32_neq_disjunction_true_of_unequal_constants :
-  forall value first second,
-    int32_value first <> int32_value second ->
-    Bool3.orb3
-      (NullValues.interp_predicate PredicateNeq
-        [Value_int32 (Some value); Value_int32 (Some first)])
-      (NullValues.interp_predicate PredicateNeq
-        [Value_int32 (Some value); Value_int32 (Some second)]) =
-    Bool3.true3.
-Proof.
-intros value first second Hdistinct.
-rewrite (interp_predicate_neq_of_order_compare
-  (Value_int32 (Some value)) (Value_int32 (Some first))
-  (Z.compare (int32_value value) (int32_value first)) eq_refl).
-rewrite (interp_predicate_neq_of_order_compare
-  (Value_int32 (Some value)) (Value_int32 (Some second))
-  (Z.compare (int32_value value) (int32_value second)) eq_refl).
-destruct (Z.compare_spec (int32_value value) (int32_value first));
-  destruct (Z.compare_spec (int32_value value) (int32_value second));
-  cbn; try reflexivity; congruence.
-Qed.
-
 Lemma int32_checked_defined_iff : forall integer,
   (exists result, int32_checked integer = Some result) <->
   int32_min <= integer <= int32_max.
@@ -130,6 +105,24 @@ Proof.
   rewrite Hresult.
   f_equal; apply int32_ext.
   now apply int32_checked_result_value in Hresult.
+Qed.
+
+Lemma int32_checked_some_iff : forall integer result,
+  int32_checked integer = Some result <->
+  int32_value result = integer.
+Proof.
+  intros integer result; split.
+  - apply int32_checked_result_value.
+  - intro Hvalue; rewrite <- Hvalue; apply int32_checked_value.
+Qed.
+
+Lemma int64_checked_some_iff : forall integer result,
+  int64_checked integer = Some result <->
+  int64_value result = integer.
+Proof.
+  intros integer result; split.
+  - apply int64_checked_result_value.
+  - intro Hvalue; rewrite <- Hvalue; apply int64_checked_value.
 Qed.
 
 Lemma int32_to_int64_injective : forall left right,

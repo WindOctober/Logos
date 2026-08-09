@@ -76,6 +76,40 @@ Proof.
     unfold int64_min, int64_max, int64_modulus in *; lia.
 Qed.
 
+Lemma int32_from_word_to_word : forall x,
+  int32_from_word (int32_to_word x) = x.
+Proof.
+  intro x; unfold int32_to_word.
+  rewrite <- int32_from_twos_complement_as_word.
+  apply int32_from_twos_complement_value.
+Qed.
+
+Lemma int64_from_word_to_word : forall x,
+  int64_from_word (int64_to_word x) = x.
+Proof.
+  intro x; unfold int64_to_word.
+  rewrite <- int64_from_twos_complement_as_word.
+  apply int64_from_twos_complement_value.
+Qed.
+
+Lemma int32_to_word_from_word : forall word,
+  int32_to_word (int32_from_word word) = word.
+Proof.
+  intro word; unfold int32_to_word, int32_from_word; cbn [int32_value].
+  apply Zmod.to_Z_inj.
+  rewrite bits.unsigned_of_Z, bits.mod_signed.
+  reflexivity.
+Qed.
+
+Lemma int64_to_word_from_word : forall word,
+  int64_to_word (int64_from_word word) = word.
+Proof.
+  intro word; unfold int64_to_word, int64_from_word; cbn [int64_value].
+  apply Zmod.to_Z_inj.
+  rewrite bits.unsigned_of_Z, bits.mod_signed.
+  reflexivity.
+Qed.
+
 Lemma bits_of_Z_land : forall n x y,
   0 <= n ->
   bits.of_Z n (Z.land x y) =

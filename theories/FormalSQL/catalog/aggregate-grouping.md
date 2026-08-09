@@ -2,7 +2,7 @@
 
 Route here for: COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality.
 
-This focused catalog contains 192 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 203 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `tnull_group_count_star_value_runtime_exact`
 
@@ -273,9 +273,65 @@ Lemma first_runtime_error_some_member :
     exists value, In value values /\ check value = Some error.
 ```
 
+## `first_runtime_error_some_iff`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:86`](../AggregateRuntimeFacts.v#L86)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma first_runtime_error_some_iff :
+  forall (A : Type) (check : A -> option sql_runtime_error) values error,
+    first_runtime_error check values = Some error <->
+    exists prefix current suffix,
+      values = List.app prefix (current :: suffix) /\
+      Forall (fun value => check value = None) prefix /\
+      check current = Some error.
+```
+
+## `first_runtime_error_Forall2_congr`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:116`](../AggregateRuntimeFacts.v#L116)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma first_runtime_error_Forall2_congr :
+  forall (A B : Type)
+    (left_check : A -> option sql_runtime_error)
+    (right_check : B -> option sql_runtime_error)
+    left right,
+    Forall2
+      (fun left_value right_value =>
+        left_check left_value = right_check right_value)
+      left right ->
+    first_runtime_error left_check left =
+    first_runtime_error right_check right.
+```
+
 ## `first_observation_error_as_first_runtime_error`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:84`](../AggregateRuntimeFacts.v#L84)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:135`](../AggregateRuntimeFacts.v#L135)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -297,7 +353,7 @@ Lemma first_observation_error_as_first_runtime_error : forall observations,
 
 ## `first_observation_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:93`](../AggregateRuntimeFacts.v#L93)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:144`](../AggregateRuntimeFacts.v#L144)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -319,7 +375,7 @@ Lemma first_observation_error_none_iff : forall observations,
 
 ## `first_observation_error_some_member`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:102`](../AggregateRuntimeFacts.v#L102)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:153`](../AggregateRuntimeFacts.v#L153)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -340,9 +396,59 @@ Lemma first_observation_error_some_member : forall observations error,
     In observation observations /\ fst observation = Some error.
 ```
 
+## `first_observation_error_some_iff`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:163`](../AggregateRuntimeFacts.v#L163)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma first_observation_error_some_iff : forall observations error,
+  first_observation_error observations = Some error <->
+  exists prefix current suffix,
+    observations = List.app prefix (current :: suffix) /\
+    Forall (fun observation => fst observation = None) prefix /\
+    fst current = Some error.
+```
+
+## `first_observation_error_Forall2_congr`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:175`](../AggregateRuntimeFacts.v#L175)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma first_observation_error_Forall2_congr : forall left right,
+  Forall2
+    (fun left_observation right_observation =>
+      fst left_observation = fst right_observation)
+    left right ->
+  first_observation_error left = first_observation_error right.
+```
+
 ## `observation_values_length`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:112`](../AggregateRuntimeFacts.v#L112)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:187`](../AggregateRuntimeFacts.v#L187)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -361,9 +467,36 @@ Lemma observation_values_length : forall observations,
   List.length (observation_values observations) = List.length observations.
 ```
 
+## `observation_values_Forall2`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:194`](../AggregateRuntimeFacts.v#L194)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the observation values forall2 law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `observation_values_Forall2` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma observation_values_Forall2 :
+  forall (relation : value -> value -> Prop) left right,
+    Forall2
+      (fun left_observation right_observation =>
+        relation (snd left_observation) (snd right_observation))
+      left right ->
+    Forall2 relation
+      (observation_values left) (observation_values right).
+```
+
 ## `aggregate_call_child_error_propagates`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:121`](../AggregateRuntimeFacts.v#L121)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:212`](../AggregateRuntimeFacts.v#L212)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -387,7 +520,7 @@ Lemma aggregate_call_child_error_propagates :
 
 ## `aggregate_call_safe_children_reduce_to_local`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:131`](../AggregateRuntimeFacts.v#L131)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:222`](../AggregateRuntimeFacts.v#L222)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -413,7 +546,7 @@ Lemma aggregate_call_safe_children_reduce_to_local :
 
 ## `aggregate_call_runtime_safe`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:143`](../AggregateRuntimeFacts.v#L143)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:234`](../AggregateRuntimeFacts.v#L234)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -440,7 +573,7 @@ Lemma aggregate_call_runtime_safe :
 
 ## `aggregate_call_runtime_error_as_first_error`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:157`](../AggregateRuntimeFacts.v#L157)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:248`](../AggregateRuntimeFacts.v#L248)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -468,7 +601,7 @@ Lemma aggregate_call_runtime_error_as_first_error :
 
 ## `aggregate_call_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:172`](../AggregateRuntimeFacts.v#L172)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:263`](../AggregateRuntimeFacts.v#L263)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -495,7 +628,7 @@ Lemma aggregate_call_runtime_error_none_iff :
 
 ## `aggregate_call_runtime_error_some_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:186`](../AggregateRuntimeFacts.v#L186)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:277`](../AggregateRuntimeFacts.v#L277)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -523,7 +656,7 @@ Lemma aggregate_call_runtime_error_some_iff :
 
 ## `count_star_runtime_error_observations`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:201`](../AggregateRuntimeFacts.v#L201)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:292`](../AggregateRuntimeFacts.v#L292)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -545,7 +678,7 @@ Lemma count_star_runtime_error_observations : forall observations,
 
 ## `int64_result_runtime_error_none_of_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:206`](../AggregateRuntimeFacts.v#L206)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:297`](../AggregateRuntimeFacts.v#L297)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -567,7 +700,7 @@ Lemma int64_result_runtime_error_none_of_range : forall integer,
 
 ## `int64_result_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:216`](../AggregateRuntimeFacts.v#L216)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:307`](../AggregateRuntimeFacts.v#L307)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -589,7 +722,7 @@ Lemma int64_result_runtime_error_none_iff : forall integer,
 
 ## `count_runtime_error_none_of_row_count_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:233`](../AggregateRuntimeFacts.v#L233)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:324`](../AggregateRuntimeFacts.v#L324)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -611,7 +744,7 @@ Lemma count_runtime_error_none_of_row_count_range : forall values,
 
 ## `count_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:241`](../AggregateRuntimeFacts.v#L241)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:332`](../AggregateRuntimeFacts.v#L332)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -633,7 +766,7 @@ Lemma count_runtime_error_none_iff : forall values,
 
 ## `non_null_count_runtime_error_none_of_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:249`](../AggregateRuntimeFacts.v#L249)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:340`](../AggregateRuntimeFacts.v#L340)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -655,7 +788,7 @@ Lemma non_null_count_runtime_error_none_of_range : forall values,
 
 ## `non_null_count_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:257`](../AggregateRuntimeFacts.v#L257)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:348`](../AggregateRuntimeFacts.v#L348)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -677,7 +810,7 @@ Lemma non_null_count_runtime_error_none_iff : forall values,
 
 ## `aggregate_function_locally_total_safe`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:286`](../AggregateRuntimeFacts.v#L286)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:377`](../AggregateRuntimeFacts.v#L377)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -699,7 +832,7 @@ Lemma aggregate_function_locally_total_safe : forall function values,
 
 ## `aggregate_call_locally_total_safe`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:296`](../AggregateRuntimeFacts.v#L296)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:387`](../AggregateRuntimeFacts.v#L387)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -723,7 +856,7 @@ Lemma aggregate_call_locally_total_safe :
 
 ## `aggregate_call_runtime_safe_of_locally_total`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:307`](../AggregateRuntimeFacts.v#L307)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:398`](../AggregateRuntimeFacts.v#L398)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -748,7 +881,7 @@ Lemma aggregate_call_runtime_safe_of_locally_total :
 
 ## `all_null_non_null_count_zero`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:321`](../AggregateRuntimeFacts.v#L321)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:412`](../AggregateRuntimeFacts.v#L412)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -770,7 +903,7 @@ Lemma all_null_non_null_count_zero : forall values,
 
 ## `aggregate_input_values_membership`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:336`](../AggregateRuntimeFacts.v#L336)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:427`](../AggregateRuntimeFacts.v#L427)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -792,7 +925,7 @@ Lemma aggregate_input_values_membership :
 
 ## `aggregate_input_values_nonempty_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:345`](../AggregateRuntimeFacts.v#L345)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:436`](../AggregateRuntimeFacts.v#L436)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -813,7 +946,7 @@ Lemma aggregate_input_values_nonempty_iff : forall quantifier values,
 
 ## `aggregate_input_values_preserves_Forall`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:367`](../AggregateRuntimeFacts.v#L367)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:458`](../AggregateRuntimeFacts.v#L458)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -836,7 +969,7 @@ Lemma aggregate_input_values_preserves_Forall :
 
 ## `non_null_count_eq_length_of_Forall_nonnull`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:381`](../AggregateRuntimeFacts.v#L381)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:472`](../AggregateRuntimeFacts.v#L472)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -859,7 +992,7 @@ Lemma non_null_count_eq_length_of_Forall_nonnull :
 
 ## `distinct_values_fixed_of_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:394`](../AggregateRuntimeFacts.v#L394)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:485`](../AggregateRuntimeFacts.v#L485)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -880,7 +1013,7 @@ Lemma distinct_values_fixed_of_nodup : forall values,
 
 ## `distinct_values_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:405`](../AggregateRuntimeFacts.v#L405)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:496`](../AggregateRuntimeFacts.v#L496)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -901,7 +1034,7 @@ Lemma distinct_values_length_le : forall values,
 
 ## `aggregate_input_values_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:412`](../AggregateRuntimeFacts.v#L412)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:503`](../AggregateRuntimeFacts.v#L503)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -923,7 +1056,7 @@ Lemma aggregate_input_values_length_le : forall quantifier values,
 
 ## `aggregate_input_values_distinct_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:420`](../AggregateRuntimeFacts.v#L420)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:511`](../AggregateRuntimeFacts.v#L511)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -944,7 +1077,7 @@ Lemma aggregate_input_values_distinct_nodup : forall values,
 
 ## `aggregate_distinct_input_Permutation_of_NoDup_support`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:429`](../AggregateRuntimeFacts.v#L429)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:520`](../AggregateRuntimeFacts.v#L520)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -970,7 +1103,7 @@ Theorem aggregate_distinct_input_Permutation_of_NoDup_support :
 
 ## `aggregate_input_values_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:447`](../AggregateRuntimeFacts.v#L447)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:538`](../AggregateRuntimeFacts.v#L538)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -995,7 +1128,7 @@ Lemma aggregate_input_values_permutation :
 
 ## `non_null_count_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:459`](../AggregateRuntimeFacts.v#L459)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:550`](../AggregateRuntimeFacts.v#L550)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1016,7 +1149,7 @@ Lemma non_null_count_permutation : forall left right,
 
 ## `interp_aggregate_count_star_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:482`](../AggregateRuntimeFacts.v#L482)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:573`](../AggregateRuntimeFacts.v#L573)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1039,7 +1172,7 @@ Lemma interp_aggregate_count_star_permutation : forall left right,
 
 ## `aggregate_count_star_local_runtime_error_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:495`](../AggregateRuntimeFacts.v#L495)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:586`](../AggregateRuntimeFacts.v#L586)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1062,7 +1195,7 @@ Lemma aggregate_count_star_local_runtime_error_permutation : forall left right,
 
 ## `interp_aggregate_count_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:506`](../AggregateRuntimeFacts.v#L506)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:597`](../AggregateRuntimeFacts.v#L597)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1085,7 +1218,7 @@ Lemma interp_aggregate_count_permutation : forall quantifier left right,
 
 ## `aggregate_count_local_runtime_error_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:524`](../AggregateRuntimeFacts.v#L524)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:615`](../AggregateRuntimeFacts.v#L615)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1111,7 +1244,7 @@ Lemma aggregate_count_local_runtime_error_permutation :
 
 ## `aggregate_input_values_idempotent`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:546`](../AggregateRuntimeFacts.v#L546)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:637`](../AggregateRuntimeFacts.v#L637)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1134,7 +1267,7 @@ Lemma aggregate_input_values_idempotent : forall quantifier values,
 
 ## `interp_aggregate_call_selected_input_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:556`](../AggregateRuntimeFacts.v#L556)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:647`](../AggregateRuntimeFacts.v#L647)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1159,7 +1292,7 @@ Lemma interp_aggregate_call_selected_input_congr :
 
 ## `aggregate_call_local_runtime_error_selected_input_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:567`](../AggregateRuntimeFacts.v#L567)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:658`](../AggregateRuntimeFacts.v#L658)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1186,7 +1319,7 @@ Lemma aggregate_call_local_runtime_error_selected_input_congr :
 
 ## `interp_aggregate_call_permutation_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:580`](../AggregateRuntimeFacts.v#L580)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:671`](../AggregateRuntimeFacts.v#L671)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1214,7 +1347,7 @@ Lemma interp_aggregate_call_permutation_congr :
 
 ## `aggregate_call_local_runtime_error_permutation_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:595`](../AggregateRuntimeFacts.v#L595)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:686`](../AggregateRuntimeFacts.v#L686)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1244,7 +1377,7 @@ Lemma aggregate_call_local_runtime_error_permutation_congr :
 
 ## `fold_nonempty_support_equiv`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:677`](../AggregateRuntimeFacts.v#L677)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:768`](../AggregateRuntimeFacts.v#L768)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1273,7 +1406,7 @@ Theorem fold_nonempty_support_equiv :
 
 ## `exact_extrema_aggregate_permutation`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:879`](../AggregateRuntimeFacts.v#L879)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:970`](../AggregateRuntimeFacts.v#L970)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1301,7 +1434,7 @@ Lemma exact_extrema_aggregate_permutation : forall function quantifier left righ
 
 ## `exact_extrema_aggregate_support_equiv`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:986`](../AggregateRuntimeFacts.v#L986)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1077`](../AggregateRuntimeFacts.v#L1077)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1330,7 +1463,7 @@ Theorem exact_extrema_aggregate_support_equiv :
 
 ## `exact_extrema_aggregate_duplicate_block`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1004`](../AggregateRuntimeFacts.v#L1004)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1095`](../AggregateRuntimeFacts.v#L1095)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1360,7 +1493,7 @@ Theorem exact_extrema_aggregate_duplicate_block :
 
 ## `first_runtime_error_duplicate_block`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1021`](../AggregateRuntimeFacts.v#L1021)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1112`](../AggregateRuntimeFacts.v#L1112)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1384,7 +1517,7 @@ Lemma first_runtime_error_duplicate_block :
 
 ## `first_observation_error_duplicate_block`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1032`](../AggregateRuntimeFacts.v#L1032)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1123`](../AggregateRuntimeFacts.v#L1123)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1407,7 +1540,7 @@ Lemma first_observation_error_duplicate_block :
 
 ## `exact_extrema_aggregate_runtime_error_duplicate_block`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1046`](../AggregateRuntimeFacts.v#L1046)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1137`](../AggregateRuntimeFacts.v#L1137)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1437,7 +1570,7 @@ Theorem exact_extrema_aggregate_runtime_error_duplicate_block :
 
 ## `aggregate_input_values_preserves_all_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1070`](../AggregateRuntimeFacts.v#L1070)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1161`](../AggregateRuntimeFacts.v#L1161)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1460,7 +1593,7 @@ Lemma aggregate_input_values_preserves_all_null : forall quantifier values,
 
 ## `aggregate_filter_input_membership`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1087`](../AggregateRuntimeFacts.v#L1087)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1178`](../AggregateRuntimeFacts.v#L1178)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1483,7 +1616,7 @@ Lemma aggregate_filter_input_membership :
 
 ## `aggregate_filter_input_distinct_nodup`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1098`](../AggregateRuntimeFacts.v#L1098)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1189`](../AggregateRuntimeFacts.v#L1189)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1504,7 +1637,7 @@ Lemma aggregate_filter_input_distinct_nodup : forall predicate values,
 
 ## `aggregate_filter_input_length_le`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1105`](../AggregateRuntimeFacts.v#L1105)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1196`](../AggregateRuntimeFacts.v#L1196)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1527,7 +1660,7 @@ Lemma aggregate_filter_input_length_le :
 
 ## `aggregate_filter_input_false_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1116`](../AggregateRuntimeFacts.v#L1116)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1207`](../AggregateRuntimeFacts.v#L1207)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1548,7 +1681,7 @@ Lemma aggregate_filter_input_false_empty : forall quantifier values,
 
 ## `count_star_value_of_row_count_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1130`](../AggregateRuntimeFacts.v#L1130)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1221`](../AggregateRuntimeFacts.v#L1221)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1573,7 +1706,7 @@ Lemma count_star_value_of_row_count_range : forall values,
 
 ## `count_value_of_non_null_count_range`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1147`](../AggregateRuntimeFacts.v#L1147)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1238`](../AggregateRuntimeFacts.v#L1238)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1601,7 +1734,7 @@ Lemma count_value_of_non_null_count_range : forall quantifier values,
 
 ## `int32_values_nonempty_of_typed_nonnull`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1175`](../AggregateRuntimeFacts.v#L1175)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1266`](../AggregateRuntimeFacts.v#L1266)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1627,7 +1760,7 @@ Lemma int32_values_nonempty_of_typed_nonnull : forall values,
 
 ## `numeric_values_nonempty_of_typed_nonnull`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1189`](../AggregateRuntimeFacts.v#L1189)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1280`](../AggregateRuntimeFacts.v#L1280)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1653,7 +1786,7 @@ Lemma numeric_values_nonempty_of_typed_nonnull : forall values,
 
 ## `interp_sum_int32_nonnull_of_nonempty_runtime_safe`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1203`](../AggregateRuntimeFacts.v#L1203)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1294`](../AggregateRuntimeFacts.v#L1294)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1680,7 +1813,7 @@ Lemma interp_sum_int32_nonnull_of_nonempty_runtime_safe : forall values,
 
 ## `interp_sum_numeric_nonnull_of_nonempty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1235`](../AggregateRuntimeFacts.v#L1235)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1326`](../AggregateRuntimeFacts.v#L1326)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1706,7 +1839,7 @@ Lemma interp_sum_numeric_nonnull_of_nonempty : forall values,
 
 ## `aggregate_sum_int32_nonnull_of_nonempty_runtime_safe`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1278`](../AggregateRuntimeFacts.v#L1278)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1369`](../AggregateRuntimeFacts.v#L1369)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1737,7 +1870,7 @@ Lemma aggregate_sum_int32_nonnull_of_nonempty_runtime_safe :
 
 ## `aggregate_sum_numeric_nonnull_of_nonempty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1299`](../AggregateRuntimeFacts.v#L1299)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1390`](../AggregateRuntimeFacts.v#L1390)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1765,7 +1898,7 @@ Lemma aggregate_sum_numeric_nonnull_of_nonempty : forall quantifier values,
 
 ## `count_star_empty_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1318`](../AggregateRuntimeFacts.v#L1318)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1409`](../AggregateRuntimeFacts.v#L1409)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1788,7 +1921,7 @@ Lemma count_star_empty_success :
 
 ## `count_empty_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1333`](../AggregateRuntimeFacts.v#L1333)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1424`](../AggregateRuntimeFacts.v#L1424)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1812,7 +1945,7 @@ Lemma count_empty_success : forall quantifier,
 
 ## `count_all_null_success`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1351`](../AggregateRuntimeFacts.v#L1351)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1442`](../AggregateRuntimeFacts.v#L1442)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1837,7 +1970,7 @@ Lemma count_all_null_success : forall quantifier values,
 
 ## `all_null_numeric_projections_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1375`](../AggregateRuntimeFacts.v#L1375)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1466`](../AggregateRuntimeFacts.v#L1466)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1861,7 +1994,7 @@ Lemma all_null_numeric_projections_empty : forall values,
 
 ## `all_null_float_string_projections_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1397`](../AggregateRuntimeFacts.v#L1397)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1488`](../AggregateRuntimeFacts.v#L1488)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1885,7 +2018,7 @@ Lemma all_null_float_string_projections_empty : forall values,
 
 ## `sum_int32_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1421`](../AggregateRuntimeFacts.v#L1421)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1512`](../AggregateRuntimeFacts.v#L1512)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1907,7 +2040,7 @@ Lemma sum_int32_empty_is_null : forall quantifier,
 
 ## `sum_int64_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1426`](../AggregateRuntimeFacts.v#L1426)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1517`](../AggregateRuntimeFacts.v#L1517)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1929,7 +2062,7 @@ Lemma sum_int64_numeric_empty_is_null : forall quantifier,
 
 ## `sum_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1431`](../AggregateRuntimeFacts.v#L1431)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1522`](../AggregateRuntimeFacts.v#L1522)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1951,7 +2084,7 @@ Lemma sum_numeric_empty_is_null : forall quantifier,
 
 ## `sum_int32_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1436`](../AggregateRuntimeFacts.v#L1436)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1527`](../AggregateRuntimeFacts.v#L1527)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1974,7 +2107,7 @@ Lemma sum_int32_all_null_is_null : forall quantifier values,
 
 ## `sum_int64_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1454`](../AggregateRuntimeFacts.v#L1454)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1545`](../AggregateRuntimeFacts.v#L1545)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1998,7 +2131,7 @@ Lemma sum_int64_numeric_all_null_is_null : forall quantifier values,
 
 ## `sum_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1473`](../AggregateRuntimeFacts.v#L1473)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1564`](../AggregateRuntimeFacts.v#L1564)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2021,7 +2154,7 @@ Lemma sum_numeric_all_null_is_null : forall quantifier values,
 
 ## `sum_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1491`](../AggregateRuntimeFacts.v#L1491)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1582`](../AggregateRuntimeFacts.v#L1582)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2043,7 +2176,7 @@ Lemma sum_float_empty_is_null : forall quantifier,
 
 ## `sum_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1496`](../AggregateRuntimeFacts.v#L1496)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1587`](../AggregateRuntimeFacts.v#L1587)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2065,7 +2198,7 @@ Lemma sum_double_empty_is_null : forall quantifier,
 
 ## `sum_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1501`](../AggregateRuntimeFacts.v#L1501)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1592`](../AggregateRuntimeFacts.v#L1592)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2088,7 +2221,7 @@ Lemma sum_float_all_null_is_null : forall quantifier values,
 
 ## `sum_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1519`](../AggregateRuntimeFacts.v#L1519)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1610`](../AggregateRuntimeFacts.v#L1610)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2111,7 +2244,7 @@ Lemma sum_double_all_null_is_null : forall quantifier values,
 
 ## `min_max_int32_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1537`](../AggregateRuntimeFacts.v#L1537)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1628`](../AggregateRuntimeFacts.v#L1628)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2133,7 +2266,7 @@ Lemma min_max_int32_empty_is_null : forall function quantifier,
 
 ## `min_max_numeric_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1544`](../AggregateRuntimeFacts.v#L1544)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1635`](../AggregateRuntimeFacts.v#L1635)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2155,7 +2288,7 @@ Lemma min_max_numeric_empty_is_null : forall function quantifier,
 
 ## `min_max_int32_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1551`](../AggregateRuntimeFacts.v#L1551)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1642`](../AggregateRuntimeFacts.v#L1642)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2178,7 +2311,7 @@ Lemma min_max_int32_all_null_is_null : forall function quantifier values,
 
 ## `min_max_numeric_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1575`](../AggregateRuntimeFacts.v#L1575)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1666`](../AggregateRuntimeFacts.v#L1666)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2201,7 +2334,7 @@ Lemma min_max_numeric_all_null_is_null : forall function quantifier values,
 
 ## `min_max_int64_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1599`](../AggregateRuntimeFacts.v#L1599)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1690`](../AggregateRuntimeFacts.v#L1690)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2223,7 +2356,7 @@ Lemma min_max_int64_empty_is_null : forall function quantifier,
 
 ## `min_max_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1606`](../AggregateRuntimeFacts.v#L1606)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1697`](../AggregateRuntimeFacts.v#L1697)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2245,7 +2378,7 @@ Lemma min_max_float_empty_is_null : forall function quantifier,
 
 ## `min_max_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1613`](../AggregateRuntimeFacts.v#L1613)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1704`](../AggregateRuntimeFacts.v#L1704)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2267,7 +2400,7 @@ Lemma min_max_double_empty_is_null : forall function quantifier,
 
 ## `max_string_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1620`](../AggregateRuntimeFacts.v#L1620)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1711`](../AggregateRuntimeFacts.v#L1711)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2289,7 +2422,7 @@ Lemma max_string_empty_is_null : forall quantifier,
 
 ## `min_max_int64_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1625`](../AggregateRuntimeFacts.v#L1625)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1716`](../AggregateRuntimeFacts.v#L1716)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2312,7 +2445,7 @@ Lemma min_max_int64_all_null_is_null : forall function quantifier values,
 
 ## `min_max_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1649`](../AggregateRuntimeFacts.v#L1649)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1740`](../AggregateRuntimeFacts.v#L1740)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2335,7 +2468,7 @@ Lemma min_max_float_all_null_is_null : forall function quantifier values,
 
 ## `min_max_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1673`](../AggregateRuntimeFacts.v#L1673)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1764`](../AggregateRuntimeFacts.v#L1764)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2358,7 +2491,7 @@ Lemma min_max_double_all_null_is_null : forall function quantifier values,
 
 ## `max_string_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1697`](../AggregateRuntimeFacts.v#L1697)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1788`](../AggregateRuntimeFacts.v#L1788)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2381,7 +2514,7 @@ Lemma max_string_all_null_is_null : forall quantifier values,
 
 ## `avg_integral_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1715`](../AggregateRuntimeFacts.v#L1715)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1806`](../AggregateRuntimeFacts.v#L1806)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2404,7 +2537,7 @@ Lemma avg_integral_empty_is_null : forall function quantifier,
 
 ## `avg_integral_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1723`](../AggregateRuntimeFacts.v#L1723)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1814`](../AggregateRuntimeFacts.v#L1814)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2428,7 +2561,7 @@ Lemma avg_integral_all_null_is_null : forall function quantifier values,
 
 ## `avg_float_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1749`](../AggregateRuntimeFacts.v#L1749)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1840`](../AggregateRuntimeFacts.v#L1840)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2450,7 +2583,7 @@ Lemma avg_float_empty_is_null : forall quantifier,
 
 ## `avg_double_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1754`](../AggregateRuntimeFacts.v#L1754)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1845`](../AggregateRuntimeFacts.v#L1845)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2472,7 +2605,7 @@ Lemma avg_double_empty_is_null : forall quantifier,
 
 ## `avg_float_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1759`](../AggregateRuntimeFacts.v#L1759)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1850`](../AggregateRuntimeFacts.v#L1850)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2495,7 +2628,7 @@ Lemma avg_float_all_null_is_null : forall quantifier values,
 
 ## `avg_double_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1777`](../AggregateRuntimeFacts.v#L1777)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1868`](../AggregateRuntimeFacts.v#L1868)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2518,7 +2651,7 @@ Lemma avg_double_all_null_is_null : forall quantifier values,
 
 ## `avg_numeric_fixed_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1795`](../AggregateRuntimeFacts.v#L1795)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1886`](../AggregateRuntimeFacts.v#L1886)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2541,7 +2674,7 @@ Lemma avg_numeric_fixed_empty_is_null : forall precision scale quantifier,
 
 ## `avg_numeric_fixed_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1806`](../AggregateRuntimeFacts.v#L1806)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1897`](../AggregateRuntimeFacts.v#L1897)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2567,7 +2700,7 @@ Lemma avg_numeric_fixed_all_null_is_null :
 
 ## `avg_numeric_at_scale_empty_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1829`](../AggregateRuntimeFacts.v#L1829)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1920`](../AggregateRuntimeFacts.v#L1920)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2590,7 +2723,7 @@ Lemma avg_numeric_at_scale_empty_is_null : forall scale quantifier,
 
 ## `avg_numeric_at_scale_all_null_is_null`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1840`](../AggregateRuntimeFacts.v#L1840)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1931`](../AggregateRuntimeFacts.v#L1931)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2614,7 +2747,7 @@ Lemma avg_numeric_at_scale_all_null_is_null : forall scale quantifier values,
 
 ## `single_value_int32_runtime_error_none_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1864`](../AggregateRuntimeFacts.v#L1864)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1955`](../AggregateRuntimeFacts.v#L1955)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2636,7 +2769,7 @@ Lemma single_value_int32_runtime_error_none_iff : forall values,
 
 ## `single_value_int32_runtime_error_cardinality_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1874`](../AggregateRuntimeFacts.v#L1874)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1965`](../AggregateRuntimeFacts.v#L1965)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2658,7 +2791,7 @@ Lemma single_value_int32_runtime_error_cardinality_iff : forall values,
 
 ## `aggregate_single_value_int32_selected_empty`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1884`](../AggregateRuntimeFacts.v#L1884)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1975`](../AggregateRuntimeFacts.v#L1975)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2685,7 +2818,7 @@ Lemma aggregate_single_value_int32_selected_empty :
 
 ## `aggregate_single_value_int32_selected_singleton`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1898`](../AggregateRuntimeFacts.v#L1898)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1989`](../AggregateRuntimeFacts.v#L1989)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2713,7 +2846,7 @@ Lemma aggregate_single_value_int32_selected_singleton :
 
 ## `aggregate_single_value_int32_cardinality_violation_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1913`](../AggregateRuntimeFacts.v#L1913)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2004`](../AggregateRuntimeFacts.v#L2004)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2739,7 +2872,7 @@ Lemma aggregate_single_value_int32_cardinality_violation_iff :
 
 ## `query_make_groups_empty_shape`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1929`](../AggregateRuntimeFacts.v#L1929)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2020`](../AggregateRuntimeFacts.v#L2020)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2765,7 +2898,7 @@ Lemma query_make_groups_empty_shape :
 
 ## `eval_grouping_sets_nil_outcome_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1975`](../AggregateRuntimeFacts.v#L1975)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2066`](../AggregateRuntimeFacts.v#L2066)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2788,7 +2921,7 @@ Lemma eval_grouping_sets_nil_outcome_iff : forall env input_bag outcome,
 
 ## `eval_grouping_sets_cons_success_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:1985`](../AggregateRuntimeFacts.v#L1985)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2076`](../AggregateRuntimeFacts.v#L2076)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2818,7 +2951,7 @@ Lemma eval_grouping_sets_cons_success_iff :
 
 ## `eval_grouping_sets_cons_error_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2003`](../AggregateRuntimeFacts.v#L2003)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2094`](../AggregateRuntimeFacts.v#L2094)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2848,7 +2981,7 @@ Lemma eval_grouping_sets_cons_error_iff :
 
 ## `eval_grouping_sets_outcome_Forall2_congr`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2055`](../AggregateRuntimeFacts.v#L2055)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2146`](../AggregateRuntimeFacts.v#L2146)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2874,7 +3007,7 @@ Theorem eval_grouping_sets_outcome_Forall2_congr :
 
 ## `eval_grouping_sets_success_fold_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2099`](../AggregateRuntimeFacts.v#L2099)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2190`](../AggregateRuntimeFacts.v#L2190)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2901,7 +3034,7 @@ Theorem eval_grouping_sets_success_fold_iff :
 
 ## `eval_grouping_sets_error_prefix_iff`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2141`](../AggregateRuntimeFacts.v#L2141)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2232`](../AggregateRuntimeFacts.v#L2232)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2929,9 +3062,101 @@ Theorem eval_grouping_sets_error_prefix_iff :
       grouping_set_error_at env input_bag current error.
 ```
 
+## `outcome_equiv_success_iff`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2289`](../AggregateRuntimeFacts.v#L2289)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_equiv_success_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop) left right,
+    outcome_equiv value_equiv (SqlSuccess left) (SqlSuccess right) <->
+    value_equiv left right.
+```
+
+## `outcome_equiv_error_iff`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2295`](../AggregateRuntimeFacts.v#L2295)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+
+Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_equiv_error_iff :
+  forall (A : Type) (value_equiv : A -> A -> Prop)
+    left_error right_error,
+    outcome_equiv value_equiv
+      (@SqlError A left_error) (@SqlError A right_error) <->
+    left_error = right_error.
+```
+
+## `outcome_equiv_success_error`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2303`](../AggregateRuntimeFacts.v#L2303)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_equiv_success_error :
+  forall (A : Type) (value_equiv : A -> A -> Prop) value error,
+    ~ outcome_equiv value_equiv (SqlSuccess value) (@SqlError A error).
+```
+
+## `outcome_equiv_error_success`
+
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2308`](../AggregateRuntimeFacts.v#L2308)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_equiv_error_success :
+  forall (A : Type) (value_equiv : A -> A -> Prop) error value,
+    ~ outcome_equiv value_equiv (@SqlError A error) (SqlSuccess value).
+```
+
 ## `closed_group_direct_column_argument_observations_permutation_rows`
 
-Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2395`](../AggregateRuntimeFacts.v#L2395)
+Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2510`](../AggregateRuntimeFacts.v#L2510)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3408,9 +3633,38 @@ Theorem scalar_expr_conj_list_redundant_operand_acceptance_exact :
       (scalar_acceptance_fold And_F (map decide expressions)).
 ```
 
+## `filter_scalar_observation_equiv_at_of_acceptance_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1121`](../GroupedFilterOutcomeFacts.v#L1121)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Transports or composes aggregate evaluation across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `grouping`, `filter`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `aggregate`, `filter`, `WHERE`, `equivalence`, `congruence`
+
+```rocq
+Lemma filter_scalar_observation_equiv_at_of_acceptance_exact :
+  forall left_env left_formula right_env right_formula accepted,
+    scalar_expr_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule left_env left_formula accepted ->
+    scalar_expr_acceptance_exact_at
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null boolean_schedule right_env right_formula accepted ->
+    filter_scalar_observation_equiv_at
+      left_env left_formula right_env right_formula.
+```
+
 ## `eval_groups_global_success_length_le_one`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1519`](../GroupedFilterOutcomeFacts.v#L1519)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1552`](../GroupedFilterOutcomeFacts.v#L1552)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3434,7 +3688,7 @@ Theorem eval_groups_global_success_length_le_one :
 
 ## `eval_groups_global_success_NoDupA`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1538`](../GroupedFilterOutcomeFacts.v#L1538)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1571`](../GroupedFilterOutcomeFacts.v#L1571)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3459,7 +3713,7 @@ Theorem eval_groups_global_success_NoDupA :
 
 ## `eval_group_bag_exact_rows_permut_equiv`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1594`](../GroupedFilterOutcomeFacts.v#L1594)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1627`](../GroupedFilterOutcomeFacts.v#L1627)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -3521,7 +3775,7 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
 
 ## `query_expr_group_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1786`](../GroupedFilterOutcomeFacts.v#L1786)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1819`](../GroupedFilterOutcomeFacts.v#L1819)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes` for the public result.
 
@@ -3780,9 +4034,46 @@ Theorem partition_members_filter_by_key_exact :
       (map snd (@Partition.partition A Key key_order key_of rows)).
 ```
 
+## `partition_lookup_key_exact`
+
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:188`](../GroupingRewriteFacts.v#L188)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the partition lookup key exact law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `partition_lookup_key_exact` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Theorem partition_lookup_key_exact :
+  forall (key_of : A -> Key) rows key,
+    filter
+      (fun group => Oset.eq_bool key_order (fst group) key)
+      (@Partition.partition A Key key_order key_of rows) =
+    match
+      filter
+        (fun row => Oset.eq_bool key_order (key_of row) key)
+        rows
+    with
+    | nil => nil
+    | _ :: _ =>
+        [(key,
+          rev
+            (filter
+              (fun row => Oset.eq_bool key_order (key_of row) key)
+              rows))]
+    end.
+```
+
 ## `partition_map_heterogeneous`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:205`](../GroupingRewriteFacts.v#L205)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:237`](../GroupingRewriteFacts.v#L237)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3808,7 +4099,7 @@ Theorem partition_map_heterogeneous :
 
 ## `partition_members_equal_of_key_decisions`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:333`](../GroupingRewriteFacts.v#L333)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:365`](../GroupingRewriteFacts.v#L365)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3837,7 +4128,7 @@ Theorem partition_members_equal_of_key_decisions :
 
 ## `list_permut_eq_implies_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:356`](../GroupingRewriteFacts.v#L356)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:388`](../GroupingRewriteFacts.v#L388)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3860,7 +4151,7 @@ Lemma list_permut_eq_implies_Permutation :
 
 ## `partition_keys_Permutation_of_NoDup_support`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:395`](../GroupingRewriteFacts.v#L395)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:427`](../GroupingRewriteFacts.v#L427)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3887,7 +4178,7 @@ Theorem partition_keys_Permutation_of_NoDup_support :
 
 ## `partition_member_exact_key_filter`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:673`](../GroupingRewriteFacts.v#L673)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:705`](../GroupingRewriteFacts.v#L705)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3916,7 +4207,7 @@ Theorem partition_member_exact_key_filter :
 
 ## `partition_factored_key_refinement_Forall2`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:821`](../GroupingRewriteFacts.v#L821)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:843`](../GroupingRewriteFacts.v#L843)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3951,7 +4242,7 @@ Theorem partition_factored_key_refinement_Forall2 :
 
 ## `query_grouping_key_decision_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:883`](../GroupingRewriteFacts.v#L883)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:905`](../GroupingRewriteFacts.v#L905)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3979,7 +4270,7 @@ Lemma query_grouping_key_decision_Permutation :
 
 ## `query_make_groups_group_terms_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:929`](../GroupingRewriteFacts.v#L929)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:951`](../GroupingRewriteFacts.v#L951)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4003,7 +4294,7 @@ Theorem query_make_groups_group_terms_Permutation :
 
 ## `query_make_groups_map_heterogeneous`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:984`](../GroupingRewriteFacts.v#L984)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1006`](../GroupingRewriteFacts.v#L1006)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4032,7 +4323,7 @@ Theorem query_make_groups_map_heterogeneous :
 
 ## `query_make_groups_factored_refinement_Forall2`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1026`](../GroupingRewriteFacts.v#L1026)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1048`](../GroupingRewriteFacts.v#L1048)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4070,7 +4361,7 @@ Theorem query_make_groups_factored_refinement_Forall2 :
 
 ## `query_make_groups_filter_by_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1129`](../GroupingRewriteFacts.v#L1129)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1151`](../GroupingRewriteFacts.v#L1151)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4104,7 +4395,7 @@ Theorem query_make_groups_filter_by_key_exact :
 
 ## `query_make_groups_selected_members_permut`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1153`](../GroupingRewriteFacts.v#L1153)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1175`](../GroupingRewriteFacts.v#L1175)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4137,7 +4428,7 @@ Theorem query_make_groups_selected_members_permut :
 
 ## `query_make_groups_selected_members_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1189`](../GroupingRewriteFacts.v#L1189)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1211`](../GroupingRewriteFacts.v#L1211)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4170,7 +4461,7 @@ Theorem query_make_groups_selected_members_Permutation :
 
 ## `query_make_groups_constant_nonempty_key`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1226`](../GroupingRewriteFacts.v#L1226)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1248`](../GroupingRewriteFacts.v#L1248)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4201,7 +4492,7 @@ Theorem query_make_groups_constant_nonempty_key :
 
 ## `query_make_groups_matching_one_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1249`](../GroupingRewriteFacts.v#L1249)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1271`](../GroupingRewriteFacts.v#L1271)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4249,7 +4540,7 @@ Theorem query_make_groups_matching_one_key_exact :
 
 ## `query_make_groups_lookup_key_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1297`](../GroupingRewriteFacts.v#L1297)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1319`](../GroupingRewriteFacts.v#L1319)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4296,7 +4587,7 @@ Theorem query_make_groups_lookup_key_exact :
 
 ## `query_make_groups_members_same_key_nonempty`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1339`](../GroupingRewriteFacts.v#L1339)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1361`](../GroupingRewriteFacts.v#L1361)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4323,7 +4614,7 @@ Lemma query_make_groups_members_same_key_nonempty :
 
 ## `query_make_groups_member_exact_key_filter`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1367`](../GroupingRewriteFacts.v#L1367)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1389`](../GroupingRewriteFacts.v#L1389)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4355,7 +4646,7 @@ Theorem query_make_groups_member_exact_key_filter :
 
 ## `query_make_groups_member_key_filter_Permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1444`](../GroupingRewriteFacts.v#L1444)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1466`](../GroupingRewriteFacts.v#L1466)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4386,7 +4677,7 @@ Corollary query_make_groups_member_key_filter_Permutation :
 
 ## `query_make_groups_global_exact`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1467`](../GroupingRewriteFacts.v#L1467)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1489`](../GroupingRewriteFacts.v#L1489)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4408,7 +4699,7 @@ Theorem query_make_groups_global_exact :
 
 ## `query_make_groups_global_length_one`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1479`](../GroupingRewriteFacts.v#L1479)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1501`](../GroupingRewriteFacts.v#L1501)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4430,7 +4721,7 @@ Corollary query_make_groups_global_length_one :
 
 ## `query_make_groups_permut_nonempty`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1492`](../GroupingRewriteFacts.v#L1492)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1514`](../GroupingRewriteFacts.v#L1514)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4456,7 +4747,7 @@ Lemma query_make_groups_permut_nonempty :
 
 ## `group_filter_map_permutation`
 
-Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1513`](../GroupingRewriteFacts.v#L1513)
+Source: [`theories/FormalSQL/GroupingRewriteFacts.v:1535`](../GroupingRewriteFacts.v#L1535)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4489,7 +4780,7 @@ Lemma group_filter_map_permutation :
 
 ## `query_group_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:470`](../OrderedQueryFacts.v#L470)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:460`](../OrderedQueryFacts.v#L460)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4524,7 +4815,7 @@ Theorem query_group_success_bags_congr_extensional :
 
 ## `query_grouping_sets_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:496`](../OrderedQueryFacts.v#L496)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:486`](../OrderedQueryFacts.v#L486)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4556,7 +4847,7 @@ Theorem query_grouping_sets_success_bags_congr_extensional :
 
 ## `query_expr_group_outcome_equiv_of_global_having`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1024`](../OrderedQueryFacts.v#L1024)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1014`](../OrderedQueryFacts.v#L1014)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_group_possible_outcome_equiv_of_uniform_having` for the public result.
 
@@ -4589,7 +4880,7 @@ Lemma query_expr_group_outcome_equiv_of_global_having :
 
 ## `eval_query_expr_group_outcome_iff_of_child_outcome_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1053`](../OrderedQueryFacts.v#L1053)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1043`](../OrderedQueryFacts.v#L1043)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4616,7 +4907,7 @@ Lemma eval_query_expr_group_outcome_iff_of_child_outcome_equiv :
 
 ## `query_expr_group_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1111`](../OrderedQueryFacts.v#L1111)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1101`](../OrderedQueryFacts.v#L1101)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_group_possible_outcome_equiv_congr_uniform` for the public result.
 
@@ -4692,7 +4983,7 @@ Lemma tnull_query_groups_matching_one_key :
 
 ## `query_expr_group_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1296`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1296)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1349`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1349)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -4717,7 +5008,7 @@ Lemma query_expr_group_global_typed_congr :
 
 ## `query_expr_grouping_sets_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1326`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1326)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1379`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1379)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -4742,7 +5033,7 @@ Lemma query_expr_grouping_sets_global_typed_congr :
 
 ## `eval_groups_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1989`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1989)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2042`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2042)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4782,7 +5073,7 @@ Lemma eval_groups_scalar_global_congr :
 
 ## `eval_group_bag_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2117`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2117)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2170`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2170)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4811,7 +5102,7 @@ Lemma eval_group_bag_scalar_global_congr :
 
 ## `eval_group_bag_group_keys_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2211`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2211)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2264`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2264)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4834,7 +5125,7 @@ Lemma eval_group_bag_group_keys_none :
 
 ## `query_group_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5346`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5346)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5399`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5399)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4871,7 +5162,7 @@ Definition query_group_rows_bag_outcomes
 
 ## `query_grouping_sets_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5365`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5365)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5418`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5418)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4906,7 +5197,7 @@ Definition query_grouping_sets_rows_bag_outcomes
 
 ## `query_group_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5597`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5597)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5650`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5650)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4936,7 +5227,7 @@ Theorem query_group_scheduled_bag_outcomes_characterization :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5641`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5641)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5694`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5694)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4966,7 +5257,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_characterization :
 
 ## `query_group_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5868`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5868)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5921`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5921)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5014,7 +5305,7 @@ Theorem query_group_scheduled_bag_outcomes_congr :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5907`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5907)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5960`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5960)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5058,7 +5349,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_congr :
 
 ## `query_expr_group_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6221`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6221)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6274`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6274)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5107,7 +5398,7 @@ Theorem query_expr_group_possible_bag_schedule_transport :
 
 ## `query_expr_group_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6264`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6264)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6317`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6317)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5156,7 +5447,7 @@ Corollary query_expr_group_possible_bag_outcome_equiv :
 
 ## `query_expr_grouping_sets_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6302`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6302)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6355`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6355)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5206,7 +5497,7 @@ Theorem query_expr_grouping_sets_possible_bag_schedule_transport :
 
 ## `query_expr_grouping_sets_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6344`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6344)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6397`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6397)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

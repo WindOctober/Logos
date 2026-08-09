@@ -2,7 +2,7 @@
 
 Route here for: typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes.
 
-This focused catalog contains 99 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`, `WitnessFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 101 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`, `WitnessFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `project_row_length`
 
@@ -1042,9 +1042,57 @@ Lemma int32_index_injective :
     left = right.
 ```
 
-## `conforming_nonnull_int32_index_eq_iff`
+## `conforming_nonnull_int32_index_lt`
 
 Source: [`theories/FormalSQL/SchemaCardinality.v:176`](../SchemaCardinality.v#L176)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the conforming nonnull int32 index strict-bound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `conforming_nonnull_int32_index_lt` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`, `scalar`
+
+Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
+
+```rocq
+Lemma conforming_nonnull_int32_index_lt :
+  forall name value,
+    value_conforms_attribute (Attr_int32 name) value ->
+    NullValues.is_null_value value = false ->
+    (int32_value_index value < int32_domain_size)%nat.
+```
+
+## `conforming_nonnull_int32_index_in_domain`
+
+Source: [`theories/FormalSQL/SchemaCardinality.v:189`](../SchemaCardinality.v#L189)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the conforming nonnull int32 index in domain law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `conforming_nonnull_int32_index_in_domain` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`, `scalar`
+
+Search aliases: `schema and integrity semantics`, `INTEGER`, `int32`
+
+```rocq
+Lemma conforming_nonnull_int32_index_in_domain :
+  forall name value,
+    value_conforms_attribute (Attr_int32 name) value ->
+    NullValues.is_null_value value = false ->
+    In (int32_value_index value) (seq 0 int32_domain_size).
+```
+
+## `conforming_nonnull_int32_index_eq_iff`
+
+Source: [`theories/FormalSQL/SchemaCardinality.v:201`](../SchemaCardinality.v#L201)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1070,7 +1118,7 @@ Lemma conforming_nonnull_int32_index_eq_iff :
 
 ## `NoDup_map_by_key`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:199`](../SchemaCardinality.v#L199)
+Source: [`theories/FormalSQL/SchemaCardinality.v:224`](../SchemaCardinality.v#L224)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1099,7 +1147,7 @@ Lemma NoDup_map_by_key :
 
 ## `int32_singleton_primary_key_projection_nodup`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:231`](../SchemaCardinality.v#L231)
+Source: [`theories/FormalSQL/SchemaCardinality.v:256`](../SchemaCardinality.v#L256)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1123,7 +1171,7 @@ Lemma int32_singleton_primary_key_projection_nodup :
 
 ## `int32_singleton_primary_key_codes_nodup`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:250`](../SchemaCardinality.v#L250)
+Source: [`theories/FormalSQL/SchemaCardinality.v:275`](../SchemaCardinality.v#L275)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1150,7 +1198,7 @@ Lemma int32_singleton_primary_key_codes_nodup :
 
 ## `int32_singleton_primary_key_length`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:280`](../SchemaCardinality.v#L280)
+Source: [`theories/FormalSQL/SchemaCardinality.v:305`](../SchemaCardinality.v#L305)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1174,7 +1222,7 @@ Theorem int32_singleton_primary_key_length :
 
 ## `int32_singleton_primary_key_length_2_32`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:314`](../SchemaCardinality.v#L314)
+Source: [`theories/FormalSQL/SchemaCardinality.v:336`](../SchemaCardinality.v#L336)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1198,7 +1246,7 @@ Corollary int32_singleton_primary_key_length_2_32 :
 
 ## `NoDup_map_fixed_pair`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:330`](../SchemaCardinality.v#L330)
+Source: [`theories/FormalSQL/SchemaCardinality.v:352`](../SchemaCardinality.v#L352)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1221,7 +1269,7 @@ Lemma NoDup_map_fixed_pair :
 
 ## `NoDup_list_prod`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:346`](../SchemaCardinality.v#L346)
+Source: [`theories/FormalSQL/SchemaCardinality.v:368`](../SchemaCardinality.v#L368)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1245,7 +1293,7 @@ Lemma NoDup_list_prod :
 
 ## `int32_pair_index_injective`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:371`](../SchemaCardinality.v#L371)
+Source: [`theories/FormalSQL/SchemaCardinality.v:393`](../SchemaCardinality.v#L393)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1269,7 +1317,7 @@ Lemma int32_pair_index_injective :
 
 ## `conforming_nonnull_int32_pair_index_eq`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:391`](../SchemaCardinality.v#L391)
+Source: [`theories/FormalSQL/SchemaCardinality.v:413`](../SchemaCardinality.v#L413)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1302,7 +1350,7 @@ Lemma conforming_nonnull_int32_pair_index_eq :
 
 ## `int32_composite_primary_key_projection_nodup`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:431`](../SchemaCardinality.v#L431)
+Source: [`theories/FormalSQL/SchemaCardinality.v:453`](../SchemaCardinality.v#L453)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1331,7 +1379,7 @@ Lemma int32_composite_primary_key_projection_nodup :
 
 ## `int32_composite_primary_key_codes_nodup`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:459`](../SchemaCardinality.v#L459)
+Source: [`theories/FormalSQL/SchemaCardinality.v:481`](../SchemaCardinality.v#L481)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1363,7 +1411,7 @@ Lemma int32_composite_primary_key_codes_nodup :
 
 ## `int32_composite_primary_key_length`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:500`](../SchemaCardinality.v#L500)
+Source: [`theories/FormalSQL/SchemaCardinality.v:522`](../SchemaCardinality.v#L522)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1389,7 +1437,7 @@ Theorem int32_composite_primary_key_length :
 
 ## `int32_composite_domain_size_is_two_power_64`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:549`](../SchemaCardinality.v#L549)
+Source: [`theories/FormalSQL/SchemaCardinality.v:571`](../SchemaCardinality.v#L571)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1410,7 +1458,7 @@ Lemma int32_composite_domain_size_is_two_power_64 :
 
 ## `int32_composite_primary_key_length_2_64`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:556`](../SchemaCardinality.v#L556)
+Source: [`theories/FormalSQL/SchemaCardinality.v:578`](../SchemaCardinality.v#L578)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1436,7 +1484,7 @@ Corollary int32_composite_primary_key_length_2_64 :
 
 ## `int32_composite_primary_key_fixed_first_length`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:575`](../SchemaCardinality.v#L575)
+Source: [`theories/FormalSQL/SchemaCardinality.v:597`](../SchemaCardinality.v#L597)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1465,7 +1513,7 @@ Theorem int32_composite_primary_key_fixed_first_length :
 
 ## `int32_composite_primary_key_fixed_second_length`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:644`](../SchemaCardinality.v#L644)
+Source: [`theories/FormalSQL/SchemaCardinality.v:666`](../SchemaCardinality.v#L666)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1494,7 +1542,7 @@ Theorem int32_composite_primary_key_fixed_second_length :
 
 ## `conforming_nullable_int32_index_lt`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:718`](../SchemaCardinality.v#L718)
+Source: [`theories/FormalSQL/SchemaCardinality.v:740`](../SchemaCardinality.v#L740)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1517,7 +1565,7 @@ Lemma conforming_nullable_int32_index_lt :
 
 ## `conforming_nullable_int32_index_eq_iff`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:730`](../SchemaCardinality.v#L730)
+Source: [`theories/FormalSQL/SchemaCardinality.v:752`](../SchemaCardinality.v#L752)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1542,7 +1590,7 @@ Lemma conforming_nullable_int32_index_eq_iff :
 
 ## `nullable_int32_nodup_length`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:753`](../SchemaCardinality.v#L753)
+Source: [`theories/FormalSQL/SchemaCardinality.v:775`](../SchemaCardinality.v#L775)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1566,7 +1614,7 @@ Theorem nullable_int32_nodup_length :
 
 ## `nullable_int32_domain_size_is_two_power_32_plus_1`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:802`](../SchemaCardinality.v#L802)
+Source: [`theories/FormalSQL/SchemaCardinality.v:824`](../SchemaCardinality.v#L824)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1587,7 +1635,7 @@ Lemma nullable_int32_domain_size_is_two_power_32_plus_1 :
 
 ## `nullable_int32_nodup_length_2_32_plus_1`
 
-Source: [`theories/FormalSQL/SchemaCardinality.v:809`](../SchemaCardinality.v#L809)
+Source: [`theories/FormalSQL/SchemaCardinality.v:831`](../SchemaCardinality.v#L831)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

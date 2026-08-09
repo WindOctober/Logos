@@ -2,7 +2,7 @@
 
 Route here for: NUMERIC representation, precision/scale, division, rounding, AVG states.
 
-This focused catalog contains 122 declarations routed at declaration granularity from `NumericFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 125 declarations routed at declaration granularity from `NumericFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `numeric_avg_scale_transition_commutes`
 
@@ -2250,9 +2250,31 @@ Lemma numeric_compare_refl :
     numeric_compare value value = Eq.
 ```
 
-## `numeric_eqb_refl`
+## `numeric_compare_eq_iff`
 
 Source: [`theories/FormalSQL/NumericFacts.v:1429`](../NumericFacts.v#L1429)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
+
+Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma numeric_compare_eq_iff :
+  forall left right,
+    numeric_compare left right = Eq <-> left = right.
+```
+
+## `numeric_eqb_refl`
+
+Source: [`theories/FormalSQL/NumericFacts.v:1437`](../NumericFacts.v#L1437)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2272,9 +2294,53 @@ Lemma numeric_eqb_refl :
     numeric_eqb value value = true.
 ```
 
+## `numeric_eqb_true_iff`
+
+Source: [`theories/FormalSQL/NumericFacts.v:1447`](../NumericFacts.v#L1447)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
+
+Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma numeric_eqb_true_iff :
+  forall left right,
+    numeric_eqb left right = true <-> left = right.
+```
+
+## `numeric_eqb_false_iff`
+
+Source: [`theories/FormalSQL/NumericFacts.v:1456`](../NumericFacts.v#L1456)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for typed numeric semantics.
+
+Applicability: Use in either direction to invert or construct a goal about typed numeric semantics.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma numeric_eqb_false_iff :
+  forall left right,
+    numeric_eqb left right = false <-> left <> right.
+```
+
 ## `numeric_cast_typmod_result`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1439`](../NumericFacts.v#L1439)
+Source: [`theories/FormalSQL/NumericFacts.v:1468`](../NumericFacts.v#L1468)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2297,7 +2363,7 @@ Lemma numeric_cast_typmod_result :
 
 ## `numeric_avg_fixed_attested_finite_exact`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1454`](../NumericFacts.v#L1454)
+Source: [`theories/FormalSQL/NumericFacts.v:1483`](../NumericFacts.v#L1483)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2322,7 +2388,7 @@ Lemma numeric_avg_fixed_attested_finite_exact :
 
 ## `numeric_avg_attested_scale_finite_exact`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1471`](../NumericFacts.v#L1471)
+Source: [`theories/FormalSQL/NumericFacts.v:1500`](../NumericFacts.v#L1500)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2346,7 +2412,7 @@ Lemma numeric_avg_attested_scale_finite_exact :
 
 ## `finite_numeric_div_by_zero`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1482`](../NumericFacts.v#L1482)
+Source: [`theories/FormalSQL/NumericFacts.v:1511`](../NumericFacts.v#L1511)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2368,7 +2434,7 @@ Lemma finite_numeric_div_by_zero :
 
 ## `numeric_to_int32_checked_result_in_range`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1492`](../NumericFacts.v#L1492)
+Source: [`theories/FormalSQL/NumericFacts.v:1521`](../NumericFacts.v#L1521)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2391,7 +2457,7 @@ Lemma numeric_to_int32_checked_result_in_range :
 
 ## `finite_decimal_numeric_division_total`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1506`](../NumericFacts.v#L1506)
+Source: [`theories/FormalSQL/NumericFacts.v:1535`](../NumericFacts.v#L1535)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2422,7 +2488,7 @@ Lemma finite_decimal_numeric_division_total :
 
 ## `numeric_positive_is_nonzero`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1529`](../NumericFacts.v#L1529)
+Source: [`theories/FormalSQL/NumericFacts.v:1558`](../NumericFacts.v#L1558)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2445,7 +2511,7 @@ Lemma numeric_positive_is_nonzero :
 
 ## `finite_numeric_division_runtime_error_none`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1550`](../NumericFacts.v#L1550)
+Source: [`theories/FormalSQL/NumericFacts.v:1579`](../NumericFacts.v#L1579)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2477,7 +2543,7 @@ Lemma finite_numeric_division_runtime_error_none :
 
 ## `numeric_positive_from_integer_lower_bound`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1572`](../NumericFacts.v#L1572)
+Source: [`theories/FormalSQL/NumericFacts.v:1601`](../NumericFacts.v#L1601)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2502,7 +2568,7 @@ Lemma numeric_positive_from_integer_lower_bound :
 
 ## `numeric_round_quot_nonnegative_half_ulp`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1603`](../NumericFacts.v#L1603)
+Source: [`theories/FormalSQL/NumericFacts.v:1632`](../NumericFacts.v#L1632)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2528,7 +2594,7 @@ Lemma numeric_round_quot_nonnegative_half_ulp :
 
 ## `numeric_pg_div_scale_display_valid`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1639`](../NumericFacts.v#L1639)
+Source: [`theories/FormalSQL/NumericFacts.v:1668`](../NumericFacts.v#L1668)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2552,7 +2618,7 @@ Lemma numeric_pg_div_scale_display_valid :
 
 ## `numeric_of_scaled_compare_lt`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1678`](../NumericFacts.v#L1678)
+Source: [`theories/FormalSQL/NumericFacts.v:1707`](../NumericFacts.v#L1707)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2580,7 +2646,7 @@ Lemma numeric_of_scaled_compare_lt :
 
 ## `numeric_round_to_scale_nonnegative_half_ulp`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1729`](../NumericFacts.v#L1729)
+Source: [`theories/FormalSQL/NumericFacts.v:1758`](../NumericFacts.v#L1758)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2610,7 +2676,7 @@ Lemma numeric_round_to_scale_nonnegative_half_ulp :
 
 ## `finite_numeric_division_result_rounding`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1751`](../NumericFacts.v#L1751)
+Source: [`theories/FormalSQL/NumericFacts.v:1780`](../NumericFacts.v#L1780)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2641,7 +2707,7 @@ Lemma finite_numeric_division_result_rounding :
 
 ## `finite_numeric_division_strict_margin`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1775`](../NumericFacts.v#L1775)
+Source: [`theories/FormalSQL/NumericFacts.v:1804`](../NumericFacts.v#L1804)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2693,7 +2759,7 @@ Theorem finite_numeric_division_strict_margin :
 
 ## `finite_numeric_division_runtime_error_zero_divisor`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1846`](../NumericFacts.v#L1846)
+Source: [`theories/FormalSQL/NumericFacts.v:1875`](../NumericFacts.v#L1875)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2719,7 +2785,7 @@ Lemma finite_numeric_division_runtime_error_zero_divisor :
 
 ## `finite_numeric_division_runtime_error_invalid_scale`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1859`](../NumericFacts.v#L1859)
+Source: [`theories/FormalSQL/NumericFacts.v:1888`](../NumericFacts.v#L1888)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2747,7 +2813,7 @@ Lemma finite_numeric_division_runtime_error_invalid_scale :
 
 ## `finite_numeric_division_runtime_error_missing_result`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1878`](../NumericFacts.v#L1878)
+Source: [`theories/FormalSQL/NumericFacts.v:1907`](../NumericFacts.v#L1907)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2778,7 +2844,7 @@ Lemma finite_numeric_division_runtime_error_missing_result :
 
 ## `finite_numeric_division_runtime_error_result_out_of_range`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1897`](../NumericFacts.v#L1897)
+Source: [`theories/FormalSQL/NumericFacts.v:1926`](../NumericFacts.v#L1926)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2810,7 +2876,7 @@ Lemma finite_numeric_division_runtime_error_result_out_of_range :
 
 ## `numeric_sqrt_at_scale_half_ulp_shape`
 
-Source: [`theories/FormalSQL/NumericFacts.v:1923`](../NumericFacts.v#L1923)
+Source: [`theories/FormalSQL/NumericFacts.v:1952`](../NumericFacts.v#L1952)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2853,7 +2919,7 @@ Lemma numeric_sqrt_at_scale_half_ulp_shape :
 
 ## `numeric_integer_stddev_samp_positive_success_iff`
 
-Source: [`theories/FormalSQL/NumericFacts.v:2012`](../NumericFacts.v#L2012)
+Source: [`theories/FormalSQL/NumericFacts.v:2041`](../NumericFacts.v#L2041)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2886,7 +2952,7 @@ Theorem numeric_integer_stddev_samp_positive_success_iff :
 
 ## `int32_avg_numeric_with_scale_success_iff`
 
-Source: [`theories/FormalSQL/NumericFacts.v:2060`](../NumericFacts.v#L2060)
+Source: [`theories/FormalSQL/NumericFacts.v:2089`](../NumericFacts.v#L2089)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2914,7 +2980,7 @@ Theorem int32_avg_numeric_with_scale_success_iff :
 
 ## `numeric_of_scaled_compare_not_gt`
 
-Source: [`theories/FormalSQL/NumericFacts.v:2100`](../NumericFacts.v#L2100)
+Source: [`theories/FormalSQL/NumericFacts.v:2129`](../NumericFacts.v#L2129)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2942,7 +3008,7 @@ Lemma numeric_of_scaled_compare_not_gt :
 
 ## `positive_numeric_of_scaled_nonzero`
 
-Source: [`theories/FormalSQL/NumericFacts.v:2147`](../NumericFacts.v#L2147)
+Source: [`theories/FormalSQL/NumericFacts.v:2176`](../NumericFacts.v#L2176)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2966,7 +3032,7 @@ Lemma positive_numeric_of_scaled_nonzero :
 
 ## `numeric_runtime_fits_from_decimal_parts`
 
-Source: [`theories/FormalSQL/NumericFacts.v:2160`](../NumericFacts.v#L2160)
+Source: [`theories/FormalSQL/NumericFacts.v:2189`](../NumericFacts.v#L2189)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

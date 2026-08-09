@@ -1426,6 +1426,14 @@ intro value.
 exact (Oset.compare_eq_refl Onumeric value).
 Qed.
 
+Lemma numeric_compare_eq_iff :
+  forall left right,
+    numeric_compare left right = Eq <-> left = right.
+Proof.
+intros left right.
+exact (Oset.compare_eq_iff Onumeric left right).
+Qed.
+
 Lemma numeric_eqb_refl :
   forall value,
     numeric_eqb value value = true.
@@ -1434,6 +1442,27 @@ intro value.
 unfold numeric_eqb.
 rewrite numeric_compare_refl.
 reflexivity.
+Qed.
+
+Lemma numeric_eqb_true_iff :
+  forall left right,
+    numeric_eqb left right = true <-> left = right.
+Proof.
+intros left right.
+change (Oset.eq_bool Onumeric left right = true <-> left = right).
+apply Oset.eq_bool_true_iff.
+Qed.
+
+Lemma numeric_eqb_false_iff :
+  forall left right,
+    numeric_eqb left right = false <-> left <> right.
+Proof.
+intros left right; split.
+- intros Hequal Hsame; subst right.
+  rewrite numeric_eqb_refl in Hequal; discriminate.
+- intro Hdistinct.
+  destruct (numeric_eqb left right) eqn:Hequal; [|reflexivity].
+  apply numeric_eqb_true_iff in Hequal; contradiction.
 Qed.
 
 Lemma numeric_cast_typmod_result :

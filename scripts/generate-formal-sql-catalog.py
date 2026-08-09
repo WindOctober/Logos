@@ -299,7 +299,6 @@ SCHEDULED_INTERNAL_DECLARATIONS = frozenset(
         "query_row_map_success_bags_total",
         "query_values_success_bags",
         "query_table_success_bags",
-        "query_cross_join_union_right_success_bags",
         "eval_scalar_boolean_context_correlated_congr",
         "eval_scalar_boolean_exists_subquery_congr",
     }
@@ -342,13 +341,10 @@ TYPED_QUERY_POSSIBLE_INTERFACES = frozenset(
 
 # These pointwise theorems remain proof foundations, but the named
 # replacements are the public SQL interfaces over the union of all Boolean
-# schedules.  A fixed-schedule declaration is never itself a final rewrite
-# certificate.
+# schedules.
 SCHEDULED_REPLACEMENTS: dict[str, str] = {
     "query_bag_closed_outcome_equiv_of_success_bags":
         "query_possible_bag_closed_outcome_equiv_of_success_bags",
-    "query_expr_distinct_global_typed_inert_reset":
-        "query_expr_distinct_possible_outcome_equiv_inert_reset",
     "query_expr_distinct_outcome_equiv_congr":
         "query_expr_distinct_possible_outcome_equiv_congr",
     "query_expr_order_by_outcome_equiv_congr":
@@ -369,30 +365,6 @@ SCHEDULED_REPLACEMENTS: dict[str, str] = {
         "query_expr_group_possible_outcome_equiv_congr_uniform",
     "query_expr_window_outcome_equiv_congr":
         "query_expr_window_possible_outcome_equiv_congr_uniform",
-    "query_expr_fetch_zero_annihilator_outcome_equiv_safe":
-        "query_expr_fetch_zero_possible_outcome_equiv_safe",
-    "query_expr_order_by_outcome_equiv_of_success_length_le_one":
-        "query_expr_order_by_possible_outcome_equiv_of_success_length_le_one",
-    "query_expr_offset_zero_global_typed_equiv":
-        "query_expr_offset_zero_possible_outcome_equiv",
-    "query_expr_offset_offset_global_typed_equiv":
-        "query_expr_offset_offset_possible_outcome_equiv",
-    "query_expr_fetch_fetch_global_typed_equiv":
-        "query_expr_fetch_fetch_possible_outcome_equiv",
-    "query_expr_offset_fetch_global_typed_equiv":
-        "query_expr_offset_fetch_possible_outcome_equiv",
-    "query_expr_fetch_offset_global_typed_equiv":
-        "query_expr_fetch_offset_possible_outcome_equiv",
-    "query_expr_order_by_order_by_global_typed_equiv":
-        "query_expr_order_by_order_by_possible_outcome_equiv",
-    "eval_filter_rows_always_true_iff":
-        "query_expr_filter_possible_outcome_equiv_of_always_true_uniform",
-    "query_expr_filter_outcome_equiv_of_always_true":
-        "query_expr_filter_possible_outcome_equiv_of_always_true_uniform",
-    "query_expr_cross_join_union_right_outcome_equiv_safe":
-        "query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform",
-    "query_expr_cross_join_union_right_equiv_safe":
-        "query_expr_cross_join_union_right_possible_outcome_equiv_safe_uniform",
     "query_expr_filter_outcome_congr_extensional":
         "query_expr_filter_possible_outcome_equiv_congr_stable_total",
     "query_expr_group_outcome_equiv_of_supported_child_outcomes":
@@ -991,9 +963,6 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "tnull_scalar_expr_not_in_rejects_exact_of_unknown_without_match": (
         "NOT IN", "UNKNOWN without match", "exact rejection", "runtime error"
     ),
-    "scalar_expr_in_union_all_acceptance_exact": (
-        "IN", "UNION ALL", "correlation", "filter acceptance", "runtime error"
-    ),
     "query_distinct_rows_support_rel": (
         "DISTINCT", "semantic support", "duplicates", "IN"
     ),
@@ -1038,15 +1007,6 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "bounded_integer_stats_sum_positive": (
         "aggregate sum", "positivity", "integer statistics"
-    ),
-    "full_outer_filter_to_left_outer_exact": (
-        "full join", "left join", "null rejection", "multiplicity"
-    ),
-    "left_right_outer_scheduler_swap_Permutation": (
-        "left join", "right join", "transpose", "multiplicity"
-    ),
-    "left_outer_null_reject_to_inner_exact": (
-        "left join", "inner join", "null rejection", "multiplicity"
     ),
     "position_rows_from_values": ("position", "window prefix", "duplicates"),
     "position_rows_from_nth_error": ("position", "indexed lookup", "window"),
@@ -1170,23 +1130,8 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "primary_key_self_filter_existsb_exact": (
         "primary key", "self membership", "NOT NULL"
     ),
-    "tnull_primary_key_self_in_rows_acceptance_exact": (
-        "primary key", "IN", "self membership", "UNKNOWN"
-    ),
-    "tnull_primary_key_self_in_rows_true": (
-        "primary key", "IN", "exact TRUE", "correlation"
-    ),
-    "scalar_expr_in_distinct_acceptance_exact_of_inner": (
-        "IN", "DISTINCT", "correlation", "runtime error"
-    ),
-    "query_expr_project_filter_runtime_safe_exact": (
-        "filter", "projection", "runtime safety", "evaluation reachability"
-    ),
     "join_matched_rows_filter_inputs_exact": (
         "inner join", "filter movement", "multiplicity", "total predicate"
-    ),
-    "inner_filter_to_input_filters_exact": (
-        "inner join", "filter pushdown", "exact list", "properness"
     ),
     "join_left_guard_reached_iff_of_witness": (
         "join", "left guard", "reachability", "self witness"
@@ -1218,12 +1163,6 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     "eval_filter_rows_reached_uniform_error_exact": (
         "filter", "exact error only", "reached occurrence", "runtime outcome"
     ),
-    "eval_filter_rows_uniform_error_of_join_witness": (
-        "join", "filter", "witness reachability", "exact error category"
-    ),
-    "eval_filter_rows_uniform_error_of_self_match": (
-        "self join", "filter", "self witness", "exact error category"
-    ),
     "nonnull_foreign_key_direct_accept_has_middle": (
         "foreign key", "NOT NULL", "middle elimination", "existence"
     ),
@@ -1232,9 +1171,6 @@ DECLARATION_TOPIC_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "join_matched_rows_empty_of_rejection": (
         "join", "null rejection", "empty branch", "multiplicity"
-    ),
-    "middle_padding_downstream_empty": (
-        "left join", "NULL padding", "null rejection", "middle elimination"
     ),
     "filtered_payload_erasure_permut": (
         "filter", "payload erasure", "multiplicity", "semantic relation"
@@ -1452,7 +1388,6 @@ def semantic_features(
     if name in {
         "map_left_join_functional_permut",
         "tnull_map_left_join_functional_permut",
-        "query_join_left_functional_projection_bag_on_representatives",
     }:
         features.add("partial_functional_left_join")
     if "QueryJoinSemi" in identifiers or ({"semi", "join"} <= tokens):
@@ -1670,10 +1605,6 @@ def semantic_features(
         "eval_group_bag_outcome",
     ):
         features.update(("outcome", "runtime"))
-    if name == "query_expr_cross_join_union_right_equiv_safe":
-        # The safe query-equivalence theorem is also a direct assembly route
-        # for an error-preserving outcome goal via the standard implication.
-        features.add("outcome")
     if tokens & {"schema", "conform", "typed", "attribute"} or has_identifier_prefix(
         "Schema", "schema_"
     ):
@@ -2444,12 +2375,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Lifts the displayed TNull NOT IN semantic case to exact scalar-expression acceptance "
             "at one correlated environment, retaining argument and child error premises."
         )
-    if name == "scalar_expr_in_union_all_acceptance_exact":
-        return (
-            "Builds exact correlated IN acceptance over UNION ALL as the Boolean OR "
-            "of fixed branch decisions while retaining duplicate candidates and requiring "
-            "both branch error relations to be empty."
-        )
     if name == "query_distinct_rows_support_rel":
         return (
             "Relates every legal DISTINCT output representative bidirectionally to "
@@ -2520,24 +2445,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
         return (
             "Derives strict positivity of the logical integer-statistics sum from "
             "a positive symbolic lower bound and a nonempty fold count."
-        )
-    if name == "full_outer_filter_to_left_outer_exact":
-        return (
-            "Rewrites a null-rejecting filter over the three FULL-join scheduler "
-            "branches to a LEFT join over the filtered left input, preserving "
-            "duplicate occurrences exactly."
-        )
-    if name == "left_right_outer_scheduler_swap_Permutation":
-        return (
-            "Shows exact occurrence permutation between LEFT and operand-swapped "
-            "RIGHT outer schedulers after transposing both match decisions and "
-            "matched-row emission."
-        )
-    if name == "left_outer_null_reject_to_inner_exact":
-        return (
-            "Removes exactly the NULL-padded branch of a LEFT outer scheduler "
-            "under an explicit rejecting consumer, retaining matched-row filtering "
-            "and duplicate occurrences."
         )
     if name in {
         "position_rows_from_values",
@@ -2724,16 +2631,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Equates two mapped bags of equal cardinality when every reached "
             "left mapped row is semantically equal to every reached right one."
         )
-    if name == "query_cross_join_bag_singleton_right_map":
-        return (
-            "Normalizes a CROSS JOIN with one right bag occurrence to the "
-            "corresponding multiplicity-preserving row map of the left bag."
-        )
-    if name == "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact":
-        return (
-            "Regroups closed-group SUM(NUMERIC column) values while preserving "
-            "only the outer SUM value and its local runtime callback."
-        )
     if name == "eval_join_row_conditions_acceptance_exact":
         return (
             "Characterizes one left row's complete join-condition evaluation as "
@@ -2854,19 +2751,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
         )
     if name == "query_table_success_bags_functional":
         return "Shows that a base table has one possible successful bag modulo bag equality."
-    if name == "query_cross_join_union_right_success_bags":
-        return (
-            "Distributes CROSS JOIN over right-hand UNION ALL at the possible-bag "
-            "layer while preserving duplicate multiplicity."
-        )
-    if name in {
-        "query_expr_cross_join_union_right_equiv_safe",
-        "query_expr_cross_join_union_right_outcome_equiv_safe",
-    }:
-        return (
-            "Assembles the right-hand CROSS JOIN/UNION ALL distribution law into "
-            "a safe exact query equivalence with explicit runtime premises."
-        )
     if name.startswith("tnull_") and name.endswith("_eval_bag_congr"):
         return (
             "Lifts bag equality through the displayed TNull relational operator "
@@ -2920,26 +2804,7 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "and occurrence-sensitive key uniqueness; the primary-key form also exposes NOT NULL."
         )
     if name in {
-        "tnull_primary_key_self_in_rows_acceptance_exact",
-        "tnull_primary_key_self_in_rows_true",
-    }:
-        return (
-            "Establishes TNull primary-key self-IN TRUE-acceptance from an actual "
-            "tuple-comparison witness, key reflection, and the complete projected NOT NULL fact."
-        )
-    if name == "scalar_expr_in_distinct_acceptance_exact_of_inner":
-        return (
-            "Lifts an exact correlated IN acceptance contract through DISTINCT "
-            "without claiming equality of the complete FALSE/UNKNOWN Bool3 result."
-        )
-    if name == "query_expr_project_filter_runtime_safe_exact":
-        return (
-            "Composes child, filter-expression, and reached-projection safety into exact "
-            "runtime safety for a Project over Filter without inferring safety from bags."
-        )
-    if name in {
         "join_matched_rows_filter_inputs_exact",
-        "inner_filter_to_input_filters_exact",
     }:
         return (
             "Factors stable total Boolean join acceptance into input guards and a "
@@ -2990,14 +2855,6 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "the exact runtime category from explicit reached-row premises."
         )
     if name in {
-        "eval_filter_rows_uniform_error_of_join_witness",
-        "eval_filter_rows_uniform_error_of_self_match",
-    }:
-        return (
-            "Constructs the FILTER error derivation from a concrete accepted join "
-            "cell; the self form retains the explicit accepted diagonal witness."
-        )
-    if name in {
         "nonnull_foreign_key_direct_accept_has_middle",
         "nonnull_foreign_key_no_middle_rejects_direct",
     }:
@@ -3005,12 +2862,9 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
             "Lifts a conforming non-NULL foreign key to an explicit referenced middle "
             "witness, or derives rejection when no such middle row exists."
         )
-    if name in {
-        "join_matched_rows_empty_of_rejection",
-        "middle_padding_downstream_empty",
-    }:
+    if name == "join_matched_rows_empty_of_rejection":
         return (
-            "Eliminates exactly the displayed rejected matched or NULL-padded branch "
+            "Eliminates exactly the displayed rejected matched branch "
             "without moving SQL evaluations or changing duplicate multiplicity."
         )
     if name == "filtered_payload_erasure_permut":
@@ -3298,13 +3152,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "child-success inhabitation, the displayed case for every legal child "
             "success, and exclusion of every child error."
         )
-    if name == "scalar_expr_in_union_all_acceptance_exact":
-        return (
-            "Use only for UNION ALL at one fixed correlated environment after proving "
-            "schema compatibility, argument safety, inhabited branch successes, fixed "
-            "per-branch TRUE-acceptance decisions, and absence of both branch errors.  "
-            "It is not a full Bool3 or UNION DISTINCT distribution theorem."
-        )
     if name in {"query_distinct_rows_support_rel", "in_rows_acceptance_distinct"}:
         return (
             "Use only for duplicate-insensitive support or IN TRUE-acceptance.  DISTINCT "
@@ -3378,24 +3225,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use for the exact logical Z-valued statistics state under the displayed "
             "symbolic interval/count hypotheses.  These bounds alone do not justify "
             "NUMERIC division, square-root rounding, comparison, or runtime safety."
-        )
-    if name == "full_outer_filter_to_left_outer_exact":
-        return (
-            "Use only after matched and left-padded rows are proved to inherit one "
-            "left guard and every right-padded row is rejected.  At SQL level also "
-            "prove predicate totality, non-volatility, properness, and exact error equivalence."
-        )
-    if name == "left_right_outer_scheduler_swap_Permutation":
-        return (
-            "Use only after the target condition is the exact transpose and the "
-            "matched and padded projections agree through one common emitter.  "
-            "SQL condition/projection errors and semantic tuple equality remain separate."
-        )
-    if name == "left_outer_null_reject_to_inner_exact":
-        return (
-            "Use only when every padded-left row is rejected.  Moving the retained "
-            "matched-row filter or claiming SQL outcome equivalence additionally "
-            "requires totality, properness, non-volatility, and exact error premises."
         )
     if name in {
         "position_rows_from_values",
@@ -3554,18 +3383,7 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
             "Use for constant-observation projections after equal bag cardinality "
             "and pairwise equality on actual representatives are established."
         )
-    if name == "query_cross_join_bag_singleton_right_map":
-        return (
-            "Use only for a semantic singleton bag on the right; lift to a query "
-            "outcome separately so child and projection errors remain observable."
-        )
     subject = semantic_subject(domain_name, features)
-    if name == "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact":
-        return (
-            "Use only for the displayed closed-group SUM(NUMERIC Dot) family. "
-            "The conclusion covers the outer SUM value/local callback; it does "
-            "not prove inner aggregate safety or a complete grouped-query outcome."
-        )
     if name == "eval_join_row_conditions_acceptance_exact":
         return (
             "Use after establishing the exact acceptance contract for every "
@@ -3698,21 +3516,6 @@ def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> 
         )
     if name == "query_table_success_bags_functional":
         return "Use as the generic base case for possible-bag functionality of a table."
-    if name == "query_cross_join_union_right_success_bags":
-        return (
-            "Use for right-hand UNION ALL distribution only after proving both "
-            "displayed sort equalities and possible-bag functionality of the "
-            "duplicated left child."
-        )
-    if name in {
-        "query_expr_cross_join_union_right_equiv_safe",
-        "query_expr_cross_join_union_right_outcome_equiv_safe",
-    }:
-        return (
-            "Use after the two sort equalities, duplicated-left functionality, "
-            "complete source/target safety, and source-success premises are all "
-            "available."
-        )
     if name.startswith("tnull_") and name.endswith("_eval_bag_congr"):
         return (
             "Use to transport an already proved child bag equality through this "
@@ -4146,20 +3949,6 @@ def premises_for(name: str, statement: str, features: frozenset[str]) -> str:
         )
     if name == "query_table_success_bags_functional":
         return "Supply two possible successful bags for the same environment, outputs, and table."
-    if name == "query_cross_join_union_right_success_bags":
-        return (
-            "Both set-operation sort equalities and pairwise possible-bag "
-            "functionality of the duplicated left child are mandatory; UNION is "
-            "multiplicity-preserving UNION ALL here."
-        )
-    if name in {
-        "query_expr_cross_join_union_right_equiv_safe",
-        "query_expr_cross_join_union_right_outcome_equiv_safe",
-    }:
-        return (
-            "Retain both sort equalities, duplicated-left bag functionality, "
-            "source and target safety, and the source-success witness."
-        )
     if name in {
         "map_left_join_functional_permut",
         "tnull_map_left_join_functional_permut",
@@ -4988,7 +4777,6 @@ def validate_navigation(
         ("query_bag_filter_commute", {"filter", "bag"}),
         ("query_bag_filter_map_fusion", {"filter", "bag"}),
         ("query_bag_map_pairwise_equiv_of_cardinal", {"bag", "cardinality"}),
-        ("query_cross_join_bag_singleton_right_map", {"join", "bag"}),
     ):
         require_route_contract(
             bag_law,
@@ -5042,11 +4830,6 @@ def validate_navigation(
     )
     require_route_contract(
         "tnull_closed_group_sum_numeric_dot_value_runtime_exact",
-        "numeric-derived.md",
-        {"grouping", "runtime", "scalar"},
-    )
-    require_route_contract(
-        "query_make_groups_closed_sum_numeric_dot_outer_sum_value_runtime_exact",
         "numeric-derived.md",
         {"grouping", "runtime", "scalar"},
     )
@@ -5156,21 +4939,6 @@ def validate_navigation(
         "relational-algebra.md",
         {"bag"},
     )
-    require_route_contract(
-        "query_cross_join_union_right_success_bags",
-        "relational-algebra.md",
-        {"join", "bag"},
-    )
-    for distribution in {
-        "query_expr_cross_join_union_right_equiv_safe",
-        "query_expr_cross_join_union_right_outcome_equiv_safe",
-    }:
-        require_route_contract(
-            distribution,
-            "runtime-verification-rewrite.md",
-            {"outcome", "runtime", "join", "bag"},
-        )
-
     expected_entry_keys = {
         "name",
         "kind",

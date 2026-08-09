@@ -2,7 +2,7 @@
 
 Route here for: exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT.
 
-This focused catalog contains 102 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 94 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `tuple_list_semantic_rel_app`
 
@@ -110,9 +110,32 @@ Theorem prefix_scan_observation_adjacent_peer :
       (prefix_scan_observation observe prefix (second :: first :: tail)).
 ```
 
+## `peer_order_permutation_implies_Permutation`
+
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:226`](../OrderedObservationTransportFacts.v#L226)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared window/rank evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about window/rank evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it.
+
+Cross-index: `bag`, `ordered`
+
+Search aliases: `ordered query semantics`, `window`, `PARTITION BY`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma peer_order_permutation_implies_Permutation :
+  forall (A : Type) (peer : A -> A -> Prop) left right,
+    peer_order_permutation peer left right ->
+    Permutation left right.
+```
+
 ## `prefix_scan_observation_adjacent_peer_transport`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:223`](../OrderedObservationTransportFacts.v#L223)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:239`](../OrderedObservationTransportFacts.v#L239)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -143,7 +166,7 @@ Theorem prefix_scan_observation_adjacent_peer_transport :
 
 ## `prefix_scan_observation_peer_transport`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:247`](../OrderedObservationTransportFacts.v#L247)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:263`](../OrderedObservationTransportFacts.v#L263)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -172,7 +195,7 @@ Theorem prefix_scan_observation_peer_transport :
 
 ## `partitioned_prefix_scan_observation_peer_transport`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:285`](../OrderedObservationTransportFacts.v#L285)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:301`](../OrderedObservationTransportFacts.v#L301)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -201,7 +224,7 @@ Theorem partitioned_prefix_scan_observation_peer_transport :
 
 ## `prefix_scan_outcome_peer_transport_iff`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:322`](../OrderedObservationTransportFacts.v#L322)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:338`](../OrderedObservationTransportFacts.v#L338)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -232,7 +255,7 @@ Theorem prefix_scan_outcome_peer_transport_iff :
 
 ## `partitioned_prefix_scan_outcome_peer_transport_iff`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:360`](../OrderedObservationTransportFacts.v#L360)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:376`](../OrderedObservationTransportFacts.v#L376)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -265,7 +288,7 @@ Theorem partitioned_prefix_scan_outcome_peer_transport_iff :
 
 ## `ordered_rows_total_map`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:412`](../OrderedObservationTransportFacts.v#L412)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:428`](../OrderedObservationTransportFacts.v#L428)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -292,7 +315,7 @@ Theorem ordered_rows_total_map :
 
 ## `ordered_rows_total_map_reflect`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:436`](../OrderedObservationTransportFacts.v#L436)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:452`](../OrderedObservationTransportFacts.v#L452)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -320,7 +343,7 @@ Lemma ordered_rows_total_map_reflect :
 
 ## `order_by_rows_total_map`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:471`](../OrderedObservationTransportFacts.v#L471)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:487`](../OrderedObservationTransportFacts.v#L487)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -348,7 +371,7 @@ Theorem order_by_rows_total_map :
 
 ## `order_by_rows_total_map_preimage`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:509`](../OrderedObservationTransportFacts.v#L509)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:525`](../OrderedObservationTransportFacts.v#L525)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -377,7 +400,7 @@ Theorem order_by_rows_total_map_preimage :
 
 ## `map_firstn_exact`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:544`](../OrderedObservationTransportFacts.v#L544)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:560`](../OrderedObservationTransportFacts.v#L560)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -399,7 +422,7 @@ Lemma map_firstn_exact :
 
 ## `total_map_order_fetch_observation_iff`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:577`](../OrderedObservationTransportFacts.v#L577)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:593`](../OrderedObservationTransportFacts.v#L593)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -428,7 +451,7 @@ Theorem total_map_order_fetch_observation_iff :
 
 ## `total_map_order_fetch_outcome_observation_iff`
 
-Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:640`](../OrderedObservationTransportFacts.v#L640)
+Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:656`](../OrderedObservationTransportFacts.v#L656)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -506,7 +529,7 @@ Lemma ordered_rows_equiv_firstn :
 
 ## `query_expr_values_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:179`](../OrderedQueryFacts.v#L179)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:169`](../OrderedQueryFacts.v#L169)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -528,7 +551,7 @@ Lemma query_expr_values_has_success :
 
 ## `query_rank_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:518`](../OrderedQueryFacts.v#L518)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:508`](../OrderedQueryFacts.v#L508)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -562,7 +585,7 @@ Theorem query_rank_success_bags_congr_extensional :
 
 ## `query_window_success_bags_congr_extensional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:544`](../OrderedQueryFacts.v#L544)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:534`](../OrderedQueryFacts.v#L534)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -597,7 +620,7 @@ Theorem query_window_success_bags_congr_extensional :
 
 ## `query_expr_set_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:703`](../OrderedQueryFacts.v#L703)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:693`](../OrderedQueryFacts.v#L693)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -621,7 +644,7 @@ Lemma query_expr_set_has_success :
 
 ## `ordered_rows_equiv_filter`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1865`](../OrderedQueryFacts.v#L1865)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1855`](../OrderedQueryFacts.v#L1855)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -649,7 +672,7 @@ Lemma ordered_rows_equiv_filter :
 
 ## `eval_query_expr_distinct_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1979`](../OrderedQueryFacts.v#L1979)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1969`](../OrderedQueryFacts.v#L1969)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -672,7 +695,7 @@ Lemma eval_query_expr_distinct_error_iff :
 
 ## `query_expr_distinct_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:1992`](../OrderedQueryFacts.v#L1992)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1982`](../OrderedQueryFacts.v#L1982)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -695,7 +718,7 @@ Lemma query_expr_distinct_runtime_safe :
 
 ## `query_expr_distinct_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2003`](../OrderedQueryFacts.v#L2003)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:1993`](../OrderedQueryFacts.v#L1993)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -718,7 +741,7 @@ Lemma query_expr_distinct_has_success :
 
 ## `query_expr_distinct_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2017`](../OrderedQueryFacts.v#L2017)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2007`](../OrderedQueryFacts.v#L2007)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -739,36 +762,9 @@ Lemma query_expr_distinct_has_outcome :
     exists outcome, eval_query env (QExpr_Distinct input) outcome.
 ```
 
-## `query_expr_distinct_global_typed_inert_reset`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2035`](../OrderedQueryFacts.v#L2035)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_inert_reset` for the public result.
-
-Purpose/direction: States the query expr distinct global typed inert reset law for ordered query equivalence, in the exact direction displayed by the declaration.
-
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about ordered query equivalence.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; keep schema/integrity conformance premises explicit.
-
-Cross-index: `scheduled`, `bag`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `DISTINCT`, `duplicate elimination`, `schema conformance`, `typing`, `multiplicity`, `bag semantics`, `list/bag bridge`
-
-```rocq
-Theorem query_expr_distinct_global_typed_inert_reset :
-  forall input,
-    query_expr_order_behavior input = BagReset ->
-    (forall env bag,
-      query_success_bags basesort instance unknown symbol_runtime_error aggregate_runtime_error value_is_null
-        boolean_schedule env input bag ->
-      bag_eq T (query_distinct_bag bag) bag) ->
-    query_global_typed_outcome_equiv (QExpr_Distinct input) input.
-```
-
 ## `eval_query_expr_rank_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2071`](../OrderedQueryFacts.v#L2071)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2020`](../OrderedQueryFacts.v#L2020)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -800,7 +796,7 @@ Lemma eval_query_expr_rank_error_iff :
 
 ## `eval_query_expr_window_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2096`](../OrderedQueryFacts.v#L2096)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2045`](../OrderedQueryFacts.v#L2045)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -832,7 +828,7 @@ Lemma eval_query_expr_window_error_iff :
 
 ## `query_expr_order_by_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2125`](../OrderedQueryFacts.v#L2125)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2074`](../OrderedQueryFacts.v#L2074)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -855,7 +851,7 @@ Lemma query_expr_order_by_runtime_safe :
 
 ## `query_expr_order_by_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2138`](../OrderedQueryFacts.v#L2138)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2087`](../OrderedQueryFacts.v#L2087)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -878,7 +874,7 @@ Lemma query_expr_order_by_has_success :
 
 ## `query_expr_order_by_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2147`](../OrderedQueryFacts.v#L2147)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2096`](../OrderedQueryFacts.v#L2096)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -901,7 +897,7 @@ Lemma query_expr_order_by_has_outcome :
 
 ## `query_expr_offset_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2160`](../OrderedQueryFacts.v#L2160)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2109`](../OrderedQueryFacts.v#L2109)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -924,7 +920,7 @@ Lemma query_expr_offset_runtime_safe :
 
 ## `query_expr_offset_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2173`](../OrderedQueryFacts.v#L2173)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2122`](../OrderedQueryFacts.v#L2122)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -947,7 +943,7 @@ Lemma query_expr_offset_has_success :
 
 ## `query_expr_offset_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2183`](../OrderedQueryFacts.v#L2183)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2132`](../OrderedQueryFacts.v#L2132)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -970,7 +966,7 @@ Lemma query_expr_offset_has_outcome :
 
 ## `query_expr_fetch_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2196`](../OrderedQueryFacts.v#L2196)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2145`](../OrderedQueryFacts.v#L2145)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -993,7 +989,7 @@ Lemma query_expr_fetch_runtime_safe :
 
 ## `query_expr_fetch_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2209`](../OrderedQueryFacts.v#L2209)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2158`](../OrderedQueryFacts.v#L2158)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1016,7 +1012,7 @@ Lemma query_expr_fetch_has_success :
 
 ## `query_expr_fetch_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2219`](../OrderedQueryFacts.v#L2219)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2168`](../OrderedQueryFacts.v#L2168)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1039,7 +1035,7 @@ Lemma query_expr_fetch_has_outcome :
 
 ## `eval_query_expr_offset_zero_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2235`](../OrderedQueryFacts.v#L2235)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2184`](../OrderedQueryFacts.v#L2184)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1062,7 +1058,7 @@ Lemma eval_query_expr_offset_zero_iff :
 
 ## `eval_query_expr_fetch_zero_success_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2250`](../OrderedQueryFacts.v#L2250)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2199`](../OrderedQueryFacts.v#L2199)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1083,37 +1079,9 @@ Lemma eval_query_expr_fetch_zero_success_iff :
     output = nil /\ query_has_success env input.
 ```
 
-## `query_expr_fetch_zero_annihilator_outcome_equiv_safe`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2267`](../OrderedQueryFacts.v#L2267)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_zero_possible_outcome_equiv_safe` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_fetch_zero_annihilator_outcome_equiv_safe :
-  forall env left right,
-    query_expr_outputs left = query_expr_outputs right ->
-    query_safe env left ->
-    query_safe env right ->
-    query_has_success env left ->
-    query_has_success env right ->
-    query_outcome_equiv env
-      (QExpr_Fetch 0 left) (QExpr_Fetch 0 right).
-```
-
 ## `eval_query_expr_offset_offset_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2303`](../OrderedQueryFacts.v#L2303)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2213`](../OrderedQueryFacts.v#L2213)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1136,7 +1104,7 @@ Lemma eval_query_expr_offset_offset_iff :
 
 ## `eval_query_expr_fetch_fetch_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2333`](../OrderedQueryFacts.v#L2333)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2243`](../OrderedQueryFacts.v#L2243)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1159,7 +1127,7 @@ Lemma eval_query_expr_fetch_fetch_iff :
 
 ## `eval_query_expr_offset_fetch_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2363`](../OrderedQueryFacts.v#L2363)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2273`](../OrderedQueryFacts.v#L2273)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1184,7 +1152,7 @@ Lemma eval_query_expr_offset_fetch_comm_iff :
 
 ## `eval_query_expr_fetch_offset_comm_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2401`](../OrderedQueryFacts.v#L2401)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2311`](../OrderedQueryFacts.v#L2311)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1209,7 +1177,7 @@ Lemma eval_query_expr_fetch_offset_comm_iff :
 
 ## `eval_query_expr_offset_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2439`](../OrderedQueryFacts.v#L2439)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2349`](../OrderedQueryFacts.v#L2349)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1234,7 +1202,7 @@ Lemma eval_query_expr_offset_success_length :
 
 ## `eval_query_expr_fetch_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2453`](../OrderedQueryFacts.v#L2453)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2363`](../OrderedQueryFacts.v#L2363)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1259,7 +1227,7 @@ Lemma eval_query_expr_fetch_success_length :
 
 ## `eval_query_expr_order_by_success_occurrences`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2684`](../OrderedQueryFacts.v#L2684)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2594`](../OrderedQueryFacts.v#L2594)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1286,7 +1254,7 @@ Lemma eval_query_expr_order_by_success_occurrences :
 
 ## `eval_query_expr_order_by_success_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2707`](../OrderedQueryFacts.v#L2707)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2617`](../OrderedQueryFacts.v#L2617)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1311,7 +1279,7 @@ Lemma eval_query_expr_order_by_success_length :
 
 ## `eval_query_expr_order_by_success_ordered`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2728`](../OrderedQueryFacts.v#L2728)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2638`](../OrderedQueryFacts.v#L2638)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1334,7 +1302,7 @@ Lemma eval_query_expr_order_by_success_ordered :
 
 ## `query_order_by_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2743`](../OrderedQueryFacts.v#L2743)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2653`](../OrderedQueryFacts.v#L2653)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1358,7 +1326,7 @@ Theorem query_order_by_success_bags :
 
 ## `query_order_by_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2771`](../OrderedQueryFacts.v#L2771)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2681`](../OrderedQueryFacts.v#L2681)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1387,7 +1355,7 @@ Theorem query_order_by_success_bags_functional :
 
 ## `query_order_by_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2791`](../OrderedQueryFacts.v#L2791)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2701`](../OrderedQueryFacts.v#L2701)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1412,7 +1380,7 @@ Theorem query_order_by_success_bags_congr :
 
 ## `query_offset_success_bags_congr_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2870`](../OrderedQueryFacts.v#L2870)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2780`](../OrderedQueryFacts.v#L2780)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1439,7 +1407,7 @@ Corollary query_offset_success_bags_congr_closed :
 
 ## `query_fetch_success_bags_congr_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2890`](../OrderedQueryFacts.v#L2890)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2800`](../OrderedQueryFacts.v#L2800)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1466,7 +1434,7 @@ Corollary query_fetch_success_bags_congr_closed :
 
 ## `query_same_rows_as_bag_length_le_one_ordered_equiv`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2913`](../OrderedQueryFacts.v#L2913)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2823`](../OrderedQueryFacts.v#L2823)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1488,35 +1456,9 @@ Lemma query_same_rows_as_bag_length_le_one_ordered_equiv :
     ordered_rows_equiv T left right.
 ```
 
-## `query_expr_order_by_outcome_equiv_of_success_length_le_one`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2949`](../OrderedQueryFacts.v#L2949)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_possible_outcome_equiv_of_success_length_le_one` for the public result.
-
-Purpose/direction: Provides the stated reusable upper bound for ordered query observation.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered query observation.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain exact order whenever the declaration observes it; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `outcome`, `runtime`, `ordered`, `cardinality`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`, `equivalence`, `congruence`
-
-```rocq
-Theorem query_expr_order_by_outcome_equiv_of_success_length_le_one :
-  forall env keys input,
-    (exists outcome, eval_query env input outcome) ->
-    (forall rows,
-      eval_query env input (SqlSuccess rows) ->
-      (length rows <= 1)%nat) ->
-    query_outcome_equiv env (QExpr_OrderBy keys input) input.
-```
-
 ## `eval_query_expr_order_by_order_by_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:2995`](../OrderedQueryFacts.v#L2995)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2861`](../OrderedQueryFacts.v#L2861)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1538,151 +1480,9 @@ Lemma eval_query_expr_order_by_order_by_iff :
     eval_query env (QExpr_OrderBy outer_keys input) outcome.
 ```
 
-## `query_expr_offset_zero_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3043`](../OrderedQueryFacts.v#L3043)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_zero_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_offset_zero_global_typed_equiv :
-  forall input,
-    query_global_typed_outcome_equiv (QExpr_Offset 0 input) input.
-```
-
-## `query_expr_offset_offset_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3051`](../OrderedQueryFacts.v#L3051)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_offset_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_offset_offset_global_typed_equiv :
-  forall outer inner input,
-    query_global_typed_outcome_equiv
-      (QExpr_Offset outer (QExpr_Offset inner input))
-      (QExpr_Offset (outer + inner) input).
-```
-
-## `query_expr_fetch_fetch_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3061`](../OrderedQueryFacts.v#L3061)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_fetch_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_fetch_fetch_global_typed_equiv :
-  forall outer inner input,
-    query_global_typed_outcome_equiv
-      (QExpr_Fetch outer (QExpr_Fetch inner input))
-      (QExpr_Fetch (Nat.min outer inner) input).
-```
-
-## `query_expr_offset_fetch_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3071`](../OrderedQueryFacts.v#L3071)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_fetch_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_offset_fetch_global_typed_equiv :
-  forall offset count input,
-    query_global_typed_outcome_equiv
-      (QExpr_Offset offset (QExpr_Fetch count input))
-      (QExpr_Fetch (count - offset) (QExpr_Offset offset input)).
-```
-
-## `query_expr_fetch_offset_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3081`](../OrderedQueryFacts.v#L3081)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_offset_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered slicing across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered slicing.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `OFFSET`, `FETCH`, `LIMIT`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_fetch_offset_global_typed_equiv :
-  forall count offset input,
-    query_global_typed_outcome_equiv
-      (QExpr_Fetch count (QExpr_Offset offset input))
-      (QExpr_Offset offset (QExpr_Fetch (offset + count) input)).
-```
-
-## `query_expr_order_by_order_by_global_typed_equiv`
-
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3091`](../OrderedQueryFacts.v#L3091)
-
-Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_order_by_possible_outcome_equiv` for the public result.
-
-Purpose/direction: Transports or composes ordered query observation across the declared equivalence.
-
-Applicability: Use to orient, transport, or compose a semantic relation about ordered query observation.
-
-Important premises: retain exact order whenever the declaration observes it; keep schema/integrity conformance premises explicit; supply the declared equivalence/properness relation.
-
-Cross-index: `scheduled`, `ordered`, `schema`
-
-Search aliases: `fixed Boolean schedule`, `foundation`, `ordered query semantics`, `ORDER BY`, `ordered observation`, `schema conformance`, `typing`, `equivalence`, `congruence`
-
-```rocq
-Lemma query_expr_order_by_order_by_global_typed_equiv :
-  forall outer_keys inner_keys input,
-    query_global_typed_outcome_equiv
-      (QExpr_OrderBy outer_keys (QExpr_OrderBy inner_keys input))
-      (QExpr_OrderBy outer_keys input).
-```
-
 ## `query_expr_distinct_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3105`](../OrderedQueryFacts.v#L3105)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2909`](../OrderedQueryFacts.v#L2909)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
@@ -1706,7 +1506,7 @@ Lemma query_expr_distinct_outcome_equiv_congr :
 
 ## `query_expr_order_by_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3165`](../OrderedQueryFacts.v#L3165)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:2969`](../OrderedQueryFacts.v#L2969)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_order_by_possible_outcome_equiv_congr` for the public result.
 
@@ -1730,7 +1530,7 @@ Lemma query_expr_order_by_outcome_equiv_congr :
 
 ## `query_expr_offset_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3225`](../OrderedQueryFacts.v#L3225)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3029`](../OrderedQueryFacts.v#L3029)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_offset_possible_outcome_equiv_congr` for the public result.
 
@@ -1754,7 +1554,7 @@ Lemma query_expr_offset_outcome_equiv_congr :
 
 ## `query_expr_fetch_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3268`](../OrderedQueryFacts.v#L3268)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3072`](../OrderedQueryFacts.v#L3072)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_fetch_possible_outcome_equiv_congr` for the public result.
 
@@ -1778,7 +1578,7 @@ Lemma query_expr_fetch_outcome_equiv_congr :
 
 ## `query_expr_rank_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3311`](../OrderedQueryFacts.v#L3311)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3115`](../OrderedQueryFacts.v#L3115)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_rank_possible_outcome_equiv_congr` for the public result.
 
@@ -1805,7 +1605,7 @@ Lemma query_expr_rank_outcome_equiv_congr :
 
 ## `query_expr_window_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3440`](../OrderedQueryFacts.v#L3440)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3244`](../OrderedQueryFacts.v#L3244)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_window_possible_outcome_equiv_congr_uniform` for the public result.
 
@@ -1836,7 +1636,7 @@ Lemma query_expr_window_outcome_equiv_congr :
 
 ## `ordered_rows_equiv_of_Forall2`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3680`](../OrderedQueryFacts.v#L3680)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3433`](../OrderedQueryFacts.v#L3433)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1862,7 +1662,7 @@ Lemma ordered_rows_equiv_of_Forall2 :
 
 ## `query_distinct_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4383`](../OrderedQueryFacts.v#L4383)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4070`](../OrderedQueryFacts.v#L4070)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1891,7 +1691,7 @@ Theorem query_distinct_success_bags_functional :
 
 ## `query_rank_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4417`](../OrderedQueryFacts.v#L4417)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4104`](../OrderedQueryFacts.v#L4104)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1924,7 +1724,7 @@ Theorem query_rank_success_bags_functional :
 
 ## `eval_query_expr_distinct_possible_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4579`](../OrderedQueryFacts.v#L4579)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4266`](../OrderedQueryFacts.v#L4266)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -1951,7 +1751,7 @@ Lemma eval_query_expr_distinct_possible_error_iff :
 
 ## `eval_query_expr_order_by_possible_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4597`](../OrderedQueryFacts.v#L4597)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4284`](../OrderedQueryFacts.v#L4284)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -1978,7 +1778,7 @@ Lemma eval_query_expr_order_by_possible_error_iff :
 
 ## `eval_query_expr_offset_possible_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4615`](../OrderedQueryFacts.v#L4615)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4302`](../OrderedQueryFacts.v#L4302)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2005,7 +1805,7 @@ Lemma eval_query_expr_offset_possible_error_iff :
 
 ## `eval_query_expr_fetch_possible_error_iff`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4633`](../OrderedQueryFacts.v#L4633)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4320`](../OrderedQueryFacts.v#L4320)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2032,7 +1832,7 @@ Lemma eval_query_expr_fetch_possible_error_iff :
 
 ## `query_expr_distinct_possible_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4651`](../OrderedQueryFacts.v#L4651)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4338`](../OrderedQueryFacts.v#L4338)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2060,7 +1860,7 @@ Lemma query_expr_distinct_possible_outcome_equiv_congr :
 
 ## `query_expr_order_by_possible_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4727`](../OrderedQueryFacts.v#L4727)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4414`](../OrderedQueryFacts.v#L4414)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2088,7 +1888,7 @@ Lemma query_expr_order_by_possible_outcome_equiv_congr :
 
 ## `query_expr_rank_possible_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4798`](../OrderedQueryFacts.v#L4798)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4485`](../OrderedQueryFacts.v#L4485)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2117,7 +1917,7 @@ Lemma query_expr_rank_possible_outcome_equiv_congr :
 
 ## `query_expr_offset_possible_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4944`](../OrderedQueryFacts.v#L4944)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4631`](../OrderedQueryFacts.v#L4631)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2145,7 +1945,7 @@ Lemma query_expr_offset_possible_outcome_equiv_congr :
 
 ## `query_expr_fetch_possible_outcome_equiv_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4996`](../OrderedQueryFacts.v#L4996)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4683`](../OrderedQueryFacts.v#L4683)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2173,7 +1973,7 @@ Lemma query_expr_fetch_possible_outcome_equiv_congr :
 
 ## `position_rows_from_values`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5066`](../OrderedQueryFacts.v#L5066)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4753`](../OrderedQueryFacts.v#L4753)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2195,7 +1995,7 @@ Theorem position_rows_from_values :
 
 ## `position_rows_from_filter_le_prefix`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5101`](../OrderedQueryFacts.v#L5101)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4788`](../OrderedQueryFacts.v#L4788)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2220,7 +2020,7 @@ Theorem position_rows_from_filter_le_prefix :
 
 ## `partition_runs_by_compare_exact_well_formed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5196`](../OrderedQueryFacts.v#L5196)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4883`](../OrderedQueryFacts.v#L4883)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2244,7 +2044,7 @@ Theorem partition_runs_by_compare_exact_well_formed :
 
 ## `rows_key_aligned_length`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5266`](../OrderedQueryFacts.v#L5266)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4953`](../OrderedQueryFacts.v#L4953)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2269,7 +2069,7 @@ Theorem rows_key_aligned_length :
 
 ## `rows_key_aligned_firstn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5278`](../OrderedQueryFacts.v#L5278)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4965`](../OrderedQueryFacts.v#L4965)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2295,7 +2095,7 @@ Theorem rows_key_aligned_firstn :
 
 ## `rows_key_aligned_skipn`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5297`](../OrderedQueryFacts.v#L5297)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4984`](../OrderedQueryFacts.v#L4984)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2321,7 +2121,7 @@ Theorem rows_key_aligned_skipn :
 
 ## `rows_key_aligned_total_map_transport`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5348`](../OrderedQueryFacts.v#L5348)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5035`](../OrderedQueryFacts.v#L5035)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2357,7 +2157,7 @@ Theorem rows_key_aligned_total_map_transport :
 
 ## `query_expr_rank_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1354`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1354)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1407`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1407)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2382,7 +2182,7 @@ Lemma query_expr_rank_global_typed_congr :
 
 ## `query_expr_window_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1386`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1386)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1439`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1439)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2407,7 +2207,7 @@ Lemma query_expr_window_global_typed_congr :
 
 ## `query_expr_distinct_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1425`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1425)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1478`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1478)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2431,7 +2231,7 @@ Lemma query_expr_distinct_global_typed_congr :
 
 ## `query_expr_order_by_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1439`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1439)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1492`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1492)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2455,7 +2255,7 @@ Lemma query_expr_order_by_global_typed_congr :
 
 ## `query_expr_offset_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1453`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1453)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1506`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1506)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2479,7 +2279,7 @@ Lemma query_expr_offset_global_typed_congr :
 
 ## `query_expr_fetch_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1467`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1467)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1520`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1520)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -2503,7 +2303,7 @@ Lemma query_expr_fetch_global_typed_congr :
 
 ## `query_window_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5385`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5385)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5438`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5438)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2541,7 +2341,7 @@ Definition query_window_rows_bag_outcomes
 
 ## `eval_unary_window_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5459`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5459)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5512`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5512)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2572,7 +2372,7 @@ Lemma eval_unary_window_error_iff :
 
 ## `query_window_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5683`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5683)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5736`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5736)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2602,7 +2402,7 @@ Theorem query_window_scheduled_bag_outcomes_characterization :
 
 ## `query_window_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5941`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5941)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5994`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5994)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2650,7 +2450,7 @@ Theorem query_window_scheduled_bag_outcomes_congr :
 
 ## `query_expr_window_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6381`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6381)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6434`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6434)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2699,7 +2499,7 @@ Theorem query_expr_window_possible_bag_schedule_transport :
 
 ## `query_expr_window_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6425`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6425)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6478`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6478)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

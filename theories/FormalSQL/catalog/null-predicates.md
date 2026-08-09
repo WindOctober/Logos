@@ -2,7 +2,7 @@
 
 Route here for: UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE.
 
-This focused catalog contains 99 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 97 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `andb3_unknown_iff`
 
@@ -1442,35 +1442,9 @@ Lemma interp_case_values_true_branch_if : forall condition then_value rest,
   interp_case_values (condition :: then_value :: rest) = then_value.
 ```
 
-## `interp_case_is_not_null_identity`
-
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:837`](../ScalarPredicateFacts.v#L837)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Makes the SQL NULL/UNKNOWN branch explicit for SQL NULL and three-valued behavior.
-
-Applicability: Use when the goal or a hypothesis matches the `interp_case_is_not_null_identity` direction for SQL NULL and three-valued behavior; do not reverse or strengthen the displayed conclusion.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
-
-Cross-index: `scalar`
-
-Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`
-
-```rocq
-Lemma interp_case_is_not_null_identity : forall value fallback,
-  is_null_value value = false ->
-  interp_case_values
-    [interp_scalar_operator
-       (ScalarPredicateValue PredicateIsNotNull) [value];
-     value;
-     fallback] = value.
-```
-
 ## `interp_case_values_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:855`](../ScalarPredicateFacts.v#L855)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:835`](../ScalarPredicateFacts.v#L835)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1493,7 +1467,7 @@ Lemma interp_case_values_skip_nontrue : forall condition then_value rest,
 
 ## `interp_case_values_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:868`](../ScalarPredicateFacts.v#L868)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:848`](../ScalarPredicateFacts.v#L848)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1515,7 +1489,7 @@ Lemma interp_case_values_skip_prefix : forall prefix suffix,
 
 ## `interp_case_values_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:879`](../ScalarPredicateFacts.v#L879)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:859`](../ScalarPredicateFacts.v#L859)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1540,7 +1514,7 @@ Lemma interp_case_values_first_true :
 
 ## `case_runtime_error_empty`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:871`](../ScalarPredicateFacts.v#L871)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1561,7 +1535,7 @@ Lemma case_runtime_error_empty :
 
 ## `case_runtime_error_else`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:897`](../ScalarPredicateFacts.v#L897)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:877`](../ScalarPredicateFacts.v#L877)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1582,7 +1556,7 @@ Lemma case_runtime_error_else : forall else_error else_value,
 
 ## `case_runtime_error_condition_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:903`](../ScalarPredicateFacts.v#L903)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:883`](../ScalarPredicateFacts.v#L883)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1605,7 +1579,7 @@ Lemma case_runtime_error_condition_error : forall error condition then_error
 
 ## `case_runtime_error_true_branch`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:911`](../ScalarPredicateFacts.v#L911)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:891`](../ScalarPredicateFacts.v#L891)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1626,37 +1600,9 @@ Lemma case_runtime_error_true_branch : forall condition then_error then_value re
     ((None, condition) :: (then_error, then_value) :: rest) = then_error.
 ```
 
-## `case_runtime_error_is_not_null_identity`
-
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:920`](../ScalarPredicateFacts.v#L920)
-
-Interface layer: General reusable foundation; no SQL interface layer is implied.
-
-Purpose/direction: Exposes the modeled SQL error condition or propagation direction for SQL NULL and three-valued behavior.
-
-Applicability: Use at the successful-outcome/runtime-error boundary for SQL NULL and three-valued behavior.
-
-Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
-
-Cross-index: `runtime`, `scalar`
-
-Search aliases: `scalar predicate semantics`, `CASE`, `conditional expression`, `NULL`, `UNKNOWN`, `three-valued logic`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
-
-```rocq
-Lemma case_runtime_error_is_not_null_identity :
-  forall value fallback value_error fallback_error,
-    is_null_value value = false ->
-    case_runtime_error
-      [(None,
-          interp_scalar_operator
-            (ScalarPredicateValue PredicateIsNotNull) [value]);
-       (value_error, value);
-       (fallback_error, fallback)] = value_error.
-```
-
 ## `case_runtime_error_skip_nontrue`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:940`](../ScalarPredicateFacts.v#L940)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:900`](../ScalarPredicateFacts.v#L900)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1680,7 +1626,7 @@ Lemma case_runtime_error_skip_nontrue : forall condition then_error then_value r
 
 ## `case_runtime_error_skipped_arm_irrelevant`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:954`](../ScalarPredicateFacts.v#L954)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:914`](../ScalarPredicateFacts.v#L914)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1706,7 +1652,7 @@ Lemma case_runtime_error_skipped_arm_irrelevant :
 
 ## `case_runtime_error_skip_prefix`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:968`](../ScalarPredicateFacts.v#L968)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:928`](../ScalarPredicateFacts.v#L928)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1728,7 +1674,7 @@ Lemma case_runtime_error_skip_prefix : forall prefix suffix,
 
 ## `case_runtime_error_first_true`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:979`](../ScalarPredicateFacts.v#L979)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:939`](../ScalarPredicateFacts.v#L939)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1754,7 +1700,7 @@ Lemma case_runtime_error_first_true :
 
 ## `case_runtime_error_some_member`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:952`](../ScalarPredicateFacts.v#L952)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1777,7 +1723,7 @@ Lemma case_runtime_error_some_member : forall observations error,
 
 ## `case_runtime_error_none_of_all_none`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1018`](../ScalarPredicateFacts.v#L1018)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:978`](../ScalarPredicateFacts.v#L978)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1799,7 +1745,7 @@ Lemma case_runtime_error_none_of_all_none : forall observations,
 
 ## `interp_scalar_case_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1032`](../ScalarPredicateFacts.v#L1032)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:992`](../ScalarPredicateFacts.v#L992)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1820,7 +1766,7 @@ Lemma interp_scalar_case_values : forall values,
 
 ## `interp_scalar_case_runtime_error`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1038`](../ScalarPredicateFacts.v#L1038)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:998`](../ScalarPredicateFacts.v#L998)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1842,7 +1788,7 @@ Lemma interp_scalar_case_runtime_error : forall observations,
 
 ## `interp_predicate_lt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1005`](../ScalarPredicateFacts.v#L1005)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1865,7 +1811,7 @@ Lemma interp_predicate_lt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_lte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1015`](../ScalarPredicateFacts.v#L1015)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1888,7 +1834,7 @@ Lemma interp_predicate_lte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gt_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1025`](../ScalarPredicateFacts.v#L1025)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1911,7 +1857,7 @@ Lemma interp_predicate_gt_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_gte_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1075`](../ScalarPredicateFacts.v#L1075)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1035`](../ScalarPredicateFacts.v#L1035)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1934,7 +1880,7 @@ Lemma interp_predicate_gte_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1085`](../ScalarPredicateFacts.v#L1085)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1045`](../ScalarPredicateFacts.v#L1045)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1957,7 +1903,7 @@ Lemma interp_predicate_eq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_neq_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1095`](../ScalarPredicateFacts.v#L1095)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1055`](../ScalarPredicateFacts.v#L1055)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1980,7 +1926,7 @@ Lemma interp_predicate_neq_of_order_compare : forall left right ordering,
 
 ## `interp_predicate_eq_neq_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1105`](../ScalarPredicateFacts.v#L1105)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1065`](../ScalarPredicateFacts.v#L1065)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2003,7 +1949,7 @@ Lemma interp_predicate_eq_neq_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1076`](../ScalarPredicateFacts.v#L1076)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2026,7 +1972,7 @@ Lemma interp_predicate_lt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_lte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1086`](../ScalarPredicateFacts.v#L1086)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2049,7 +1995,7 @@ Lemma interp_predicate_lte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_gt_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1096`](../ScalarPredicateFacts.v#L1096)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2072,7 +2018,7 @@ Lemma interp_predicate_gt_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_gte_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1146`](../ScalarPredicateFacts.v#L1146)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1106`](../ScalarPredicateFacts.v#L1106)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2095,7 +2041,7 @@ Lemma interp_predicate_gte_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_eq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1156`](../ScalarPredicateFacts.v#L1156)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1116`](../ScalarPredicateFacts.v#L1116)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2118,7 +2064,7 @@ Lemma interp_predicate_eq_true_iff_of_order_compare : forall left right ordering
 
 ## `interp_predicate_neq_true_iff_of_order_compare`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1166`](../ScalarPredicateFacts.v#L1166)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1126`](../ScalarPredicateFacts.v#L1126)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2141,7 +2087,7 @@ Lemma interp_predicate_neq_true_iff_of_order_compare : forall left right orderin
 
 ## `interp_predicate_lt_gte_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1176`](../ScalarPredicateFacts.v#L1176)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1136`](../ScalarPredicateFacts.v#L1136)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2164,7 +2110,7 @@ Lemma interp_predicate_lt_gte_dual_on_ordered_values : forall left right orderin
 
 ## `interp_predicate_lte_gt_dual_on_ordered_values`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1187`](../ScalarPredicateFacts.v#L1187)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1147`](../ScalarPredicateFacts.v#L1147)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2187,7 +2133,7 @@ Lemma interp_predicate_lte_gt_dual_on_ordered_values : forall left right orderin
 
 ## `interp_ordered_comparison_congr`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1198`](../ScalarPredicateFacts.v#L1198)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1158`](../ScalarPredicateFacts.v#L1158)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2213,7 +2159,7 @@ Lemma interp_ordered_comparison_congr :
 
 ## `scalar_predicate_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1213`](../ScalarPredicateFacts.v#L1213)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1173`](../ScalarPredicateFacts.v#L1173)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2236,7 +2182,7 @@ Lemma scalar_predicate_runtime_error_is_children : forall predicate observations
 
 ## `scalar_boolean_runtime_error_is_children`
 
-Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1223`](../ScalarPredicateFacts.v#L1223)
+Source: [`theories/FormalSQL/ScalarPredicateFacts.v:1183`](../ScalarPredicateFacts.v#L1183)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

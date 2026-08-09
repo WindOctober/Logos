@@ -107,25 +107,6 @@ Proof.
 apply query_expr_possible_equiv_of_possible_outcome_equiv_safe.
 Qed.
 
-Example distinct_inert_reset_possible_regression :
-  query_expr_order_behavior first = BagReset ->
-  (forall (schedule : boolean_site -> boolean_evaluation_order)
-      current_env bag,
-    @query_success_bags T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null schedule current_env first bag ->
-    bag_eq T (query_distinct_bag bag) bag) ->
-  (exists outcome,
-    @eval_query_expr_possible_outcome T relname
-      basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env first outcome) ->
-  @query_expr_possible_outcome_equiv T relname
-    basesort instance unknown symbol_runtime_error aggregate_runtime_error
-    value_is_null env (QExpr_Distinct first) first.
-Proof.
-apply query_expr_distinct_possible_outcome_equiv_inert_reset.
-Qed.
-
 Variable scalar_select :
   list (scalar_expr T relname ScalarResultValue * attribute T).
 Variable scalar_predicate : scalar_expr T relname ScalarResultBoolean.
@@ -359,7 +340,6 @@ Check query_expr_possible_equiv_refl.
 Check query_expr_possible_equiv_sym.
 Check query_expr_possible_equiv_trans.
 Check query_expr_possible_equiv_of_possible_outcome_equiv_safe.
-Check query_expr_distinct_possible_outcome_equiv_inert_reset.
 Check eval_query_expr_possible_outcome_site_reindex_iff.
 Print Assumptions eval_query_expr_possible_outcome_site_reindex_iff.
 Check query_expr_context_possible_outcome_equiv.
@@ -385,14 +365,6 @@ Check query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes.
 Check query_expr_group_possible_outcome_equiv_of_exact_local_outcomes.
 Check query_expr_group_clauses_possible_outcome_equiv.
 Check query_expr_possible_outcome_equiv_of_shared_exact_error.
-Check query_expr_offset_zero_possible_outcome_equiv.
-Check query_expr_offset_offset_possible_outcome_equiv.
-Check query_expr_fetch_fetch_possible_outcome_equiv.
-Check query_expr_offset_fetch_possible_outcome_equiv.
-Check query_expr_fetch_offset_possible_outcome_equiv.
-Check query_expr_order_by_order_by_possible_outcome_equiv.
-Check query_expr_fetch_zero_possible_outcome_equiv_safe.
-Check query_expr_order_by_possible_outcome_equiv_of_success_length_le_one.
 Check query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv.
 Check query_program_possible_equiv_nil.
 Check query_program_possible_equiv_cons.
@@ -405,11 +377,8 @@ Check query_program_possible_outcome_equiv_iff_Forall2.
 
 Print Assumptions query_expr_possible_outcome_equiv_of_exact_schedule_transport.
 Print Assumptions query_expr_possible_equiv_of_possible_outcome_equiv_safe.
-Print Assumptions query_expr_distinct_possible_outcome_equiv_inert_reset.
 Print Assumptions query_expr_context_possible_outcome_equiv.
 Print Assumptions query_expr_filter_possible_outcome_equiv_congr_stable_total.
 Print Assumptions query_expr_group_possible_outcome_equiv_of_supported_child_outcomes.
 Print Assumptions query_expr_group_clauses_possible_outcome_equiv.
-Print Assumptions query_expr_order_by_order_by_possible_outcome_equiv.
-
 End GenericPossibleInterfaces.

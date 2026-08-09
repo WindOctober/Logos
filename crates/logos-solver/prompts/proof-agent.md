@@ -277,8 +277,8 @@ Unconditional modes may instead select the fully qualified
 `apply generated_countermodel_goal_intro; [reflexivity|]`. This branch is
 available only for the read-only `Witness.generated_witness_db`; do not define
 another database or re-prove schema conformance. Prove only its complete
-outcome separation for every `NumericExpModel`. `CONDITIONAL` mode forbids the
-branch because its verified precondition may exclude that database.
+outcome separation. `CONDITIONAL` mode forbids the branch because its verified
+precondition may exclude that database.
 
 For a conditional goal, define exactly one `generated_precondition` and one
 direct constructor-valued `generated_precondition_source`, with the trusted
