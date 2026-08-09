@@ -116,9 +116,9 @@ Source: [`theories/FormalSQL/OrderedObservationTransportFacts.v:226`](../Ordered
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Purpose/direction: Shows that the declared window/rank evaluation result is invariant under input permutation.
+Purpose/direction: Forgets peer-swap justification from a peer-order permutation to obtain an ordinary occurrence-preserving list permutation.
 
-Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about window/rank evaluation.
+Applicability: Use when only multiplicity, length, or ordinary permutation facts are needed from a legal peer reorder; the converse is intentionally unavailable.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary; retain exact order whenever the declaration observes it.
 

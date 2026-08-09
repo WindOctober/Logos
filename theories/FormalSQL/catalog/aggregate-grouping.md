@@ -3068,9 +3068,9 @@ Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2289`](../AggregateRuntimeF
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+Purpose/direction: Characterizes the successful-successful branch of generic SQL-outcome equivalence by the caller-supplied value relation.
 
-Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+Applicability: Use to invert or construct exactly the displayed constructor branch of polymorphic `outcome_equiv`; this law is not specific to aggregate evaluation.
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 
@@ -3091,9 +3091,9 @@ Source: [`theories/FormalSQL/AggregateRuntimeFacts.v:2295`](../AggregateRuntimeF
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Purpose/direction: Gives necessary and sufficient conditions for aggregate evaluation.
+Purpose/direction: Characterizes the error-error branch of generic SQL-outcome equivalence by exact equality of error categories.
 
-Applicability: Use in either direction to invert or construct a goal about aggregate evaluation.
+Applicability: Use to invert or construct exactly the displayed constructor branch of polymorphic `outcome_equiv`; this law is not specific to aggregate evaluation.
 
 Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
 

@@ -2088,6 +2088,21 @@ def is_non_equivalence_law(name: str) -> bool:
 def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
     subject = semantic_subject(domain_name, features)
     name_tokens = identifier_tokens(name)
+    if name == "outcome_equiv_success_iff":
+        return (
+            "Characterizes the successful-successful branch of generic SQL-outcome "
+            "equivalence by the caller-supplied value relation."
+        )
+    if name == "outcome_equiv_error_iff":
+        return (
+            "Characterizes the error-error branch of generic SQL-outcome "
+            "equivalence by exact equality of error categories."
+        )
+    if name == "peer_order_permutation_implies_Permutation":
+        return (
+            "Forgets peer-swap justification from a peer-order permutation to obtain "
+            "an ordinary occurrence-preserving list permutation."
+        )
     if name == "query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv":
         return (
             "Abstracts exact possible ordered-row outcomes to possible bags while "
@@ -2967,6 +2982,16 @@ def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
 
 
 def applicability_for(name: str, domain_name: str, features: frozenset[str]) -> str:
+    if name in {"outcome_equiv_success_iff", "outcome_equiv_error_iff"}:
+        return (
+            "Use to invert or construct exactly the displayed constructor branch of "
+            "polymorphic `outcome_equiv`; this law is not specific to aggregate evaluation."
+        )
+    if name == "peer_order_permutation_implies_Permutation":
+        return (
+            "Use when only multiplicity, length, or ordinary permutation facts are needed "
+            "from a legal peer reorder; the converse is intentionally unavailable."
+        )
     if name in GENERIC_QUERY_RENAME_CONSTRUCTOR_THEOREMS:
         specialized = {
             "QExpr_Error_rename_transport":

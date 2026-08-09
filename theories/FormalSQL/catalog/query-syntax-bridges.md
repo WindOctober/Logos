@@ -673,7 +673,7 @@ Lemma TNullRequireArgumentTypes_some_iff :
 
 ## `TNullFunTermType_Constant`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:442`](../QueryTNullSyntax.v#L442)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:444`](../QueryTNullSyntax.v#L444)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -696,7 +696,7 @@ Lemma TNullFunTermType_Constant :
 
 ## `TNullFunTermType_Dot`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:450`](../QueryTNullSyntax.v#L450)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:452`](../QueryTNullSyntax.v#L452)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -719,7 +719,7 @@ Lemma TNullFunTermType_Dot :
 
 ## `TNullAggTermType_AExpr`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:458`](../QueryTNullSyntax.v#L458)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:460`](../QueryTNullSyntax.v#L460)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -741,7 +741,7 @@ Lemma TNullAggTermType_AExpr :
 
 ## `TNullAggTermType_AAggregate`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:465`](../QueryTNullSyntax.v#L465)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:467`](../QueryTNullSyntax.v#L467)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -766,7 +766,7 @@ Lemma TNullAggTermType_AAggregate :
 
 ## `TNullAggTermType_ACountStar`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:485`](../QueryTNullSyntax.v#L485)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:487`](../QueryTNullSyntax.v#L487)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -787,7 +787,7 @@ Lemma TNullAggTermType_ACountStar :
 
 ## `TNullQueryExprAdmissibleWithOutputs_intro`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:557`](../QueryTNullSyntax.v#L557)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:559`](../QueryTNullSyntax.v#L559)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -815,7 +815,7 @@ Lemma TNullQueryExprAdmissibleWithOutputs_intro :
 
 ## `eval_query_expr_row_map_child_error`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:636`](../QueryTNullSyntax.v#L636)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:638`](../QueryTNullSyntax.v#L638)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -839,7 +839,7 @@ Lemma eval_query_expr_row_map_child_error :
 
 ## `query_scalar_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1124`](../QueryTNullSyntax.v#L1124)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1126`](../QueryTNullSyntax.v#L1126)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -873,7 +873,7 @@ Lemma query_scalar_expr_admissible_basesort_extensional :
 
 ## `query_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1186`](../QueryTNullSyntax.v#L1186)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1188`](../QueryTNullSyntax.v#L1188)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -900,7 +900,7 @@ Theorem query_expr_admissible_basesort_extensional :
 
 ## `scalar_expr_admissible_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1198`](../QueryTNullSyntax.v#L1198)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1200`](../QueryTNullSyntax.v#L1200)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -927,7 +927,7 @@ Theorem scalar_expr_admissible_basesort_extensional :
 
 ## `query_expr_admissible_of_with_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1233`](../QueryTNullSyntax.v#L1233)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1235`](../QueryTNullSyntax.v#L1235)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -952,7 +952,7 @@ Lemma query_expr_admissible_of_with_outputs :
 
 ## `query_expr_admissible_with_outputs_change`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1243`](../QueryTNullSyntax.v#L1243)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1245`](../QueryTNullSyntax.v#L1245)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -976,7 +976,7 @@ Lemma query_expr_admissible_with_outputs_change :
 
 ## `query_output_attributes_unique_from_all_diff`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1253`](../QueryTNullSyntax.v#L1253)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1255`](../QueryTNullSyntax.v#L1255)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -999,7 +999,7 @@ Lemma query_output_attributes_unique_from_all_diff :
 
 ## `query_sort_keys_in_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1266`](../QueryTNullSyntax.v#L1266)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1268`](../QueryTNullSyntax.v#L1268)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1022,7 +1022,7 @@ Lemma query_sort_keys_in_outputs :
 
 ## `query_attribute_not_in_outputs`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1277`](../QueryTNullSyntax.v#L1277)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1279`](../QueryTNullSyntax.v#L1279)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1045,7 +1045,7 @@ Lemma query_attribute_not_in_outputs :
 
 ## `query_expr_admissible_with_outputs_error`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1288`](../QueryTNullSyntax.v#L1288)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1290`](../QueryTNullSyntax.v#L1290)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1069,7 +1069,7 @@ Lemma query_expr_admissible_with_outputs_error :
 
 ## `query_expr_admissible_with_outputs_values`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1297`](../QueryTNullSyntax.v#L1297)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1299`](../QueryTNullSyntax.v#L1299)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1094,7 +1094,7 @@ Lemma query_expr_admissible_with_outputs_values :
 
 ## `query_expr_admissible_with_outputs_empty_tuple`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1307`](../QueryTNullSyntax.v#L1307)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1309`](../QueryTNullSyntax.v#L1309)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1117,7 +1117,7 @@ Lemma query_expr_admissible_with_outputs_empty_tuple :
 
 ## `query_expr_admissible_with_outputs_table`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1334`](../QueryTNullSyntax.v#L1334)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1336`](../QueryTNullSyntax.v#L1336)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1142,7 +1142,7 @@ Lemma query_expr_admissible_with_outputs_table :
 
 ## `query_expr_admissible_with_outputs_set`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1344`](../QueryTNullSyntax.v#L1344)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1346`](../QueryTNullSyntax.v#L1346)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1168,7 +1168,7 @@ Lemma query_expr_admissible_with_outputs_set :
 
 ## `query_expr_admissible_with_outputs_natural_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1361`](../QueryTNullSyntax.v#L1361)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1363`](../QueryTNullSyntax.v#L1363)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1194,7 +1194,7 @@ Lemma query_expr_admissible_with_outputs_natural_join :
 
 ## `query_expr_admissible_with_outputs_cross_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1376`](../QueryTNullSyntax.v#L1376)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1378`](../QueryTNullSyntax.v#L1378)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1223,7 +1223,7 @@ Lemma query_expr_admissible_with_outputs_cross_join :
 
 ## `query_expr_admissible_with_outputs_join`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1396`](../QueryTNullSyntax.v#L1396)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1398`](../QueryTNullSyntax.v#L1398)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1351,7 +1351,7 @@ Lemma query_expr_admissible_with_outputs_join :
 
 ## `query_expr_admissible_with_outputs_project`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1514`](../QueryTNullSyntax.v#L1514)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1516`](../QueryTNullSyntax.v#L1516)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1385,7 +1385,7 @@ Lemma query_expr_admissible_with_outputs_project :
 
 ## `query_expr_admissible_with_outputs_row_map`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1534`](../QueryTNullSyntax.v#L1534)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1536`](../QueryTNullSyntax.v#L1536)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1411,7 +1411,7 @@ Lemma query_expr_admissible_with_outputs_row_map :
 
 ## `query_expr_admissible_with_outputs_filter`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1546`](../QueryTNullSyntax.v#L1546)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1548`](../QueryTNullSyntax.v#L1548)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1439,7 +1439,7 @@ Lemma query_expr_admissible_with_outputs_filter :
 
 ## `query_expr_admissible_with_outputs_group`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1562`](../QueryTNullSyntax.v#L1562)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1564`](../QueryTNullSyntax.v#L1564)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1484,7 +1484,7 @@ Lemma query_expr_admissible_with_outputs_group :
 
 ## `query_expr_admissible_with_outputs_grouping_sets`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1597`](../QueryTNullSyntax.v#L1597)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1599`](../QueryTNullSyntax.v#L1599)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1530,7 +1530,7 @@ Lemma query_expr_admissible_with_outputs_grouping_sets :
 
 ## `query_expr_admissible_with_outputs_rank`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1629`](../QueryTNullSyntax.v#L1629)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1631`](../QueryTNullSyntax.v#L1631)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1563,7 +1563,7 @@ Lemma query_expr_admissible_with_outputs_rank :
 
 ## `query_expr_admissible_with_outputs_window`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1654`](../QueryTNullSyntax.v#L1654)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1656`](../QueryTNullSyntax.v#L1656)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1612,7 +1612,7 @@ Lemma query_expr_admissible_with_outputs_window :
 
 ## `query_expr_admissible_with_outputs_distinct`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1698`](../QueryTNullSyntax.v#L1698)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1700`](../QueryTNullSyntax.v#L1700)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1636,7 +1636,7 @@ Lemma query_expr_admissible_with_outputs_distinct :
 
 ## `query_expr_admissible_with_outputs_order_by`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1708`](../QueryTNullSyntax.v#L1708)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1710`](../QueryTNullSyntax.v#L1710)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1661,7 +1661,7 @@ Lemma query_expr_admissible_with_outputs_order_by :
 
 ## `query_expr_admissible_with_outputs_offset`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1722`](../QueryTNullSyntax.v#L1722)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1724`](../QueryTNullSyntax.v#L1724)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1685,7 +1685,7 @@ Lemma query_expr_admissible_with_outputs_offset :
 
 ## `query_expr_admissible_with_outputs_fetch`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1732`](../QueryTNullSyntax.v#L1732)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1734`](../QueryTNullSyntax.v#L1734)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1709,7 +1709,7 @@ Lemma query_expr_admissible_with_outputs_fetch :
 
 ## `query_expr_admissible_database_schema_transport`
 
-Source: [`theories/FormalSQL/QueryTNullSyntax.v:1746`](../QueryTNullSyntax.v#L1746)
+Source: [`theories/FormalSQL/QueryTNullSyntax.v:1748`](../QueryTNullSyntax.v#L1748)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
