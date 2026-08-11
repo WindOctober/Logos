@@ -72,6 +72,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleOutcomeInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleBagContextLiftingRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/QueryBindingRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/QueryDemandSemanticsRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/BitwiseRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AcceptanceGroupInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ScalarPredicateAcceptanceRegression.v

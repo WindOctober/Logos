@@ -262,6 +262,24 @@ complete outcome separation. If no candidate is found, this proof session is
 resumed so that it can continue the equivalence proof. Do not create a handoff
 for a missing lemma, timeout, type error, or uncertainty.
 
+If a compile-clean checkpoint instead exposes a concrete, definition-backed
+obstruction for which neither an EQ proof nor a genuine finite countermodel is
+currently valid, terminate without claiming either result by writing:
+
+```json
+{
+  "decision": "needs_manual_review",
+  "reason": "the exact trusted contract that blocks both accepted selectors",
+  "guidance": "the definitions and evidence a human should inspect"
+}
+```
+
+This is an uncertified terminal status: it stops repeated resume and does not
+invoke the counterexample agent. Use it only after checking the generated goal
+and the relevant trusted definitions. Missing lemmas, incomplete exploration,
+timeouts, compiler errors, or general uncertainty are not manual-review
+evidence.
+
 ## Proof contract
 
 Follow the verification mode in the invocation header and in

@@ -2,7 +2,7 @@
 
 Route here for: row-count bounds, functional joins, filters, groups, finite images.
 
-This focused catalog contains 137 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 139 declarations routed at declaration granularity from `CardinalityCombinators.v`, `QueryCardinality.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `bag_map_cardinal`
 
@@ -3662,4 +3662,60 @@ Lemma primary_key_conforms_filter :
   forall primary_key rows keep,
     primary_key_conforms primary_key rows ->
     primary_key_conforms primary_key (filter keep rows).
+```
+
+## `query_success_composite_key_fixed_first_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2674`](../QueryCardinality.v#L2674)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `cardinality`, `scalar`
+
+Search aliases: `cardinality composition`, `INTEGER`, `int32`, `cardinality`
+
+```rocq
+Theorem query_success_composite_key_fixed_first_length :
+  forall env query first_name second_name rows fixed_first,
+    query_success_int32_composite_key_provenance
+      env query first_name second_name ->
+    eval_query env query (SqlSuccess rows) ->
+    Forall
+      (fun row => dot TNull row (Attr_int32 first_name) = fixed_first)
+      rows ->
+    (List.length rows <= int32_domain_size)%nat.
+```
+
+## `query_success_composite_key_fixed_second_length`
+
+Source: [`theories/FormalSQL/QueryCardinality.v:2693`](../QueryCardinality.v#L2693)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about row cardinality and compositional bounds.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `cardinality`, `scalar`
+
+Search aliases: `cardinality composition`, `INTEGER`, `int32`, `cardinality`
+
+```rocq
+Theorem query_success_composite_key_fixed_second_length :
+  forall env query first_name second_name rows fixed_second,
+    query_success_int32_composite_key_provenance
+      env query first_name second_name ->
+    eval_query env query (SqlSuccess rows) ->
+    Forall
+      (fun row => dot TNull row (Attr_int32 second_name) = fixed_second)
+      rows ->
+    (List.length rows <= int32_domain_size)%nat.
 ```

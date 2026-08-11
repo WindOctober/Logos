@@ -10,6 +10,9 @@ From SQLFS Require Import
 From Logos.FormalSQL Require Import
   OrderedQueryFacts RelationalAlgebraFacts.
 
+Check query_expr_project_success_rows_realize_outputs.
+Check query_expr_group_success_rows_realize_outputs.
+
 Import Tuple.
 
 Section SuccessForallCompositionRegression.

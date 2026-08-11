@@ -2,7 +2,7 @@
 
 Route here for: bag/list abstraction, multiplicity, filter/project/join/set operators.
 
-This focused catalog contains 288 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 290 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `join_matched_rows_filter_inputs_exact`
 
@@ -757,7 +757,7 @@ Theorem query_expr_filter_outcome_congr_extensional :
 
 ## `query_set_union_occurrence_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:868`](../NumericRegroupFacts.v#L868)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1330`](../NumericRegroupFacts.v#L1330)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -781,7 +781,7 @@ Lemma query_set_union_occurrence_exact : forall left right row,
 
 ## `query_bag_duplicate_free_of_rows_NoDupA`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:882`](../NumericRegroupFacts.v#L882)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1344`](../NumericRegroupFacts.v#L1344)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -805,7 +805,7 @@ Lemma query_bag_duplicate_free_of_rows_NoDupA : forall rows,
 
 ## `query_bag_duplicate_free_transport`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:897`](../NumericRegroupFacts.v#L897)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1359`](../NumericRegroupFacts.v#L1359)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -828,7 +828,7 @@ Lemma query_bag_duplicate_free_transport : forall left right,
 
 ## `query_bags_disjoint_sym`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:964`](../NumericRegroupFacts.v#L964)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1426`](../NumericRegroupFacts.v#L1426)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -849,7 +849,7 @@ Lemma query_bags_disjoint_sym : forall left right,
 
 ## `query_set_union_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:971`](../NumericRegroupFacts.v#L971)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1433`](../NumericRegroupFacts.v#L1433)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -873,7 +873,7 @@ Lemma query_set_union_duplicate_free : forall left right,
 
 ## `query_set_union_disjoint_right`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:990`](../NumericRegroupFacts.v#L990)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1452`](../NumericRegroupFacts.v#L1452)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -896,7 +896,7 @@ Lemma query_set_union_disjoint_right : forall first second third,
 
 ## `query_distinct_bag_inert`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1008`](../NumericRegroupFacts.v#L1008)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1470`](../NumericRegroupFacts.v#L1470)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -918,7 +918,7 @@ Lemma query_distinct_bag_inert : forall bag,
 
 ## `query_distinct_bag_occurrence_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1033`](../NumericRegroupFacts.v#L1033)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1495`](../NumericRegroupFacts.v#L1495)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -941,7 +941,7 @@ Lemma query_distinct_bag_occurrence_exact : forall bag row,
 
 ## `query_duplicate_free_support_bag_eq`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1056`](../NumericRegroupFacts.v#L1056)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1518`](../NumericRegroupFacts.v#L1518)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -968,7 +968,7 @@ Lemma query_duplicate_free_support_bag_eq :
 
 ## `query_bag_filter_occurrence_exact`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1093`](../NumericRegroupFacts.v#L1093)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1555`](../NumericRegroupFacts.v#L1555)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -999,7 +999,7 @@ Lemma query_bag_filter_occurrence_exact :
 
 ## `query_bag_filter_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:1116`](../NumericRegroupFacts.v#L1116)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1578`](../NumericRegroupFacts.v#L1578)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2087,6 +2087,56 @@ Theorem rows_key_aligned_filter :
       rows_key_aligned key_rel left_key right_key
         (filter (fun row => left_keep (left_key row)) left)
         (filter (fun row => right_keep (right_key row)) right).
+```
+
+## `project_row_realizes_query_outputs`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6858`](../OrderedQueryFacts.v#L6858)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the project row realizes query outputs law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `project_row_realizes_query_outputs` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `projection`
+
+Search aliases: `relational algebra`, `projection`, `SELECT list`
+
+```rocq
+Lemma project_row_realizes_query_outputs :
+  forall (T : Tuple.Rcd) (relname : Type)
+      (select_list : @query_select_list T relname) values,
+    row_realizes_query_outputs
+      (scalar_select_outputs select_list)
+      (project_row select_list values).
+```
+
+## `query_expr_project_success_rows_realize_outputs`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6889`](../OrderedQueryFacts.v#L6889)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for relational algebra.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_project_success_rows_realize_outputs` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `projection`
+
+Search aliases: `relational algebra`, `projection`, `SELECT list`
+
+```rocq
+Theorem query_expr_project_success_rows_realize_outputs :
+  forall env select_list input,
+    @query_success_Forall T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env (QExpr_Project select_list input)
+      (row_realizes_query_outputs (scalar_select_outputs select_list)).
 ```
 
 ## `join_matched_rows_transpose_Permutation`

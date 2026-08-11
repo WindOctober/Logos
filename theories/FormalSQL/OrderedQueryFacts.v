@@ -6823,3 +6823,125 @@ induction Haligned as
 - constructor.
 - constructor; [now apply Hmap|exact IH].
 Qed.
+
+(******************************************************************************)
+(** Successful rows realize the query's declared output schema.              **)
+(******************************************************************************)
+
+(** This is a semantic row-shape property, not mere name membership.  It is
+    phrased with the same finite-set equality used by FormalSQL tuples and is
+    therefore stable under hidden tuple-representation equality. *)
+Definition row_realizes_query_outputs {T : Tuple.Rcd}
+    (outputs : list (attribute T)) (row : tuple T) : Prop :=
+  labels T row =S= @query_outputs_sort T outputs.
+
+Lemma row_realizes_query_outputs_semantic_invariant :
+  forall (T : Tuple.Rcd) outputs,
+    tuple_property_semantic_invariant
+      (@row_realizes_query_outputs T outputs).
+Proof.
+intros T outputs left right Hrows; split; intro Hshape.
+- unfold row_realizes_query_outputs in *.
+  apply tuple_eq in Hrows as [Hlabels _].
+  rewrite Fset.equal_spec in Hlabels, Hshape |- *.
+  intro attribute.
+  rewrite <- (Hlabels attribute).
+  apply Hshape.
+- unfold row_realizes_query_outputs in *.
+  apply tuple_eq in Hrows as [Hlabels _].
+  rewrite Fset.equal_spec in Hlabels, Hshape |- *.
+  intro attribute.
+  rewrite (Hlabels attribute).
+  apply Hshape.
+Qed.
+
+Lemma project_row_realizes_query_outputs :
+  forall (T : Tuple.Rcd) (relname : Type)
+      (select_list : @query_select_list T relname) values,
+    row_realizes_query_outputs
+      (scalar_select_outputs select_list)
+      (project_row select_list values).
+Proof.
+intros T relname select_list values.
+unfold row_realizes_query_outputs, project_row, query_outputs_sort.
+apply labels_mk_tuple.
+Qed.
+
+Section SuccessfulOutputSchemas.
+
+Context {T : Tuple.Rcd} {relname : Type}.
+
+Variable basesort : relname -> Fset.set (A T).
+Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple T)).
+Variable unknown : Bool.b (B T).
+Variable symbol_runtime_error :
+  scalar_operator T ->
+  list (option sql_runtime_error * value T) -> option sql_runtime_error.
+Variable aggregate_runtime_error :
+  aggregate T ->
+  list (option sql_runtime_error * value T) -> option sql_runtime_error.
+Variable value_is_null : value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
+
+(** Every successful projection row has exactly the labels declared by its
+    SELECT list.  No child-schema or scalar-safety premise is needed: success
+    already contains the reached scalar observations. *)
+Theorem query_expr_project_success_rows_realize_outputs :
+  forall env select_list input,
+    @query_success_Forall T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env (QExpr_Project select_list input)
+      (row_realizes_query_outputs (scalar_select_outputs select_list)).
+Proof.
+intros env select_list input.
+eapply query_expr_project_success_Forall with
+  (input_property := fun _ => True).
+- intros rows _; induction rows; constructor; auto.
+- intros input_row output_row _ [values [Hvalues ->]].
+  apply project_row_realizes_query_outputs.
+Qed.
+
+Lemma eval_groups_success_rows_realize_outputs :
+  forall env select_list group_terms having groups rows,
+    @eval_groups_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list group_terms having groups
+      (SqlSuccess rows) ->
+    Forall
+      (row_realizes_query_outputs (scalar_select_outputs select_list)) rows.
+Proof.
+intros env select_list group_terms having groups.
+induction groups as [|group groups IH]; intros rows Heval.
+- inversion Heval; constructor.
+- inversion Heval; subst.
+  + now apply IH.
+  + destruct tail as [tail_rows | error]; cbn in *; try discriminate.
+    inversion H1; subst rows.
+    constructor.
+    * apply project_row_realizes_query_outputs.
+    * now apply IH.
+Qed.
+
+(** GROUP output rows are projected rows regardless of which legal input-bag
+    representative or group order the evaluator selected. *)
+Theorem query_expr_group_success_rows_realize_outputs :
+  forall env select_list group_keys having input,
+    @query_success_Forall T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
+      (QExpr_Group select_list group_keys having input)
+      (row_realizes_query_outputs (scalar_select_outputs select_list)).
+Proof.
+intros env select_list group_keys having input rows Heval.
+apply eval_query_expr_group_success_iff in Heval.
+destruct Heval as
+  [input_rows [output_bag [Hinput [Hgroup Hrows]]]].
+inversion Hgroup; subst.
+eapply query_same_rows_as_bag_Forall_transport.
+- apply row_realizes_query_outputs_semantic_invariant.
+- exact H8.
+- exact Hrows.
+- eapply eval_groups_success_rows_realize_outputs; exact H3.
+Qed.
+
+End SuccessfulOutputSchemas.

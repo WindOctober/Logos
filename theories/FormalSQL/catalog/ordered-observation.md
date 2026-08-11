@@ -2,7 +2,7 @@
 
 Route here for: exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT.
 
-This focused catalog contains 116 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 117 declarations routed at declaration granularity from `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `tuple_list_semantic_rel_app`
 
@@ -2747,6 +2747,29 @@ Theorem rows_key_aligned_total_map_transport :
       rows_key_aligned input_key_rel left_key right_key left right ->
       rows_key_aligned output_key_rel left_output_key right_output_key
         (map left_map left) (map right_map right).
+```
+
+## `row_realizes_query_outputs_semantic_invariant`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6838`](../OrderedQueryFacts.v#L6838)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Preserves the declared ordered query equivalence result across the indicated transformation.
+
+Applicability: Use when the goal or a hypothesis matches the `row_realizes_query_outputs_semantic_invariant` direction for ordered query equivalence; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `ordered`
+
+Search aliases: `ordered query semantics`
+
+```rocq
+Lemma row_realizes_query_outputs_semantic_invariant :
+  forall (T : Tuple.Rcd) outputs,
+    tuple_property_semantic_invariant
+      (@row_realizes_query_outputs T outputs).
 ```
 
 ## `query_expr_rank_global_typed_congr`

@@ -220,6 +220,12 @@ pub fn solve(
 
     let proof_stage_result = if let Some(provider) = provider.as_ref() {
         let mut handle_handoff = |handoff: &report::ProofCounterexampleHandoff| {
+            let feedback = handoff.counterexample_feedback().ok_or_else(|| {
+                Error::ProofAgentCommand(
+                    "manual-review proof control must not enter counterexample synthesis"
+                        .to_owned(),
+                )
+            })?;
             match resume_counterexample_search(
                 &input,
                 formal_schema_for_counterexample.as_ref(),
@@ -229,7 +235,7 @@ pub fn solve(
                 &artifacts,
                 started,
                 &counterexample_report,
-                handoff.counterexample_feedback(),
+                feedback,
             )? {
                 CounterexampleStageResult::Terminal(_) => Err(Error::ProposalCommand(
                     "proof-directed counterexample synthesis attempted to terminate verification without the trusted Rocq selector"
@@ -265,7 +271,8 @@ pub fn solve(
     let verification_report = match proof_stage_result {
         ProofStageResult::Finished(report) => *report,
     };
-    if counterexample_report.outcome == SearchStatus::NeedsManualReview
+    if (counterexample_report.outcome == SearchStatus::NeedsManualReview
+        || verification_report.backend_status == BackendStatus::NeedsManualReview)
         && verification_report.certification.is_some()
     {
         return Err(Error::ProofAgentCommand(
@@ -275,8 +282,11 @@ pub fn solve(
     let outcome = final_solver_outcome(
         verification_report.certification,
         counterexample_report.outcome,
+        verification_report.backend_status,
     );
-    let status_reason = if outcome == SolverOutcome::NeedsManualReview {
+    let status_reason = if verification_report.backend_status == BackendStatus::NeedsManualReview {
+        verification_report.status_reason.clone()
+    } else if outcome == SolverOutcome::NeedsManualReview {
         format!(
             "{}; proof-directed FormalSQL verification stopped without accepting EQ or NEQ: {}",
             counterexample_report.reason, verification_report.status_reason
@@ -327,6 +337,7 @@ pub fn solve(
 fn final_solver_outcome(
     certification: Option<CertificationLevel>,
     counterexample_status: SearchStatus,
+    proof_status: BackendStatus,
 ) -> SolverOutcome {
     match certification {
         Some(CertificationLevel::SafeUnconditional) => SolverOutcome::SafeUnconditional,
@@ -334,7 +345,9 @@ fn final_solver_outcome(
         Some(CertificationLevel::ConditionalDerived) => SolverOutcome::ConditionalDerived,
         Some(CertificationLevel::ConditionalExternal) => SolverOutcome::ConditionalExternal,
         Some(CertificationLevel::FormalCountermodel) => SolverOutcome::NotEquivalent,
-        None if counterexample_status == SearchStatus::NeedsManualReview => {
+        None if counterexample_status == SearchStatus::NeedsManualReview
+            || proof_status == BackendStatus::NeedsManualReview =>
+        {
             SolverOutcome::NeedsManualReview
         }
         None => SolverOutcome::EquivalenceVerificationIncomplete,
@@ -374,7 +387,9 @@ mod tests {
     use std::time::Instant;
 
     use super::{ProofHandoffResolution, final_solver_outcome, proof_handoff_resolution};
-    use crate::engine::report::{CertificationLevel, SearchReport, SearchStatus, SolverOutcome};
+    use crate::engine::report::{
+        BackendStatus, CertificationLevel, SearchReport, SearchStatus, SolverOutcome,
+    };
     use crate::validation::FormalWitnessSnapshot;
 
     #[test]
@@ -435,15 +450,35 @@ mod tests {
     #[test]
     fn unresolved_manual_review_survives_proof_while_certificates_take_priority() {
         assert_eq!(
-            final_solver_outcome(None, SearchStatus::NeedsManualReview),
+            final_solver_outcome(
+                None,
+                SearchStatus::NeedsManualReview,
+                BackendStatus::ProofAgentRunCompleted,
+            ),
             SolverOutcome::NeedsManualReview
         );
         assert_eq!(
-            final_solver_outcome(None, SearchStatus::MaybeEquivalent),
+            final_solver_outcome(
+                None,
+                SearchStatus::MaybeEquivalent,
+                BackendStatus::NeedsManualReview,
+            ),
+            SolverOutcome::NeedsManualReview
+        );
+        assert_eq!(
+            final_solver_outcome(
+                None,
+                SearchStatus::MaybeEquivalent,
+                BackendStatus::ProofAgentRunCompleted,
+            ),
             SolverOutcome::EquivalenceVerificationIncomplete
         );
         assert_eq!(
-            final_solver_outcome(None, SearchStatus::NotEquivalent),
+            final_solver_outcome(
+                None,
+                SearchStatus::NotEquivalent,
+                BackendStatus::ProofAgentRunCompleted,
+            ),
             SolverOutcome::EquivalenceVerificationIncomplete,
             "a counterexample-stage status cannot bypass the trusted Rocq selector"
         );
@@ -451,6 +486,7 @@ mod tests {
             final_solver_outcome(
                 Some(CertificationLevel::OutcomeUnconditional),
                 SearchStatus::NeedsManualReview,
+                BackendStatus::NeedsManualReview,
             ),
             SolverOutcome::OutcomeUnconditional
         );
@@ -458,6 +494,7 @@ mod tests {
             final_solver_outcome(
                 Some(CertificationLevel::FormalCountermodel),
                 SearchStatus::NeedsManualReview,
+                BackendStatus::NeedsManualReview,
             ),
             SolverOutcome::NotEquivalent
         );

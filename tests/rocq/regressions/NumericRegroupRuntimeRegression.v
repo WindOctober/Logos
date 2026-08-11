@@ -6,6 +6,9 @@ From Stdlib Require Import List.
 From SQLFS Require Import Values ValueNumeric.
 From Logos.FormalSQL Require Import NumericRegroupFacts.
 
+Check fixed_decimal_sum_runtime_safe_of_cardinality.
+Check fixed_decimal_avg_runtime_safe_of_cardinality.
+
 Import ListNotations.
 Import NullValues.
 

@@ -8,7 +8,7 @@ From Stdlib Require Import Lia List NArith QArith Qcanon SetoidList
   Sorting.Permutation ZArith.
 From SQLFS Require Import ATerms Bool3 Env FiniteBag FiniteCollection FiniteSet
   FlatData FTerms FTuples GenericInstance ListPermut ListSort OrderedSet Partition
-  SqlBagAbstraction SqlErrorSemantics SqlOutcome SqlQueryFacts
+  SchemaConstraints SqlSyntax SqlBagAbstraction SqlErrorSemantics SqlOutcome SqlQueryFacts
   SqlQuerySemantics Values ValueNumeric.
 From Logos.FormalSQL Require Import AggregateRuntimeFacts
   GroupedFilterOutcomeFacts GroupingRewriteFacts NumericDerivedFacts
@@ -652,6 +652,468 @@ split.
     rewrite tnull_sum_numeric_dot_observation_values.
     exact (@NumericFacts.sum_numeric_runtime_error_permutation _ _ Hvalues).
   + exact Hchildren.
+Qed.
+
+(******************************************************************************)
+(** Cardinality certificates for fixed DECIMAL SUM and AVG runtime safety.  **)
+(******************************************************************************)
+
+(** A schema-attested DECIMAL(p,s) observation is NULL, NaN, or one exact
+    scale-[s] finite coefficient inside the p-digit typmod bound.  PostgreSQL
+    rejects infinities at this boundary. *)
+Definition fixed_decimal_value_shape
+    (precision scale : Z) (observation : value TNull) : Prop :=
+  match observation with
+  | Value_numeric None => True
+  | Value_numeric (Some NumericNaN) => True
+  | Value_numeric (Some (NumericFinite finite)) =>
+      exists coefficient,
+        NumericFinite finite = numeric_of_scaled coefficient scale /\
+        numeric_finite_rounded_coeff finite scale = coefficient /\
+        Z.abs coefficient < Z.pow 10 precision
+  | _ => False
+  end.
+
+Definition fixed_decimal_numeric_shape
+    (precision scale : Z) (number : numeric) : Prop :=
+  match number with
+  | NumericNaN => True
+  | NumericFinite finite =>
+      exists coefficient,
+        NumericFinite finite = numeric_of_scaled coefficient scale /\
+        numeric_finite_rounded_coeff finite scale = coefficient /\
+        Z.abs coefficient < Z.pow 10 precision
+  | NumericNegInfinity | NumericPosInfinity => False
+  end.
+
+Lemma fixed_decimal_conforms_shape :
+  forall name precision scale observation,
+    value_conforms_attribute
+      (AttrDecimal name precision scale) observation ->
+    fixed_decimal_value_shape precision scale observation.
+Proof.
+intros name precision scale observation Hconforms.
+destruct observation; try contradiction.
+destruct o as [number |]; [|exact I].
+destruct number as [|finite| |].
+- pose proof (numeric_cast_typmod_infinity_rejected
+    NumericNegInfinity precision scale (or_introl eq_refl)) as Hnone.
+  congruence.
+- exists (numeric_finite_rounded_coeff finite scale); split.
+  + symmetry.
+    exact (@numeric_avg_fixed_attested_finite_exact
+      precision scale finite Hconforms).
+  + split; [reflexivity|].
+    apply numeric_cast_typmod_some_iff in Hconforms as [Hfits _].
+    unfold numeric_fits_typmod_bool in Hfits.
+    destruct (numeric_typmod_valid_bool precision scale) eqn:Hvalid;
+      cbn [numeric_rounded_coeff] in Hfits; try discriminate.
+    now apply Z.ltb_lt.
+- pose proof (numeric_cast_typmod_infinity_rejected
+    NumericPosInfinity precision scale (or_intror eq_refl)) as Hnone.
+  congruence.
+- exact I.
+Qed.
+
+Lemma fixed_decimal_shapes_are_numeric :
+  forall precision scale observations,
+    Forall (fixed_decimal_value_shape precision scale) observations ->
+    forallb is_numeric_value observations = true.
+Proof.
+intros precision scale observations Hshape.
+induction Hshape as [|observation observations Hhead Htail IH].
+- reflexivity.
+- destruct observation; cbn in Hhead |- *; try contradiction.
+  destruct o; cbn; exact IH.
+Qed.
+
+Lemma fixed_decimal_conforms_numeric_values :
+  forall name precision scale observations,
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    Forall (fixed_decimal_numeric_shape precision scale)
+      (numeric_values observations).
+Proof.
+intros name precision scale observations Hconforms.
+induction Hconforms as [|observation observations Hhead Htail IH].
+- constructor.
+- destruct observation; cbn in Hhead |- *; try contradiction; try exact IH.
+  destruct o as [number |]; cbn; [|exact IH].
+  constructor; [|exact IH].
+  pose proof (fixed_decimal_conforms_shape
+    name precision scale (Value_numeric (Some number)) Hhead) as Hshape.
+  exact Hshape.
+Qed.
+
+Lemma fixed_decimal_conforms_typmod_forallb :
+  forall name precision scale observations,
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    forallb (numeric_conforms_typmod_bool precision scale)
+      (numeric_values observations) = true.
+Proof.
+intros name precision scale observations Hconforms.
+induction Hconforms as [|observation observations Hhead Htail IH].
+- reflexivity.
+- destruct observation; cbn in Hhead |- *; try contradiction; try exact IH.
+  destruct o as [number |]; cbn; [|exact IH].
+  unfold numeric_conforms_typmod_bool.
+  rewrite Hhead, numeric_eqb_refl.
+  exact IH.
+Qed.
+
+Lemma numeric_values_length_le :
+  forall observations,
+    (List.length (numeric_values observations) <=
+      List.length observations)%nat.
+Proof.
+induction observations as [|observation observations IH]; cbn; [lia|].
+destruct observation; cbn; try lia.
+destruct o; cbn; lia.
+Qed.
+
+(** Exact addition at one nonnegative fixed scale. *)
+Lemma numeric_add_same_nonnegative_scale :
+  forall left right scale,
+    0 <= scale ->
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+Proof.
+intros left right scale Hscale.
+unfold numeric_add, numeric_of_scaled.
+rewrite (proj2 (Z.leb_le 0 scale) Hscale).
+cbn; f_equal.
+unfold Qcanon.Qcdiv.
+rewrite <- Qcanon.Qcmult_plus_distr_l.
+f_equal.
+apply (proj2 (Qcanon.Qceq_alt _ _)).
+unfold Qcanon.Qccompare, Qcanon.Qcplus.
+setoid_rewrite Qreduction.Qred_correct.
+pose proof (Qreduction.Qred_correct
+  (QArith_base.inject_Z left)) as Hleft.
+pose proof (Qreduction.Qred_correct
+  (QArith_base.inject_Z right)) as Hright.
+setoid_rewrite Hleft; setoid_rewrite Hright.
+rewrite QArith_base.inject_Z_plus.
+remember
+  (QArith_base.Qplus (QArith_base.inject_Z left)
+    (QArith_base.inject_Z right)) as rational.
+destruct (QArith_base.Qcompare_spec rational rational)
+  as [Hequal | Hless | Hgreater].
+- reflexivity.
+- exfalso; exact (QArith_base.Qlt_irrefl rational Hless).
+- exfalso; exact (QArith_base.Qlt_irrefl rational Hgreater).
+Qed.
+
+Lemma numeric_add_same_negative_scale :
+  forall left right scale,
+    scale < 0 ->
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+Proof.
+intros left right scale Hscale.
+unfold numeric_add, numeric_of_scaled.
+rewrite (proj2 (Z.leb_gt 0 scale) Hscale).
+cbn; f_equal.
+rewrite <- Qcanon.Qcmult_plus_distr_l.
+f_equal.
+apply (proj2 (Qcanon.Qceq_alt _ _)).
+unfold Qcanon.Qccompare, Qcanon.Qcplus.
+setoid_rewrite Qreduction.Qred_correct.
+pose proof (Qreduction.Qred_correct
+  (QArith_base.inject_Z left)) as Hleft.
+pose proof (Qreduction.Qred_correct
+  (QArith_base.inject_Z right)) as Hright.
+setoid_rewrite Hleft; setoid_rewrite Hright.
+rewrite QArith_base.inject_Z_plus.
+remember
+  (QArith_base.Qplus (QArith_base.inject_Z left)
+    (QArith_base.inject_Z right)) as rational.
+destruct (QArith_base.Qcompare_spec rational rational)
+  as [Hequal | Hless | Hgreater].
+- reflexivity.
+- exfalso; exact (QArith_base.Qlt_irrefl rational Hless).
+- exfalso; exact (QArith_base.Qlt_irrefl rational Hgreater).
+Qed.
+
+(** Exact addition for every PostgreSQL fixed DECIMAL scale, including the
+    negative scales admitted by recent PostgreSQL typmods. *)
+Lemma numeric_add_same_scale :
+  forall left right scale,
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+Proof.
+intros left right scale.
+destruct (Z_le_gt_dec 0 scale) as [Hnonnegative | Hnegative].
+- now apply numeric_add_same_nonnegative_scale.
+- apply numeric_add_same_negative_scale; lia.
+Qed.
+
+Definition fixed_decimal_sum_option_shape
+    (scale bound : Z) (state : option numeric) : Prop :=
+  state = None \/ state = Some NumericNaN \/
+  exists coefficient,
+    state = Some (numeric_of_scaled coefficient scale) /\
+    Z.abs coefficient <= bound.
+
+Lemma fixed_decimal_sum_option_shape_mono :
+  forall scale lower upper state,
+    lower <= upper ->
+    fixed_decimal_sum_option_shape scale lower state ->
+    fixed_decimal_sum_option_shape scale upper state.
+Proof.
+intros scale lower upper state Hle Hshape.
+destruct Hshape as [Hnone | [Hnan | [coefficient [Hstate Hbound]]]].
+- now left.
+- now right; left.
+- right; right; exists coefficient; split; [exact Hstate|lia].
+Qed.
+
+Lemma fixed_decimal_sum_fold_shape :
+  forall precision scale numbers current bound,
+    0 <= precision ->
+    Forall (fixed_decimal_numeric_shape precision scale) numbers ->
+    0 <= bound ->
+    fixed_decimal_sum_option_shape scale bound current ->
+    fixed_decimal_sum_option_shape scale
+      (bound + Z.of_nat (List.length numbers) * Z.pow 10 precision)
+      (fold_left numeric_sum_option_add numbers current).
+Proof.
+intros precision scale numbers.
+induction numbers as [|number numbers IH];
+  intros current bound Hprecision Hnumbers Hbound Hcurrent.
+- cbn; replace (bound + 0) with bound by ring; exact Hcurrent.
+- inversion Hnumbers as [|? ? Hnumber Htail]; subst.
+  assert (Hpower : 0 < Z.pow 10 precision).
+  { apply Z.pow_pos_nonneg; lia. }
+  eapply fixed_decimal_sum_option_shape_mono with
+    (lower := (bound + Z.pow 10 precision) +
+      Z.of_nat (List.length numbers) * Z.pow 10 precision).
+  + apply Z.eq_le_incl.
+    cbn [List.length]; rewrite Nat2Z.inj_succ; unfold Z.succ; ring.
+  + eapply IH; try eassumption; [lia|].
+    destruct number as [|finite| |]; cbn in Hnumber; try contradiction.
+    * destruct Hnumber as
+        [coefficient [Hnumber [Hrounded Hcoefficient]]].
+      destruct Hcurrent as [-> | [-> | [total [-> Htotal]]]].
+      -- right; right; exists coefficient; split.
+         ++ cbn [numeric_sum_option_add]; now rewrite Hnumber.
+         ++ lia.
+      -- right; left; reflexivity.
+      -- right; right; exists (total + coefficient); split.
+         ++ cbn [numeric_sum_option_add].
+            rewrite Hnumber, numeric_add_same_scale.
+            reflexivity.
+         ++ pose proof (Z.abs_triangle total coefficient); nia.
+    * destruct Hcurrent as [-> | [-> | [total [-> Htotal]]]];
+        right; left; reflexivity.
+Qed.
+
+(** The query-specific work is reduced to a cardinality bound and one
+    representability certificate for scaled coefficients.  All NULL/NaN,
+    typmod, fold, and finalizer plumbing is discharged here. *)
+Theorem fixed_decimal_sum_runtime_safe_of_cardinality :
+  forall name precision scale observations max_count accumulator_bound,
+    0 <= precision ->
+    0 <= max_count ->
+    Z.of_nat (List.length observations) <= max_count ->
+    max_count * Z.pow 10 precision <= accumulator_bound ->
+    (forall coefficient,
+      Z.abs coefficient <= accumulator_bound ->
+      numeric_runtime_fits_bool
+        (numeric_of_scaled coefficient scale) = true) ->
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    sum_numeric_runtime_error observations = None.
+Proof.
+intros name precision scale observations max_count accumulator_bound
+  Hprecision Hcount_nonnegative Hlength Haccumulator Hfits Hconforms.
+assert (Hshapes :
+  Forall (fixed_decimal_value_shape precision scale) observations).
+{ eapply Forall_impl; [|exact Hconforms].
+  intros observation Hconform.
+  now apply (fixed_decimal_conforms_shape name precision scale). }
+pose proof (@fixed_decimal_shapes_are_numeric
+  precision scale observations Hshapes) as Htyped.
+pose proof (@fixed_decimal_conforms_numeric_values
+  name precision scale observations Hconforms) as Hnumbers.
+pose proof (@fixed_decimal_sum_fold_shape
+  precision scale (numeric_values observations) None 0
+  Hprecision Hnumbers ltac:(lia) ltac:(left; reflexivity)) as Hfold.
+unfold sum_numeric_runtime_error; rewrite Htyped.
+unfold numeric_sum_state_runtime_error.
+rewrite numeric_sum_fold_from_initial.
+destruct Hfold as
+  [Hnone | [Hnan | [coefficient [Hsum Hcoefficient]]]].
+- now rewrite Hnone.
+- rewrite Hnan.
+  apply (proj2 (numeric_result_runtime_error_none_iff NumericNaN)).
+  reflexivity.
+- rewrite Hsum.
+  apply (proj2 (numeric_result_runtime_error_none_iff _)).
+  apply Hfits.
+  eapply Z.le_trans; [exact Hcoefficient|].
+  replace
+    (0 + Z.of_nat (List.length (numeric_values observations)) *
+      Z.pow 10 precision)
+    with
+    (Z.of_nat (List.length (numeric_values observations)) *
+      Z.pow 10 precision) by ring.
+  eapply Z.le_trans; [|exact Haccumulator].
+  apply Z.mul_le_mono_nonneg_r; [apply Z.pow_nonneg; lia|].
+  eapply Z.le_trans; [|exact Hlength].
+  apply Nat2Z.inj_le.
+  apply numeric_values_length_le.
+Qed.
+
+Definition fixed_decimal_avg_state_shape
+    (precision : Z) (state : numeric_avg_scale_state) : Prop :=
+  numeric_avg_pos_inf_count state = 0 /\
+  numeric_avg_neg_inf_count state = 0 /\
+  0 <= numeric_avg_finite_count state /\
+  0 <= numeric_avg_nan_count state /\
+  Z.abs (numeric_avg_sum_coeff state) <=
+    numeric_avg_finite_count state * Z.pow 10 precision.
+
+Lemma fixed_decimal_avg_transition_shape :
+  forall precision scale state number,
+    0 <= precision ->
+    fixed_decimal_avg_state_shape precision state ->
+    fixed_decimal_numeric_shape precision scale number ->
+    fixed_decimal_avg_state_shape precision
+      (numeric_avg_scale_transition scale state number).
+Proof.
+intros precision scale
+  [finite_count nan_count pos_count neg_count coefficient]
+  number Hprecision Hstate Hnumber.
+unfold fixed_decimal_avg_state_shape in Hstate |- *; cbn in *.
+destruct Hstate as [Hpos [Hneg [Hfinite [Hnan Hcoefficient]]]].
+subst pos_count neg_count.
+assert (Hpower : 0 < Z.pow 10 precision).
+{ apply Z.pow_pos_nonneg; lia. }
+destruct number as [|finite| |]; cbn in Hnumber |- *; try contradiction.
+- destruct Hnumber as [next [Hnumber [Hrounded Hnext]]].
+  rewrite Hrounded.
+  repeat split; try lia.
+- repeat split; try lia.
+Qed.
+
+Lemma fixed_decimal_avg_fold_shape :
+  forall precision scale numbers,
+    0 <= precision ->
+    Forall (fixed_decimal_numeric_shape precision scale) numbers ->
+    fixed_decimal_avg_state_shape precision
+      (fold_left (numeric_avg_scale_transition scale) numbers
+        numeric_avg_scale_initial).
+Proof.
+intros precision scale numbers Hprecision Hnumbers.
+assert (Hinitial :
+  fixed_decimal_avg_state_shape precision numeric_avg_scale_initial).
+{ unfold fixed_decimal_avg_state_shape, numeric_avg_scale_initial; cbn.
+  pose proof (Z.pow_nonneg 10 precision ltac:(lia)); nia. }
+assert (Hfold : forall initial,
+  fixed_decimal_avg_state_shape precision initial ->
+  fixed_decimal_avg_state_shape precision
+    (fold_left (numeric_avg_scale_transition scale) numbers initial)).
+{
+  clear Hinitial.
+  induction Hnumbers as [|number numbers Hnumber Hnumbers IH];
+    intros initial Hshape; cbn.
+  - exact Hshape.
+  - apply IH.
+    now apply fixed_decimal_avg_transition_shape.
+}
+now apply Hfold.
+Qed.
+
+(** AVG uses the same cardinality/coefficient invariant as SUM, but its final
+    division has PostgreSQL-selected display scale.  The finalizer certificate
+    is intentionally explicit; it is the only operation-specific arithmetic
+    obligation left to a caller. *)
+Theorem fixed_decimal_avg_runtime_safe_of_cardinality :
+  forall name precision scale observations max_count,
+    numeric_typmod_valid_bool precision scale = true ->
+    0 <= precision ->
+    Z.of_nat (List.length observations) <= max_count ->
+    (forall finite_count coefficient,
+      1 <= finite_count <= max_count ->
+      Z.abs coefficient <=
+        finite_count * Z.pow 10 precision ->
+      numeric_div_runtime_error
+        [Value_numeric (Some (numeric_of_scaled coefficient scale));
+         Value_Z (Some scale);
+         Value_numeric (Some (numeric_of_Z finite_count));
+         Value_Z (Some 0)] = None) ->
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    avg_numeric_fixed_runtime_error precision scale observations = None.
+Proof.
+intros name precision scale observations max_count
+  Hvalid Hprecision Hlength Hfinalize Hconforms.
+assert (Hshapes :
+  Forall (fixed_decimal_value_shape precision scale) observations).
+{ eapply Forall_impl; [|exact Hconforms].
+  intros observation Hconform.
+  now apply (fixed_decimal_conforms_shape name precision scale). }
+pose proof (@fixed_decimal_shapes_are_numeric
+  precision scale observations Hshapes) as Htyped.
+pose proof (@fixed_decimal_conforms_numeric_values
+  name precision scale observations Hconforms) as Hnumbers.
+pose proof (@fixed_decimal_conforms_typmod_forallb
+  name precision scale observations Hconforms) as Htypmod.
+pose proof (@fixed_decimal_avg_fold_shape
+  precision scale (numeric_values observations) Hprecision Hnumbers) as Hstate.
+unfold avg_numeric_fixed_runtime_error.
+rewrite Hvalid, Htyped; cbn; rewrite Htypmod.
+unfold numeric_avg_scale_state_runtime_error.
+set (state := fold_left (numeric_avg_scale_transition scale)
+  (numeric_values observations) numeric_avg_scale_initial) in *.
+destruct (numeric_avg_scale_total_count state =? 0) eqn:Hempty;
+  [reflexivity|].
+destruct (numeric_agg_special_result
+  (numeric_avg_nan_count state)
+  (numeric_avg_pos_inf_count state)
+  (numeric_avg_neg_inf_count state)) as [special |] eqn:Hspecial;
+  [reflexivity|].
+unfold fixed_decimal_avg_state_shape in Hstate.
+destruct Hstate as [Hpos [Hneg [Hfinite [Hnan Hcoefficient]]]].
+apply Hfinalize.
+split.
+- apply Z.eqb_neq in Hempty.
+  unfold numeric_agg_special_result in Hspecial.
+  rewrite Hpos, Hneg in Hspecial; cbn in Hspecial.
+  destruct (0 <? numeric_avg_nan_count state) eqn:Hnan_positive;
+    [discriminate|].
+  apply Z.ltb_ge in Hnan_positive.
+  assert (numeric_avg_nan_count state = 0) by lia.
+  unfold numeric_avg_scale_total_count, numeric_agg_total_count in Hempty.
+  rewrite Hpos, Hneg, H in Hempty; lia.
+- eapply Z.le_trans; [|exact Hlength].
+  pose proof (numeric_avg_scale_fold_total_count_exact
+    scale (numeric_values observations) numeric_avg_scale_initial) as Htotal.
+  fold state in Htotal.
+  unfold numeric_avg_scale_total_count, numeric_agg_total_count,
+    numeric_avg_scale_initial in Htotal; cbn in Htotal.
+  rewrite Hpos, Hneg in Htotal.
+  assert (numeric_avg_nan_count state = 0).
+  { unfold numeric_agg_special_result in Hspecial.
+    rewrite Hpos, Hneg in Hspecial; cbn in Hspecial.
+    destruct (0 <? numeric_avg_nan_count state) eqn:Hnan_positive;
+      [discriminate|].
+    apply Z.ltb_ge in Hnan_positive; lia. }
+  assert (Hfinite_count :
+    numeric_avg_finite_count state =
+      Z.of_nat (List.length (numeric_values observations))) by lia.
+  rewrite Hfinite_count.
+  apply Nat2Z.inj_le, numeric_values_length_le.
+- exact Hcoefficient.
 Qed.
 
 (** A finite NUMERIC observation is an exact canonical rational.  These

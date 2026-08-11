@@ -2,7 +2,7 @@
 
 Route here for: INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow.
 
-This focused catalog contains 127 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 141 declarations routed at declaration granularity from `NumericDerivedFacts.v`, `NumericRegroupFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `int32_checked_result_value`
 
@@ -2791,9 +2791,379 @@ Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :
         (map (fun row => dot TNull row attribute) group).
 ```
 
+## `fixed_decimal_conforms_shape`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:689`](../NumericRegroupFacts.v#L689)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the fixed decimal conforms shape law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_conforms_shape` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_conforms_shape :
+  forall name precision scale observation,
+    value_conforms_attribute
+      (AttrDecimal name precision scale) observation ->
+    fixed_decimal_value_shape precision scale observation.
+```
+
+## `fixed_decimal_shapes_are_numeric`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:718`](../NumericRegroupFacts.v#L718)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the fixed decimal shapes are numeric law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_shapes_are_numeric` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_shapes_are_numeric :
+  forall precision scale observations,
+    Forall (fixed_decimal_value_shape precision scale) observations ->
+    forallb is_numeric_value observations = true.
+```
+
+## `fixed_decimal_conforms_numeric_values`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:730`](../NumericRegroupFacts.v#L730)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the fixed decimal conforms numeric values law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_conforms_numeric_values` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_conforms_numeric_values :
+  forall name precision scale observations,
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    Forall (fixed_decimal_numeric_shape precision scale)
+      (numeric_values observations).
+```
+
+## `fixed_decimal_conforms_typmod_forallb`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:749`](../NumericRegroupFacts.v#L749)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the fixed decimal conforms typmod forallb law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_conforms_typmod_forallb` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
+
+```rocq
+Lemma fixed_decimal_conforms_typmod_forallb :
+  forall name precision scale observations,
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    forallb (numeric_conforms_typmod_bool precision scale)
+      (numeric_values observations) = true.
+```
+
+## `numeric_values_length_le`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:767`](../NumericRegroupFacts.v#L767)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Provides the stated reusable upper bound for typed numeric semantics.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_values_length_le` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma numeric_values_length_le :
+  forall observations,
+    (List.length (numeric_values observations) <=
+      List.length observations)%nat.
+```
+
+## `numeric_add_same_nonnegative_scale`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:778`](../NumericRegroupFacts.v#L778)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the numeric add same nonnegative scale law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_add_same_nonnegative_scale` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
+
+```rocq
+Lemma numeric_add_same_nonnegative_scale :
+  forall left right scale,
+    0 <= scale ->
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+```
+
+## `numeric_add_same_negative_scale`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:811`](../NumericRegroupFacts.v#L811)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the numeric add same negative scale law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_add_same_negative_scale` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; retain every typmod/precision/scale and representability condition.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
+
+```rocq
+Lemma numeric_add_same_negative_scale :
+  forall left right scale,
+    scale < 0 ->
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+```
+
+## `numeric_add_same_scale`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:845`](../NumericRegroupFacts.v#L845)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the numeric add same scale law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `numeric_add_same_scale` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: retain every typmod/precision/scale and representability condition.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`
+
+```rocq
+Lemma numeric_add_same_scale :
+  forall left right scale,
+    numeric_add (numeric_of_scaled left scale)
+      (numeric_of_scaled right scale) =
+    numeric_of_scaled (left + right) scale.
+```
+
+## `fixed_decimal_sum_option_shape_mono`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:864`](../NumericRegroupFacts.v#L864)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the fixed decimal sum option shape mono law for typed numeric semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_sum_option_shape_mono` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_sum_option_shape_mono :
+  forall scale lower upper state,
+    lower <= upper ->
+    fixed_decimal_sum_option_shape scale lower state ->
+    fixed_decimal_sum_option_shape scale upper state.
+```
+
+## `fixed_decimal_sum_fold_shape`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:877`](../NumericRegroupFacts.v#L877)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_sum_fold_shape` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_sum_fold_shape :
+  forall precision scale numbers current bound,
+    0 <= precision ->
+    Forall (fixed_decimal_numeric_shape precision scale) numbers ->
+    0 <= bound ->
+    fixed_decimal_sum_option_shape scale bound current ->
+    fixed_decimal_sum_option_shape scale
+      (bound + Z.of_nat (List.length numbers) * Z.pow 10 precision)
+      (fold_left numeric_sum_option_add numbers current).
+```
+
+## `fixed_decimal_sum_runtime_safe_of_cardinality`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:920`](../NumericRegroupFacts.v#L920)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates typed numeric semantics to the exact list length or bag cardinality shown below.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem fixed_decimal_sum_runtime_safe_of_cardinality :
+  forall name precision scale observations max_count accumulator_bound,
+    0 <= precision ->
+    0 <= max_count ->
+    Z.of_nat (List.length observations) <= max_count ->
+    max_count * Z.pow 10 precision <= accumulator_bound ->
+    (forall coefficient,
+      Z.abs coefficient <= accumulator_bound ->
+      numeric_runtime_fits_bool
+        (numeric_of_scaled coefficient scale) = true) ->
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    sum_numeric_runtime_error observations = None.
+```
+
+## `fixed_decimal_avg_transition_shape`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:984`](../NumericRegroupFacts.v#L984)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_avg_transition_shape` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_avg_transition_shape :
+  forall precision scale state number,
+    0 <= precision ->
+    fixed_decimal_avg_state_shape precision state ->
+    fixed_decimal_numeric_shape precision scale number ->
+    fixed_decimal_avg_state_shape precision
+      (numeric_avg_scale_transition scale state number).
+```
+
+## `fixed_decimal_avg_fold_shape`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1007`](../NumericRegroupFacts.v#L1007)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates the fold or transition state to the displayed typed numeric semantics result.
+
+Applicability: Use when the goal or a hypothesis matches the `fixed_decimal_avg_fold_shape` direction for typed numeric semantics; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`
+
+```rocq
+Lemma fixed_decimal_avg_fold_shape :
+  forall precision scale numbers,
+    0 <= precision ->
+    Forall (fixed_decimal_numeric_shape precision scale) numbers ->
+    fixed_decimal_avg_state_shape precision
+      (fold_left (numeric_avg_scale_transition scale) numbers
+        numeric_avg_scale_initial).
+```
+
+## `fixed_decimal_avg_runtime_safe_of_cardinality`
+
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1039`](../NumericRegroupFacts.v#L1039)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates typed numeric semantics to the exact list length or bag cardinality shown below.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for typed numeric semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `numeric and cast semantics`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem fixed_decimal_avg_runtime_safe_of_cardinality :
+  forall name precision scale observations max_count,
+    numeric_typmod_valid_bool precision scale = true ->
+    0 <= precision ->
+    Z.of_nat (List.length observations) <= max_count ->
+    (forall finite_count coefficient,
+      1 <= finite_count <= max_count ->
+      Z.abs coefficient <=
+        finite_count * Z.pow 10 precision ->
+      numeric_div_runtime_error
+        [Value_numeric (Some (numeric_of_scaled coefficient scale));
+         Value_Z (Some scale);
+         Value_numeric (Some (numeric_of_Z finite_count));
+         Value_Z (Some 0)] = None) ->
+    Forall
+      (value_conforms_attribute (AttrDecimal name precision scale))
+      observations ->
+    avg_numeric_fixed_runtime_error precision scale observations = None.
+```
+
 ## `numeric_values_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:675`](../NumericRegroupFacts.v#L675)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1137`](../NumericRegroupFacts.v#L1137)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2815,7 +3185,7 @@ Lemma numeric_values_finite_observations : forall numbers,
 
 ## `finite_observations_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:682`](../NumericRegroupFacts.v#L682)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1144`](../NumericRegroupFacts.v#L1144)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2836,7 +3206,7 @@ Lemma finite_observations_all_numeric : forall numbers,
 
 ## `numeric_sum_finite_fold_state`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:688`](../NumericRegroupFacts.v#L688)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1150`](../NumericRegroupFacts.v#L1150)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2864,7 +3234,7 @@ Lemma numeric_sum_finite_fold_state :
 
 ## `interp_sum_finite_observations`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:704`](../NumericRegroupFacts.v#L704)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1166`](../NumericRegroupFacts.v#L1166)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2889,7 +3259,7 @@ Lemma interp_sum_finite_observations : forall numbers,
 
 ## `interp_sum_numeric_values_extensional`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:727`](../NumericRegroupFacts.v#L727)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1189`](../NumericRegroupFacts.v#L1189)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2913,7 +3283,7 @@ Lemma interp_sum_numeric_values_extensional : forall left right,
 
 ## `finite_numeric_total_from_accumulator`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:737`](../NumericRegroupFacts.v#L737)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1199`](../NumericRegroupFacts.v#L1199)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2935,7 +3305,7 @@ Lemma finite_numeric_total_from_accumulator : forall numbers accumulator,
 
 ## `nonempty_group_totals_flatten`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:749`](../NumericRegroupFacts.v#L749)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1211`](../NumericRegroupFacts.v#L1211)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2957,7 +3327,7 @@ Lemma nonempty_group_totals_flatten : forall groups,
 
 ## `grouped_finite_sums_all_numeric`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:771`](../NumericRegroupFacts.v#L771)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1233`](../NumericRegroupFacts.v#L1233)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2982,7 +3352,7 @@ Lemma grouped_finite_sums_all_numeric : forall groups,
 
 ## `numeric_values_grouped_finite_sums`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:783`](../NumericRegroupFacts.v#L783)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1245`](../NumericRegroupFacts.v#L1245)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3008,7 +3378,7 @@ Lemma numeric_values_grouped_finite_sums : forall groups,
 
 ## `nonempty_group_totals_nil_iff`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:796`](../NumericRegroupFacts.v#L796)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1258`](../NumericRegroupFacts.v#L1258)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3029,7 +3399,7 @@ Lemma nonempty_group_totals_nil_iff : forall groups,
 
 ## `interp_sum_numeric_finite_regroup`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:814`](../NumericRegroupFacts.v#L814)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1276`](../NumericRegroupFacts.v#L1276)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3056,7 +3426,7 @@ Theorem interp_sum_numeric_finite_regroup : forall groups,
 
 ## `eval_group_bag_global_success_duplicate_free`
 
-Source: [`theories/FormalSQL/NumericRegroupFacts.v:937`](../NumericRegroupFacts.v#L937)
+Source: [`theories/FormalSQL/NumericRegroupFacts.v:1399`](../NumericRegroupFacts.v#L1399)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

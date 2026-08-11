@@ -673,11 +673,11 @@ pub struct ProofCounterexampleHandoff {
 }
 
 impl ProofCounterexampleHandoff {
-    pub fn counterexample_feedback(&self) -> String {
-        format!(
+    pub fn counterexample_feedback(&self) -> Option<String> {
+        (self.decision == ProofAgentDecision::CounterexampleCandidate).then(|| format!(
             "The proof agent suspects non-equivalence. Independently synthesize candidate DML for a typed FormalSQL witness and do not treat this claim as evidence. PostgreSQL will materialize the database without executing the query pair; trusted Rocq must decide the result. Reason: {} Guidance: {}",
             self.reason, self.guidance
-        )
+        ))
     }
 }
 
@@ -685,6 +685,7 @@ impl ProofCounterexampleHandoff {
 #[serde(rename_all = "snake_case")]
 pub enum ProofAgentDecision {
     CounterexampleCandidate,
+    NeedsManualReview,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -742,7 +743,7 @@ pub struct AuditFinding {
 
 #[cfg(test)]
 mod tests {
-    use super::{CertificationLevel, SolverOutcome};
+    use super::{CertificationLevel, ProofAgentDecision, SolverOutcome};
 
     #[test]
     fn certification_and_solver_outcomes_keep_distinct_wire_labels() {
@@ -774,6 +775,11 @@ mod tests {
         assert_eq!(
             serde_json::to_value(super::BackendStatus::NeedsManualReview)
                 .expect("serialize manual-review proof status"),
+            serde_json::json!("needs_manual_review")
+        );
+        assert_eq!(
+            serde_json::to_value(ProofAgentDecision::NeedsManualReview)
+                .expect("serialize direct proof-agent manual review"),
             serde_json::json!("needs_manual_review")
         );
     }

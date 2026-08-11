@@ -9949,6 +9949,104 @@ def round_has_counterexample_handoff(record: dict[str, Any]) -> bool:
     )
 
 
+def round_has_direct_manual_review_handoff(record: dict[str, Any]) -> bool:
+    handoff = record.get("counterexampleHandoff")
+    audit = record.get("audit")
+    candidate_sha256 = record.get("candidateProblemSha256")
+    checkpoint_sha256 = record.get("activeProblemCompileCheckpointSha256")
+    compile_clean = record.get("candidateProblemCompilePassed") is True or (
+        isinstance(candidate_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", candidate_sha256) is not None
+        and candidate_sha256 == checkpoint_sha256
+    )
+    return (
+        record.get("success") is False
+        and record.get("candidateClaim") is None
+        and record.get("candidateHasFinalTheorem") is False
+        and record.get("proofCheckExitCode") != 0
+        and record.get("proofCheckTimedOut") is False
+        and isinstance(audit, dict)
+        and audit.get("passed") is True
+        and audit.get("findings") == []
+        and compile_clean
+        and isinstance(handoff, dict)
+        and set(handoff) == {"decision", "reason", "guidance"}
+        and handoff.get("decision") == "needs_manual_review"
+        and all(
+            isinstance(handoff.get(key), str) and handoff[key].strip()
+            for key in ("reason", "guidance")
+        )
+    )
+
+
+def report_has_direct_manual_review(
+    report: dict[str, Any], record: dict[str, Any] | None
+) -> bool:
+    return (
+        report.get("outcome") == "needs_manual_review"
+        and report.get("counterexample") is None
+        and isinstance(record, dict)
+        and round_has_direct_manual_review_handoff(record)
+    )
+
+
+def report_has_counterexample_manual_review(
+    report: dict[str, Any], record: dict[str, Any] | None
+) -> bool:
+    rounds = report.get("rounds")
+    if (
+        report.get("outcome") != "needs_manual_review"
+        or report.get("counterexample") is not None
+        or not isinstance(record, dict)
+        or not round_has_counterexample_handoff(record)
+        or not isinstance(rounds, list)
+        or not rounds
+        or any(not isinstance(round_record, dict) for round_record in rounds)
+    ):
+        return False
+    terminal = rounds[-1]
+    proposal = terminal.get("proposal")
+    assessment = terminal.get("assessment")
+    return (
+        terminal.get("validation") is None
+        and isinstance(proposal, dict)
+        and set(proposal) == {"decision", "reason", "witnessSql", "notes"}
+        and proposal.get("decision") == "needs_review"
+        and isinstance(proposal.get("reason"), str)
+        and bool(proposal["reason"].strip())
+        and proposal.get("witnessSql") == ""
+        and isinstance(proposal.get("notes"), str)
+        and isinstance(assessment, dict)
+        and assessment.get("decision") == "needs_review"
+        and isinstance(assessment.get("parse"), dict)
+        and assessment["parse"].get("success") is True
+    )
+
+
+def validate_counterexample_manual_review_authority(
+    report: dict[str, Any], case_dir: Path
+) -> None:
+    stage_report_path = case_dir / "counterexample-stage/report.json"
+    require_regular_nonsymlink_file(
+        stage_report_path, "counterexample-stage manual-review report"
+    )
+    stage_report = read_json_object(
+        stage_report_path, "counterexample-stage manual-review report"
+    )
+    if (
+        set(stage_report)
+        != {"outcome", "reason", "rounds", "counterexample", "elapsedMs", "llmUsage"}
+        or stage_report.get("outcome") != "needs_manual_review"
+        or stage_report.get("counterexample") is not None
+        or stage_report.get("rounds") != report.get("rounds")
+        or not isinstance(stage_report.get("reason"), str)
+        or not stage_report["reason"].strip()
+    ):
+        raise RunnerError(
+            "counterexample manual review differs from counterexample-stage authority"
+        )
+
+
 def terminal_round_has_unavailable_counterexample_handoff(
     record: dict[str, Any],
 ) -> bool:
@@ -13207,6 +13305,16 @@ def proof_metrics_from_report(
                     and round_has_unresumable_session_suffix(rounds[-1])
                 )
             or (
+                bool(rounds)
+                and report_has_direct_manual_review(report, rounds[-1])
+                and round_has_unresumable_session_suffix(rounds[-1])
+            )
+            or (
+                bool(rounds)
+                and report_has_counterexample_manual_review(report, rounds[-1])
+                and round_has_unresumable_session_suffix(rounds[-1])
+            )
+            or (
                 proof.get("backendStatus") == "proof_complete"
                 and bool(rounds)
                 and rounds[-1].get("success") is True
@@ -14234,6 +14342,10 @@ def validate_proof_backend_coherence(
     terminal_handoff = report_has_strict_terminal_counterexample_handoff(
         report, final_agent
     )
+    direct_manual_review = report_has_direct_manual_review(report, final_agent)
+    counterexample_manual_review = report_has_counterexample_manual_review(
+        report, final_agent
+    )
 
     if recovery is not None:
         if not workspace_generated or final_agent is None or timed_out is not False:
@@ -14245,6 +14357,8 @@ def validate_proof_backend_coherence(
             if workspace_generated and final_agent is not None
             else "proof_agent_failed"
         )
+    elif direct_manual_review or counterexample_manual_review:
+        expected = "needs_manual_review"
     elif (
         isinstance(final_agent, dict)
         and round_has_unresumable_session_suffix(final_agent)
@@ -14547,10 +14661,29 @@ def validate_completed_report(
                 "incomplete verification report carries incoherent proof status"
             )
     elif outcome == "needs_manual_review":
-        if not isinstance(proof, dict) or certification is not None:
+        direct_manual_review = (
+            isinstance(proof, dict)
+            and report_has_direct_manual_review(report, proof.get("proofAgent"))
+        )
+        counterexample_manual_review = (
+            isinstance(proof, dict)
+            and report_has_counterexample_manual_review(
+                report, proof.get("proofAgent")
+            )
+        )
+        if (
+            not isinstance(proof, dict)
+            or certification is not None
+            or (
+                backend_status == "needs_manual_review"
+                and not (direct_manual_review or counterexample_manual_review)
+            )
+        ):
             raise RunnerError(
                 "manual-review report must carry coherent uncertified proof evidence"
             )
+        if counterexample_manual_review:
+            validate_counterexample_manual_review_authority(report, case_dir)
     else:
         raise RunnerError(
             f"completed full-pipeline report has forbidden or unknown outcome {outcome!r}"

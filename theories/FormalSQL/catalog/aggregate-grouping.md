@@ -2,7 +2,7 @@
 
 Route here for: COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality.
 
-This focused catalog contains 239 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 243 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `aggregate_observation_outcome_transport`
 
@@ -4571,6 +4571,70 @@ Theorem query_expr_group_outcome_equiv_of_supported_child_outcomes :
       (QExpr_Group select_list group_keys having right).
 ```
 
+## `eval_groups_outcome_exact_filter_map`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2337`](../GroupedFilterOutcomeFacts.v#L2337)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval groups outcome exact filter map law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `filter`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_groups_outcome_exact_filter_map :
+  forall env select_list group_terms having groups keep values,
+    (forall group,
+      In group groups ->
+      group_filter_map_exact_at env select_list group_terms having
+        keep values group) ->
+    forall outcome,
+      @eval_groups_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome <->
+      outcome = SqlSuccess
+        (map (fun group => project_row select_list (values group))
+          (filter keep groups)).
+```
+
+## `group_filter_map_outputs_permut_of_representatives`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2423`](../GroupedFilterOutcomeFacts.v#L2423)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the group filter map outputs permut of representatives law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `group_filter_map_outputs_permut_of_representatives` direction for aggregate grouping; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`, `filter`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `filter`, `WHERE`
+
+```rocq
+Theorem group_filter_map_outputs_permut_of_representatives :
+  forall env group_terms left right keep emit,
+    group_terms <> nil ->
+    Oeset.permut (OTuple T) left right ->
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      keep first = keep second) ->
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      Oeset.compare (OTuple T) (emit first) (emit second) = Eq) ->
+    Oeset.permut (OTuple T)
+      (map emit (filter keep (query_make_groups env left group_terms)))
+      (map emit (filter keep (query_make_groups env right group_terms))).
+```
+
 ## `query_canonical_rows_permut`
 
 Source: [`theories/FormalSQL/GroupingRewriteFacts.v:16`](../GroupingRewriteFacts.v#L16)
@@ -6037,6 +6101,59 @@ Lemma eval_query_cardinality_grouping_sets_has_outcome :
         symbol_runtime_error aggregate_runtime_error value_is_null
         boolean_schedule env
         (QExpr_GroupingSets grouping_sets input) outcome.
+```
+
+## `eval_groups_success_rows_realize_outputs`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6904`](../OrderedQueryFacts.v#L6904)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
+
+Applicability: Use when the goal or a hypothesis matches the `eval_groups_success_rows_realize_outputs` direction for aggregate grouping; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
+
+```rocq
+Lemma eval_groups_success_rows_realize_outputs :
+  forall env select_list group_terms having groups rows,
+    @eval_groups_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env select_list group_terms having groups
+      (SqlSuccess rows) ->
+    Forall
+      (row_realizes_query_outputs (scalar_select_outputs select_list)) rows.
+```
+
+## `query_expr_group_success_rows_realize_outputs`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6927`](../OrderedQueryFacts.v#L6927)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Inverts or constructs the successful evaluation branch for aggregate grouping.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_group_success_rows_realize_outputs` direction for aggregate grouping; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`
+
+```rocq
+Theorem query_expr_group_success_rows_realize_outputs :
+  forall env select_list group_keys having input,
+    @query_success_Forall T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env
+      (QExpr_Group select_list group_keys having input)
+      (row_realizes_query_outputs (scalar_select_outputs select_list)).
 ```
 
 ## `tnull_query_groups_matching_one_key`

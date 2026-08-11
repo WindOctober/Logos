@@ -4,7 +4,7 @@ From SQLFS Require Import
   FiniteSet OrderedSet ValueInteger Bool3 Formula SqlErrorSemantics
   SchemaConstraints.
 From Logos.FormalSQL Require Import
-  TNullSyntax SchemaCardinality IntegrityFacts WitnessFacts.
+  TNullSyntax SchemaCardinality QueryCardinality IntegrityFacts WitnessFacts.
 
 Import ListNotations.
 Import Tuple.
@@ -648,6 +648,9 @@ Example complete_int32_primary_key_has_finite_bound :
 Proof.
 exact int32_singleton_primary_key_length.
 Qed.
+
+Check query_success_composite_key_fixed_first_length.
+Check query_success_composite_key_fixed_second_length.
 
 Example conforming_database_exposes_declared_primary_key :
   forall expected constraints actual constraint key,

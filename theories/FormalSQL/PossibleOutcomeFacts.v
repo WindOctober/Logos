@@ -5017,3 +5017,150 @@ eapply query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv;
 Qed.
 
 End PossibleBagConstructorAdapters.
+
+(******************************************************************************)
+(** Functional native JOIN elimination at the evaluator boundary.            **)
+(******************************************************************************)
+
+Section FunctionalJoinElimination.
+
+Context {T : Tuple.Rcd} {relname : Type}.
+
+Variable basesort : relname -> Fset.set (Tuple.A T).
+Variable instance : relname -> Febag.bag (Fecol.CBag (Tuple.CTuple T)).
+Variable unknown : Bool.b (Tuple.B T).
+Variable symbol_runtime_error :
+  Tuple.scalar_operator T ->
+  list (option sql_runtime_error * Tuple.value T) ->
+  option sql_runtime_error.
+Variable aggregate_runtime_error :
+  Tuple.aggregate T ->
+  list (option sql_runtime_error * Tuple.value T) ->
+  option sql_runtime_error.
+Variable value_is_null : Tuple.value T -> bool.
+
+Definition fixed_success_outcomes {A : Type} (value : A) :
+    sql_outcome A -> Prop :=
+  fun outcome => outcome = SqlSuccess value.
+
+(** Eliminate a native JOIN to its left child once the right child is
+    inhabited and error-free and the complete local JOIN continuation is
+    occurrence-equivalent to the fixed successful left rows.  Functional
+    matching, FK witnesses, matched/padded projections, predicate acceptance,
+    and local runtime errors are deliberately kept in [Hlocal]; this theorem
+    performs only the reusable evaluator-level lifting. *)
+Theorem query_expr_join_relation_transport_to_left :
+  forall schedule env kind predicate matched_select left_select right_select
+      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),
+    (exists right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows)) ->
+    (forall error,
+      ~ @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right (SqlError error)) ->
+    (forall left_rows right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left (SqlSuccess left_rows) ->
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows) ->
+      outcome_relation_transport (Forall2 row_rel)
+        (@query_join_rows_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env kind predicate matched_select left_select right_select
+          left_rows right_rows)
+        (fixed_success_outcomes left_rows)) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left).
+Proof.
+intros schedule env kind predicate matched_select left_select right_select
+  left right row_rel Hright_success Hright_safe Hlocal.
+split.
+- intros output Hjoin.
+  apply eval_query_expr_join_success_iff in Hjoin.
+  destruct Hjoin as
+    [left_rows [right_rows [output_bag
+      [Hleft [Hright [Hlocal_success Houtput]]]]]].
+  destruct (Hlocal left_rows right_rows Hleft Hright) as [Hforward _].
+  destruct (Hforward output
+    (ex_intro _ output_bag (conj Hlocal_success Houtput))) as
+    [target_rows [Hfixed Hrows]].
+  unfold fixed_success_outcomes in Hfixed; injection Hfixed as Hfixed.
+  subst target_rows.
+  exists left_rows; now split.
+- split.
+  + intros left_rows Hleft.
+    destruct Hright_success as [right_rows Hright].
+    destruct (Hlocal left_rows right_rows Hleft Hright)
+      as [_ [Hbackward _]].
+    destruct (Hbackward left_rows eq_refl) as
+      [output [Hjoin_local Hrows]].
+    exists output; split; [|exact Hrows].
+    destruct Hjoin_local as [output_bag [Hjoin_bag Houtput]].
+    apply eval_query_expr_join_success_iff.
+    now exists left_rows, right_rows, output_bag.
+  + intro error; split; intro Herror.
+    * apply eval_query_expr_join_error_iff in Herror.
+      destruct Herror as
+        [Hleft_error |
+         [left_rows [Hleft [Hright_error |
+          [right_rows [Hright Hlocal_error]]]]]].
+      -- exact Hleft_error.
+      -- exfalso; exact (Hright_safe error Hright_error).
+      -- destruct (Hlocal left_rows right_rows Hleft Hright)
+           as [_ [_ Herrors]].
+         apply (proj1 (Herrors error)) in Hlocal_error.
+         discriminate.
+    * apply eval_query_expr_join_error_iff; now left.
+Qed.
+
+(** LEFT JOIN elimination is the principal consumer, but the evaluator proof
+    is valid for every join kind whose local continuation satisfies the same
+    contract.  This named corollary makes the intended outer-join use visible
+    without baking any key or schema into the theorem. *)
+Corollary query_expr_left_join_functional_elimination_transport :
+  forall schedule env predicate matched_select left_select right_select
+      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),
+    (exists right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows)) ->
+    (forall error,
+      ~ @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right (SqlError error)) ->
+    (forall left_rows right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left (SqlSuccess left_rows) ->
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows) ->
+      outcome_relation_transport (Forall2 row_rel)
+        (@query_join_rows_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env QueryJoinLeft predicate matched_select left_select right_select
+          left_rows right_rows)
+        (fixed_success_outcomes left_rows)) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
+        (QExpr_Join QueryJoinLeft predicate matched_select left_select
+          right_select left right))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left).
+Proof.
+intros; now eapply query_expr_join_relation_transport_to_left.
+Qed.
+
+End FunctionalJoinElimination.

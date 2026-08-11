@@ -7622,6 +7622,64 @@
       "statement": "Theorem query_expr_group_outcome_equiv_of_supported_child_outcomes :\n  forall env select_list group_keys having left right\n      (supported : list (tuple T) -> list (tuple T) -> Prop),\n    query_expr_outputs\n      (QExpr_Group select_list group_keys having left) =\n    query_expr_outputs\n      (QExpr_Group select_list group_keys having right) ->\n    (exists outcome,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env\n        (QExpr_Group select_list group_keys having left) outcome) ->\n    (forall left_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env left (SqlSuccess left_rows) ->\n      exists right_rows,\n        @eval_query_expr_outcome T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null\n          boolean_schedule env right (SqlSuccess right_rows) /\\\n        supported left_rows right_rows) ->\n    (forall right_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env right (SqlSuccess right_rows) ->\n      exists left_rows,\n        @eval_query_expr_outcome T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null\n          boolean_schedule env left (SqlSuccess left_rows) /\\\n        supported left_rows right_rows) ->\n    (forall error,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env left (SqlError error) <->\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env right (SqlError error)) ->\n    (forall left_rows right_rows,\n      supported left_rows right_rows ->\n      forall outcome,\n        eval_group_bag env select_list group_keys having\n          (rows_bag T left_rows) outcome <->\n        eval_group_bag env select_list group_keys having\n          (rows_bag T right_rows) outcome) ->\n    @query_expr_outcome_equiv T relname basesort instance unknown\n      symbol_runtime_error aggregate_runtime_error value_is_null\n      boolean_schedule env\n      (QExpr_Group select_list group_keys having left)\n      (QExpr_Group select_list group_keys having right)."
     },
     {
+      "name": "eval_groups_outcome_exact_filter_map",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/GroupedFilterOutcomeFacts.v",
+      "line": 2337,
+      "sourceDomain": "aggregate-grouping.md",
+      "semanticDomain": "aggregate-grouping.md",
+      "catalog": "aggregate-grouping.md",
+      "routes": [
+        "scheduled",
+        "outcome",
+        "grouping",
+        "runtime",
+        "filter"
+      ],
+      "interfaceLayer": "scheduled_foundation",
+      "replacement": "",
+      "summary": "States the eval groups outcome exact filter map law for aggregate grouping, in the exact direction displayed by the declaration.",
+      "topics": [
+        "fixed Boolean schedule",
+        "foundation",
+        "aggregate/grouping runtime semantics",
+        "GROUP BY",
+        "aggregate",
+        "filter",
+        "WHERE",
+        "query outcome",
+        "error-preserving outcome",
+        "runtime outcome",
+        "runtime safety",
+        "error propagation"
+      ],
+      "statement": "Theorem eval_groups_outcome_exact_filter_map :\n  forall env select_list group_terms having groups keep values,\n    (forall group,\n      In group groups ->\n      group_filter_map_exact_at env select_list group_terms having\n        keep values group) ->\n    forall outcome,\n      @eval_groups_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null\n        boolean_schedule env select_list group_terms having groups outcome <->\n      outcome = SqlSuccess\n        (map (fun group => project_row select_list (values group))\n          (filter keep groups))."
+    },
+    {
+      "name": "group_filter_map_outputs_permut_of_representatives",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/GroupedFilterOutcomeFacts.v",
+      "line": 2423,
+      "sourceDomain": "aggregate-grouping.md",
+      "semanticDomain": "aggregate-grouping.md",
+      "catalog": "aggregate-grouping.md",
+      "routes": [
+        "grouping",
+        "filter"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the group filter map outputs permut of representatives law for aggregate grouping, in the exact direction displayed by the declaration.",
+      "topics": [
+        "aggregate/grouping runtime semantics",
+        "GROUP BY",
+        "aggregate",
+        "filter",
+        "WHERE"
+      ],
+      "statement": "Theorem group_filter_map_outputs_permut_of_representatives :\n  forall env group_terms left right keep emit,\n    group_terms <> nil ->\n    Oeset.permut (OTuple T) left right ->\n    (forall first second,\n      Oeset.compare (OLTuple T) first second = Eq ->\n      keep first = keep second) ->\n    (forall first second,\n      Oeset.compare (OLTuple T) first second = Eq ->\n      Oeset.compare (OTuple T) (emit first) (emit second) = Eq) ->\n    Oeset.permut (OTuple T)\n      (map emit (filter keep (query_make_groups env left group_terms)))\n      (map emit (filter keep (query_make_groups env right group_terms)))."
+    },
+    {
       "name": "query_canonical_rows_permut",
       "kind": "Lemma",
       "source": "theories/FormalSQL/GroupingRewriteFacts.v",
@@ -15496,10 +15554,322 @@
       "statement": "Theorem tnull_closed_group_sum_numeric_dot_value_runtime_exact :\n  forall group_terms group attribute,\n    group <> nil ->\n    Forall\n      (fun row => attribute inS labels TNull row)\n      group ->\n    Interp.interp_aggterm TNull\n      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)\n      (tnull_sum_numeric_dot_term attribute) =\n      NullValues.interp_sum_numeric\n        (map (fun row => dot TNull row attribute) group) /\\\n    @eval_aggterm_aggregate_runtime_error TNull\n      NullValues.interp_scalar_operator_runtime_error\n      NullValues.interp_aggregate_runtime_error\n      (Env.env_g TNull nil (@Env.Group_By TNull group_terms) group)\n      (tnull_sum_numeric_dot_term attribute) =\n      NullValues.sum_numeric_runtime_error\n        (map (fun row => dot TNull row attribute) group)."
     },
     {
+      "name": "fixed_decimal_conforms_shape",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 689,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the fixed decimal conforms shape law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_conforms_shape :\n  forall name precision scale observation,\n    value_conforms_attribute\n      (AttrDecimal name precision scale) observation ->\n    fixed_decimal_value_shape precision scale observation."
+    },
+    {
+      "name": "fixed_decimal_shapes_are_numeric",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 718,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the fixed decimal shapes are numeric law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_shapes_are_numeric :\n  forall precision scale observations,\n    Forall (fixed_decimal_value_shape precision scale) observations ->\n    forallb is_numeric_value observations = true."
+    },
+    {
+      "name": "fixed_decimal_conforms_numeric_values",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 730,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the fixed decimal conforms numeric values law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_conforms_numeric_values :\n  forall name precision scale observations,\n    Forall\n      (value_conforms_attribute (AttrDecimal name precision scale))\n      observations ->\n    Forall (fixed_decimal_numeric_shape precision scale)\n      (numeric_values observations)."
+    },
+    {
+      "name": "fixed_decimal_conforms_typmod_forallb",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 749,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the fixed decimal conforms typmod forallb law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "typmod",
+        "precision/scale"
+      ],
+      "statement": "Lemma fixed_decimal_conforms_typmod_forallb :\n  forall name precision scale observations,\n    Forall\n      (value_conforms_attribute (AttrDecimal name precision scale))\n      observations ->\n    forallb (numeric_conforms_typmod_bool precision scale)\n      (numeric_values observations) = true."
+    },
+    {
+      "name": "numeric_values_length_le",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 767,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Provides the stated reusable upper bound for typed numeric semantics.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma numeric_values_length_le :\n  forall observations,\n    (List.length (numeric_values observations) <=\n      List.length observations)%nat."
+    },
+    {
+      "name": "numeric_add_same_nonnegative_scale",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 778,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the numeric add same nonnegative scale law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "typmod",
+        "precision/scale"
+      ],
+      "statement": "Lemma numeric_add_same_nonnegative_scale :\n  forall left right scale,\n    0 <= scale ->\n    numeric_add (numeric_of_scaled left scale)\n      (numeric_of_scaled right scale) =\n    numeric_of_scaled (left + right) scale."
+    },
+    {
+      "name": "numeric_add_same_negative_scale",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 811,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the numeric add same negative scale law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "typmod",
+        "precision/scale"
+      ],
+      "statement": "Lemma numeric_add_same_negative_scale :\n  forall left right scale,\n    scale < 0 ->\n    numeric_add (numeric_of_scaled left scale)\n      (numeric_of_scaled right scale) =\n    numeric_of_scaled (left + right) scale."
+    },
+    {
+      "name": "numeric_add_same_scale",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 845,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the numeric add same scale law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "typmod",
+        "precision/scale"
+      ],
+      "statement": "Lemma numeric_add_same_scale :\n  forall left right scale,\n    numeric_add (numeric_of_scaled left scale)\n      (numeric_of_scaled right scale) =\n    numeric_of_scaled (left + right) scale."
+    },
+    {
+      "name": "fixed_decimal_sum_option_shape_mono",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 864,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the fixed decimal sum option shape mono law for typed numeric semantics, in the exact direction displayed by the declaration.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_sum_option_shape_mono :\n  forall scale lower upper state,\n    lower <= upper ->\n    fixed_decimal_sum_option_shape scale lower state ->\n    fixed_decimal_sum_option_shape scale upper state."
+    },
+    {
+      "name": "fixed_decimal_sum_fold_shape",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 877,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates the fold or transition state to the displayed typed numeric semantics result.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_sum_fold_shape :\n  forall precision scale numbers current bound,\n    0 <= precision ->\n    Forall (fixed_decimal_numeric_shape precision scale) numbers ->\n    0 <= bound ->\n    fixed_decimal_sum_option_shape scale bound current ->\n    fixed_decimal_sum_option_shape scale\n      (bound + Z.of_nat (List.length numbers) * Z.pow 10 precision)\n      (fold_left numeric_sum_option_add numbers current)."
+    },
+    {
+      "name": "fixed_decimal_sum_runtime_safe_of_cardinality",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 920,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "runtime",
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates typed numeric semantics to the exact list length or bag cardinality shown below.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "runtime outcome",
+        "runtime safety",
+        "error propagation"
+      ],
+      "statement": "Theorem fixed_decimal_sum_runtime_safe_of_cardinality :\n  forall name precision scale observations max_count accumulator_bound,\n    0 <= precision ->\n    0 <= max_count ->\n    Z.of_nat (List.length observations) <= max_count ->\n    max_count * Z.pow 10 precision <= accumulator_bound ->\n    (forall coefficient,\n      Z.abs coefficient <= accumulator_bound ->\n      numeric_runtime_fits_bool\n        (numeric_of_scaled coefficient scale) = true) ->\n    Forall\n      (value_conforms_attribute (AttrDecimal name precision scale))\n      observations ->\n    sum_numeric_runtime_error observations = None."
+    },
+    {
+      "name": "fixed_decimal_avg_transition_shape",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 984,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates the fold or transition state to the displayed typed numeric semantics result.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_avg_transition_shape :\n  forall precision scale state number,\n    0 <= precision ->\n    fixed_decimal_avg_state_shape precision state ->\n    fixed_decimal_numeric_shape precision scale number ->\n    fixed_decimal_avg_state_shape precision\n      (numeric_avg_scale_transition scale state number)."
+    },
+    {
+      "name": "fixed_decimal_avg_fold_shape",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 1007,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates the fold or transition state to the displayed typed numeric semantics result.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL"
+      ],
+      "statement": "Lemma fixed_decimal_avg_fold_shape :\n  forall precision scale numbers,\n    0 <= precision ->\n    Forall (fixed_decimal_numeric_shape precision scale) numbers ->\n    fixed_decimal_avg_state_shape precision\n      (fold_left (numeric_avg_scale_transition scale) numbers\n        numeric_avg_scale_initial)."
+    },
+    {
+      "name": "fixed_decimal_avg_runtime_safe_of_cardinality",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/NumericRegroupFacts.v",
+      "line": 1039,
+      "sourceDomain": "numeric-derived.md",
+      "semanticDomain": "numeric-derived.md",
+      "catalog": "numeric-derived.md",
+      "routes": [
+        "runtime",
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates typed numeric semantics to the exact list length or bag cardinality shown below.",
+      "topics": [
+        "numeric and cast semantics",
+        "NUMERIC",
+        "DECIMAL",
+        "typmod",
+        "precision/scale",
+        "runtime outcome",
+        "runtime safety",
+        "error propagation"
+      ],
+      "statement": "Theorem fixed_decimal_avg_runtime_safe_of_cardinality :\n  forall name precision scale observations max_count,\n    numeric_typmod_valid_bool precision scale = true ->\n    0 <= precision ->\n    Z.of_nat (List.length observations) <= max_count ->\n    (forall finite_count coefficient,\n      1 <= finite_count <= max_count ->\n      Z.abs coefficient <=\n        finite_count * Z.pow 10 precision ->\n      numeric_div_runtime_error\n        [Value_numeric (Some (numeric_of_scaled coefficient scale));\n         Value_Z (Some scale);\n         Value_numeric (Some (numeric_of_Z finite_count));\n         Value_Z (Some 0)] = None) ->\n    Forall\n      (value_conforms_attribute (AttrDecimal name precision scale))\n      observations ->\n    avg_numeric_fixed_runtime_error precision scale observations = None."
+    },
+    {
       "name": "numeric_values_finite_observations",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 675,
+      "line": 1137,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15520,7 +15890,7 @@
       "name": "finite_observations_all_numeric",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 682,
+      "line": 1144,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15541,7 +15911,7 @@
       "name": "numeric_sum_finite_fold_state",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 688,
+      "line": 1150,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15562,7 +15932,7 @@
       "name": "interp_sum_finite_observations",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 704,
+      "line": 1166,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15583,7 +15953,7 @@
       "name": "interp_sum_numeric_values_extensional",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 727,
+      "line": 1189,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15604,7 +15974,7 @@
       "name": "finite_numeric_total_from_accumulator",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 737,
+      "line": 1199,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15625,7 +15995,7 @@
       "name": "nonempty_group_totals_flatten",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 749,
+      "line": 1211,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15646,7 +16016,7 @@
       "name": "grouped_finite_sums_all_numeric",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 771,
+      "line": 1233,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15667,7 +16037,7 @@
       "name": "numeric_values_grouped_finite_sums",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 783,
+      "line": 1245,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15688,7 +16058,7 @@
       "name": "nonempty_group_totals_nil_iff",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 796,
+      "line": 1258,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15709,7 +16079,7 @@
       "name": "interp_sum_numeric_finite_regroup",
       "kind": "Theorem",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 814,
+      "line": 1276,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15730,7 +16100,7 @@
       "name": "query_set_union_occurrence_exact",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 868,
+      "line": 1330,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15754,7 +16124,7 @@
       "name": "query_bag_duplicate_free_of_rows_NoDupA",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 882,
+      "line": 1344,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15776,7 +16146,7 @@
       "name": "query_bag_duplicate_free_transport",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 897,
+      "line": 1359,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15798,7 +16168,7 @@
       "name": "eval_group_bag_global_success_duplicate_free",
       "kind": "Theorem",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 937,
+      "line": 1399,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "numeric-derived.md",
       "catalog": "numeric-derived.md",
@@ -15830,7 +16200,7 @@
       "name": "query_bags_disjoint_sym",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 964,
+      "line": 1426,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15854,7 +16224,7 @@
       "name": "query_set_union_duplicate_free",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 971,
+      "line": 1433,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15878,7 +16248,7 @@
       "name": "query_set_union_disjoint_right",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 990,
+      "line": 1452,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15902,7 +16272,7 @@
       "name": "query_distinct_bag_inert",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 1008,
+      "line": 1470,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15926,7 +16296,7 @@
       "name": "query_distinct_bag_occurrence_exact",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 1033,
+      "line": 1495,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15950,7 +16320,7 @@
       "name": "query_duplicate_free_support_bag_eq",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 1056,
+      "line": 1518,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15972,7 +16342,7 @@
       "name": "query_bag_filter_occurrence_exact",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 1093,
+      "line": 1555,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -15997,7 +16367,7 @@
       "name": "query_bag_filter_duplicate_free",
       "kind": "Lemma",
       "source": "theories/FormalSQL/NumericRegroupFacts.v",
-      "line": 1116,
+      "line": 1578,
       "sourceDomain": "numeric-derived.md",
       "semanticDomain": "relational-algebra.md",
       "catalog": "relational-algebra.md",
@@ -22886,6 +23256,109 @@
       "statement": "Theorem rows_key_aligned_total_map_transport :\n  forall (A B C D LeftKey RightKey LeftOutputKey RightOutputKey : Type)\n      (input_key_rel : LeftKey -> RightKey -> Prop)\n      (output_key_rel : LeftOutputKey -> RightOutputKey -> Prop)\n      (left_key : A -> LeftKey) (right_key : B -> RightKey)\n      (left_output_key : C -> LeftOutputKey)\n      (right_output_key : D -> RightOutputKey)\n      (left_map : A -> C) (right_map : B -> D),\n    (forall left_row right_row,\n      input_key_rel (left_key left_row) (right_key right_row) ->\n      output_key_rel\n        (left_output_key (left_map left_row))\n        (right_output_key (right_map right_row))) ->\n    forall left right,\n      rows_key_aligned input_key_rel left_key right_key left right ->\n      rows_key_aligned output_key_rel left_output_key right_output_key\n        (map left_map left) (map right_map right)."
     },
     {
+      "name": "row_realizes_query_outputs_semantic_invariant",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/OrderedQueryFacts.v",
+      "line": 6838,
+      "sourceDomain": "ordered-observation.md",
+      "semanticDomain": "ordered-observation.md",
+      "catalog": "ordered-observation.md",
+      "routes": [
+        "ordered"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Preserves the declared ordered query equivalence result across the indicated transformation.",
+      "topics": [
+        "ordered query semantics"
+      ],
+      "statement": "Lemma row_realizes_query_outputs_semantic_invariant :\n  forall (T : Tuple.Rcd) outputs,\n    tuple_property_semantic_invariant\n      (@row_realizes_query_outputs T outputs)."
+    },
+    {
+      "name": "project_row_realizes_query_outputs",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/OrderedQueryFacts.v",
+      "line": 6858,
+      "sourceDomain": "ordered-observation.md",
+      "semanticDomain": "relational-algebra.md",
+      "catalog": "relational-algebra.md",
+      "routes": [
+        "projection"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "States the project row realizes query outputs law for relational algebra, in the exact direction displayed by the declaration.",
+      "topics": [
+        "relational algebra",
+        "projection",
+        "SELECT list"
+      ],
+      "statement": "Lemma project_row_realizes_query_outputs :\n  forall (T : Tuple.Rcd) (relname : Type)\n      (select_list : @query_select_list T relname) values,\n    row_realizes_query_outputs\n      (scalar_select_outputs select_list)\n      (project_row select_list values)."
+    },
+    {
+      "name": "query_expr_project_success_rows_realize_outputs",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/OrderedQueryFacts.v",
+      "line": 6889,
+      "sourceDomain": "ordered-observation.md",
+      "semanticDomain": "relational-algebra.md",
+      "catalog": "relational-algebra.md",
+      "routes": [
+        "projection"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Inverts or constructs the successful evaluation branch for relational algebra.",
+      "topics": [
+        "relational algebra",
+        "projection",
+        "SELECT list"
+      ],
+      "statement": "Theorem query_expr_project_success_rows_realize_outputs :\n  forall env select_list input,\n    @query_success_Forall T relname basesort instance unknown\n      symbol_runtime_error aggregate_runtime_error value_is_null\n      boolean_schedule env (QExpr_Project select_list input)\n      (row_realizes_query_outputs (scalar_select_outputs select_list))."
+    },
+    {
+      "name": "eval_groups_success_rows_realize_outputs",
+      "kind": "Lemma",
+      "source": "theories/FormalSQL/OrderedQueryFacts.v",
+      "line": 6904,
+      "sourceDomain": "ordered-observation.md",
+      "semanticDomain": "aggregate-grouping.md",
+      "catalog": "aggregate-grouping.md",
+      "routes": [
+        "grouping"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Inverts or constructs the successful evaluation branch for aggregate grouping.",
+      "topics": [
+        "aggregate/grouping runtime semantics",
+        "GROUP BY",
+        "aggregate"
+      ],
+      "statement": "Lemma eval_groups_success_rows_realize_outputs :\n  forall env select_list group_terms having groups rows,\n    @eval_groups_outcome T relname basesort instance unknown\n      symbol_runtime_error aggregate_runtime_error value_is_null\n      boolean_schedule env select_list group_terms having groups\n      (SqlSuccess rows) ->\n    Forall\n      (row_realizes_query_outputs (scalar_select_outputs select_list)) rows."
+    },
+    {
+      "name": "query_expr_group_success_rows_realize_outputs",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/OrderedQueryFacts.v",
+      "line": 6927,
+      "sourceDomain": "ordered-observation.md",
+      "semanticDomain": "aggregate-grouping.md",
+      "catalog": "aggregate-grouping.md",
+      "routes": [
+        "grouping"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Inverts or constructs the successful evaluation branch for aggregate grouping.",
+      "topics": [
+        "aggregate/grouping runtime semantics",
+        "GROUP BY",
+        "aggregate"
+      ],
+      "statement": "Theorem query_expr_group_success_rows_realize_outputs :\n  forall env select_list group_keys having input,\n    @query_success_Forall T relname basesort instance unknown\n      symbol_runtime_error aggregate_runtime_error value_is_null\n      boolean_schedule env\n      (QExpr_Group select_list group_keys having input)\n      (row_realizes_query_outputs (scalar_select_outputs select_list))."
+    },
+    {
       "name": "join_matched_rows_transpose_Permutation",
       "kind": "Lemma",
       "source": "theories/FormalSQL/OuterJoinFilterFacts.v",
@@ -26697,6 +27170,78 @@
         "congruence"
       ],
       "statement": "Theorem query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv :\n  forall env count left right,\n    BagClosed T\n      (fun rows => eval_possible env left (SqlSuccess rows)) ->\n    BagClosed T\n      (fun rows => eval_possible env right (SqlSuccess rows)) ->\n    possible_bag_outcome_equiv env left right ->\n    @query_expr_possible_outcome_equiv T relname\n      basesort instance unknown symbol_runtime_error aggregate_runtime_error\n      value_is_null env\n      (QExpr_Fetch count left) (QExpr_Fetch count right)."
+    },
+    {
+      "name": "query_expr_join_relation_transport_to_left",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/PossibleOutcomeFacts.v",
+      "line": 5052,
+      "sourceDomain": "runtime-verification-rewrite.md",
+      "semanticDomain": "runtime-verification-rewrite.md",
+      "catalog": "runtime-verification-rewrite.md",
+      "routes": [
+        "scheduled",
+        "outcome",
+        "runtime",
+        "join"
+      ],
+      "interfaceLayer": "schedule_transport_foundation",
+      "replacement": "",
+      "summary": "Transports the displayed hypotheses and conclusion for outer/semi/anti-join semantics.",
+      "topics": [
+        "verification and runtime semantics",
+        "outer join",
+        "LEFT OUTER JOIN",
+        "RIGHT OUTER JOIN",
+        "FULL OUTER JOIN",
+        "semi join",
+        "EXISTS",
+        "anti join",
+        "NOT EXISTS",
+        "join",
+        "query outcome",
+        "error-preserving outcome",
+        "runtime outcome",
+        "runtime safety",
+        "error propagation"
+      ],
+      "statement": "Theorem query_expr_join_relation_transport_to_left :\n  forall schedule env kind predicate matched_select left_select right_select\n      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),\n    (exists right_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env right (SqlSuccess right_rows)) ->\n    (forall error,\n      ~ @eval_query_expr_outcome T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null schedule\n          env right (SqlError error)) ->\n    (forall left_rows right_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env left (SqlSuccess left_rows) ->\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env right (SqlSuccess right_rows) ->\n      outcome_relation_transport (Forall2 row_rel)\n        (@query_join_rows_outcomes T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null schedule\n          env kind predicate matched_select left_select right_select\n          left_rows right_rows)\n        (fixed_success_outcomes left_rows)) ->\n    outcome_relation_transport (Forall2 row_rel)\n      (@eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule env\n        (QExpr_Join kind predicate matched_select left_select right_select\n          left right))\n      (@eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env left)."
+    },
+    {
+      "name": "query_expr_left_join_functional_elimination_transport",
+      "kind": "Corollary",
+      "source": "theories/FormalSQL/PossibleOutcomeFacts.v",
+      "line": 5130,
+      "sourceDomain": "runtime-verification-rewrite.md",
+      "semanticDomain": "runtime-verification-rewrite.md",
+      "catalog": "runtime-verification-rewrite.md",
+      "routes": [
+        "scheduled",
+        "outcome",
+        "runtime",
+        "join"
+      ],
+      "interfaceLayer": "schedule_transport_foundation",
+      "replacement": "",
+      "summary": "Transports the displayed hypotheses and conclusion for outer/semi/anti-join semantics.",
+      "topics": [
+        "verification and runtime semantics",
+        "outer join",
+        "LEFT OUTER JOIN",
+        "RIGHT OUTER JOIN",
+        "FULL OUTER JOIN",
+        "semi join",
+        "EXISTS",
+        "anti join",
+        "NOT EXISTS",
+        "join",
+        "query outcome",
+        "error-preserving outcome",
+        "runtime outcome",
+        "runtime safety",
+        "error propagation"
+      ],
+      "statement": "Corollary query_expr_left_join_functional_elimination_transport :\n  forall schedule env predicate matched_select left_select right_select\n      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),\n    (exists right_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env right (SqlSuccess right_rows)) ->\n    (forall error,\n      ~ @eval_query_expr_outcome T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null schedule\n          env right (SqlError error)) ->\n    (forall left_rows right_rows,\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env left (SqlSuccess left_rows) ->\n      @eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env right (SqlSuccess right_rows) ->\n      outcome_relation_transport (Forall2 row_rel)\n        (@query_join_rows_outcomes T relname basesort instance unknown\n          symbol_runtime_error aggregate_runtime_error value_is_null schedule\n          env QueryJoinLeft predicate matched_select left_select right_select\n          left_rows right_rows)\n        (fixed_success_outcomes left_rows)) ->\n    outcome_relation_transport (Forall2 row_rel)\n      (@eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule env\n        (QExpr_Join QueryJoinLeft predicate matched_select left_select\n          right_select left right))\n      (@eval_query_expr_outcome T relname basesort instance unknown\n        symbol_runtime_error aggregate_runtime_error value_is_null schedule\n        env left)."
     },
     {
       "name": "tnull_row_eq_refl",
@@ -30994,6 +31539,52 @@
         "cardinality"
       ],
       "statement": "Lemma primary_key_conforms_filter :\n  forall primary_key rows keep,\n    primary_key_conforms primary_key rows ->\n    primary_key_conforms primary_key (filter keep rows)."
+    },
+    {
+      "name": "query_success_composite_key_fixed_first_length",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/QueryCardinality.v",
+      "line": 2674,
+      "sourceDomain": "cardinality-composition.md",
+      "semanticDomain": "cardinality-composition.md",
+      "catalog": "cardinality-composition.md",
+      "routes": [
+        "cardinality",
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.",
+      "topics": [
+        "cardinality composition",
+        "INTEGER",
+        "int32",
+        "cardinality"
+      ],
+      "statement": "Theorem query_success_composite_key_fixed_first_length :\n  forall env query first_name second_name rows fixed_first,\n    query_success_int32_composite_key_provenance\n      env query first_name second_name ->\n    eval_query env query (SqlSuccess rows) ->\n    Forall\n      (fun row => dot TNull row (Attr_int32 first_name) = fixed_first)\n      rows ->\n    (List.length rows <= int32_domain_size)%nat."
+    },
+    {
+      "name": "query_success_composite_key_fixed_second_length",
+      "kind": "Theorem",
+      "source": "theories/FormalSQL/QueryCardinality.v",
+      "line": 2693,
+      "sourceDomain": "cardinality-composition.md",
+      "semanticDomain": "cardinality-composition.md",
+      "catalog": "cardinality-composition.md",
+      "routes": [
+        "cardinality",
+        "scalar"
+      ],
+      "interfaceLayer": "general",
+      "replacement": "",
+      "summary": "Relates row cardinality and compositional bounds to the exact list length or bag cardinality shown below.",
+      "topics": [
+        "cardinality composition",
+        "INTEGER",
+        "int32",
+        "cardinality"
+      ],
+      "statement": "Theorem query_success_composite_key_fixed_second_length :\n  forall env query first_name second_name rows fixed_second,\n    query_success_int32_composite_key_provenance\n      env query first_name second_name ->\n    eval_query env query (SqlSuccess rows) ->\n    Forall\n      (fun row => dot TNull row (Attr_int32 second_name) = fixed_second)\n      rows ->\n    (List.length rows <= int32_domain_size)%nat."
     },
     {
       "name": "TNullTypeEqb_eq",

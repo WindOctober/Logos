@@ -2,7 +2,7 @@
 
 Route here for: success/error outcomes, safe vs error-preserving equivalence, rewrite contracts.
 
-This focused catalog contains 356 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 358 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `successful_outcome_equiv_implies_outcome_equiv`
 
@@ -7228,6 +7228,108 @@ Theorem query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv :
       basesort instance unknown symbol_runtime_error aggregate_runtime_error
       value_is_null env
       (QExpr_Fetch count left) (QExpr_Fetch count right).
+```
+
+## `query_expr_join_relation_transport_to_left`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5052`](../PossibleOutcomeFacts.v#L5052)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for outer/semi/anti-join semantics.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_join_relation_transport_to_left :
+  forall schedule env kind predicate matched_select left_select right_select
+      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),
+    (exists right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows)) ->
+    (forall error,
+      ~ @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right (SqlError error)) ->
+    (forall left_rows right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left (SqlSuccess left_rows) ->
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows) ->
+      outcome_relation_transport (Forall2 row_rel)
+        (@query_join_rows_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env kind predicate matched_select left_select right_select
+          left_rows right_rows)
+        (fixed_success_outcomes left_rows)) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left).
+```
+
+## `query_expr_left_join_functional_elimination_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5130`](../PossibleOutcomeFacts.v#L5130)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for outer/semi/anti-join semantics.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Corollary query_expr_left_join_functional_elimination_transport :
+  forall schedule env predicate matched_select left_select right_select
+      left right (row_rel : Tuple.tuple T -> Tuple.tuple T -> Prop),
+    (exists right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows)) ->
+    (forall error,
+      ~ @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right (SqlError error)) ->
+    (forall left_rows right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left (SqlSuccess left_rows) ->
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right (SqlSuccess right_rows) ->
+      outcome_relation_transport (Forall2 row_rel)
+        (@query_join_rows_outcomes T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env QueryJoinLeft predicate matched_select left_select right_select
+          left_rows right_rows)
+        (fixed_success_outcomes left_rows)) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule env
+        (QExpr_Join QueryJoinLeft predicate matched_select left_select
+          right_select left right))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left).
 ```
 
 ## `tnull_query_success_outcome_is_success_bag`

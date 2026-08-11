@@ -2280,3 +2280,163 @@ apply query_expr_outcome_equiv_of_observations.
 Qed.
 
 End TypedGroupQueryLift.
+
+(******************************************************************************)
+(** Representative-independent exact GROUP evaluation.                       **)
+(******************************************************************************)
+
+Section ExactGroupFilterMap.
+
+Context {T : Tuple.Rcd} {relname : Type}.
+
+Variable basesort : relname -> Fset.set (Tuple.A T).
+Variable instance : relname -> Febag.bag (Fecol.CBag (Tuple.CTuple T)).
+Variable unknown : Bool.b (Tuple.B T).
+Variable symbol_runtime_error :
+  Tuple.scalar_operator T ->
+  list (option sql_runtime_error * Tuple.value T) ->
+  option sql_runtime_error.
+Variable aggregate_runtime_error :
+  Tuple.aggregate T ->
+  list (option sql_runtime_error * Tuple.value T) ->
+  option sql_runtime_error.
+Variable value_is_null : Tuple.value T -> bool.
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
+
+(** A complete local contract for one GROUP member.  It records the exact
+    HAVING decision and the exact projected value vector while retaining the
+    evaluator's two aggregate-finalization checks.  It is intentionally
+    parameterized by [keep] and [values], so it describes an operator rather
+    than a benchmark rewrite. *)
+Definition group_filter_map_exact_at
+    (env : Env.env T)
+    (select_list : @query_select_list T relname)
+    (group_terms : list (@aggterm T))
+    (having : scalar_expr T relname ScalarResultBoolean)
+    (keep : list (Tuple.tuple T) -> bool)
+    (values : list (Tuple.tuple T) -> list (Tuple.value T))
+    (group : list (Tuple.tuple T)) : Prop :=
+  let group_env := Env.env_g T env (@Env.Group_By T group_terms) group in
+  @eval_scalar_select_aggregate_runtime_error T relname
+    symbol_runtime_error aggregate_runtime_error group_env select_list = None /\
+  @eval_scalar_expr_aggregate_runtime_error T relname
+    symbol_runtime_error aggregate_runtime_error ScalarResultBoolean
+    group_env having = None /\
+  @scalar_expr_acceptance_exact_at T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null boolean_schedule group_env having (keep group) /\
+  @scalar_value_list_exact_at T relname
+    basesort instance unknown symbol_runtime_error aggregate_runtime_error
+    value_is_null boolean_schedule group_env (map fst select_list)
+    (values group).
+
+(** Exact per-group observations determine the whole GROUP-list evaluator as
+    one stable [filter]/[map] traversal.  The theorem preserves duplicate
+    groups, their order, and the first runtime error; the latter is absent only
+    because the local contract proves every reached observation exact. *)
+Theorem eval_groups_outcome_exact_filter_map :
+  forall env select_list group_terms having groups keep values,
+    (forall group,
+      In group groups ->
+      group_filter_map_exact_at env select_list group_terms having
+        keep values group) ->
+    forall outcome,
+      @eval_groups_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome <->
+      outcome = SqlSuccess
+        (map (fun group => project_row select_list (values group))
+          (filter keep groups)).
+Proof.
+intros env select_list group_terms having groups.
+induction groups as [|group groups IH];
+  intros keep values Hexact outcome.
+- split; intro Heval.
+  + inversion Heval; reflexivity.
+  + subst outcome; constructor.
+- destruct (Hexact group (or_introl eq_refl))
+    as [Hselect_aggregate
+      [Hhaving_aggregate [Hhaving Hselect]]].
+  assert (Htail : forall item,
+    In item groups ->
+    group_filter_map_exact_at env select_list group_terms having
+      keep values item).
+  { intros item Hitem; apply Hexact; now right. }
+  specialize (IH keep values Htail).
+  destruct Hhaving as
+    [[truth [Htruth Haccepted]] [Htruth_unique Htruth_safe]].
+  destruct Hselect as
+    [Hvalues [Hvalues_unique Hvalues_safe]].
+  split; intro Heval.
+  + inversion Heval; subst.
+    * rewrite Hselect_aggregate in *; discriminate.
+    * rewrite Hselect_aggregate, Hhaving_aggregate in *; discriminate.
+    * exfalso; eapply Htruth_safe; eassumption.
+    * pose proof (Htruth_unique truth0 H3) as Hdecision.
+      rewrite Hdecision in H7; cbn [filter]; rewrite H7; cbn [map].
+      now apply (proj1 (IH outcome)).
+    * exfalso; eapply Hvalues_safe; eassumption.
+    * pose proof (Htruth_unique truth0 H3) as Hdecision.
+      rewrite Hdecision in H4.
+      assert (Hobserved : values0 = values group).
+      { now apply Hvalues_unique. }
+      subst values0.
+      assert (Htail_outcome :
+        tail = SqlSuccess
+          (map (fun item => project_row select_list (values item))
+            (filter keep groups))).
+      { now apply (proj1 (IH tail)). }
+      rewrite Htail_outcome.
+      cbn [filter]; rewrite H4; reflexivity.
+  + subst outcome.
+    destruct (keep group) eqn:Hkeep.
+    * cbn [filter]; rewrite Hkeep; cbn [map].
+      eapply EGroups_SelectSuccess with
+        (truth := truth) (values := values group)
+        (tail := SqlSuccess
+          (map (fun item => project_row select_list (values item))
+            (filter keep groups))).
+      -- exact Hselect_aggregate.
+      -- exact Hhaving_aggregate.
+      -- exact Htruth.
+      -- exact Haccepted.
+      -- exact Hvalues.
+      -- apply (proj2 (IH _)); reflexivity.
+    * cbn [filter]; rewrite Hkeep; cbn [map].
+      eapply EGroups_HavingFalse with
+        (truth := truth)
+        (outcome := SqlSuccess
+          (map (fun item => project_row select_list (values item))
+            (filter keep groups))).
+      -- exact Hselect_aggregate.
+      -- exact Hhaving_aggregate.
+      -- exact Htruth.
+      -- exact Haccepted.
+      -- apply (proj2 (IH _)); reflexivity.
+Qed.
+
+(** Once the local decision and emitter respect semantic equality of groups,
+    any two representatives of the same nonempty-key input bag produce
+    semantically permuted successful GROUP rows.  This is the missing middle
+    layer between [query_make_groups_permut_nonempty] and
+    [eval_group_bag_exact_rows_permut_equiv]. *)
+Theorem group_filter_map_outputs_permut_of_representatives :
+  forall env group_terms left right keep emit,
+    group_terms <> nil ->
+    Oeset.permut (OTuple T) left right ->
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      keep first = keep second) ->
+    (forall first second,
+      Oeset.compare (OLTuple T) first second = Eq ->
+      Oeset.compare (OTuple T) (emit first) (emit second) = Eq) ->
+    Oeset.permut (OTuple T)
+      (map emit (filter keep (query_make_groups env left group_terms)))
+      (map emit (filter keep (query_make_groups env right group_terms))).
+Proof.
+intros env group_terms left right keep emit Hterms Hrows Hkeep Hemit.
+apply group_filter_map_permutation; try assumption.
+now apply query_make_groups_permut_nonempty.
+Qed.
+
+End ExactGroupFilterMap.

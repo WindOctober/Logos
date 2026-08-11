@@ -2637,3 +2637,75 @@ repeat split; [exact Hnonempty| |].
   eapply Hnonnull; eauto.
 - now apply NoDupA_map_filter.
 Qed.
+
+(******************************************************************************)
+(** Query-level provenance for finite fibers of composite INTEGER keys.      **)
+(******************************************************************************)
+
+Section CompositeInt32KeyFibers.
+
+Variable relname : Type.
+Variable basesort : relname -> Fset.set (A TNull).
+Variable instance : relname -> Febag.bag (Fecol.CBag (CTuple TNull)).
+Variable unknown : Bool.b (B TNull).
+Variable boolean_schedule : boolean_site -> boolean_evaluation_order.
+
+Local Abbreviation eval_query :=
+  (@eval_query_expr_outcome TNull relname basesort instance unknown
+    NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error
+    NullValues.is_null_value boolean_schedule).
+
+(** This contract records exactly the list-level facts needed to use a
+    two-column INTEGER primary key as finite provenance.  It deliberately
+    does not claim that either component is unique on its own. *)
+Definition query_success_int32_composite_key_provenance
+    (env : Env.env TNull) (query : query_expr TNull relname)
+    (first_name second_name : string) : Prop :=
+  forall rows,
+    eval_query env query (SqlSuccess rows) ->
+    rows_attribute_conform (Attr_int32 first_name) rows /\
+    rows_attribute_conform (Attr_int32 second_name) rows /\
+    primary_key_conforms
+      [Attr_int32 first_name; Attr_int32 second_name] rows.
+
+(** Once the first component is fixed throughout a successful query result,
+    the remaining component injects that fiber into the INTEGER domain. *)
+Theorem query_success_composite_key_fixed_first_length :
+  forall env query first_name second_name rows fixed_first,
+    query_success_int32_composite_key_provenance
+      env query first_name second_name ->
+    eval_query env query (SqlSuccess rows) ->
+    Forall
+      (fun row => dot TNull row (Attr_int32 first_name) = fixed_first)
+      rows ->
+    (List.length rows <= int32_domain_size)%nat.
+Proof.
+intros env query first_name second_name rows fixed_first
+  Hprovenance Hrows Hfixed.
+destruct (Hprovenance rows Hrows) as [Hfirst [Hsecond Hprimary]].
+exact (int32_composite_primary_key_fixed_first_length
+  first_name second_name rows fixed_first
+  Hfirst Hsecond Hprimary Hfixed).
+Qed.
+
+(** Symmetric finite-fiber rule when the second key component is fixed. *)
+Theorem query_success_composite_key_fixed_second_length :
+  forall env query first_name second_name rows fixed_second,
+    query_success_int32_composite_key_provenance
+      env query first_name second_name ->
+    eval_query env query (SqlSuccess rows) ->
+    Forall
+      (fun row => dot TNull row (Attr_int32 second_name) = fixed_second)
+      rows ->
+    (List.length rows <= int32_domain_size)%nat.
+Proof.
+intros env query first_name second_name rows fixed_second
+  Hprovenance Hrows Hfixed.
+destruct (Hprovenance rows Hrows) as [Hfirst [Hsecond Hprimary]].
+exact (int32_composite_primary_key_fixed_second_length
+  first_name second_name rows fixed_second
+  Hfirst Hsecond Hprimary Hfixed).
+Qed.
+
+End CompositeInt32KeyFibers.

@@ -6,6 +6,11 @@ From SQLFS Require Import
 From Logos.FormalSQL Require Import
   GroupedFilterOutcomeFacts PossibleOutcomeFacts SubqueryFacts.
 
+Check eval_groups_outcome_exact_filter_map.
+Check group_filter_map_outputs_permut_of_representatives.
+Check query_expr_join_relation_transport_to_left.
+Check query_expr_left_join_functional_elimination_transport.
+
 Import Tuple.
 Import ListNotations.
 

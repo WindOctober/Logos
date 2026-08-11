@@ -1145,6 +1145,197 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             ):
                 with self.subTest(valid=label):
                     validate(report_for(proof), {}, case_dir)
+
+            checkpoint_sha256 = "a" * 64
+            direct_review_round = {
+                "success": False,
+                "exitCode": 0,
+                "candidateClaim": None,
+                "candidateHasFinalTheorem": False,
+                "candidateProblemCompilePassed": False,
+                "candidateProblemSha256": checkpoint_sha256,
+                "activeProblemCompileCheckpointSha256": checkpoint_sha256,
+                "proofCheckExitCode": None,
+                "proofCheckTimedOut": False,
+                "audit": {"passed": True, "findings": []},
+                "counterexampleHandoff": {
+                    "decision": "needs_manual_review",
+                    "reason": "the trusted contract lacks demand events",
+                    "guidance": "inspect the binding evaluator",
+                },
+            }
+            direct_review = {
+                "backendStatus": "needs_manual_review",
+                "certification": None,
+                "proofSearchTimedOut": False,
+                "proofWorkspace": {},
+                "proofAgent": direct_review_round,
+                "proofAgentRounds": [direct_review_round],
+            }
+            validate(
+                report_for(direct_review, "needs_manual_review"),
+                {},
+                case_dir,
+            )
+
+            for label, mutate in (
+                (
+                    "wrong decision",
+                    lambda value: value["proofAgent"]["counterexampleHandoff"].__setitem__(
+                        "decision", "counterexample_candidate"
+                    ),
+                ),
+                (
+                    "empty reason",
+                    lambda value: value["proofAgent"]["counterexampleHandoff"].__setitem__(
+                        "reason", ""
+                    ),
+                ),
+                (
+                    "wrong backend",
+                    lambda value: value.__setitem__(
+                        "backendStatus", "proof_agent_run_completed"
+                    ),
+                ),
+                (
+                    "timeout mixed with review",
+                    lambda value: value.__setitem__("proofSearchTimedOut", True),
+                ),
+                (
+                    "missing compile-clean authority",
+                    lambda value: value["proofAgent"].__setitem__(
+                        "candidateProblemSha256", "b" * 64
+                    ),
+                ),
+                (
+                    "failed audit",
+                    lambda value: value["proofAgent"]["audit"].__setitem__(
+                        "passed", False
+                    ),
+                ),
+            ):
+                with self.subTest(invalid_direct_review=label):
+                    forged = json.loads(json.dumps(direct_review))
+                    mutate(forged)
+                    forged["proofAgentRounds"][-1] = forged["proofAgent"]
+                    with self.assertRaises(self.runner_error):
+                        validate(
+                            report_for(forged, "needs_manual_review"),
+                            {},
+                            case_dir,
+                        )
+
+            certified_review = json.loads(json.dumps(direct_review))
+            certified_review["certification"] = "OUTCOME-UNCONDITIONAL"
+            with self.assertRaises(self.runner_error):
+                validate(
+                    report_for(certified_review, "needs_manual_review"),
+                    {},
+                    case_dir,
+                )
+
+            counterexample_review_round = {
+                "round": 1,
+                "assessment": {
+                    "decision": "needs_review",
+                    "parse": {"success": True, "error": None},
+                },
+                "proposal": {
+                    "decision": "needs_review",
+                    "reason": "no finite executable witness is available",
+                    "witnessSql": "",
+                    "notes": "requires semantic review",
+                },
+                "validation": None,
+            }
+            counterexample_handoff_round = {
+                "success": False,
+                "exitCode": 0,
+                "candidateClaim": None,
+                "proofCheckExitCode": None,
+                "counterexampleHandoff": {
+                    "decision": "counterexample_candidate",
+                    "reason": "a finite witness may separate the outcomes",
+                    "guidance": "try one nonempty input row",
+                },
+            }
+            counterexample_review_proof = {
+                "backendStatus": "needs_manual_review",
+                "certification": None,
+                "proofSearchTimedOut": False,
+                "proofWorkspace": {},
+                "proofAgent": counterexample_handoff_round,
+                "proofAgentRounds": [counterexample_handoff_round],
+            }
+            counterexample_review_report = report_for(
+                counterexample_review_proof, "needs_manual_review"
+            )
+            counterexample_review_report["counterexample"] = None
+            counterexample_review_report["rounds"] = [counterexample_review_round]
+            stage_report = {
+                "outcome": "needs_manual_review",
+                "reason": "counterexample agent requested review",
+                "rounds": [counterexample_review_round],
+                "counterexample": None,
+                "elapsedMs": 1,
+                "llmUsage": {},
+            }
+            stage_report_path = case_dir / "counterexample-stage/report.json"
+            stage_report_path.parent.mkdir(parents=True, exist_ok=True)
+            stage_report_path.write_text(json.dumps(stage_report))
+            validate(counterexample_review_report, {}, case_dir)
+
+            forged_stage_report = dict(stage_report)
+            forged_stage_report["rounds"] = []
+            stage_report_path.write_text(json.dumps(forged_stage_report))
+            with self.assertRaisesRegex(
+                self.runner_error, "counterexample-stage authority"
+            ):
+                validate(counterexample_review_report, {}, case_dir)
+            stage_report_path.write_text(json.dumps(stage_report))
+
+            for label, mutate in (
+                (
+                    "non-review proposal",
+                    lambda value: value["rounds"][-1]["proposal"].__setitem__(
+                        "decision", "no_candidate"
+                    ),
+                ),
+                (
+                    "counterexample attached",
+                    lambda value: value.__setitem__("counterexample", {}),
+                ),
+                (
+                    "wrong backend",
+                    lambda value: value["proof"].__setitem__(
+                        "backendStatus", "proof_agent_run_completed"
+                    ),
+                ),
+                (
+                    "timeout mixed with review",
+                    lambda value: value["proof"].__setitem__(
+                        "proofSearchTimedOut", True
+                    ),
+                ),
+                (
+                    "certification attached",
+                    lambda value: value["proof"].__setitem__(
+                        "certification", "OUTCOME-UNCONDITIONAL"
+                    ),
+                ),
+                (
+                    "non-review top-level outcome",
+                    lambda value: value.__setitem__(
+                        "outcome", "equivalence_verification_incomplete"
+                    ),
+                ),
+            ):
+                with self.subTest(invalid_counterexample_review=label):
+                    forged = json.loads(json.dumps(counterexample_review_report))
+                    mutate(forged)
+                    with self.assertRaises(self.runner_error):
+                        validate(forged, {}, case_dir)
+
             validate(report_for(failed, "needs_manual_review"), {}, case_dir)
 
             unresumable_exit_zero = json.loads(json.dumps(run_completed))
@@ -2220,6 +2411,50 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             self.runner["validate_proof_backend_coherence"](
                 manual_report, forged_manual_terminal
             )
+
+        checkpoint_sha256 = "a" * 64
+        direct_manual_round = {
+            **changed_session,
+            "candidateClaim": None,
+            "candidateHasFinalTheorem": False,
+            "candidateProblemCompilePassed": False,
+            "candidateProblemSha256": checkpoint_sha256,
+            "activeProblemCompileCheckpointSha256": checkpoint_sha256,
+            "proofCheckExitCode": None,
+            "proofCheckTimedOut": False,
+            "audit": {"passed": True, "findings": []},
+            "counterexampleHandoff": {
+                "decision": "needs_manual_review",
+                "reason": "trusted demand semantics are unavailable",
+                "guidance": "inspect the binding evaluator",
+            },
+        }
+        self.assertTrue(
+            self.runner["report_has_direct_manual_review"](
+                manual_report, direct_manual_round
+            )
+        )
+        self.runner["validate_proof_agent_session_sequence"](
+            [established_session, direct_manual_round],
+            "direct manual review with unavailable terminal session",
+            allow_terminal_unavailable_session=True,
+            workspace_transitions_by_round={},
+        )
+        direct_manual_proof = {
+            "proofWorkspace": {},
+            "proofAgentRounds": [direct_manual_round],
+            "proofAgent": direct_manual_round,
+            "proofSearchTimedOut": False,
+            "deterministicTailRecovery": None,
+            "certification": None,
+            "backendStatus": "needs_manual_review",
+        }
+        self.assertEqual(
+            self.runner["validate_proof_backend_coherence"](
+                manual_report, direct_manual_proof
+            ),
+            "needs_manual_review",
+        )
 
     def test_cid_only_cleanup_preserves_artifacts_without_touching_docker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -7550,7 +7785,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             by_case["cohort__bench-a__forgedenvpolicy"]["reportCoherenceError"],
         )
         self.assertIn(
-            "source binding drifted",
+            "cache-bound generated source differs from trusted cache",
             by_case["cohort__bench-a__forgedwitnesscache"][
                 "reportCoherenceError"
             ],
