@@ -5,7 +5,7 @@
 From SQLFS Require Import
   SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection
   FiniteSet OrderedSet SchemaConstraints Bool3 SqlQuerySemantics.
-From Stdlib Require Import List String Bool ZArith NArith SetoidList.
+From Stdlib Require Import List String Bool ZArith NArith SetoidList Lia.
 
 Import ListNotations.
 Import Tuple.
@@ -48,6 +48,36 @@ Lemma witness_database_instance_rows :
     witness_instance_rows tables relation.
 Proof.
 reflexivity.
+Qed.
+
+(** Omitted relations have an empty concrete instance.  The premise mentions
+    only relation names, so generated certificates for empty tables never
+    reduce or duplicate the (potentially very wide) rows stored for unrelated
+    nonempty tables. *)
+Lemma witness_rows_for_absent :
+  forall tables relation,
+    ~ In relation (map witness_table_relation tables) ->
+    witness_rows_for tables relation = nil.
+Proof.
+induction tables as [|table rest IH]; intros relation Habsent; cbn.
+- reflexivity.
+- destruct (Oset.eq_bool ORN relation (witness_table_relation table))
+    eqn:Hequal.
+  + apply Oset.eq_bool_true_iff in Hequal; subst relation.
+    exfalso; apply Habsent; now left.
+  + apply IH.
+    intro Hin; apply Habsent; now right.
+Qed.
+
+Lemma witness_instance_rows_absent :
+  forall tables relation,
+    ~ In relation (map witness_table_relation tables) ->
+    witness_instance_rows tables relation = nil.
+Proof.
+intros tables relation Habsent.
+unfold witness_instance_rows.
+rewrite (witness_rows_for_absent tables relation Habsent).
+apply Febag.elements_empty.
 Qed.
 
 (** The witness database preserves every occurrence in the host-provided raw
@@ -777,44 +807,202 @@ Definition option_primary_key_conformsb
   | Some key => primary_key_conformsb key rows
   end.
 
-(** CHECK constraints and partial/expression unique indexes remain fail-closed
-    for nonempty witness tables. On an empty table, CHECK obligations are
-    vacuous and a unique index conforms once its declaration has a nonempty
-    term list; no predicate or term is evaluated. *)
-Definition deferred_row_constraints_conformb
-    (rows : list (tuple TNull))
-    (checks : list check_constraint)
-    (indexes : list unique_index_constraint) : bool :=
-  match rows with
-  | nil =>
-      forallb
-        (fun index => list_nonemptyb (unique_index_terms index)) indexes
-  | _ :: _ =>
-      match checks with nil => true | _ => false end &&
-      match indexes with nil => true | _ => false end
+(** Executable reflection for PostgreSQL row-local CHECK constraints.  A CHECK
+    accepts TRUE and UNKNOWN, rejects FALSE, and cannot certify a witness row
+    whose expression raises a runtime error. *)
+Definition check_row_conformsb
+    (db : db_state) (check : check_constraint) (row : tuple TNull) : bool :=
+  match constraint_formula_runtime_error db row
+          (check_constraint_formula check) with
+  | Some _ => false
+  | None =>
+      match eval_constraint_formula db row
+              (check_constraint_formula check) with
+      | false3 => false
+      | true3 | unknown3 => true
+      end
   end.
 
-Lemma deferred_row_constraints_conformb_sound :
+Lemma check_row_conformsb_sound :
+  forall db check row,
+    check_row_conformsb db check row = true ->
+    check_row_conforms db check row.
+Proof.
+intros db check row Hconforms.
+unfold check_row_conformsb in Hconforms.
+destruct (constraint_formula_runtime_error db row
+  (check_constraint_formula check)) as [error|] eqn:Herror;
+  try discriminate.
+destruct (eval_constraint_formula db row
+  (check_constraint_formula check)) eqn:Hvalue;
+  cbn in Hconforms; try discriminate.
+- split; [exact Herror|].
+  rewrite Hvalue; discriminate.
+- split; [exact Herror|].
+  rewrite Hvalue; discriminate.
+Qed.
+
+Definition check_constraint_conformsb
+    (db : db_state) (rows : list (tuple TNull))
+    (check : check_constraint) : bool :=
+  forallb (check_row_conformsb db check) rows.
+
+Lemma check_constraint_conformsb_sound :
+  forall db rows check,
+    check_constraint_conformsb db rows check = true ->
+    check_constraint_conforms db rows check.
+Proof.
+intros db rows check Hconforms.
+unfold check_constraint_conformsb in Hconforms.
+unfold check_constraint_conforms.
+rewrite Forall_forall; intros row Hrow.
+rewrite forallb_forall in Hconforms.
+now apply check_row_conformsb_sound, Hconforms.
+Qed.
+
+(** A partial-index predicate must evaluate without error on every row.  Only
+    rows for which it is exactly TRUE participate in the unique index. *)
+Definition unique_index_predicate_succeedsb
+    (db : db_state) (row : tuple TNull)
+    (index : unique_index_constraint) : bool :=
+  match unique_index_predicate_error db row index with
+  | None => true
+  | Some _ => false
+  end.
+
+Lemma unique_index_predicate_succeedsb_sound :
+  forall db row index,
+    unique_index_predicate_succeedsb db row index = true ->
+    unique_index_predicate_error db row index = None.
+Proof.
+intros db row index Hsucceeds.
+unfold unique_index_predicate_succeedsb in Hsucceeds.
+now destruct (unique_index_predicate_error db row index) eqn:Herror;
+  try discriminate.
+Qed.
+
+Definition constraint_term_succeedsb
+    (row : tuple TNull) (term : constraint_term) : bool :=
+  match constraint_term_runtime_error row term with
+  | None => true
+  | Some _ => false
+  end.
+
+Lemma constraint_term_succeedsb_sound :
+  forall row term,
+    constraint_term_succeedsb row term = true ->
+    constraint_term_runtime_error row term = None.
+Proof.
+intros row term Hsucceeds.
+unfold constraint_term_succeedsb in Hsucceeds.
+now destruct (constraint_term_runtime_error row term) eqn:Herror;
+  try discriminate.
+Qed.
+
+Definition unique_index_row_terms_succeedb
+    (index : unique_index_constraint) (row : tuple TNull) : bool :=
+  forallb (constraint_term_succeedsb row) (unique_index_terms index).
+
+Lemma unique_index_row_terms_succeedb_sound :
+  forall index row,
+    unique_index_row_terms_succeedb index row = true ->
+    unique_index_row_terms_succeed index row.
+Proof.
+intros index row Hsucceeds.
+unfold unique_index_row_terms_succeedb in Hsucceeds.
+unfold unique_index_row_terms_succeed.
+rewrite Forall_forall; intros term Hterm.
+rewrite forallb_forall in Hsucceeds.
+now apply constraint_term_succeedsb_sound, Hsucceeds.
+Qed.
+
+(** Executable reflection for ordinary, partial, and expression unique
+    indexes.  Expression terms are evaluated only for participating rows, and
+    SQL equality must be exactly TRUE for two keys to conflict; UNKNOWN caused
+    by NULL therefore does not create a spurious uniqueness violation. *)
+Definition unique_index_conformsb
+    (db : db_state) (rows : list (tuple TNull))
+    (index : unique_index_constraint) : bool :=
+  list_nonemptyb (unique_index_terms index) &&
+  (forallb (fun row => unique_index_predicate_succeedsb db row index) rows &&
+   (forallb
+      (fun row =>
+        if unique_index_row_participates db index row
+        then unique_index_row_terms_succeedb index row
+        else true)
+      rows &&
+    no_relatedb sql_key_equal_trueb
+      (map (unique_index_key (unique_index_terms index))
+        (filter (unique_index_row_participates db index) rows)))).
+
+Lemma unique_index_conformsb_sound :
+  forall db rows index,
+    unique_index_conformsb db rows index = true ->
+    unique_index_conforms db rows index.
+Proof.
+intros db rows index Hconforms.
+unfold unique_index_conformsb in Hconforms.
+apply andb_true_iff in Hconforms as [Hnonempty Hrest].
+apply andb_true_iff in Hrest as [Hpredicate Hrest].
+apply andb_true_iff in Hrest as [Hterms Hunique].
+unfold unique_index_conforms.
+repeat split.
+- now apply list_nonemptyb_sound.
+- intros row Hrow.
+  rewrite forallb_forall in Hpredicate.
+  now apply unique_index_predicate_succeedsb_sound, Hpredicate.
+- intros row Hrow Hparticipates.
+  rewrite forallb_forall in Hterms.
+  specialize (Hterms row Hrow).
+  rewrite Hparticipates in Hterms.
+  now apply unique_index_row_terms_succeedb_sound.
+- eapply no_relatedb_sound; [exact sql_key_equal_trueb_iff|exact Hunique].
+Qed.
+
+Lemma unique_index_conforms_of_reflected_components :
+  forall db rows index,
+    list_nonemptyb (unique_index_terms index) = true ->
+    forallb (fun row => unique_index_predicate_succeedsb db row index) rows = true ->
+    forallb
+      (fun row =>
+        if unique_index_row_participates db index row
+        then unique_index_row_terms_succeedb index row
+        else true)
+      rows = true ->
+    no_relatedb sql_key_equal_trueb
+      (map (unique_index_key (unique_index_terms index))
+        (filter (unique_index_row_participates db index) rows)) = true ->
+    unique_index_conforms db rows index.
+Proof.
+intros db rows index Hnonempty Hpredicate Hterms Hunique.
+apply unique_index_conformsb_sound.
+unfold unique_index_conformsb.
+now rewrite Hnonempty, Hpredicate, Hterms, Hunique.
+Qed.
+
+Definition row_expression_constraints_conformb
+    (db : db_state) (rows : list (tuple TNull))
+    (checks : list check_constraint)
+    (indexes : list unique_index_constraint) : bool :=
+  forallb (check_constraint_conformsb db rows) checks &&
+  forallb (unique_index_conformsb db rows) indexes.
+
+Lemma row_expression_constraints_conformb_sound :
   forall db rows checks indexes,
-    deferred_row_constraints_conformb rows checks indexes = true ->
+    row_expression_constraints_conformb db rows checks indexes = true ->
     Forall (check_constraint_conforms db rows) checks /\
     Forall (unique_index_conforms db rows) indexes.
 Proof.
-intros db [|row rows] checks indexes Hconforms.
-- split.
-  + rewrite Forall_forall; intros check _.
-    unfold check_constraint_conforms; constructor.
-  + rewrite Forall_forall; intros index Hindex.
-    unfold deferred_row_constraints_conformb in Hconforms.
-    rewrite forallb_forall in Hconforms.
-    specialize (Hconforms index Hindex).
-    apply list_nonemptyb_sound in Hconforms.
-    unfold unique_index_conforms.
-    repeat split; try assumption; try (intros value Hvalue; contradiction).
-    constructor.
-- unfold deferred_row_constraints_conformb in Hconforms.
-  destruct checks as [|check checks], indexes as [|index indexes];
-    cbn in Hconforms; try discriminate; split; constructor.
+intros db rows checks indexes Hconforms.
+unfold row_expression_constraints_conformb in Hconforms.
+apply andb_true_iff in Hconforms as [Hchecks Hindexes].
+split.
+- rewrite Forall_forall; intros check Hcheck.
+  rewrite forallb_forall in Hchecks.
+  now apply check_constraint_conformsb_sound, Hchecks.
+- rewrite Forall_forall; intros index Hindex.
+  rewrite forallb_forall in Hindexes.
+  now apply unique_index_conformsb_sound, Hindexes.
 Qed.
 
 Definition rows_constraint_conformb
@@ -829,7 +1017,8 @@ Definition rows_constraint_conformb
       (constraint_unique_keys constraint) &&
     (forallb (foreign_key_conformsb tables rows)
        (constraint_foreign_keys constraint) &&
-     deferred_row_constraints_conformb
+     row_expression_constraints_conformb
+       (witness_database expected tables)
        rows
        (constraint_checks constraint)
        (constraint_unique_indexes constraint)))).
@@ -847,7 +1036,7 @@ apply andb_true_iff in Hrest as [Hprimary Hrest].
 apply andb_true_iff in Hrest as [Hunique Hrest].
 apply andb_true_iff in Hrest as [Hforeign Hrest].
 pose proof
-  (deferred_row_constraints_conformb_sound
+  (row_expression_constraints_conformb_sound
     (witness_database expected tables)
     (witness_instance_rows tables (constraint_relation constraint))
     (constraint_checks constraint)
@@ -868,6 +1057,80 @@ repeat split.
   now apply (foreign_key_conformsb_sound expected), Hforeign.
 - exact Hchecks.
 - exact Hindexes.
+Qed.
+
+(** An empty relation satisfies every row-level constraint once the
+    declarations themselves are well formed.  Keeping this fact separate from
+    executable reflection is important for wide schemas: a concrete witness
+    normally populates only a few tables, so the certificate generator can
+    avoid reducing the whole witness database once for every empty table. *)
+Lemma table_constraint_conforms_empty :
+  forall db constraints constraint,
+    table_constraint_declarations_well_formed constraints constraint ->
+    instance_rows db (constraint_relation constraint) = nil ->
+    table_constraint_conforms db constraint.
+Proof.
+intros db constraints constraint Hdeclarations Hrows.
+unfold table_constraint_declarations_well_formed in Hdeclarations.
+destruct Hdeclarations as [Hprimary [Hunique [Hforeign Hindexes]]].
+unfold table_constraint_conforms, rows_constraint_conform.
+rewrite Hrows.
+repeat split.
+- intros row Hrow; contradiction.
+- destruct (constraint_primary_key constraint) as [key|] eqn:Hkey; trivial.
+  cbn in Hprimary.
+  repeat split.
+  + exact Hprimary.
+  + intros row Hrow; contradiction.
+  + constructor.
+- rewrite Forall_forall in Hunique |- *.
+  intros key Hkey.
+  split; [now apply Hunique|constructor].
+- rewrite Forall_forall in Hforeign |- *.
+  intros foreign_key Hforeign_key.
+  specialize (Hforeign foreign_key Hforeign_key).
+  unfold foreign_key_reference_well_formed in Hforeign.
+  destruct Hforeign as [Hnonempty [Hlength _]].
+  repeat split; [exact Hnonempty|exact Hlength|].
+  intros row Hrow; contradiction.
+- rewrite Forall_forall; intros check Hcheck.
+  constructor.
+- rewrite Forall_forall in Hindexes |- *.
+  intros index Hindex.
+  specialize (Hindexes index Hindex).
+  unfold unique_index_conforms.
+  repeat split.
+  + exact Hindexes.
+  + intros row Hrow; contradiction.
+  + intros row Hrow; contradiction.
+  + constructor.
+Qed.
+
+(** Assemble one table certificate from independently reflected components.
+    Generated witnesses use this interface to keep each CHECK, unique index,
+    key, or foreign-key computation in a bounded Rocq compilation unit. *)
+Lemma table_constraint_conforms_of_components :
+  forall db constraint rows,
+    instance_rows db (constraint_relation constraint) = rows ->
+    rows_attributes_not_null (constraint_not_null constraint) rows ->
+    (match constraint_primary_key constraint with
+     | None => True
+     | Some key => primary_key_conforms key rows
+     end) ->
+    Forall (fun key => unique_key_conforms key rows)
+      (constraint_unique_keys constraint) ->
+    Forall (foreign_key_conforms db rows)
+      (constraint_foreign_keys constraint) ->
+    Forall (check_constraint_conforms db rows)
+      (constraint_checks constraint) ->
+    Forall (unique_index_conforms db rows)
+      (constraint_unique_indexes constraint) ->
+    table_constraint_conforms db constraint.
+Proof.
+intros db constraint rows Hrows Hnotnull Hprimary Hunique Hforeign Hchecks Hindexes.
+unfold table_constraint_conforms, rows_constraint_conform.
+rewrite Hrows.
+repeat split; assumption.
 Qed.
 
 Definition schema_constraints_conformb
@@ -957,4 +1220,33 @@ split.
 - split.
   + now apply witness_values_conformb_sound.
   + now apply schema_constraints_conformb_sound.
+Qed.
+
+(** Assembly interface for generated witnesses whose finite checks are proved
+    incrementally.  In particular, a host may certify value conformance once,
+    certify schema declarations independently of the witness, and certify each
+    table constraint in a separate opaque lemma.  The final database theorem
+    then performs no whole-schema Boolean reduction. *)
+Theorem witness_database_conforms_of_certificates :
+  forall expected constraints tables,
+    witness_values_conformb expected tables = true ->
+    schema_constraints_well_formed constraints ->
+    Forall
+      (table_constraint_conforms (witness_database expected tables))
+      constraints ->
+    database_conforms_schema expected constraints
+      (witness_database expected tables).
+Proof.
+intros expected constraints tables Hvalues Hdeclarations Hconstraints.
+unfold database_conforms_schema.
+split; [reflexivity|].
+split.
+- intro relation.
+  change
+    (@_basesort TNull expected relation =S=
+     @_basesort TNull expected relation).
+  apply Fset.equal_refl.
+- split.
+  + now apply witness_values_conformb_sound.
+  + split; assumption.
 Qed.

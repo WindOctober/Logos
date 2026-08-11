@@ -1,7 +1,7 @@
 From SQLFS Require Import FTuples OrderedSet FiniteSet FiniteBag FiniteCollection
   SqlSyntax GenericInstance Values Bool3 Env SqlOutcome SqlErrorSemantics
   SchemaConstraints SqlBagAbstraction SqlQuerySemantics SqlQuerySyntax
-  SqlQueryWellFormed.
+  SqlQueryWellFormed SqlQueryContexts.
 From Logos Require Import FormalSQL.QueryTNullSyntax.
 From Stdlib Require Import List.
 
@@ -262,6 +262,152 @@ Definition eval_query_expr_with_schedule
     NullValues.is_null_value
     schedule env query outcome.
 
+(** The ordinary table leaf used by a consumer of one local binding.  Keeping
+    this constructor named makes the materialization/substitution boundary
+    explicit without adding a second query language. *)
+Definition local_query_binding_reference
+    (binding : LocalQueryBinding) : QueryExpr :=
+  @QExpr_Table TNull relname
+    (local_binding_outputs binding)
+    (local_binding_relation binding).
+
+(** A concrete successful binding result represented as a query leaf.  This
+    is the semantic intermediate between the one shared materialized table and
+    a replayable/inlined definition.  It intentionally stores a bag, not the
+    particular list representative returned while evaluating the definition. *)
+Definition local_query_binding_values
+    (binding : LocalQueryBinding) (rows : list (tuple TNull)) : QueryExpr :=
+  @QExpr_Values TNull relname
+    (local_binding_outputs binding) (@query_rows_bag TNull rows).
+
+Definition local_query_binding_reference_well_typed
+    (db : db_state) (binding : LocalQueryBinding) : Prop :=
+  (@query_outputs_sort TNull (local_binding_outputs binding) =S?=
+    @_basesort TNull db (local_binding_relation binding)) = true.
+
+(** Once a successful result has been installed, the local table reference
+    denotes exactly that result bag.  This is the small database-update fact
+    that agents previously reconstructed by unfolding [query_table_bag]. *)
+Lemma set_local_query_binding_rows_table_bag :
+  forall db binding rows,
+    local_query_binding_reference_well_typed db binding ->
+    @query_table_bag TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      (local_binding_outputs binding)
+      (local_binding_relation binding) =
+    @query_rows_bag TNull rows.
+Proof.
+intros db binding rows Htyped.
+unfold query_table_bag, local_query_binding_reference_well_typed in *.
+rewrite set_local_query_binding_rows_basesort_preserving.
+rewrite Htyped.
+apply set_local_query_binding_rows_instance_eq.
+Qed.
+
+(** A materialized table read and the corresponding concrete bag leaf have
+    exactly the same scheduled row outcomes, including multiplicity and every
+    legal list representative.  Neither leaf can invent a runtime error. *)
+Lemma eval_local_query_binding_reference_values_iff :
+  forall db binding rows schedule env outcome,
+    local_query_binding_reference_well_typed db binding ->
+    eval_query_expr_with_schedule
+      (set_local_query_binding_rows db binding rows) schedule env
+      (local_query_binding_reference binding) outcome <->
+    eval_query_expr_with_schedule
+      (set_local_query_binding_rows db binding rows) schedule env
+      (local_query_binding_values binding rows) outcome.
+Proof.
+intros db binding rows schedule env [output | error] Htyped; split;
+  intro Heval; inversion Heval; subst.
+- apply EQuery_Values.
+  rewrite <- (set_local_query_binding_rows_table_bag
+    db binding rows Htyped); assumption.
+- apply EQuery_Table.
+  rewrite (set_local_query_binding_rows_table_bag
+    db binding rows Htyped); assumption.
+Qed.
+
+(** EXISTS deliberately has its own demand evaluator.  For table/VALUES
+    leaves it is nevertheless the same mapped row observation, so the exact
+    materialized-reference substitution remains valid under EXISTS. *)
+Lemma eval_local_query_binding_reference_values_exists_iff :
+  forall db binding rows schedule env outcome,
+    local_query_binding_reference_well_typed db binding ->
+    @eval_query_exists_outcome TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule env (local_query_binding_reference binding) outcome <->
+    @eval_query_exists_outcome TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule env (local_query_binding_values binding rows) outcome.
+Proof.
+intros db binding rows schedule env outcome Htyped; split; intro Heval;
+  inversion Heval; subst; try discriminate.
+- eapply EExists_Demanded; [reflexivity|].
+  now apply (proj1
+    (eval_local_query_binding_reference_values_iff
+      db binding rows schedule env _ Htyped)).
+- eapply EExists_Demanded; [reflexivity|].
+  now apply (proj2
+    (eval_local_query_binding_reference_values_iff
+      db binding rows schedule env _ Htyped)).
+Qed.
+
+(** Demand-aware equality is what permits substitution below arbitrary query
+    and scalar contexts.  In row-consuming positions it preserves the complete
+    ordered/error relation; under EXISTS it preserves the dedicated target-
+    eliding observation. *)
+Lemma local_query_binding_reference_values_global_demand_equiv :
+  forall db binding rows schedule demand,
+    local_query_binding_reference_well_typed db binding ->
+    @query_expr_global_demand_equiv TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule demand
+      (local_query_binding_reference binding)
+      (local_query_binding_values binding rows).
+Proof.
+intros db binding rows schedule [|] Htyped; cbn.
+- split; [reflexivity|].
+  intros env outcome.
+  now apply eval_local_query_binding_reference_values_iff.
+- intros env outcome.
+  now apply eval_local_query_binding_reference_values_exists_iff.
+Qed.
+
+(** One theorem substitutes the materialized reference through every query
+    context supported by FormalSQL, including occurrences nested in scalar
+    subqueries.  It changes only the reference leaf; evaluation of the binding
+    definition itself remains outside this theorem and is handled by the
+    BoundQuery contract below. *)
+Theorem local_query_binding_reference_context_substitution :
+  forall db binding rows schedule
+      (context : @query_expr_context TNull relname),
+    local_query_binding_reference_well_typed db binding ->
+    @query_expr_global_typed_outcome_equiv TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule
+      (plug_query_expr_context context
+        (local_query_binding_reference binding))
+      (plug_query_expr_context context
+        (local_query_binding_values binding rows)).
+Proof.
+intros db binding rows schedule context Htyped.
+apply query_expr_context_global_congr.
+now apply local_query_binding_reference_values_global_demand_equiv.
+Qed.
+
 Fixpoint eval_local_query_bindings_with_schedule
     (schedule : boolean_site -> boolean_evaluation_order)
     (env : Env.env TNull)
@@ -461,6 +607,154 @@ split.
     right; exists reached; now split.
 Qed.
 
+(** The ordinary possible-outcome relation for a query after local schemas
+    have been declared, but without eagerly evaluating any local definition.
+    This is the semantic endpoint of a CTE-inline transformation. *)
+Definition eval_inlined_query_possible_outcome
+    (db : db_state) (schemas : list LocalQuerySchema)
+    (env : Env.env TNull) (query : QueryExpr)
+    (outcome : sql_outcome (list (tuple TNull))) : Prop :=
+  exists schedule,
+    eval_query_expr_with_schedule
+      (declare_local_query_schemas db schemas) schedule env query outcome.
+
+Definition eval_bound_query_prefix_error_possible
+    (db : db_state) (schemas : list LocalQuerySchema)
+    (env : Env.env TNull) (query : BoundQuery)
+    (error : sql_runtime_error) : Prop :=
+  exists schedule,
+    local_query_bindings_error_with_schedule schedule env
+      (declare_local_query_schemas db schemas)
+      (bound_query_bindings query) error.
+
+(** Generalizes [eval_bound_query_without_bindings] to a nonempty list of
+    predeclared local schemas.  With no definitions there is no
+    materialization step: the BoundQuery wrapper is exactly the ordinary query
+    relation in the declared database. *)
+Lemma eval_bound_query_without_bindings_with_schemas :
+  forall db schemas env query outcome,
+    eval_bound_query_possible_outcome db schemas env
+      (MakeBoundQuery nil query) outcome <->
+    eval_inlined_query_possible_outcome db schemas env query outcome.
+Proof.
+intros db schemas env query outcome; reflexivity.
+Qed.
+
+(** A replay/inline contract isolates the genuinely semantic obligations from
+    BoundQuery's prefix plumbing.
+
+    Successful outcomes of a bound query necessarily come from a successfully
+    materialized prefix and a reachable body.  Errors may instead arise in the
+    prefix or in such a reachable body.  An inlined query is a sound replacement
+    exactly when it transports both successful directions, preserves this
+    complete error union, and both relations are inhabited.
+
+    The contract deliberately does not assert that every CTE is replayable.
+    Duplicating a definition that can error, has multiple successful bags, or
+    is evaluated in a demand-sensitive context requires additional proof. *)
+Definition bound_query_inline_possible_outcome_contract
+    (db : db_state) (schemas : list LocalQuerySchema)
+    (env : Env.env TNull) (bound : BoundQuery)
+    (inlined : QueryExpr) : Prop :=
+  bound_query_outputs bound = query_expr_outputs inlined /\
+  (exists outcome,
+    eval_bound_query_possible_outcome db schemas env bound outcome) /\
+  (exists outcome,
+    eval_inlined_query_possible_outcome db schemas env inlined outcome) /\
+  (forall bound_rows,
+    eval_bound_query_body_possible_outcome db schemas env bound
+      (SqlSuccess bound_rows) ->
+    exists inlined_rows,
+      eval_inlined_query_possible_outcome db schemas env inlined
+        (SqlSuccess inlined_rows) /\
+      @ordered_rows_equiv TNull bound_rows inlined_rows) /\
+  (forall inlined_rows,
+    eval_inlined_query_possible_outcome db schemas env inlined
+      (SqlSuccess inlined_rows) ->
+    exists bound_rows,
+      eval_bound_query_body_possible_outcome db schemas env bound
+        (SqlSuccess bound_rows) /\
+      @ordered_rows_equiv TNull bound_rows inlined_rows) /\
+  (forall error,
+    (eval_bound_query_prefix_error_possible db schemas env bound error \/
+     eval_bound_query_body_possible_outcome db schemas env bound
+       (SqlError error)) <->
+    eval_inlined_query_possible_outcome db schemas env inlined
+      (SqlError error)).
+
+(** The public CTE-substitution bridge.  Once the operator-specific inline
+    contract is established, binding evaluation, local-database updates,
+    reference lookup, prefix/body error scheduling, and the final unbound
+    wrapper are discharged here once and for all. *)
+Theorem bound_query_inline_possible_outcome_contract_sound :
+  forall db schemas env bound inlined,
+    bound_query_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_possible_outcome_equiv db schemas env
+      bound (MakeBoundQuery nil inlined).
+Proof.
+intros db schemas env bound inlined
+  [Houtputs [Hbound [Hinlined_inhabited
+    [Hforward [Hbackward Herrors]]]]].
+split; [exact Houtputs|].
+apply outcome_relation_equiv_intro.
+- exact Hbound.
+- destruct Hinlined_inhabited as [outcome Houtcome].
+  exists outcome.
+  now apply eval_bound_query_without_bindings_with_schemas.
+- intros bound_rows Houtcome.
+  apply eval_bound_query_possible_outcome_decompose in Houtcome.
+  destruct Houtcome as
+    [[schedule [error [Himpossible _]]] | Hbody];
+    [discriminate Himpossible|].
+  destruct (Hforward bound_rows Hbody) as
+    [inlined_rows [Hinlined Hrows]].
+  exists inlined_rows; split; [|exact Hrows].
+  now apply eval_bound_query_without_bindings_with_schemas.
+- intros inlined_rows Houtcome.
+  apply eval_bound_query_without_bindings_with_schemas in Houtcome.
+  destruct (Hbackward inlined_rows Houtcome) as
+    [bound_rows [Hbody Hrows]].
+  exists bound_rows; split; [|exact Hrows].
+  apply eval_bound_query_possible_outcome_decompose.
+  now right.
+- intro error; split; intro Houtcome.
+  + apply eval_bound_query_possible_outcome_decompose in Houtcome.
+    apply eval_bound_query_without_bindings_with_schemas.
+    apply (proj1 (Herrors error)).
+    destruct Houtcome as
+      [[schedule [prefix_error [Hsame Hprefix]]] | Hbody].
+    * inversion Hsame; subst prefix_error.
+      left; now exists schedule.
+    * now right.
+  + apply eval_bound_query_without_bindings_with_schemas in Houtcome.
+    apply (proj2 (Herrors error)) in Houtcome.
+    apply eval_bound_query_possible_outcome_decompose.
+    destruct Houtcome as [Hprefix | Hbody].
+    * destruct Hprefix as [schedule Hprefix].
+      left; exists schedule, error; now split.
+    * now right.
+Qed.
+
+Definition local_query_binding_inline_possible_outcome_contract
+    (db : db_state) (schemas : list LocalQuerySchema)
+    (env : Env.env TNull) (binding : LocalQueryBinding)
+    (body inlined : QueryExpr) : Prop :=
+  bound_query_inline_possible_outcome_contract db schemas env
+    (MakeBoundQuery (binding :: nil) body) inlined.
+
+Corollary local_query_binding_inline_possible_outcome_contract_sound :
+  forall db schemas env binding body inlined,
+    local_query_binding_inline_possible_outcome_contract
+      db schemas env binding body inlined ->
+    bound_query_possible_outcome_equiv db schemas env
+      (MakeBoundQuery (binding :: nil) body)
+      (MakeBoundQuery nil inlined).
+Proof.
+intros db schemas env binding body inlined Hcontract.
+now apply bound_query_inline_possible_outcome_contract_sound.
+Qed.
+
 (** A body lift keeps the local definitions literally shared and compares the
     body only after successful prefix materialization.  The body relation is
     a complete possible-outcome relation: successful row lists retain ordered
@@ -609,6 +903,45 @@ Fixpoint bound_query_program_possible_outcome_equiv
   | _, _ => False
   end.
 
+Fixpoint inlined_query_program (queries : list QueryExpr) : BoundQueryProgram :=
+  match queries with
+  | nil => nil
+  | query :: rest =>
+      MakeBoundQuery nil query :: inlined_query_program rest
+  end.
+
+(** Pointwise lifting of the query-level inline contract to generated
+    multi-statement programs.  Statements remain independently observed
+    against the same database, schemas, and outer environment. *)
+Fixpoint bound_query_program_inline_possible_outcome_contract
+    (db : db_state) (schemas : list LocalQuerySchema)
+    (env : Env.env TNull)
+    (bound : BoundQueryProgram) (inlined : list QueryExpr) : Prop :=
+  match bound, inlined with
+  | nil, nil => True
+  | bound_query :: bound_rest, inlined_query :: inlined_rest =>
+      bound_query_inline_possible_outcome_contract
+        db schemas env bound_query inlined_query /\
+      bound_query_program_inline_possible_outcome_contract
+        db schemas env bound_rest inlined_rest
+  | _, _ => False
+  end.
+
+Theorem bound_query_program_inline_possible_outcome_contract_sound :
+  forall db schemas env bound inlined,
+    bound_query_program_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_program_possible_outcome_equiv
+      db schemas env bound (inlined_query_program inlined).
+Proof.
+intros db schemas env bound; induction bound as [|bound_query bound_rest IH];
+  intros [|inlined_query inlined_rest] Hcontract;
+  try contradiction; cbn in *; [exact I|].
+destruct Hcontract as [Hquery Hrest]; split.
+- now apply bound_query_inline_possible_outcome_contract_sound.
+- now apply IH.
+Qed.
+
 (** Pairwise program composition of the reachable-body contract.  This list
     relation does not add statement-order effects: [BoundQueryProgram] is the
     existing collection of independently observed statements, each evaluated
@@ -662,6 +995,16 @@ Fixpoint bound_query_program_materialization_safe
       bound_query_program_materialization_safe db schemas env rest
   end.
 
+Lemma inlined_query_program_materialization_safe :
+  forall db schemas env queries,
+    bound_query_program_materialization_safe db schemas env
+      (inlined_query_program queries).
+Proof.
+intros db schemas env queries; induction queries as [|query rest IH];
+  cbn [inlined_query_program bound_query_program_materialization_safe
+    bound_query_materialization_safe bound_query_bindings]; auto.
+Qed.
+
 (** Only statements with local bindings cross the eager-materialization
     boundary.  An unbound statement is exactly the canonical query evaluator,
     so its ordinary successful and error outcomes require no extra safety
@@ -674,6 +1017,25 @@ Definition bound_query_program_demand_safe_outcome_equiv
   bound_query_program_materialization_safe db schemas env left /\
   bound_query_program_materialization_safe db schemas env right /\
   bound_query_program_possible_outcome_equiv db schemas env left right.
+
+(** Program-level end point for CTE elimination.  The inlined endpoint has no
+    eager local definitions and is therefore materialization-safe by
+    construction.  Safety of the original bound program remains explicit:
+    the inline contract alone must not erase an error from an unused CTE. *)
+Theorem bound_query_program_inline_possible_outcome_contract_demand_safe :
+  forall db schemas env bound inlined,
+    bound_query_program_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_program_materialization_safe db schemas env bound ->
+    bound_query_program_demand_safe_outcome_equiv db schemas env
+      bound (inlined_query_program inlined).
+Proof.
+intros db schemas env bound inlined Hcontract Hsafe.
+split; [exact Hsafe|].
+split.
+- apply inlined_query_program_materialization_safe.
+- now apply bound_query_program_inline_possible_outcome_contract_sound.
+Qed.
 
 (** A possible-outcome body lift is not by itself evidence that PostgreSQL
     must evaluate an undemanded local definition.  Program clients therefore
@@ -907,13 +1269,15 @@ eapply bound_query_program_admissible_database_shape_extensional.
 - exact Hadmissible.
 Qed.
 
-(** Without local bindings, the composition is exactly the canonical query
-    outcome relation. *)
+(** Compatibility corollary for clients without even predeclared local
+    schemas.  The generalized theorem above is the authoritative interface. *)
 Lemma eval_bound_query_without_bindings :
   forall db env query outcome,
     eval_bound_query_possible_outcome db nil env
       (MakeBoundQuery nil query) outcome <->
     eval_query_expr_outcome_in_env db env query outcome.
 Proof.
-intros db env query outcome; reflexivity.
+intros db env query outcome.
+exact (eval_bound_query_without_bindings_with_schemas
+  db nil env query outcome).
 Qed.

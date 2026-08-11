@@ -305,3 +305,158 @@ exact (@query_rename_context_chain_transport TNull relname
   left_contexts right_contexts Hcontexts_scheduled
   left right (Htransport boolean_schedule)).
 Qed.
+
+(** Scope-changing counterpart of [tnull_query_rename_context_compatible].
+    Both maps remain name-only TNull renames, but an inner alias namespace and
+    its enclosing namespace may now use unrelated textual mappings. *)
+Definition tnull_query_scoped_rename_context_compatible
+    (db : db_state)
+    (inner_environment_relation outer_environment_relation :
+      Env.env TNull -> Env.env TNull -> Prop)
+    (inner_rename_name outer_rename_name : string -> string)
+    (left_context right_context : query_expr_context TNull relname) : Prop :=
+  forall boolean_schedule : boolean_site -> boolean_evaluation_order,
+    @query_scoped_rename_context_compatible TNull relname
+      (@_basesort TNull db) (@_instance TNull db) unknown3
+      NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error
+      NullValues.is_null_value boolean_schedule
+      TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+      type_int64 type_bool
+      inner_environment_relation outer_environment_relation
+      (rename_tnull_attribute_name inner_rename_name)
+      (rename_tnull_attribute_name outer_rename_name)
+      left_context right_context.
+
+Theorem tnull_query_scoped_renaming_context_transport :
+  forall db inner_environment_relation outer_environment_relation
+      (inner_rename_name outer_rename_name : string -> string)
+      left_context right_context left right,
+    tnull_query_scoped_rename_context_compatible db
+      inner_environment_relation outer_environment_relation
+      inner_rename_name outer_rename_name left_context right_context ->
+    tnull_query_rename_transport_under db inner_environment_relation
+      inner_rename_name left right ->
+    tnull_query_rename_transport_under db outer_environment_relation
+      outer_rename_name
+      (plug_query_expr_context left_context left)
+      (plug_query_expr_context right_context right).
+Proof.
+intros db inner_environment_relation outer_environment_relation
+  inner_rename_name outer_rename_name left_context right_context
+  left right Hcontext Htransport boolean_schedule.
+exact (@query_scoped_rename_context_transport TNull relname
+  (@_basesort TNull db) (@_instance TNull db) unknown3
+  NullValues.interp_scalar_operator_runtime_error
+  NullValues.interp_aggregate_runtime_error
+  NullValues.is_null_value boolean_schedule
+  TNullLeafHasType TNullCallHasType TNullPredicateHasTypes
+  type_int64 type_bool
+  inner_environment_relation outer_environment_relation
+  (rename_tnull_attribute_name inner_rename_name)
+  (rename_tnull_attribute_name outer_rename_name)
+  left_context right_context left right
+  (Hcontext boolean_schedule) (Htransport boolean_schedule)).
+Qed.
+
+Record tnull_query_rename_scope_step : Type := TNullQueryRenameScopeStep {
+  tnull_scope_left_context : query_expr_context TNull relname;
+  tnull_scope_right_context : query_expr_context TNull relname;
+  tnull_scope_outer_environment_relation :
+    Env.env TNull -> Env.env TNull -> Prop;
+  tnull_scope_outer_rename_name : string -> string
+}.
+
+Fixpoint plug_tnull_query_rename_scope_steps_left
+    (steps : list tnull_query_rename_scope_step)
+    (replacement : QueryExpr) : QueryExpr :=
+  match steps with
+  | nil => replacement
+  | step :: rest =>
+      plug_tnull_query_rename_scope_steps_left rest
+        (plug_query_expr_context
+          (tnull_scope_left_context step) replacement)
+  end.
+
+Fixpoint plug_tnull_query_rename_scope_steps_right
+    (steps : list tnull_query_rename_scope_step)
+    (replacement : QueryExpr) : QueryExpr :=
+  match steps with
+  | nil => replacement
+  | step :: rest =>
+      plug_tnull_query_rename_scope_steps_right rest
+        (plug_query_expr_context
+          (tnull_scope_right_context step) replacement)
+  end.
+
+Fixpoint tnull_query_rename_scope_steps_final_environment_relation
+    (current : Env.env TNull -> Env.env TNull -> Prop)
+    (steps : list tnull_query_rename_scope_step) :
+    Env.env TNull -> Env.env TNull -> Prop :=
+  match steps with
+  | nil => current
+  | step :: rest =>
+      tnull_query_rename_scope_steps_final_environment_relation
+        (tnull_scope_outer_environment_relation step) rest
+  end.
+
+Fixpoint tnull_query_rename_scope_steps_final_name
+    (current : string -> string)
+    (steps : list tnull_query_rename_scope_step) : string -> string :=
+  match steps with
+  | nil => current
+  | step :: rest =>
+      tnull_query_rename_scope_steps_final_name
+        (tnull_scope_outer_rename_name step) rest
+  end.
+
+Fixpoint tnull_query_rename_scope_steps_compatible
+    (db : db_state)
+    (current_environment_relation :
+      Env.env TNull -> Env.env TNull -> Prop)
+    (current_rename_name : string -> string)
+    (steps : list tnull_query_rename_scope_step) : Prop :=
+  match steps with
+  | nil => True
+  | step :: rest =>
+      tnull_query_scoped_rename_context_compatible db
+        current_environment_relation
+        (tnull_scope_outer_environment_relation step)
+        current_rename_name (tnull_scope_outer_rename_name step)
+        (tnull_scope_left_context step)
+        (tnull_scope_right_context step) /\
+      tnull_query_rename_scope_steps_compatible db
+        (tnull_scope_outer_environment_relation step)
+        (tnull_scope_outer_rename_name step) rest
+  end.
+
+(** Agent-facing scoped alpha-renaming entry point.  Maps are consumed from
+    innermost to outermost scope, so shadowed names never share an accidental
+    global substitution. *)
+Theorem tnull_query_scoped_renaming_context_chain_transport :
+  forall db current_environment_relation
+      (current_rename_name : string -> string) steps,
+    tnull_query_rename_scope_steps_compatible db
+      current_environment_relation current_rename_name steps ->
+    forall left right,
+      tnull_query_rename_transport_under db current_environment_relation
+        current_rename_name left right ->
+      tnull_query_rename_transport_under db
+        (tnull_query_rename_scope_steps_final_environment_relation
+          current_environment_relation steps)
+        (tnull_query_rename_scope_steps_final_name
+          current_rename_name steps)
+        (plug_tnull_query_rename_scope_steps_left steps left)
+        (plug_tnull_query_rename_scope_steps_right steps right).
+Proof.
+intros db current_environment_relation current_rename_name steps Hsteps.
+revert current_environment_relation current_rename_name Hsteps.
+induction steps as [|step rest IH];
+  intros current_environment_relation current_rename_name
+    Hsteps left right Htransport; cbn in *.
+- exact Htransport.
+- destruct Hsteps as [Hstep Hrest].
+  apply IH; [exact Hrest|].
+  eapply tnull_query_scoped_renaming_context_transport;
+    eassumption.
+Qed.

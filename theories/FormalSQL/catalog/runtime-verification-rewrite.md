@@ -2,7 +2,7 @@
 
 Route here for: success/error outcomes, safe vs error-preserving equivalence, rewrite contracts.
 
-This focused catalog contains 288 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 356 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `successful_outcome_equiv_implies_outcome_equiv`
 
@@ -1757,9 +1757,207 @@ Theorem query_list_transform_success_bags_congr_closed :
       (success_bags env right_parent).
 ```
 
+## `scalar_pred_runtime_safe_of_arguments`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3489`](../OrderedQueryFacts.v#L3489)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar pred runtime safe of arguments law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `verification and runtime semantics`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_pred_runtime_safe_of_arguments :
+  forall env predicate arguments,
+    scalar_value_list_runtime_safe_at env arguments ->
+    scalar_boolean_expr_runtime_safe_at env (SExpr_Pred predicate arguments).
+```
+
+## `scalar_value_case_runtime_safe_of_reachable_branches`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3501`](../OrderedQueryFacts.v#L3501)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar value case runtime safe of reachable branches law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `scalar`
+
+Search aliases: `verification and runtime semantics`, `CASE`, `conditional expression`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_value_case_runtime_safe_of_reachable_branches :
+  forall env result_type condition then_expression else_expression,
+    scalar_boolean_expr_runtime_safe_at env condition ->
+    (forall truth,
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env condition (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = true ->
+      scalar_value_expr_runtime_safe_at env then_expression) ->
+    (forall truth,
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env condition (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = false ->
+      scalar_value_expr_runtime_safe_at env else_expression) ->
+    scalar_value_expr_runtime_safe_at env
+      (SExpr_Case result_type condition then_expression else_expression).
+```
+
+## `eval_scalar_boolean_operands_runtime_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3537`](../OrderedQueryFacts.v#L3537)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`
+
+Search aliases: `verification and runtime semantics`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_scalar_boolean_operands_runtime_safe :
+  forall env operation expressions,
+    (forall expression,
+      In expression expressions ->
+      scalar_boolean_expr_runtime_safe_at env expression) ->
+    forall error,
+      ~ @eval_scalar_boolean_operands_outcome T relname basesort instance
+          unknown symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env operation expressions (SqlError error).
+```
+
+## `scalar_conj_list_uniform_runtime_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3571`](../OrderedQueryFacts.v#L3571)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`
+
+Search aliases: `verification and runtime semantics`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_conj_list_uniform_runtime_safe :
+  forall env site_rows operation expressions,
+    Forall (scalar_boolean_expr_uniform_runtime_safe_at env) expressions ->
+    scalar_boolean_expr_uniform_runtime_safe_at env
+      (SExpr_ConjList site_rows operation expressions).
+```
+
+## `eval_filter_rows_runtime_safe_of_reachable_predicate_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3609`](../OrderedQueryFacts.v#L3609)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `runtime`, `filter`, `scalar`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_filter_rows_runtime_safe_of_reachable_predicate_safe :
+  forall env formula rows,
+    (forall row,
+      In row rows ->
+      scalar_boolean_expr_runtime_safe_at (env_t T env row) formula) ->
+    forall error,
+      ~ @eval_filter_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env formula rows (SqlError error).
+```
+
+## `query_expr_filter_runtime_safe_of_reachable_predicate_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3637`](../OrderedQueryFacts.v#L3637)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `runtime`, `filter`, `scalar`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `filter`, `WHERE`, `predicate`, `Bool3`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_filter_runtime_safe_of_reachable_predicate_safe :
+  forall env formula input,
+    query_safe env input ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        scalar_boolean_expr_runtime_safe_at (env_t T env row) formula) ->
+    query_safe env (QExpr_Filter formula input).
+```
+
+## `eval_project_rows_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3684`](../OrderedQueryFacts.v#L3684)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval project rows has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_project_rows_has_outcome :
+  forall env select_list rows,
+    (forall row,
+      In row rows ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env row) (map fst select_list) outcome) ->
+    exists outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome.
+```
+
 ## `eval_project_rows_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3490`](../OrderedQueryFacts.v#L3490)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3709`](../OrderedQueryFacts.v#L3709)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1788,7 +1986,7 @@ Lemma eval_project_rows_runtime_safe :
 
 ## `query_expr_project_has_success_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3512`](../OrderedQueryFacts.v#L3512)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3731`](../OrderedQueryFacts.v#L3731)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1814,7 +2012,7 @@ Lemma query_expr_project_has_success_safe :
 
 ## `query_expr_project_runtime_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3529`](../OrderedQueryFacts.v#L3529)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3748`](../OrderedQueryFacts.v#L3748)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1838,9 +2036,40 @@ Lemma query_expr_project_runtime_safe :
     query_safe env (QExpr_Project select_list input).
 ```
 
+## `query_expr_join_runtime_safe_of_reachable_local_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3781`](../OrderedQueryFacts.v#L3781)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for outer/semi/anti-join semantics.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_join_runtime_safe_of_reachable_local_safe :
+  forall env kind predicate matched_select left_select right_select left right,
+    query_safe env left ->
+    query_safe env right ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      query_join_rows_runtime_safe_at env kind predicate
+        matched_select left_select right_select left_rows right_rows) ->
+    query_safe env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left right).
+```
+
 ## `eval_query_expr_project_error_iff_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3547`](../OrderedQueryFacts.v#L3547)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4157`](../OrderedQueryFacts.v#L4157)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1865,9 +2094,42 @@ Lemma eval_query_expr_project_error_iff_safe :
       eval_query env input (SqlError error).
 ```
 
+## `query_expr_project_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4180`](../OrderedQueryFacts.v#L4180)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr project has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_project_has_outcome :
+  forall env select_list input,
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        exists outcome,
+          @eval_scalar_values_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            boolean_schedule (env_t T env row) (map fst select_list)
+            outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_Project select_list input) outcome.
+```
+
 ## `query_expr_project_has_outcome_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3567`](../OrderedQueryFacts.v#L3567)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4203`](../OrderedQueryFacts.v#L4203)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1893,7 +2155,7 @@ Lemma query_expr_project_has_outcome_safe :
 
 ## `row_map_rows_outcome_total_as`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3598`](../OrderedQueryFacts.v#L3598)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4233`](../OrderedQueryFacts.v#L4233)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1903,9 +2165,9 @@ Applicability: Use at the successful-outcome/runtime-error boundary for SQL veri
 
 Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
 
-Cross-index: `outcome`, `runtime`
+Cross-index: `outcome`, `runtime`, `projection`
 
-Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
 
 ```rocq
 Lemma row_map_rows_outcome_total_as :
@@ -1917,7 +2179,7 @@ Lemma row_map_rows_outcome_total_as :
 
 ## `query_row_map_bag_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3615`](../OrderedQueryFacts.v#L3615)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4250`](../OrderedQueryFacts.v#L4250)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1943,7 +2205,7 @@ Lemma query_row_map_bag_congr :
 
 ## `query_row_map_success_bags_congr_extensional_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3675`](../OrderedQueryFacts.v#L3675)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4310`](../OrderedQueryFacts.v#L4310)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1978,7 +2240,7 @@ Theorem query_row_map_success_bags_congr_extensional_total :
 
 ## `query_row_map_success_bags_congr_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3719`](../OrderedQueryFacts.v#L3719)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4354`](../OrderedQueryFacts.v#L4354)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2005,7 +2267,7 @@ Corollary query_row_map_success_bags_congr_total :
 
 ## `query_row_map_success_bags_congr_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3743`](../OrderedQueryFacts.v#L3743)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4378`](../OrderedQueryFacts.v#L4378)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2031,7 +2293,7 @@ Theorem query_row_map_success_bags_congr_of_contract :
 
 ## `query_row_map_success_bags_congr_extensional_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3808`](../OrderedQueryFacts.v#L3808)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4443`](../OrderedQueryFacts.v#L4443)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2058,7 +2320,7 @@ Theorem query_row_map_success_bags_congr_extensional_of_contract :
 
 ## `query_error_success_bags_empty`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3829`](../OrderedQueryFacts.v#L3829)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4464`](../OrderedQueryFacts.v#L4464)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2080,7 +2342,7 @@ Theorem query_error_success_bags_empty :
 
 ## `query_values_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3881`](../OrderedQueryFacts.v#L3881)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4516`](../OrderedQueryFacts.v#L4516)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2105,7 +2367,7 @@ Theorem query_values_success_bags_congr :
 
 ## `query_table_success_bags_congr`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3902`](../OrderedQueryFacts.v#L3902)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4537`](../OrderedQueryFacts.v#L4537)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -2132,9 +2394,663 @@ Theorem query_table_success_bags_congr :
       (success_bags env (QExpr_Table right_outputs right_table)).
 ```
 
+## `eval_scalar_values_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4790`](../OrderedQueryFacts.v#L4790)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval scalar values has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_scalar_values_has_outcome :
+  forall env expressions,
+    (forall expression,
+      In expression expressions ->
+      exists outcome,
+        @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env expression outcome) ->
+    exists outcome,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expressions outcome.
+```
+
+## `eval_scalar_boolean_operands_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4815`](../OrderedQueryFacts.v#L4815)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval scalar boolean operands has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_scalar_boolean_operands_has_outcome :
+  forall env operation expressions,
+    (forall expression,
+      In expression expressions ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env expression outcome) ->
+    exists outcome,
+      @eval_scalar_boolean_operands_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env operation expressions outcome.
+```
+
+## `eval_project_join_sources_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4844`](../OrderedQueryFacts.v#L4844)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval project join sources has outcome law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_project_join_sources_has_outcome :
+  forall env matched_select left_select right_select sources,
+    (forall source,
+      In source sources ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_t T env (query_join_source_row source))
+          (map fst
+            (query_join_source_select
+              matched_select left_select right_select source)) outcome) ->
+    exists outcome,
+      @eval_project_join_sources_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select
+        sources outcome.
+```
+
+## `eval_filter_exists_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4879`](../OrderedQueryFacts.v#L4879)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval filter exists has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_filter_exists_has_outcome :
+  forall env formula rows,
+    (forall row,
+      In row rows ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env row) formula outcome) ->
+    exists outcome,
+      @eval_filter_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env formula rows outcome.
+```
+
+## `eval_join_row_conditions_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4905`](../OrderedQueryFacts.v#L4905)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval join row conditions has outcome law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_join_row_conditions_has_outcome :
+  forall env predicate left rights,
+    (forall right,
+      In right rights ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env (join_tuple T left right))
+          predicate outcome) ->
+    exists outcome,
+      @eval_join_row_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate left rights outcome.
+```
+
+## `eval_join_conditions_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4933`](../OrderedQueryFacts.v#L4933)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval join conditions has outcome law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_join_conditions_has_outcome :
+  forall env predicate lefts rights,
+    (forall left,
+      In left lefts ->
+      exists outcome,
+        @eval_join_row_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left rights outcome) ->
+    exists outcome,
+      @eval_join_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate lefts rights outcome.
+```
+
+## `eval_join_bag_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4960`](../OrderedQueryFacts.v#L4960)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval join bag has outcome law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma eval_join_bag_has_outcome :
+  forall env kind predicate matched_select left_select right_select
+      left_bag right_bag,
+    (forall left_rows right_rows,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      exists outcome,
+        @eval_join_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left_rows right_rows outcome) ->
+    (forall left_rows right_rows matrix,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      @eval_join_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate left_rows right_rows
+        (SqlSuccess matrix) ->
+      exists outcome,
+        @eval_project_join_sources_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env matched_select left_select right_select
+          (query_join_sources T kind left_rows right_rows matrix) outcome) ->
+    exists outcome,
+      @eval_join_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env kind predicate
+        matched_select left_select right_select left_bag right_bag outcome.
+```
+
+## `eval_join_cardinality_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5011`](../OrderedQueryFacts.v#L5011)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates join cardinality to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about join cardinality.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_join_cardinality_has_outcome :
+  forall env kind predicate left_bag right_bag,
+    (forall left_rows right_rows,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      exists outcome,
+        @eval_join_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left_rows right_rows outcome) ->
+    exists outcome,
+      @eval_join_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env kind predicate left_bag right_bag outcome.
+```
+
+## `query_expr_natural_join_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5403`](../OrderedQueryFacts.v#L5403)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr natural join has outcome law for join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for join semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_natural_join_has_outcome :
+  forall env left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    exists outcome,
+      eval_query env (QExpr_NaturalJoin left right) outcome.
+```
+
+## `query_expr_row_map_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5426`](../OrderedQueryFacts.v#L5426)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr row map has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_RowMap outputs row_map input) outcome.
+```
+
+## `query_expr_join_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5438`](../OrderedQueryFacts.v#L5438)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr join has outcome law for outer/semi/anti-join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_join_has_outcome :
+  forall env kind predicate matched_select left_select right_select left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      exists outcome,
+        @eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env kind predicate
+          matched_select left_select right_select
+          (query_rows_bag left_rows) (query_rows_bag right_rows) outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right) outcome.
+```
+
+## `eval_query_cardinality_demanded_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5587`](../OrderedQueryFacts.v#L5587)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates SQL verification and runtime outcomes to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_demanded_has_outcome :
+  forall env query,
+    query_cardinality_requires_rows query = true ->
+    (exists query_outcome, eval_query env query query_outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+```
+
+## `eval_query_cardinality_project_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5601`](../OrderedQueryFacts.v#L5601)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates SQL verification and runtime outcomes to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_project_has_outcome :
+  forall env select_list input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Project select_list input) outcome.
+```
+
+## `eval_query_cardinality_row_map_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5616`](../OrderedQueryFacts.v#L5616)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates SQL verification and runtime outcomes to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_RowMap outputs row_map input) outcome.
+```
+
+## `eval_query_cardinality_join_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5662`](../OrderedQueryFacts.v#L5662)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates outer/semi/anti-join semantics to the exact list length or bag cardinality shown below.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_join_has_outcome :
+  forall env kind predicate matched_select left_select right_select left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      exists outcome,
+        @eval_join_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env kind predicate (query_rows_bag left_rows)
+          (query_rows_bag right_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right) outcome.
+```
+
+## `eval_query_exists_demanded_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5740`](../OrderedQueryFacts.v#L5740)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval query exists demanded has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_exists_demanded_has_outcome :
+  forall env query,
+    query_exists_requires_rows query = true ->
+    (exists query_outcome, eval_query env query query_outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+```
+
+## `eval_query_exists_cardinality_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5754`](../OrderedQueryFacts.v#L5754)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates SQL verification and runtime outcomes to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_exists_cardinality_has_outcome :
+  forall env query,
+    query_exists_uses_cardinality query = true ->
+    (exists cardinality_outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query cardinality_outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+```
+
+## `eval_query_exists_project_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5771`](../OrderedQueryFacts.v#L5771)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval query exists project has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_exists_project_has_outcome :
+  forall env select_list input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Project select_list input) outcome.
+```
+
+## `eval_query_exists_row_map_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5786`](../OrderedQueryFacts.v#L5786)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval query exists row map has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_exists_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_RowMap outputs row_map input) outcome.
+```
+
+## `eval_query_exists_filter_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5801`](../OrderedQueryFacts.v#L5801)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval query exists filter has outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_query_exists_filter_has_outcome :
+  forall env formula input,
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        exists outcome,
+          @eval_scalar_boolean_expr_outcome T relname
+            basesort instance unknown symbol_runtime_error
+            aggregate_runtime_error value_is_null boolean_schedule
+            (env_t T env row) formula outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Filter formula input) outcome.
+```
+
+## `query_expr_scheduled_progress_has_possible_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5896`](../OrderedQueryFacts.v#L5896)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr scheduled progress has possible outcome law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_scheduled_progress_has_possible_outcome :
+  forall env query,
+    query_expr_scheduled_progress env query ->
+    exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env query outcome.
+```
+
 ## `query_possible_bag_closed_outcome_equiv_of_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4204`](../OrderedQueryFacts.v#L4204)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5967`](../OrderedQueryFacts.v#L5967)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2187,7 +3103,7 @@ Theorem query_possible_bag_closed_outcome_equiv_of_success_bags :
 
 ## `position_rows_from_nth_error`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4767`](../OrderedQueryFacts.v#L4767)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6530`](../OrderedQueryFacts.v#L6530)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2208,9 +3124,213 @@ Theorem position_rows_from_nth_error :
     option_map (fun row => (start + index, row)) (nth_error rows index).
 ```
 
+## `outcome_relation_equiv_of_left_inhabited_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:36`](../PossibleOutcomeFacts.v#L36)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_relation_equiv_of_left_inhabited_transport :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    (exists outcome, left outcome) ->
+    outcome_relation_transport value_rel left right ->
+    outcome_relation_equiv value_rel left right.
+```
+
+## `outcome_relation_equiv_value_relation_morphism`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:56`](../PossibleOutcomeFacts.v#L56)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_relation_equiv_value_relation_morphism :
+  forall (A : Type) (left_rel right_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    (forall left_value right_value,
+      left_rel left_value right_value <->
+      right_rel left_value right_value) ->
+    outcome_relation_equiv left_rel left right ->
+    outcome_relation_equiv right_rel left right.
+```
+
+## `outcome_relation_equiv_flip`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:83`](../PossibleOutcomeFacts.v#L83)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_relation_equiv_flip :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_equiv value_rel left right ->
+    outcome_relation_equiv (fun right_value left_value =>
+      value_rel left_value right_value) right left.
+```
+
+## `outcome_equiv_flip_relation`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:100`](../PossibleOutcomeFacts.v#L100)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma outcome_equiv_flip_relation :
+  forall (A : Type) (value_rel : A -> A -> Prop) left right,
+    outcome_equiv value_rel left right ->
+    outcome_equiv
+      (fun right_value left_value => value_rel left_value right_value)
+      right left.
+```
+
+## `outcome_relation_transport_flip`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:113`](../PossibleOutcomeFacts.v#L113)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma outcome_relation_transport_flip :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_transport value_rel left right ->
+    outcome_relation_transport (fun right_value left_value =>
+      value_rel left_value right_value) right left.
+```
+
+## `Forall2_relation_flip`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:126`](../PossibleOutcomeFacts.v#L126)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the forall2 relation flip law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `Forall2_relation_flip` direction for SQL verification and runtime outcomes; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `scheduled`, `runtime`
+
+Search aliases: `verification and runtime semantics`
+
+```rocq
+Lemma Forall2_relation_flip :
+  forall (A : Type) (relation : A -> A -> Prop) left right,
+    Forall2 relation left right ->
+    Forall2 (fun right_value left_value =>
+      relation left_value right_value) right left.
+```
+
+## `outcome_relation_transport_Forall2_flip`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:136`](../PossibleOutcomeFacts.v#L136)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma outcome_relation_transport_Forall2_flip :
+  forall (A : Type) (relation : A -> A -> Prop)
+      (left right : sql_outcome (list A) -> Prop),
+    outcome_relation_transport (Forall2 relation) left right ->
+    outcome_relation_transport
+      (Forall2 (fun right_value left_value =>
+        relation left_value right_value)) right left.
+```
+
+## `outcome_relation_transport_exists_same_index`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:160`](../PossibleOutcomeFacts.v#L160)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma outcome_relation_transport_exists_same_index :
+  forall (Index A : Type) (value_rel : A -> A -> Prop)
+      (left right : Index -> sql_outcome A -> Prop),
+    (forall index,
+      outcome_relation_transport value_rel (left index) (right index)) ->
+    outcome_relation_transport value_rel
+      (fun outcome => exists index, left index outcome)
+      (fun outcome => exists index, right index outcome).
+```
+
 ## `successful_relation_equiv_transport_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:23`](../PossibleOutcomeFacts.v#L23)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:192`](../PossibleOutcomeFacts.v#L192)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2236,7 +3356,7 @@ Lemma successful_relation_equiv_transport_iff :
 
 ## `outcome_relation_equiv_implies_successful_relation_equiv_safe`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:57`](../PossibleOutcomeFacts.v#L57)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:226`](../PossibleOutcomeFacts.v#L226)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2263,7 +3383,7 @@ Lemma outcome_relation_equiv_implies_successful_relation_equiv_safe :
 
 ## `outcome_relation_equiv_transport_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:71`](../PossibleOutcomeFacts.v#L71)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:240`](../PossibleOutcomeFacts.v#L240)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2289,7 +3409,7 @@ Lemma outcome_relation_equiv_transport_iff :
 
 ## `outcome_relation_equiv_exists_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:108`](../PossibleOutcomeFacts.v#L108)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:277`](../PossibleOutcomeFacts.v#L277)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2321,9 +3441,1053 @@ Theorem outcome_relation_equiv_exists_schedule_transport :
       (fun outcome => exists schedule, right schedule outcome).
 ```
 
+## `row_map_rows_outcome_relation`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:386`](../PossibleOutcomeFacts.v#L386)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the row map rows outcome relation law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma row_map_rows_outcome_relation :
+  forall left_map right_map left_rows right_rows row_rel output_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    outcome_equiv (Forall2 output_rel)
+      (@row_map_rows_outcome T left_map left_rows)
+      (@row_map_rows_outcome T right_map right_rows).
+```
+
+## `eval_scalar_values_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:421`](../PossibleOutcomeFacts.v#L421)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the eval scalar values relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_scalar_values_relation_forward :
+  forall schedule left_env left_expressions left_outcome,
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_expressions left_outcome ->
+    forall right_env right_expressions value_rel,
+      Forall2
+        (fun left_expression right_expression =>
+          scalar_value_observation_related_at schedule
+            left_env left_expression right_env right_expression value_rel)
+        left_expressions right_expressions ->
+      exists right_outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_expressions right_outcome /\
+        outcome_equiv (Forall2 value_rel) left_outcome right_outcome.
+```
+
+## `eval_scalar_values_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:477`](../PossibleOutcomeFacts.v#L477)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_scalar_values_relation_transport :
+  forall schedule left_env left_expressions
+      right_env right_expressions value_rel,
+    Forall2
+      (fun left_expression right_expression =>
+        scalar_value_observation_related_at schedule
+          left_env left_expression right_env right_expression value_rel)
+      left_expressions right_expressions ->
+    outcome_relation_transport (Forall2 value_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_expressions)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_expressions).
+```
+
+## `eval_scalar_value_call_outcome_iff`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:561`](../PossibleOutcomeFacts.v#L561)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Gives necessary and sufficient conditions for SQL verification and runtime outcomes.
+
+Applicability: Use in either direction to invert or construct a goal about SQL verification and runtime outcomes.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_scalar_value_call_outcome_iff :
+  forall schedule env result_type operator arguments outcome,
+    @eval_scalar_value_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      env (SExpr_Call result_type operator arguments) outcome <->
+    exists argument_outcome,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env arguments argument_outcome /\
+      scalar_call_apply_outcome operator argument_outcome = outcome.
+```
+
+## `scalar_call_expression_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:597`](../PossibleOutcomeFacts.v#L597)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the scalar call expression relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_call_expression_relation_forward :
+  forall schedule left_env left_result_type left_operator left_arguments
+      right_env right_result_type right_operator right_arguments
+      argument_rel result_rel,
+    outcome_relation_transport (Forall2 argument_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_arguments)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_arguments) ->
+    scalar_call_local_observation_related
+      left_operator right_operator argument_rel result_rel ->
+    forall left_outcome,
+      @eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env (SExpr_Call left_result_type left_operator left_arguments)
+        left_outcome ->
+      exists right_outcome,
+        @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env
+          (SExpr_Call right_result_type right_operator right_arguments)
+          right_outcome /\
+        outcome_equiv result_rel left_outcome right_outcome.
+```
+
+## `scalar_call_expression_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:653`](../PossibleOutcomeFacts.v#L653)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem scalar_call_expression_relation_transport :
+  forall schedule left_env left_result_type left_operator left_arguments
+      right_env right_result_type right_operator right_arguments
+      argument_rel result_rel,
+    outcome_relation_transport (Forall2 argument_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_arguments)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_arguments) ->
+    scalar_call_local_observation_related
+      left_operator right_operator argument_rel result_rel ->
+    outcome_relation_transport result_rel
+      (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env (SExpr_Call left_result_type left_operator left_arguments))
+      (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env
+          (SExpr_Call right_result_type right_operator right_arguments)).
+```
+
+## `scalar_call_expression_runtime_safe_of_reachable_local_safe`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:724`](../PossibleOutcomeFacts.v#L724)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_call_expression_runtime_safe_of_reachable_local_safe :
+  forall schedule env result_type operator arguments,
+    (forall error,
+      ~ @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env arguments (SqlError error)) ->
+    (forall values,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env arguments (SqlSuccess values) ->
+      forall error,
+        @scalar_call_value_outcome T symbol_runtime_error operator values <>
+          SqlError error) ->
+    forall error,
+      ~ @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (SExpr_Call result_type operator arguments) (SqlError error).
+```
+
+## `query_expr_possible_outcome_equiv_of_related`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:752`](../PossibleOutcomeFacts.v#L752)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_possible_outcome_equiv_of_related :
+  forall env left right,
+    query_expr_outputs left = query_expr_outputs right ->
+    query_expr_possible_outcome_related env (@ordered_rows_equiv T) left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right.
+```
+
+## `query_expr_possible_outcome_equiv_of_Forall2_rows`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:766`](../PossibleOutcomeFacts.v#L766)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `possible`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma query_expr_possible_outcome_equiv_of_Forall2_rows :
+  forall env left right,
+    query_expr_outputs left = query_expr_outputs right ->
+    query_expr_possible_outcome_related env
+      (Forall2
+        (fun left_row right_row =>
+          Oeset.compare (OTuple T) left_row right_row = Eq))
+      left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right.
+```
+
+## `eval_project_rows_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:811`](../PossibleOutcomeFacts.v#L811)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the eval project rows relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_project_rows_relation_forward :
+  forall schedule left_env left_select left_rows left_outcome,
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_select left_rows left_outcome ->
+    forall right_env right_select right_rows row_rel output_rel,
+      Forall2 row_rel left_rows right_rows ->
+      (forall left_row right_row,
+        row_rel left_row right_row ->
+        project_row_observation_related_at schedule
+          left_env left_select left_row
+          right_env right_select right_row output_rel) ->
+      exists right_outcome,
+        @eval_project_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_select right_rows right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+```
+
+## `eval_project_rows_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:870`](../PossibleOutcomeFacts.v#L870)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_project_rows_relation_transport :
+  forall schedule left_env left_select left_rows
+      right_env right_select right_rows row_rel output_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        left_env left_select left_row
+        right_env right_select right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_select left_rows)
+      (@eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_select right_rows).
+```
+
+## `query_expr_row_map_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:951`](../PossibleOutcomeFacts.v#L951)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the query expr row map relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_row_map_relation_forward :
+  forall schedule env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap left_outputs left_map left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_RowMap right_outputs right_map right_input) right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+```
+
+## `query_expr_row_map_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:996`](../PossibleOutcomeFacts.v#L996)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_row_map_relation_transport :
+  forall schedule env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap left_outputs left_map left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap right_outputs right_map right_input)).
+```
+
+## `eval_filter_rows_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1081`](../PossibleOutcomeFacts.v#L1081)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the eval filter rows relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_filter_rows_relation_forward :
+  forall schedule left_env left_formula left_rows left_outcome,
+    @eval_filter_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_formula left_rows left_outcome ->
+    forall right_env right_formula right_rows row_rel,
+      Forall2 row_rel left_rows right_rows ->
+      (forall left_row right_row,
+        row_rel left_row right_row ->
+        @filter_scalar_observation_equiv_at T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          (env_t T left_env left_row) left_formula
+          (env_t T right_env right_row) right_formula) ->
+      exists right_outcome,
+        @eval_filter_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_formula right_rows right_outcome /\
+        outcome_equiv (Forall2 row_rel) left_outcome right_outcome.
+```
+
+## `eval_filter_rows_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1139`](../PossibleOutcomeFacts.v#L1139)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_filter_rows_relation_transport :
+  forall schedule left_env left_formula left_rows
+      right_env right_formula right_rows row_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T left_env left_row) left_formula
+        (env_t T right_env right_row) right_formula) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_formula left_rows)
+      (@eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_formula right_rows).
+```
+
+## `query_expr_project_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1218`](../PossibleOutcomeFacts.v#L1218)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the query expr project relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_project_relation_forward :
+  forall schedule env left_select left_input right_select right_input
+      row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project left_select left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_Project right_select right_input) right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+```
+
+## `query_expr_project_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1295`](../PossibleOutcomeFacts.v#L1295)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_project_relation_transport :
+  forall schedule env left_select left_input right_select right_input
+      row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project left_select left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project right_select right_input)).
+```
+
+## `query_expr_filter_relation_forward`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1371`](../PossibleOutcomeFacts.v#L1371)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: States the query expr filter relation forward law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_filter_relation_forward :
+  forall schedule env left_formula left_input right_formula right_input row_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter left_formula left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_Filter right_formula right_input) right_outcome /\
+        outcome_equiv (Forall2 row_rel) left_outcome right_outcome.
+```
+
+## `query_expr_filter_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1447`](../PossibleOutcomeFacts.v#L1447)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `filter`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_filter_relation_transport :
+  forall schedule env left_formula left_input right_formula right_input row_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter left_formula left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter right_formula right_input)).
+```
+
+## `query_expr_project_possible_outcome_related`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1522`](../PossibleOutcomeFacts.v#L1522)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr project possible outcome related law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_project_possible_outcome_related :
+  forall env left_select left_input right_select right_input
+      row_rel output_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall schedule left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env (QExpr_Project left_select left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_rel)
+      (QExpr_Project left_select left_input)
+      (QExpr_Project right_select right_input).
+```
+
+## `query_expr_row_map_possible_outcome_related`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1557`](../PossibleOutcomeFacts.v#L1557)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr row map possible outcome related law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `runtime`, `projection`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_row_map_possible_outcome_related :
+  forall env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env
+        (QExpr_RowMap left_outputs left_map left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_rel)
+      (QExpr_RowMap left_outputs left_map left_input)
+      (QExpr_RowMap right_outputs right_map right_input).
+```
+
+## `query_expr_filter_possible_outcome_related`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1595`](../PossibleOutcomeFacts.v#L1595)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr filter possible outcome related law for SQL verification and runtime outcomes, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `runtime`, `filter`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `filter`, `WHERE`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_filter_possible_outcome_related :
+  forall env left_formula left_input right_formula right_input row_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall schedule left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env (QExpr_Filter left_formula left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 row_rel)
+      (QExpr_Filter left_formula left_input)
+      (QExpr_Filter right_formula right_input).
+```
+
+## `query_expr_join_relation_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1665`](../PossibleOutcomeFacts.v#L1665)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for outer/semi/anti-join semantics.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `join`
+
+Search aliases: `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_join_relation_transport :
+  forall left_schedule right_schedule env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    outcome_relation_transport (Forall2 left_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_transport (Forall2 right_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    (forall left_first_rows right_first_rows,
+      Forall2 left_row_rel left_first_rows right_first_rows ->
+      forall left_second_rows right_second_rows,
+        Forall2 right_row_rel left_second_rows right_second_rows ->
+        outcome_relation_transport (Forall2 output_row_rel)
+          (query_join_rows_outcomes left_schedule env left_kind
+            left_predicate left_matched_select left_left_select
+            left_right_select left_first_rows left_second_rows)
+          (query_join_rows_outcomes right_schedule env right_kind
+            right_predicate right_matched_select right_left_select
+            right_right_select right_first_rows right_second_rows)) ->
+    outcome_relation_transport (Forall2 output_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env
+        (QExpr_Join right_kind right_predicate right_matched_select
+          right_left_select right_right_select right_first right_second)).
+```
+
+## `query_expr_join_possible_outcome_related_same_schedule`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1820`](../PossibleOutcomeFacts.v#L1820)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr join possible outcome related same schedule law for outer/semi/anti-join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_join_possible_outcome_related_same_schedule :
+  forall env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 left_row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left_first)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right_first)) ->
+    (forall schedule,
+      outcome_relation_transport (Forall2 right_row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left_second)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right_second)) ->
+    (forall schedule left_first_rows right_first_rows,
+      Forall2 left_row_rel left_first_rows right_first_rows ->
+      forall left_second_rows right_second_rows,
+        Forall2 right_row_rel left_second_rows right_second_rows ->
+        outcome_relation_transport (Forall2 output_row_rel)
+          (query_join_rows_outcomes schedule env left_kind left_predicate
+            left_matched_select left_left_select left_right_select
+            left_first_rows left_second_rows)
+          (query_join_rows_outcomes schedule env right_kind right_predicate
+            right_matched_select right_left_select right_right_select
+            right_first_rows right_second_rows)) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_row_rel)
+      (QExpr_Join left_kind left_predicate left_matched_select
+        left_left_select left_right_select left_first left_second)
+      (QExpr_Join right_kind right_predicate right_matched_select
+        right_left_select right_right_select right_first right_second).
+```
+
+## `query_expr_join_possible_outcome_related`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1892`](../PossibleOutcomeFacts.v#L1892)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the query expr join possible outcome related law for outer/semi/anti-join semantics, in the exact direction displayed by the declaration.
+
+Applicability: Use for goals whose exact QueryJoin kind selects the stated outer/semi/anti-join semantics branch; do not transfer a branch conclusion to another join kind.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every explicit join-kind branch and predicate/projection premise.
+
+Cross-index: `possible`, `outcome`, `runtime`, `join`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `outer join`, `LEFT OUTER JOIN`, `RIGHT OUTER JOIN`, `FULL OUTER JOIN`, `semi join`, `EXISTS`, `anti join`, `NOT EXISTS`, `join`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_join_possible_outcome_related :
+  forall env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    (forall left_schedule,
+      exists right_schedule,
+        outcome_relation_transport (Forall2 left_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_first)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_first) /\
+        outcome_relation_transport (Forall2 right_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_second)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_second) /\
+        (forall left_first_rows right_first_rows,
+          Forall2 left_row_rel left_first_rows right_first_rows ->
+          forall left_second_rows right_second_rows,
+            Forall2 right_row_rel left_second_rows right_second_rows ->
+            outcome_relation_transport (Forall2 output_row_rel)
+              (query_join_rows_outcomes left_schedule env left_kind
+                left_predicate left_matched_select left_left_select
+                left_right_select left_first_rows left_second_rows)
+              (query_join_rows_outcomes right_schedule env right_kind
+                right_predicate right_matched_select right_left_select
+                right_right_select right_first_rows right_second_rows))) ->
+    (forall right_schedule,
+      exists left_schedule,
+        outcome_relation_transport (Forall2 left_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_first)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_first) /\
+        outcome_relation_transport (Forall2 right_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_second)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_second) /\
+        (forall left_first_rows right_first_rows,
+          Forall2 left_row_rel left_first_rows right_first_rows ->
+          forall left_second_rows right_second_rows,
+            Forall2 right_row_rel left_second_rows right_second_rows ->
+            outcome_relation_transport (Forall2 output_row_rel)
+              (query_join_rows_outcomes left_schedule env left_kind
+                left_predicate left_matched_select left_left_select
+                left_right_select left_first_rows left_second_rows)
+              (query_join_rows_outcomes right_schedule env right_kind
+                right_predicate right_matched_select right_left_select
+                right_right_select right_first_rows right_second_rows))) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_row_rel)
+      (QExpr_Join left_kind left_predicate left_matched_select
+        left_left_select left_right_select left_first left_second)
+      (QExpr_Join right_kind right_predicate right_matched_select
+        right_left_select right_right_select right_first right_second).
+```
+
 ## `query_expr_possible_equiv_of_ordered_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:176`](../PossibleOutcomeFacts.v#L176)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2066`](../PossibleOutcomeFacts.v#L2066)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2380,7 +4544,7 @@ Theorem query_expr_possible_equiv_of_ordered_observations :
 
 ## `query_expr_possible_equiv_of_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:222`](../PossibleOutcomeFacts.v#L222)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2112`](../PossibleOutcomeFacts.v#L2112)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2424,7 +4588,7 @@ Theorem query_expr_possible_equiv_of_observations :
 
 ## `query_expr_possible_outcome_equiv_of_observations`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:258`](../PossibleOutcomeFacts.v#L258)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2148`](../PossibleOutcomeFacts.v#L2148)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2482,9 +4646,59 @@ Theorem query_expr_possible_outcome_equiv_of_observations :
       value_is_null env left right.
 ```
 
+## `scalar_expr_uniform_global_group_outcome_equiv_outcomes`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2277`](../PossibleOutcomeFacts.v#L2277)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma scalar_expr_uniform_global_group_outcome_equiv_outcomes :
+  forall kind (left right : scalar_expr T relname kind),
+    scalar_expr_uniform_global_group_outcome_equiv left right ->
+    scalar_expr_uniform_global_outcome_equiv left right.
+```
+
+## `scalar_expr_uniform_global_group_outcome_equiv_aggregates`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2286`](../PossibleOutcomeFacts.v#L2286)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports or composes SQL verification and runtime outcomes across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma scalar_expr_uniform_global_group_outcome_equiv_aggregates :
+  forall kind (left right : scalar_expr T relname kind),
+    scalar_expr_uniform_global_group_outcome_equiv left right ->
+    forall env,
+      @eval_scalar_expr_aggregate_runtime_error T relname
+        symbol_runtime_error aggregate_runtime_error kind env left =
+      @eval_scalar_expr_aggregate_runtime_error T relname
+        symbol_runtime_error aggregate_runtime_error kind env right.
+```
+
 ## `scalar_expr_uniform_global_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:405`](../PossibleOutcomeFacts.v#L405)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2317`](../PossibleOutcomeFacts.v#L2317)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2504,9 +4718,31 @@ Lemma scalar_expr_uniform_global_outcome_equiv_refl :
     scalar_expr_uniform_global_outcome_equiv expression expression.
 ```
 
+## `scalar_select_list_uniform_global_outcome_equiv_refl`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2324`](../PossibleOutcomeFacts.v#L2324)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Establishes reflexivity for SQL verification and runtime outcomes.
+
+Applicability: Use to orient, transport, or compose a semantic relation about SQL verification and runtime outcomes.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; supply the declared equivalence/properness relation.
+
+Cross-index: `scheduled`, `outcome`, `runtime`
+
+Search aliases: `verification and runtime semantics`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `equivalence`, `congruence`
+
+```rocq
+Lemma scalar_select_list_uniform_global_outcome_equiv_refl :
+  forall select_list,
+    scalar_select_list_uniform_global_outcome_equiv select_list select_list.
+```
+
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:412`](../PossibleOutcomeFacts.v#L412)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2334`](../PossibleOutcomeFacts.v#L2334)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2529,7 +4765,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_refl :
 
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:421`](../PossibleOutcomeFacts.v#L421)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2343`](../PossibleOutcomeFacts.v#L2343)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2550,7 +4786,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_value_expr_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:425`](../PossibleOutcomeFacts.v#L425)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2347`](../PossibleOutcomeFacts.v#L2347)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2575,7 +4811,7 @@ Lemma scalar_value_expr_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_boolean_expr_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:433`](../PossibleOutcomeFacts.v#L433)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2355`](../PossibleOutcomeFacts.v#L2355)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2596,7 +4832,7 @@ Lemma scalar_boolean_expr_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_boolean_expr_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:437`](../PossibleOutcomeFacts.v#L437)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2359`](../PossibleOutcomeFacts.v#L2359)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2621,7 +4857,7 @@ Lemma scalar_boolean_expr_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:445`](../PossibleOutcomeFacts.v#L445)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2367`](../PossibleOutcomeFacts.v#L2367)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2642,7 +4878,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_nil :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:449`](../PossibleOutcomeFacts.v#L449)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2371`](../PossibleOutcomeFacts.v#L2371)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2672,7 +4908,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_cons :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_outputs`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:464`](../PossibleOutcomeFacts.v#L464)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2386`](../PossibleOutcomeFacts.v#L2386)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2695,7 +4931,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_outputs :
 
 ## `scalar_select_list_uniform_global_outcome_equiv_values`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:474`](../PossibleOutcomeFacts.v#L474)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2396`](../PossibleOutcomeFacts.v#L2396)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2719,7 +4955,7 @@ Lemma scalar_select_list_uniform_global_outcome_equiv_values :
 
 ## `eval_scalar_values_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:485`](../PossibleOutcomeFacts.v#L485)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2407`](../PossibleOutcomeFacts.v#L2407)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2748,7 +4984,7 @@ Lemma eval_scalar_values_outcome_uniform_congr :
 
 ## `eval_scalar_boolean_operands_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:513`](../PossibleOutcomeFacts.v#L513)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2435`](../PossibleOutcomeFacts.v#L2435)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2777,7 +5013,7 @@ Lemma eval_scalar_boolean_operands_outcome_uniform_congr :
 
 ## `insert_boolean_operand_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:554`](../PossibleOutcomeFacts.v#L554)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2476`](../PossibleOutcomeFacts.v#L2476)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2804,7 +5040,7 @@ Lemma insert_boolean_operand_uniform_Forall2 :
 
 ## `schedule_boolean_operands_aux_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:576`](../PossibleOutcomeFacts.v#L576)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2498`](../PossibleOutcomeFacts.v#L2498)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2833,7 +5069,7 @@ Lemma schedule_boolean_operands_aux_uniform_Forall2 :
 
 ## `schedule_boolean_operands_uniform_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:600`](../PossibleOutcomeFacts.v#L600)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2522`](../PossibleOutcomeFacts.v#L2522)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2858,7 +5094,7 @@ Lemma schedule_boolean_operands_uniform_Forall2 :
 
 ## `scalar_expr_call_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:613`](../PossibleOutcomeFacts.v#L613)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2535`](../PossibleOutcomeFacts.v#L2535)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2883,7 +5119,7 @@ Lemma scalar_expr_call_uniform_global_congr :
 
 ## `scalar_expr_case_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:636`](../PossibleOutcomeFacts.v#L636)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2558`](../PossibleOutcomeFacts.v#L2558)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2912,7 +5148,7 @@ Lemma scalar_expr_case_uniform_global_congr :
 
 ## `scalar_expr_bool_value_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:672`](../PossibleOutcomeFacts.v#L672)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2594`](../PossibleOutcomeFacts.v#L2594)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2937,7 +5173,7 @@ Lemma scalar_expr_bool_value_uniform_global_congr :
 
 ## `scalar_expr_value_bool_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:685`](../PossibleOutcomeFacts.v#L685)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2607`](../PossibleOutcomeFacts.v#L2607)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2961,7 +5197,7 @@ Lemma scalar_expr_value_bool_uniform_global_congr :
 
 ## `scalar_expr_pred_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:697`](../PossibleOutcomeFacts.v#L697)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2619`](../PossibleOutcomeFacts.v#L2619)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -2985,7 +5221,7 @@ Lemma scalar_expr_pred_uniform_global_congr :
 
 ## `scalar_expr_conj_list_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:719`](../PossibleOutcomeFacts.v#L719)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2641`](../PossibleOutcomeFacts.v#L2641)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3010,7 +5246,7 @@ Lemma scalar_expr_conj_list_uniform_global_congr :
 
 ## `scalar_expr_not_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:736`](../PossibleOutcomeFacts.v#L736)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2658`](../PossibleOutcomeFacts.v#L2658)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3034,7 +5270,7 @@ Lemma scalar_expr_not_uniform_global_congr :
 
 ## `scalar_expr_subquery_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:757`](../PossibleOutcomeFacts.v#L757)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2679`](../PossibleOutcomeFacts.v#L2679)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3059,7 +5295,7 @@ Lemma scalar_expr_subquery_uniform_global_congr :
 
 ## `scalar_expr_quant_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:775`](../PossibleOutcomeFacts.v#L775)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2697`](../PossibleOutcomeFacts.v#L2697)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3086,7 +5322,7 @@ Lemma scalar_expr_quant_uniform_global_congr :
 
 ## `scalar_expr_in_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:814`](../PossibleOutcomeFacts.v#L814)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2736`](../PossibleOutcomeFacts.v#L2736)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3112,7 +5348,7 @@ Lemma scalar_expr_in_uniform_global_congr :
 
 ## `scalar_expr_exists_uniform_global_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:854`](../PossibleOutcomeFacts.v#L854)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2776`](../PossibleOutcomeFacts.v#L2776)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3136,7 +5372,7 @@ Lemma scalar_expr_exists_uniform_global_congr :
 
 ## `query_expr_possible_outcome_equiv_of_exact_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:876`](../PossibleOutcomeFacts.v#L876)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2798`](../PossibleOutcomeFacts.v#L2798)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3182,7 +5418,7 @@ Theorem query_expr_possible_outcome_equiv_of_exact_schedule_transport :
 
 ## `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:932`](../PossibleOutcomeFacts.v#L932)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2854`](../PossibleOutcomeFacts.v#L2854)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3225,7 +5461,7 @@ Theorem query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport :
 
 ## `query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:966`](../PossibleOutcomeFacts.v#L966)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2888`](../PossibleOutcomeFacts.v#L2888)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3250,7 +5486,7 @@ Theorem query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv :
 
 ## `query_expr_scheduled_outcome_equiv_implies_possible_of_independent`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:984`](../PossibleOutcomeFacts.v#L984)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2906`](../PossibleOutcomeFacts.v#L2906)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3279,7 +5515,7 @@ Theorem query_expr_scheduled_outcome_equiv_implies_possible_of_independent :
 
 ## `boolean_schedule_reindex_complete_id`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1019`](../PossibleOutcomeFacts.v#L1019)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2941`](../PossibleOutcomeFacts.v#L2941)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3300,7 +5536,7 @@ Lemma boolean_schedule_reindex_complete_id :
 
 ## `eval_query_expr_possible_outcome_site_reindex_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1027`](../PossibleOutcomeFacts.v#L1027)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2949`](../PossibleOutcomeFacts.v#L2949)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3330,7 +5566,7 @@ Lemma eval_query_expr_possible_outcome_site_reindex_iff :
 
 ## `query_expr_possible_outcome_equiv_of_uniform_global_typed`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1052`](../PossibleOutcomeFacts.v#L1052)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2974`](../PossibleOutcomeFacts.v#L2974)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3359,7 +5595,7 @@ Theorem query_expr_possible_outcome_equiv_of_uniform_global_typed :
 
 ## `eval_project_rows_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1092`](../PossibleOutcomeFacts.v#L1092)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3014`](../PossibleOutcomeFacts.v#L3014)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3389,7 +5625,7 @@ Lemma eval_project_rows_outcome_uniform_congr :
 
 ## `query_expr_filter_uniform_global_typed_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1138`](../PossibleOutcomeFacts.v#L1138)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3060`](../PossibleOutcomeFacts.v#L3060)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3415,7 +5651,7 @@ Lemma query_expr_filter_uniform_global_typed_congr :
 
 ## `query_expr_project_uniform_global_typed_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1151`](../PossibleOutcomeFacts.v#L1151)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3073`](../PossibleOutcomeFacts.v#L3073)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3441,7 +5677,7 @@ Lemma query_expr_project_uniform_global_typed_congr :
 
 ## `query_expr_filter_predicate_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1175`](../PossibleOutcomeFacts.v#L1175)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3097`](../PossibleOutcomeFacts.v#L3097)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3473,7 +5709,7 @@ Theorem query_expr_filter_predicate_possible_outcome_equiv :
 
 ## `query_expr_project_select_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1195`](../PossibleOutcomeFacts.v#L1195)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3117`](../PossibleOutcomeFacts.v#L3117)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3505,7 +5741,7 @@ Theorem query_expr_project_select_possible_outcome_equiv :
 
 ## `eval_groups_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1220`](../PossibleOutcomeFacts.v#L1220)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3142`](../PossibleOutcomeFacts.v#L3142)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3548,9 +5784,115 @@ Lemma eval_groups_outcome_uniform_congr :
         env right_select group_terms right_having groups outcome.
 ```
 
+## `query_expr_group_possible_outcome_transport`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3309`](../PossibleOutcomeFacts.v#L3309)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `possible`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `verification and runtime semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_group_possible_outcome_transport :
+  forall env left_select right_select left_group_keys right_group_keys
+      left_having right_having left right
+      (scheduled_rows_rel :
+        (boolean_site -> boolean_evaluation_order) -> list (tuple T) ->
+        (boolean_site -> boolean_evaluation_order) -> list (tuple T) -> Prop)
+      (output_rows_rel : list (tuple T) -> list (tuple T) -> Prop),
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Group left_select left_group_keys left_having left) outcome) ->
+    (forall left_schedule left_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left (SqlSuccess left_rows) ->
+      exists right_schedule, exists right_rows,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right (SqlSuccess right_rows) /\
+        scheduled_rows_rel
+          left_schedule left_rows right_schedule right_rows) ->
+    (forall right_schedule right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right (SqlSuccess right_rows) ->
+      exists left_schedule, exists left_rows,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left (SqlSuccess left_rows) /\
+        scheduled_rows_rel
+          left_schedule left_rows right_schedule right_rows) ->
+    (forall error,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env left
+        (SqlError error) <->
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env right
+        (SqlError error)) ->
+    (forall left_schedule left_rows right_schedule right_rows,
+      scheduled_rows_rel left_schedule left_rows right_schedule right_rows ->
+      outcome_relation_transport output_rows_rel
+        (query_group_rows_outcomes
+          left_schedule env left_select left_group_keys left_having left_rows)
+        (query_group_rows_outcomes
+          right_schedule env right_select right_group_keys right_having
+          right_rows)) ->
+    query_expr_possible_outcome_related env output_rows_rel
+      (QExpr_Group left_select left_group_keys left_having left)
+      (QExpr_Group right_select right_group_keys right_having right).
+```
+
+## `query_group_rows_outcomes_transport_of_exact_bag_outcomes`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3432`](../PossibleOutcomeFacts.v#L3432)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for SQL verification and runtime outcomes.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about SQL verification and runtime outcomes.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `verification and runtime semantics`, `GROUP BY`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_group_rows_outcomes_transport_of_exact_bag_outcomes :
+  forall left_schedule left_env left_select left_group_keys left_having left_rows
+      right_schedule right_env right_select right_group_keys right_having
+      right_rows,
+    (forall outcome,
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule left_env left_select left_group_keys left_having
+        (rows_bag T left_rows) outcome <->
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule right_env right_select right_group_keys right_having
+        (rows_bag T right_rows) outcome) ->
+    outcome_relation_transport (@ordered_rows_equiv T)
+      (query_group_rows_outcomes
+        left_schedule left_env left_select left_group_keys left_having left_rows)
+      (query_group_rows_outcomes
+        right_schedule right_env right_select right_group_keys right_having
+        right_rows).
+```
+
 ## `eval_group_bag_outcome_exact_local_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1380`](../PossibleOutcomeFacts.v#L1380)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3468`](../PossibleOutcomeFacts.v#L3468)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -3585,7 +5927,7 @@ Lemma eval_group_bag_outcome_exact_local_congr :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1420`](../PossibleOutcomeFacts.v#L1420)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3508`](../PossibleOutcomeFacts.v#L3508)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3627,7 +5969,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_local_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1474`](../PossibleOutcomeFacts.v#L1474)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3556`](../PossibleOutcomeFacts.v#L3556)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3665,7 +6007,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_local_outcomes :
 
 ## `query_expr_group_clauses_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1503`](../PossibleOutcomeFacts.v#L1503)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3585`](../PossibleOutcomeFacts.v#L3585)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3712,7 +6054,7 @@ Theorem query_expr_group_clauses_possible_outcome_equiv :
 
 ## `query_expr_possible_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1541`](../PossibleOutcomeFacts.v#L1541)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3623`](../PossibleOutcomeFacts.v#L3623)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3740,7 +6082,7 @@ Lemma query_expr_possible_outcome_equiv_refl :
 
 ## `query_expr_possible_outcome_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1558`](../PossibleOutcomeFacts.v#L1558)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3640`](../PossibleOutcomeFacts.v#L3640)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3767,7 +6109,7 @@ Lemma query_expr_possible_outcome_equiv_sym :
 
 ## `query_expr_possible_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1580`](../PossibleOutcomeFacts.v#L1580)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3662`](../PossibleOutcomeFacts.v#L3662)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3797,7 +6139,7 @@ Lemma query_expr_possible_outcome_equiv_trans :
 
 ## `query_expr_context_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1627`](../PossibleOutcomeFacts.v#L1627)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3709`](../PossibleOutcomeFacts.v#L3709)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3829,7 +6171,7 @@ Theorem query_expr_context_possible_outcome_equiv :
 
 ## `query_expr_filter_possible_outcome_equiv_of_uniform_expression`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1648`](../PossibleOutcomeFacts.v#L1648)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3730`](../PossibleOutcomeFacts.v#L3730)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3861,7 +6203,7 @@ Theorem query_expr_filter_possible_outcome_equiv_of_uniform_expression :
 
 ## `query_expr_group_possible_outcome_equiv_of_uniform_having`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1669`](../PossibleOutcomeFacts.v#L1669)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3751`](../PossibleOutcomeFacts.v#L3751)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3893,7 +6235,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_uniform_having :
 
 ## `query_expr_join_possible_outcome_equiv_of_uniform_predicate`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1693`](../PossibleOutcomeFacts.v#L1693)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3775`](../PossibleOutcomeFacts.v#L3775)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3929,7 +6271,7 @@ Theorem query_expr_join_possible_outcome_equiv_of_uniform_predicate :
 
 ## `query_expr_filter_in_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1722`](../PossibleOutcomeFacts.v#L1722)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3804`](../PossibleOutcomeFacts.v#L3804)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3961,7 +6303,7 @@ Corollary query_expr_filter_in_subquery_possible_outcome_equiv :
 
 ## `query_expr_filter_exists_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1744`](../PossibleOutcomeFacts.v#L1744)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3826`](../PossibleOutcomeFacts.v#L3826)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -3993,7 +6335,7 @@ Corollary query_expr_filter_exists_subquery_possible_outcome_equiv :
 
 ## `query_expr_set_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1768`](../PossibleOutcomeFacts.v#L1768)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3850`](../PossibleOutcomeFacts.v#L3850)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4021,7 +6363,7 @@ Theorem query_expr_set_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_cross_join_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1783`](../PossibleOutcomeFacts.v#L1783)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3865`](../PossibleOutcomeFacts.v#L3865)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4049,7 +6391,7 @@ Theorem query_expr_cross_join_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_group_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1798`](../PossibleOutcomeFacts.v#L1798)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3880`](../PossibleOutcomeFacts.v#L3880)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4080,7 +6422,7 @@ Theorem query_expr_group_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_window_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1819`](../PossibleOutcomeFacts.v#L1819)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3928`](../PossibleOutcomeFacts.v#L3928)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4115,7 +6457,7 @@ Theorem query_expr_window_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_possible_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1865`](../PossibleOutcomeFacts.v#L1865)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3974`](../PossibleOutcomeFacts.v#L3974)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4141,7 +6483,7 @@ Lemma query_expr_possible_equiv_refl :
 
 ## `query_expr_possible_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1881`](../PossibleOutcomeFacts.v#L1881)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3990`](../PossibleOutcomeFacts.v#L3990)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4168,7 +6510,7 @@ Lemma query_expr_possible_equiv_sym :
 
 ## `query_expr_possible_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1910`](../PossibleOutcomeFacts.v#L1910)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4019`](../PossibleOutcomeFacts.v#L4019)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4198,7 +6540,7 @@ Lemma query_expr_possible_equiv_trans :
 
 ## `query_expr_possible_equiv_of_possible_outcome_equiv_safe`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1949`](../PossibleOutcomeFacts.v#L1949)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4058`](../PossibleOutcomeFacts.v#L4058)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4228,7 +6570,7 @@ Theorem query_expr_possible_equiv_of_possible_outcome_equiv_safe :
 
 ## `query_expr_possible_outcome_equiv_of_shared_exact_error`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:1972`](../PossibleOutcomeFacts.v#L1972)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4081`](../PossibleOutcomeFacts.v#L4081)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4277,7 +6619,7 @@ Theorem query_expr_possible_outcome_equiv_of_shared_exact_error :
 
 ## `query_expr_filter_possible_outcome_equiv_congr_stable_total`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2032`](../PossibleOutcomeFacts.v#L2032)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4141`](../PossibleOutcomeFacts.v#L4141)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4308,7 +6650,7 @@ Theorem query_expr_filter_possible_outcome_equiv_congr_stable_total :
 
 ## `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2161`](../PossibleOutcomeFacts.v#L2161)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4270`](../PossibleOutcomeFacts.v#L4270)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4375,7 +6717,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_supported_child_outcomes :
 
 ## `query_program_possible_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2321`](../PossibleOutcomeFacts.v#L2321)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4343`](../PossibleOutcomeFacts.v#L4343)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4399,7 +6741,7 @@ Lemma query_program_possible_equiv_nil :
 
 ## `query_program_possible_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2330`](../PossibleOutcomeFacts.v#L2330)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4352`](../PossibleOutcomeFacts.v#L4352)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4430,7 +6772,7 @@ Lemma query_program_possible_equiv_cons :
 
 ## `query_program_possible_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2346`](../PossibleOutcomeFacts.v#L2346)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4368`](../PossibleOutcomeFacts.v#L4368)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4454,7 +6796,7 @@ Lemma query_program_possible_outcome_equiv_nil :
 
 ## `query_program_possible_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2355`](../PossibleOutcomeFacts.v#L2355)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4377`](../PossibleOutcomeFacts.v#L4377)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4485,7 +6827,7 @@ Lemma query_program_possible_outcome_equiv_cons :
 
 ## `query_program_possible_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2371`](../PossibleOutcomeFacts.v#L2371)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4393`](../PossibleOutcomeFacts.v#L4393)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4510,7 +6852,7 @@ Lemma query_program_possible_equiv_length :
 
 ## `query_program_possible_outcome_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2385`](../PossibleOutcomeFacts.v#L2385)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4407`](../PossibleOutcomeFacts.v#L4407)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4535,7 +6877,7 @@ Lemma query_program_possible_outcome_equiv_length :
 
 ## `query_program_possible_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2399`](../PossibleOutcomeFacts.v#L2399)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4421`](../PossibleOutcomeFacts.v#L4421)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4564,7 +6906,7 @@ Theorem query_program_possible_equiv_iff_Forall2 :
 
 ## `query_program_possible_outcome_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2421`](../PossibleOutcomeFacts.v#L2421)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4443`](../PossibleOutcomeFacts.v#L4443)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4593,7 +6935,7 @@ Theorem query_program_possible_outcome_equiv_iff_Forall2 :
 
 ## `query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2482`](../PossibleOutcomeFacts.v#L2482)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4504`](../PossibleOutcomeFacts.v#L4504)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4627,7 +6969,7 @@ Theorem query_rename_uniform_transport_implies_mapped_schema_possible_outcome_eq
 
 ## `query_mapped_schema_possible_outcome_equiv_mapped_schema`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2526`](../PossibleOutcomeFacts.v#L2526)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4548`](../PossibleOutcomeFacts.v#L4548)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4651,7 +6993,7 @@ Lemma query_mapped_schema_possible_outcome_equiv_mapped_schema :
 
 ## `query_expr_possible_bag_outcome_equiv_success_forward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2570`](../PossibleOutcomeFacts.v#L2570)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4592`](../PossibleOutcomeFacts.v#L4592)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4677,7 +7019,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_forward :
 
 ## `query_expr_possible_bag_outcome_equiv_success_backward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2597`](../PossibleOutcomeFacts.v#L2597)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4619`](../PossibleOutcomeFacts.v#L4619)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4703,7 +7045,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_backward :
 
 ## `query_expr_possible_bag_outcome_equiv_error_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2623`](../PossibleOutcomeFacts.v#L2623)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4645`](../PossibleOutcomeFacts.v#L4645)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4727,7 +7069,7 @@ Lemma query_expr_possible_bag_outcome_equiv_error_iff :
 
 ## `query_expr_possible_bag_outcome_equiv_inhabited`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2636`](../PossibleOutcomeFacts.v#L2636)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4658`](../PossibleOutcomeFacts.v#L4658)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4751,7 +7093,7 @@ Lemma query_expr_possible_bag_outcome_equiv_inhabited :
 
 ## `query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2668`](../PossibleOutcomeFacts.v#L2668)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4690`](../PossibleOutcomeFacts.v#L4690)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4777,7 +7119,7 @@ Theorem query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2738`](../PossibleOutcomeFacts.v#L2738)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4760`](../PossibleOutcomeFacts.v#L4760)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4804,7 +7146,7 @@ Theorem query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2889`](../PossibleOutcomeFacts.v#L2889)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4911`](../PossibleOutcomeFacts.v#L4911)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4830,7 +7172,7 @@ Theorem query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2959`](../PossibleOutcomeFacts.v#L2959)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4981`](../PossibleOutcomeFacts.v#L4981)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4860,7 +7202,7 @@ Theorem query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:2979`](../PossibleOutcomeFacts.v#L2979)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5001`](../PossibleOutcomeFacts.v#L5001)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4890,7 +7232,7 @@ Theorem query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `tnull_query_success_outcome_is_success_bag`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:192`](../ProofAgentFacade.v#L192)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:193`](../ProofAgentFacade.v#L193)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4913,7 +7255,7 @@ Lemma tnull_query_success_outcome_is_success_bag :
 
 ## `tnull_query_expr_outcome_separation_sound`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:218`](../ProofAgentFacade.v#L218)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:219`](../ProofAgentFacade.v#L219)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4936,7 +7278,7 @@ Lemma tnull_query_expr_outcome_separation_sound :
 
 ## `tnull_query_expr_outcome_separation_of_left_success_length_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:238`](../ProofAgentFacade.v#L238)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:239`](../ProofAgentFacade.v#L239)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4962,7 +7304,7 @@ Lemma tnull_query_expr_outcome_separation_of_left_success_length_difference :
 
 ## `tnull_query_expr_outcome_separation_of_right_success_length_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:254`](../ProofAgentFacade.v#L254)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:255`](../ProofAgentFacade.v#L255)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -4988,7 +7330,7 @@ Lemma tnull_query_expr_outcome_separation_of_right_success_length_difference :
 
 ## `tnull_query_expr_outcome_separation_of_right_functional_observation_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:270`](../ProofAgentFacade.v#L270)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:271`](../ProofAgentFacade.v#L271)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5014,7 +7356,7 @@ Lemma tnull_query_expr_outcome_separation_of_right_functional_observation_differ
 
 ## `tnull_query_expr_outcome_separation_of_left_functional_observation_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:287`](../ProofAgentFacade.v#L287)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:288`](../ProofAgentFacade.v#L288)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5040,7 +7382,7 @@ Lemma tnull_query_expr_outcome_separation_of_left_functional_observation_differe
 
 ## `tnull_query_expr_outcome_separation_of_right_functional_bag_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:309`](../ProofAgentFacade.v#L309)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:310`](../ProofAgentFacade.v#L310)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5066,7 +7408,7 @@ Lemma tnull_query_expr_outcome_separation_of_right_functional_bag_difference :
 
 ## `tnull_query_expr_outcome_separation_of_left_functional_bag_difference`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:331`](../ProofAgentFacade.v#L331)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:332`](../ProofAgentFacade.v#L332)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6187,7 +8529,7 @@ Lemma query_expr_filter_expression_global_typed_congr :
 
 ## `eval_project_join_sources_global_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1720`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1720)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1734`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1734)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6219,7 +8561,7 @@ Lemma eval_project_join_sources_global_congr_forward :
 
 ## `eval_project_join_sources_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1785`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1785)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1799`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1799)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6251,7 +8593,7 @@ Lemma eval_project_join_sources_global_congr :
 
 ## `query_expr_join_scalar_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1870`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1870)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1884`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1884)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6283,7 +8625,7 @@ Lemma query_expr_join_scalar_global_typed_congr :
 
 ## `scalar_expr_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1914`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1914)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1928`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1928)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6309,7 +8651,7 @@ Theorem scalar_expr_context_global_congr :
 
 ## `first_runtime_error_context_eq`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1966`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1966)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1980`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1980)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6334,7 +8676,7 @@ Lemma first_runtime_error_context_eq :
 
 ## `scalar_expr_context_aggregate_runtime_error_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1979`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1979)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1993`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1993)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6362,7 +8704,7 @@ Theorem scalar_expr_context_aggregate_runtime_error_congr :
 
 ## `scalar_expr_context_global_group_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2013`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2013)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2027`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2027)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6388,7 +8730,7 @@ Corollary scalar_expr_context_global_group_congr :
 
 ## `scalar_select_context_aggregate_runtime_error_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2026`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2026)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2040`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2040)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6415,7 +8757,7 @@ Lemma scalar_select_context_aggregate_runtime_error_congr :
 
 ## `query_expr_group_scalar_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2199`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2199)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2213`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2213)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6448,7 +8790,7 @@ Lemma query_expr_group_scalar_global_typed_congr :
 
 ## `scalar_expr_context_group_key_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2243`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2243)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2257`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2257)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6472,7 +8814,7 @@ Lemma scalar_expr_context_group_key_none :
 
 ## `scalar_value_list_context_group_keys_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2252`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2252)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2266`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2266)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6495,7 +8837,7 @@ Lemma scalar_value_list_context_group_keys_none :
 
 ## `query_expr_group_invalid_keys_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2273`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2273)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2287`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2287)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6521,7 +8863,7 @@ Lemma query_expr_group_invalid_keys_global_typed_congr :
 
 ## `eval_grouping_sets_bag_branch_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2296`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2296)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2310`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2310)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6550,7 +8892,7 @@ Lemma eval_grouping_sets_bag_branch_congr_forward :
 
 ## `eval_grouping_sets_bag_branch_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2324`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2324)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2338`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2338)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6579,7 +8921,7 @@ Lemma eval_grouping_sets_bag_branch_congr :
 
 ## `query_expr_grouping_sets_branch_global_typed_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2343`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2343)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2357`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2357)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6612,7 +8954,7 @@ Lemma query_expr_grouping_sets_branch_global_typed_congr :
 
 ## `query_expr_grouping_sets_select_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2379`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2379)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2393`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2393)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6645,7 +8987,7 @@ Lemma query_expr_grouping_sets_select_context_global_congr :
 
 ## `query_expr_grouping_sets_key_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2434`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2434)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2448`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2448)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6677,7 +9019,7 @@ Lemma query_expr_grouping_sets_key_context_global_congr :
 
 ## `query_expr_group_select_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2460`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2460)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2474`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2474)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6706,7 +9048,7 @@ Lemma query_expr_group_select_context_global_congr :
 
 ## `query_expr_group_having_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2483`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2483)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2497`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2497)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6735,7 +9077,7 @@ Lemma query_expr_group_having_context_global_congr :
 
 ## `query_expr_group_key_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2502`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2502)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2516`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2516)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6761,7 +9103,7 @@ Lemma query_expr_group_key_context_global_congr :
 
 ## `query_expr_context_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2516`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2516)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2530`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2530)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -6787,7 +9129,7 @@ Theorem query_expr_context_global_congr :
 
 ## `query_expr_observation_equiv_of_outcome_rel_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2564`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2564)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2578`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2578)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport` for the public result.
 
@@ -6814,7 +9156,7 @@ Lemma query_expr_observation_equiv_of_outcome_rel_equiv_safe :
 
 ## `query_expr_equiv_of_outcome_rel_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2589`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2589)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2603`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2603)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_possible_outcome_equiv_of_bidirectional_schedule_transport` for the public result.
 
@@ -6842,7 +9184,7 @@ Lemma query_expr_equiv_of_outcome_rel_equiv_safe :
 
 ## `query_expr_context_equiv_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2604`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2604)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2618`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2618)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_context_possible_outcome_equiv` for the public result.
 
@@ -6875,7 +9217,7 @@ Theorem query_expr_context_equiv_safe :
 
 ## `query_bag_closed_equiv_of_success_bags_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2631`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2631)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2645`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2645)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -6912,7 +9254,7 @@ Theorem query_bag_closed_equiv_of_success_bags_safe :
 
 ## `query_bag_reset_equiv_of_success_bags_safe`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2680`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2680)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2694`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2694)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_possible_bag_closed_outcome_equiv_of_success_bags` for the public result.
 
@@ -6947,7 +9289,7 @@ Corollary query_bag_reset_equiv_of_success_bags_safe :
 
 ## `query_distinct_equiv_of_local_success_rel_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2708`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2708)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2722`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2722)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
@@ -6985,7 +9327,7 @@ Theorem query_distinct_equiv_of_local_success_rel_equiv :
 
 ## `query_distinct_local_list_equiv_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2745`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2745)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2759`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2759)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_distinct_possible_outcome_equiv_congr` for the public result.
 
@@ -7012,7 +9354,7 @@ Theorem query_distinct_local_list_equiv_congr :
 
 ## `plug_possible_bag_context_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2819`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2819)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2833`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2833)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7037,7 +9379,7 @@ Theorem plug_possible_bag_context_extensional :
 
 ## `possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2840`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2840)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2854`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2854)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7062,7 +9404,7 @@ Theorem possible_bag_context_congr :
 
 ## `outcome_alpha_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2858`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2858)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2872`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2872)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7085,7 +9427,7 @@ Lemma outcome_alpha_congr :
 
 ## `successful_relation_equiv_possible_bags_rel_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2872`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2872)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2886`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2886)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7110,7 +9452,7 @@ Lemma successful_relation_equiv_possible_bags_rel_equiv :
 
 ## `successful_possible_bags_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2898`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2898)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2912`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2912)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7132,7 +9474,7 @@ Lemma successful_possible_bags_extensional :
 
 ## `possible_bag_context_successful_plug_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2907`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2907)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2921`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2921)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7157,7 +9499,7 @@ Theorem possible_bag_context_successful_plug_extensional :
 
 ## `list_outcome_equiv_successful_possible_bags`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2919`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2919)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2933`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2933)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7182,7 +9524,7 @@ Lemma list_outcome_equiv_successful_possible_bags :
 
 ## `list_outcome_equiv_possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2930`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2930)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2944`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2944)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7207,7 +9549,7 @@ Theorem list_outcome_equiv_possible_bag_context_congr :
 
 ## `list_outcome_equiv_possible_bag_query_boundary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2949`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2949)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2963`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2963)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -7234,7 +9576,7 @@ Theorem list_outcome_equiv_possible_bag_query_boundary_congr :
 
 ## `query_expr_equiv_possible_bag_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2963`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2963)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2977`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2977)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7263,7 +9605,7 @@ Theorem query_expr_equiv_possible_bag_context_congr :
 
 ## `query_possible_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3031`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3031)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3045`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3045)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7286,7 +9628,7 @@ Definition query_possible_bag_outcomes
 
 ## `query_expr_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3038`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3038)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3052`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3052)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7311,7 +9653,7 @@ Definition query_expr_possible_bag_outcome_equiv
 
 ## `query_expr_possible_bag_outcome_equiv_intro`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3045`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3045)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3059`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3059)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7337,7 +9679,7 @@ Lemma query_expr_possible_bag_outcome_equiv_intro :
 
 ## `query_expr_possible_bag_outcome_equiv_outputs`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3056`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3056)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3070`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3070)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7360,7 +9702,7 @@ Lemma query_expr_possible_bag_outcome_equiv_outputs :
 
 ## `query_expr_possible_bag_outcome_equiv_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3064`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3064)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3078`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3078)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7385,7 +9727,7 @@ Lemma query_expr_possible_bag_outcome_equiv_outcomes :
 
 ## `query_expr_possible_bag_outcome_equiv_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3074`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3074)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3088`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3088)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7411,7 +9753,7 @@ Lemma query_expr_possible_bag_outcome_equiv_iff :
 
 ## `outcome_relation_equiv_implies_outcome_alpha_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3087`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3087)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3101`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3101)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7435,7 +9777,7 @@ Lemma outcome_relation_equiv_implies_outcome_alpha_equiv :
 
 ## `query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3127`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3127)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3141`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3141)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7460,7 +9802,7 @@ Theorem query_expr_possible_outcome_equiv_implies_possible_bag_outcome_equiv :
 
 ## `query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3142`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3142)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3156`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3156)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7489,7 +9831,7 @@ Theorem query_expr_possible_bag_outcome_equiv_implies_possible_outcome_equiv :
 
 ## `query_expr_possible_outcome_equiv_iff_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3163`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3163)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3177`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3177)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7518,7 +9860,7 @@ Corollary query_expr_possible_outcome_equiv_iff_possible_bag_outcome_equiv :
 
 ## `possible_bag_outcome_equiv_refl`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3228`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3228)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3242`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3242)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7540,7 +9882,7 @@ Lemma possible_bag_outcome_equiv_refl :
 
 ## `possible_bag_outcome_relation_equiv_match_left`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3237`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3237)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3251`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3251)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7565,7 +9907,7 @@ Lemma possible_bag_outcome_relation_equiv_match_left :
 
 ## `possible_bag_outcome_relation_equiv_match_right`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3253`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3253)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3267`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3267)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7590,7 +9932,7 @@ Lemma possible_bag_outcome_relation_equiv_match_right :
 
 ## `lift_possible_bag_outcome_unary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3269`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3269)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3283`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3283)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7616,7 +9958,7 @@ Theorem lift_possible_bag_outcome_unary_congr :
 
 ## `lift_possible_bag_outcome_binary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3327`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3327)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3341`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3341)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7643,7 +9985,7 @@ Theorem lift_possible_bag_outcome_binary_congr :
 
 ## `possible_bag_outcome_context_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3463`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3463)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3477`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3477)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7669,7 +10011,7 @@ Theorem possible_bag_outcome_context_congr :
 
 ## `outcome_relation_equiv_rel_equiv_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3491`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3491)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3505`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3505)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7694,7 +10036,7 @@ Lemma outcome_relation_equiv_rel_equiv_transport :
 
 ## `query_expr_possible_bag_outcome_context_boundary_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3521`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3521)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3535`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3535)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7727,7 +10069,7 @@ Theorem query_expr_possible_bag_outcome_context_boundary_congr :
 
 ## `query_expr_possible_bag_outcome_context_boundary_final`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3549`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3549)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3563`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3563)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7766,7 +10108,7 @@ Theorem query_expr_possible_bag_outcome_context_boundary_final :
 
 ## `query_scheduled_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3615`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3615)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3629`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3629)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7790,7 +10132,7 @@ Definition query_scheduled_bag_outcomes
 
 ## `query_possible_bag_outcomes_iff_scheduled`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3623`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3623)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3637`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3637)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7816,7 +10158,7 @@ Lemma query_possible_bag_outcomes_iff_scheduled :
 
 ## `query_expr_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3647`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3647)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3661`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3661)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7848,7 +10190,7 @@ Definition query_expr_possible_bag_schedule_transport
 
 ## `query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3661`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3661)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3675`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3675)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7873,7 +10215,7 @@ Theorem query_expr_possible_bag_schedule_transport_implies_possible_bag_outcome_
 
 ## `query_expr_possible_bag_unary_wrapper_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3745`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3745)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3759`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3759)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7906,7 +10248,7 @@ Theorem query_expr_possible_bag_unary_wrapper_schedule_transport :
 
 ## `query_expr_possible_bag_unary_wrapper_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3774`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3774)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3788`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3788)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7940,7 +10282,7 @@ Theorem query_expr_possible_bag_unary_wrapper_congr :
 
 ## `query_expr_possible_bag_joint_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3801`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3801)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3815`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3815)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7981,7 +10323,7 @@ Definition query_expr_possible_bag_joint_schedule_transport
 
 ## `query_expr_possible_bag_binary_wrapper_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3827`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3827)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3841`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3841)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8018,7 +10360,7 @@ Theorem query_expr_possible_bag_binary_wrapper_schedule_transport :
 
 ## `query_expr_possible_bag_binary_wrapper_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3861`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3861)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3875`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3875)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8056,7 +10398,7 @@ Theorem query_expr_possible_bag_binary_wrapper_congr :
 
 ## `lift_possible_bag_outcome_binary_cross_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4016`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4016)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4030`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4030)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

@@ -1465,8 +1465,11 @@ def semantic_features(
         }
     ):
         features.add("filter")
-    if tokens & {"project", "projection"} or has_identifier(
-        "QExpr_Project", "QExpr_RowMap"
+    if (
+        tokens & {"project", "projection"}
+        or normalized_name.startswith("row_map_")
+        or has_identifier("QExpr_Project", "QExpr_RowMap")
+        or has_identifier_prefix("row_map_")
     ):
         features.add("projection")
     if "order_by" in normalized_name or has_identifier("QExpr_OrderBy"):
@@ -1592,6 +1595,8 @@ def semantic_features(
     } or has_identifier("SqlError", "DataException", "CardinalityViolation"):
         features.add("runtime")
     if "outcome" in tokens or has_identifier(
+        "outcome_equiv",
+        "outcome_relation_transport",
         "TNullQueryExprOutcomeEq",
         "QueryExprOutcomeEquiv",
         "QueryExprGlobalOutcomeEquiv",
@@ -1768,6 +1773,7 @@ def declaration_domain(
         return "ordered-observation.md"
 
     if module == "GroupedFilterOutcomeFacts.v" and name in {
+        "eval_project_rows_exact_map",
         "scalar_expr_pred_acceptance_exact_safe",
         "eval_filter_rows_acceptance_exact",
         "filter_scalar_observation_equiv_at_sym",
@@ -1777,7 +1783,7 @@ def declaration_domain(
         "query_expr_filter_outcome_congr_extensional",
     }:
         # These declarations are source-adjacent to the grouped HAVING bridge,
-        # but their public contracts are generic ordinary row-filter laws.
+        # but their public contracts are generic ordinary Project/Filter laws.
         return "relational-algebra.md"
 
     return source_domain
@@ -4948,6 +4954,36 @@ def validate_navigation(
         "query_project_preserves_success_permutation_closed",
         "relational-algebra.md",
         {"projection", "bag"},
+    )
+    require_route_contract(
+        "eval_project_rows_exact_map",
+        "relational-algebra.md",
+        {"projection"},
+    )
+    require_route_contract(
+        "eval_scalar_values_relation_transport",
+        "runtime-verification-rewrite.md",
+        {"scheduled", "outcome", "runtime"},
+    )
+    require_route_contract(
+        "scalar_call_expression_relation_transport",
+        "runtime-verification-rewrite.md",
+        {"scheduled", "outcome", "runtime"},
+    )
+    require_route_contract(
+        "row_map_rows_outcome_relation",
+        "runtime-verification-rewrite.md",
+        {"scheduled", "outcome", "runtime", "projection"},
+    )
+    require_route_contract(
+        "query_expr_row_map_relation_transport",
+        "runtime-verification-rewrite.md",
+        {"scheduled", "outcome", "runtime", "projection"},
+    )
+    require_route_contract(
+        "query_expr_row_map_possible_outcome_related",
+        "runtime-verification-rewrite.md",
+        {"possible", "outcome", "runtime", "projection"},
     )
     require_route_contract(
         "query_row_map_preserves_success_permutation_closed",

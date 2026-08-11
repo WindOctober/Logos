@@ -3462,6 +3462,198 @@ Definition scalar_select_values_runtime_safe_at
         symbol_runtime_error aggregate_runtime_error value_is_null
         boolean_schedule env (map fst select_list) (SqlError error).
 
+Definition scalar_boolean_expr_runtime_safe_at
+    (env : Env.env T)
+    (expression : scalar_expr T relname ScalarResultBoolean) : Prop :=
+  forall error,
+    ~ @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expression (SqlError error).
+
+Definition scalar_value_expr_runtime_safe_at
+    (env : Env.env T)
+    (expression : scalar_expr T relname ScalarResultValue) : Prop :=
+  forall error,
+    ~ @eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expression (SqlError error).
+
+Definition scalar_value_list_runtime_safe_at
+    (env : Env.env T)
+    (expressions : list (scalar_expr T relname ScalarResultValue)) : Prop :=
+  forall error,
+    ~ @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expressions (SqlError error).
+
+Lemma scalar_pred_runtime_safe_of_arguments :
+  forall env predicate arguments,
+    scalar_value_list_runtime_safe_at env arguments ->
+    scalar_boolean_expr_runtime_safe_at env (SExpr_Pred predicate arguments).
+Proof.
+intros env predicate arguments Harguments error Heval.
+inversion Heval; subst.
+eapply Harguments; eassumption.
+Qed.
+
+(** Branch-sensitive CASE safety.  An unselected arm is intentionally absent
+    from the corresponding premise, matching SQL short-circuit semantics. *)
+Lemma scalar_value_case_runtime_safe_of_reachable_branches :
+  forall env result_type condition then_expression else_expression,
+    scalar_boolean_expr_runtime_safe_at env condition ->
+    (forall truth,
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env condition (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = true ->
+      scalar_value_expr_runtime_safe_at env then_expression) ->
+    (forall truth,
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env condition (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = false ->
+      scalar_value_expr_runtime_safe_at env else_expression) ->
+    scalar_value_expr_runtime_safe_at env
+      (SExpr_Case result_type condition then_expression else_expression).
+Proof.
+intros env result_type condition then_expression else_expression
+  Hcondition Hthen Helse error Heval.
+inversion Heval; subst.
+- eapply Hcondition; eassumption.
+- match goal with
+  | Htruth : context [eval_scalar_boolean_expr_outcome],
+    Hselected : Bool.is_true _ _ = true,
+    Harm : context [eval_scalar_value_expr_outcome] |- _ =>
+      eapply (Hthen _ Htruth Hselected); exact Harm
+  end.
+- match goal with
+  | Htruth : context [eval_scalar_boolean_expr_outcome],
+    Hselected : Bool.is_true _ _ = false,
+    Harm : context [eval_scalar_value_expr_outcome] |- _ =>
+      eapply (Helse _ Htruth Hselected); exact Harm
+  end.
+Qed.
+
+Lemma eval_scalar_boolean_operands_runtime_safe :
+  forall env operation expressions,
+    (forall expression,
+      In expression expressions ->
+      scalar_boolean_expr_runtime_safe_at env expression) ->
+    forall error,
+      ~ @eval_scalar_boolean_operands_outcome T relname basesort instance
+          unknown symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env operation expressions (SqlError error).
+Proof.
+intros env operation expressions Hsafe error Heval.
+remember (SqlError error) as observed eqn:Hobserved in Heval.
+induction Heval; try discriminate.
+- eapply (Hsafe expression (or_introl eq_refl) error0); exact H.
+- destruct tail as [tail_truth | tail_error].
+  + cbn [scalar_conj_cons_outcome] in Hobserved; discriminate.
+  + cbn [scalar_conj_cons_outcome] in Hobserved.
+    inversion Hobserved; subst tail_error.
+    apply IHHeval.
+    * intros other Hother; apply Hsafe; now right.
+    * reflexivity.
+Qed.
+
+Definition scalar_boolean_expr_uniform_runtime_safe_at
+    (env : Env.env T)
+    (expression : scalar_expr T relname ScalarResultBoolean) : Prop :=
+  forall schedule error,
+    ~ @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env expression (SqlError error).
+
+(** Every legal Boolean schedule is covered.  Scheduling may reorder the
+    operands, but the premise follows each expression through that permutation
+    and the evaluator retains its exact short-circuit/error behavior. *)
+Lemma scalar_conj_list_uniform_runtime_safe :
+  forall env site_rows operation expressions,
+    Forall (scalar_boolean_expr_uniform_runtime_safe_at env) expressions ->
+    scalar_boolean_expr_uniform_runtime_safe_at env
+      (SExpr_ConjList site_rows operation expressions).
+Proof.
+intros env site_rows operation expressions Hsafe schedule error Heval.
+inversion Heval; subst.
+rename H3 into Hoperands.
+assert (Hscheduled : forall expression,
+  In expression (schedule_boolean_operands schedule site_rows expressions) ->
+  scalar_boolean_expr_uniform_runtime_safe_at env expression).
+{
+  intros expression Hin.
+  rewrite Forall_forall in Hsafe.
+  apply Hsafe.
+  eapply Permutation_in.
+  - apply Permutation_sym, schedule_boolean_operands_permutation.
+  - exact Hin.
+}
+remember (SqlError error) as observed eqn:Hobserved in Hoperands.
+induction Hoperands; try discriminate.
+- eapply (Hscheduled expression (or_introl eq_refl) schedule error0); exact H.
+- destruct tail as [tail_truth | tail_error].
+  + cbn [scalar_conj_cons_outcome] in Hobserved; discriminate.
+  + cbn [scalar_conj_cons_outcome] in Hobserved.
+    inversion Hobserved; subst tail_error.
+    eapply IHHoperands.
+    * exact Hsafe.
+    * exact Heval.
+    * reflexivity.
+    * intros other Hother; apply Hscheduled. now right.
+Qed.
+
+(** A filter only evaluates its predicate on rows actually reached in the
+    selected child observation.  This list lift therefore needs no acceptance
+    function and does not constrain FALSE versus UNKNOWN; it rules out only
+    genuine SQL runtime errors. *)
+Lemma eval_filter_rows_runtime_safe_of_reachable_predicate_safe :
+  forall env formula rows,
+    (forall row,
+      In row rows ->
+      scalar_boolean_expr_runtime_safe_at (env_t T env row) formula) ->
+    forall error,
+      ~ @eval_filter_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env formula rows (SqlError error).
+Proof.
+intros env formula rows Hsafe error Heval.
+remember (SqlError error) as observed eqn:Hobserved in Heval.
+induction Heval; try discriminate.
+- eapply (Hsafe row (or_introl eq_refl) error0); exact H.
+- destruct tail as [tail_rows | tail_error].
+  + cbn [filter_cons_outcome] in Hobserved.
+    destruct (Bool.is_true (B T) truth); discriminate.
+  + cbn [filter_cons_outcome] in Hobserved.
+    inversion Hobserved; subst tail_error.
+    apply IHHeval.
+    * intros other Hother; apply Hsafe; now right.
+    * reflexivity.
+Qed.
+
+(** Reachable-row FILTER safety.  Unlike
+    [query_expr_filter_runtime_safe_exact], no deterministic keep function is
+    required: any successful Bool3 observation is allowed, while child and
+    predicate errors are excluded compositionally. *)
+Theorem query_expr_filter_runtime_safe_of_reachable_predicate_safe :
+  forall env formula input,
+    query_safe env input ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        scalar_boolean_expr_runtime_safe_at (env_t T env row) formula) ->
+    query_safe env (QExpr_Filter formula input).
+Proof.
+intros env formula input Hinput Hpredicate error Herror.
+apply eval_query_expr_filter_error_iff in Herror.
+destruct Herror as [Hchild | [input_rows [Hrows Hlocal]]].
+- exact (Hinput error Hchild).
+- eapply (eval_filter_rows_runtime_safe_of_reachable_predicate_safe
+    (env := env) (formula := formula) (rows := input_rows));
+    [|exact Hlocal].
+  intros row Hrow; now apply (Hpredicate input_rows Hrows row Hrow).
+Qed.
+
 Lemma eval_project_rows_has_success :
   forall env select_list rows,
     (forall row,
@@ -3485,6 +3677,33 @@ intros env select_list rows; induction rows as [|row rows IH]; intro Htotal.
     (@project_cons_outcome T (project_row select_list values)
       (SqlSuccess tail))).
   eapply EProjectRows_Cons; eassumption.
+Qed.
+
+(** Unlike [eval_project_rows_has_success], this is genuine progress: a
+    reached scalar error is returned as the projection outcome. *)
+Lemma eval_project_rows_has_outcome :
+  forall env select_list rows,
+    (forall row,
+      In row rows ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env row) (map fst select_list) outcome) ->
+    exists outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome.
+Proof.
+intros env select_list rows; induction rows as [|row rows IH]; intro Htotal.
+- exists (SqlSuccess nil); constructor.
+- destruct (Htotal row (or_introl eq_refl)) as
+    [[values | error] Hhead].
+  + destruct IH as [tail Htail].
+    { intros other Hother; apply Htotal; now right. }
+    exists
+      (@project_cons_outcome T (project_row select_list values) tail).
+    eapply EProjectRows_Cons; eassumption.
+  + exists (SqlError error); now apply EProjectRows_HeadError.
 Qed.
 
 Lemma eval_project_rows_runtime_safe :
@@ -3544,6 +3763,397 @@ destruct Herror as [Hchild | [rows [Hrows Hproject]]].
   intros row _; apply Hselect.
 Qed.
 
+(** Operator-local JOIN safety for one pair of actually selected child row
+    observations.  Predicate scheduling, matched/padded projections, and bag
+    representatives remain inside the authoritative join evaluator. *)
+Definition query_join_rows_runtime_safe_at
+    (env : Env.env T) (kind : query_join_kind)
+    (predicate : scalar_expr T relname ScalarResultBoolean)
+    (matched_select left_select right_select : query_select_list T relname)
+    (left_rows right_rows : list (tuple T)) : Prop :=
+  forall error,
+    ~ @eval_join_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env kind predicate matched_select left_select
+        right_select (rows_bag T left_rows) (rows_bag T right_rows)
+        (SqlError error).
+
+Theorem query_expr_join_runtime_safe_of_reachable_local_safe :
+  forall env kind predicate matched_select left_select right_select left right,
+    query_safe env left ->
+    query_safe env right ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      query_join_rows_runtime_safe_at env kind predicate
+        matched_select left_select right_select left_rows right_rows) ->
+    query_safe env
+      (QExpr_Join kind predicate matched_select left_select right_select
+        left right).
+Proof.
+intros env kind predicate matched_select left_select right_select left right
+  Hleft_safe Hright_safe Hlocal error Herror.
+apply eval_query_expr_join_error_iff in Herror.
+destruct Herror as
+  [Hleft | [left_rows [Hleft [Hright | [right_rows [Hright Hjoin]]]]]].
+- exact (Hleft_safe error Hleft).
+- exact (Hright_safe error Hright).
+- exact (Hlocal left_rows right_rows Hleft Hright error Hjoin).
+Qed.
+
+(** GROUP safety for one reachable child row observation.  This contract is
+    deliberately below the query constructor and therefore includes grouping
+    keys, aggregate finalization, HAVING, SELECT, representative choice, and
+    their exact local error order. *)
+Definition query_group_rows_runtime_safe_at
+    (env : Env.env T) (select_list : query_select_list T relname)
+    (group_terms : list (scalar_expr T relname ScalarResultValue))
+    (having : scalar_expr T relname ScalarResultBoolean)
+    (input_rows : list (tuple T)) : Prop :=
+  forall error,
+    ~ @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having
+        (rows_bag T input_rows) (SqlError error).
+
+Theorem query_expr_group_runtime_safe_of_reachable_local_safe :
+  forall env select_list group_terms having input,
+    query_safe env input ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      query_group_rows_runtime_safe_at
+        env select_list group_terms having input_rows) ->
+    query_safe env (QExpr_Group select_list group_terms having input).
+Proof.
+intros env select_list group_terms having input Hinput Hlocal error Herror.
+apply eval_query_expr_group_error_iff in Herror.
+destruct Herror as [Hchild | [input_rows [Hrows Hgroup]]].
+- exact (Hinput error Hchild).
+- exact (Hlocal input_rows Hrows error Hgroup).
+Qed.
+
+(** WINDOW-local safety quantifies every legal ordering of one reachable child
+    bag.  This is essential when peer order is under-specified: proving one
+    convenient ordered representative safe is insufficient. *)
+Definition query_window_rows_runtime_safe_at
+    (env : Env.env T) (partition_keys order_keys : list (sort_key T))
+    (items : list (query_window_item T))
+    (input_rows : list (tuple T)) : Prop :=
+  forall ordered_rows,
+    order_by_rows value_is_null (partition_keys ++ order_keys)
+      (query_rank_bag_rows (query_rows_bag input_rows)) ordered_rows ->
+    forall error,
+      @query_window_rows_outcome T symbol_runtime_error
+        aggregate_runtime_error value_is_null env partition_keys items
+        None 0 nil ordered_rows <> Some (SqlError error).
+
+Theorem query_expr_window_runtime_safe_of_reachable_local_safe :
+  forall env partition_keys order_keys items input,
+    query_safe env input ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      query_window_rows_runtime_safe_at
+        env partition_keys order_keys items input_rows) ->
+    query_safe env
+      (QExpr_Window partition_keys order_keys items input).
+Proof.
+intros env partition_keys order_keys items input
+  Hinput Hlocal error Herror.
+apply eval_query_expr_window_error_iff in Herror.
+destruct Herror as
+  [Hchild | [input_rows [ordered_rows [Hrows [Hordered Hwindow]]]]].
+- exact (Hinput error Hchild).
+- exact (Hlocal input_rows Hrows ordered_rows Hordered error Hwindow).
+Qed.
+
+(** Every computed RANK is bounded by one plus the size of its candidate row
+    list.  This intentionally uses a simple universal bound; callers may prove
+    a sharper bound, but no query-specific partition argument is needed for
+    ordinary BIGINT availability. *)
+Lemma query_rank_nat_le_succ_length :
+  forall partition_keys order_keys rows row,
+    (query_rank_nat value_is_null partition_keys order_keys rows row <=
+      S (length rows))%nat.
+Proof.
+intros partition_keys order_keys rows row.
+unfold query_rank_nat.
+induction rows as [|candidate rows IH]; cbn.
+- lia.
+- destruct (query_rank_precedes value_is_null
+    partition_keys order_keys candidate row); cbn; lia.
+Qed.
+
+Definition query_rank_values_available_through
+    (rank_value : nat -> option (value T)) (bound : nat) : Prop :=
+  forall position,
+    (position <= bound)%nat ->
+    exists value, rank_value position = Some value.
+
+Lemma query_rank_rows_outcome_available_of_length_bound :
+  forall partition_keys order_keys rank_attribute rank_value
+      all_rows rows bound,
+    (length all_rows <= bound)%nat ->
+    query_rank_values_available_through rank_value (S bound) ->
+    exists ranked_rows,
+      @query_rank_rows_outcome T value_is_null
+        partition_keys order_keys rank_attribute rank_value
+        all_rows rows = Some ranked_rows.
+Proof.
+intros partition_keys order_keys rank_attribute rank_value
+  all_rows rows bound Hlength Havailable.
+induction rows as [|row rows IH].
+- exists nil; reflexivity.
+- assert (Hposition :
+    (query_rank_nat value_is_null partition_keys order_keys all_rows row <=
+      S bound)%nat).
+  { eapply Nat.le_trans.
+    - apply query_rank_nat_le_succ_length.
+    - now apply le_n_S.
+  }
+  destruct (Havailable _ Hposition) as [rank Hrank].
+  destruct IH as [ranked_rows Hrows].
+  exists
+    (query_window_attach_value T rank_attribute rank row :: ranked_rows).
+  cbn [query_rank_rows_outcome].
+  unfold query_rank_row_outcome.
+  now rewrite Hrank, Hrows.
+Qed.
+
+(** Child cardinality plus availability of the concrete rank carrier implies
+    RANK safety.  For PostgreSQL BIGINT, [rank_value] is the checked embedding;
+    the theorem itself remains carrier- and schema-independent. *)
+Theorem query_expr_rank_runtime_safe_of_cardinality :
+  forall env partition_keys order_keys rank_attribute rank_value input bound,
+    query_safe env input ->
+    query_length_le env input bound ->
+    query_rank_values_available_through rank_value (S bound) ->
+    query_safe env
+      (QExpr_Rank partition_keys order_keys rank_attribute rank_value input).
+Proof.
+intros env partition_keys order_keys rank_attribute rank_value input bound
+  Hinput Hbound Havailable error Herror.
+apply eval_query_expr_rank_error_iff in Herror.
+destruct Herror as [Hchild | [_ [input_rows [Hrows Hrank]]]].
+- exact (Hinput error Hchild).
+- pose proof (query_rank_bag_rows_length (T := T) input_rows) as Hlength.
+  destruct (query_rank_rows_outcome_available_of_length_bound
+    partition_keys order_keys rank_attribute
+    (query_rank_bag_rows (rows_bag T input_rows))
+    (query_rank_bag_rows (rows_bag T input_rows))
+    (rank_value := rank_value) (bound := bound))
+    as [ranked_rows Hsome].
+  + rewrite Hlength; now apply Hbound.
+  + exact Havailable.
+  + change
+      (@query_rank_rows_outcome T value_is_null
+        partition_keys order_keys rank_attribute rank_value
+        (query_rank_bag_rows (rows_bag T input_rows))
+        (query_rank_bag_rows (rows_bag T input_rows)) = None)
+      in Hrank.
+    rewrite Hrank in Hsome; discriminate.
+Qed.
+
+(** Safety of one window item at every reachable one-based position up to a
+    cardinality bound.  Aggregate items keep their prefix/full-partition
+    environments in the premise; ROW_NUMBER reduces to availability of its
+    checked value embedding. *)
+Definition query_window_item_runtime_safe_through
+    (env : Env.env T) (bound : nat) (item : query_window_item T) : Prop :=
+  forall position prefix partition,
+    (1 <= position <= bound)%nat ->
+    forall error,
+      @query_window_item_value_outcome T symbol_runtime_error
+        aggregate_runtime_error env position prefix partition item <>
+      Some (SqlError error).
+
+Lemma query_window_row_number_runtime_safe_through :
+  forall env bound item embed,
+    qwi_function item = QueryWindowRowNumber embed ->
+    (forall position,
+      (1 <= position <= bound)%nat ->
+      exists value, embed position = Some value) ->
+    query_window_item_runtime_safe_through env bound item.
+Proof.
+intros env bound [attribute function] embed Hfunction Havailable
+  position prefix partition Hposition error; cbn in Hfunction |- *.
+destruct function as [actual_embed | actual_term | actual_term];
+  inversion Hfunction; subst.
+destruct (Havailable position Hposition) as [value Hvalue].
+change
+  (match embed position with
+   | None => Some (SqlError (DataException NumericValueOutOfRange))
+   | Some observed => Some (SqlSuccess observed)
+   end <> Some (SqlError error)).
+now rewrite Hvalue.
+Qed.
+
+Lemma query_window_prefix_aggregate_runtime_safe_through :
+  forall env bound item term,
+    qwi_function item = QueryWindowAggregate term ->
+    (forall position (prefix partition : list (tuple T)),
+      (1 <= position <= bound)%nat ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error
+        (env_g T env (@Group_By T nil) prefix) term = None) ->
+    query_window_item_runtime_safe_through env bound item.
+Proof.
+intros env bound [attribute function] term Hfunction Hsafe
+  position prefix partition Hposition error; cbn in Hfunction |- *.
+destruct function as [actual_embed | actual_term | actual_term];
+  inversion Hfunction; subst; cbn [query_window_item_value_outcome].
+change
+  (match @eval_aggterm_runtime_error T symbol_runtime_error
+      aggregate_runtime_error (env_g T env (@Group_By T nil) prefix) term with
+   | Some observed_error => Some (SqlError observed_error)
+   | None => Some (SqlSuccess
+       (@interp_aggterm T (env_g T env (@Group_By T nil) prefix) term))
+   end <> Some (SqlError error)).
+now rewrite (Hsafe position prefix partition Hposition).
+Qed.
+
+Lemma query_window_full_partition_aggregate_runtime_safe_through :
+  forall env bound item term,
+    qwi_function item = QueryWindowFullPartitionAggregate term ->
+    (forall position (prefix partition : list (tuple T)),
+      (1 <= position <= bound)%nat ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error
+        (env_g T env (@Group_By T nil) partition) term = None) ->
+    query_window_item_runtime_safe_through env bound item.
+Proof.
+intros env bound [attribute function] term Hfunction Hsafe
+  position prefix partition Hposition error; cbn in Hfunction |- *.
+destruct function as [actual_embed | actual_term | actual_term];
+  inversion Hfunction; subst; cbn [query_window_item_value_outcome].
+change
+  (match @eval_aggterm_runtime_error T symbol_runtime_error
+      aggregate_runtime_error (env_g T env (@Group_By T nil) partition) term with
+   | Some observed_error => Some (SqlError observed_error)
+   | None => Some (SqlSuccess
+       (@interp_aggterm T (env_g T env (@Group_By T nil) partition) term))
+   end <> Some (SqlError error)).
+now rewrite (Hsafe position prefix partition Hposition).
+Qed.
+
+Lemma query_window_items_outcome_runtime_safe_through :
+  forall env bound items,
+    Forall (query_window_item_runtime_safe_through env bound) items ->
+    forall position prefix partition row,
+      (1 <= position <= bound)%nat ->
+      forall error,
+        @query_window_items_outcome T symbol_runtime_error
+          aggregate_runtime_error env position prefix partition items row <>
+        Some (SqlError error).
+Proof.
+intros env bound items Hitems.
+induction Hitems as [|item items Hitem Hitems IH];
+  intros position prefix partition row Hposition error Houtcome; cbn in *.
+- discriminate.
+- destruct (@query_window_item_value_outcome T symbol_runtime_error
+    aggregate_runtime_error env position prefix partition item)
+    as [[value | item_error] |] eqn:Hvalue.
+  + eapply (IH position prefix partition
+      (query_window_attach_value T (qwi_attribute item) value row)
+      Hposition error); exact Houtcome.
+  + inversion Houtcome; subst item_error.
+    exact (Hitem position prefix partition Hposition error Hvalue).
+  + discriminate.
+Qed.
+
+(** Starting from [position], at most one position is consumed per remaining
+    row; partition resets only decrease it.  Thus a simple position budget is
+    sufficient for every partition and every legal peer ordering. *)
+Lemma query_window_rows_outcome_runtime_safe_of_position_budget :
+  forall env partition_keys items bound,
+    Forall (query_window_item_runtime_safe_through env bound) items ->
+    forall previous position prefix rows,
+      (position + length rows <= bound)%nat ->
+      forall error,
+        @query_window_rows_outcome T symbol_runtime_error
+          aggregate_runtime_error value_is_null env partition_keys items
+          previous position prefix rows <> Some (SqlError error).
+Proof.
+intros env partition_keys items bound Hitems previous position prefix rows.
+revert previous position prefix.
+induction rows as [|row rows IH];
+  intros previous position prefix Hbudget error Houtcome; cbn in Houtcome.
+- discriminate.
+- cbn in Hbudget.
+  set (same_partition :=
+    match previous with
+    | None => false
+    | Some previous_row =>
+        match compare_order_keys value_is_null partition_keys
+                previous_row row with
+        | Eq => true
+        | Lt | Gt => false
+        end
+    end) in *.
+  set (current_position := if same_partition then S position else 1) in *.
+  set (current_prefix :=
+    if same_partition then prefix ++ row :: nil else row :: nil) in *.
+  set (current_partition :=
+    filter (query_window_same_partition value_is_null partition_keys row)
+      (current_prefix ++ rows)) in *.
+  assert (Hposition : (1 <= current_position <= bound)%nat).
+  { split; unfold current_position; destruct same_partition; cbn; lia. }
+  assert (Htail_budget :
+    (current_position + length rows <= bound)%nat).
+  { unfold current_position; destruct same_partition; cbn; lia. }
+  destruct (@query_window_items_outcome T symbol_runtime_error
+    aggregate_runtime_error env current_position current_prefix
+    current_partition items row) as [[output_row | item_error] |]
+    eqn:Hitem.
+  + destruct (@query_window_rows_outcome T symbol_runtime_error
+      aggregate_runtime_error value_is_null env partition_keys items
+      (Some row) current_position current_prefix rows)
+      as [[output_rows | tail_error] |] eqn:Htail.
+    * discriminate.
+    * inversion Houtcome; subst tail_error.
+      eapply (IH (Some row) current_position current_prefix
+        Htail_budget error); exact Htail.
+    * discriminate.
+  + inversion Houtcome; subst item_error.
+    pose proof (query_window_items_outcome_runtime_safe_through
+      (env := env) (bound := bound) (items := items)
+      Hitems (position := current_position)
+      current_prefix current_partition row Hposition) as Hsafe.
+    exact (Hsafe error Hitem).
+  + discriminate.
+Qed.
+
+(** Complete Window cardinality-to-safety bridge.  The child bound applies to
+    every successful observation; [order_by_rows] preserves that length, so
+    all legal peer orderings satisfy the same item contracts. *)
+Theorem query_expr_window_runtime_safe_of_cardinality :
+  forall env partition_keys order_keys items input bound,
+    query_safe env input ->
+    query_length_le env input bound ->
+    Forall (query_window_item_runtime_safe_through env bound) items ->
+    query_safe env
+      (QExpr_Window partition_keys order_keys items input).
+Proof.
+intros env partition_keys order_keys items input bound
+  Hinput Hbound Hitems.
+apply query_expr_window_runtime_safe_of_reachable_local_safe; [exact Hinput|].
+intros input_rows Hrows ordered_rows [Hordered_bag _] error Herror.
+assert (Hordered_length :
+  length ordered_rows =
+  length (query_rank_bag_rows (rows_bag T input_rows))).
+{
+  apply Nat2N.inj.
+  rewrite (query_same_rows_as_bag_length_N ordered_rows _ Hordered_bag).
+  unfold query_rows_bag, rows_bag.
+  rewrite Febag.cardinal_mk_bag; reflexivity.
+}
+assert (Hlength : (length ordered_rows <= bound)%nat).
+{ rewrite Hordered_length, query_rank_bag_rows_length; now apply Hbound. }
+eapply (query_window_rows_outcome_runtime_safe_of_position_budget
+  partition_keys Hitems None 0 nil ordered_rows
+  (env := env) (bound := bound));
+  [cbn; exact Hlength|exact Herror].
+Qed.
+
 Lemma eval_query_expr_project_error_iff_safe :
   forall env select_list input,
     (forall row,
@@ -3564,6 +4174,32 @@ intros env select_list input Hselect error; split.
 - intro Herror; now apply EQuery_ProjectChildError.
 Qed.
 
+(** Total-or-error projection progress.  The scalar premise is restricted to
+    rows of an actually selected successful child observation and permits
+    either [SqlSuccess] or [SqlError]. *)
+Lemma query_expr_project_has_outcome :
+  forall env select_list input,
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        exists outcome,
+          @eval_scalar_values_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            boolean_schedule (env_t T env row) (map fst select_list)
+            outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_Project select_list input) outcome.
+Proof.
+intros env select_list input Htotal [[input_rows | error] Hinput].
+- destruct (@eval_project_rows_has_outcome
+    env select_list input_rows (Htotal input_rows Hinput))
+    as [outcome Hproject].
+  exists outcome; eapply EQuery_ProjectRows; eassumption.
+- exists (SqlError error); now apply EQuery_ProjectChildError.
+Qed.
+
 Lemma query_expr_project_has_outcome_safe :
   forall env select_list input,
     (forall row,
@@ -3572,12 +4208,11 @@ Lemma query_expr_project_has_outcome_safe :
     (exists outcome, eval_query env input outcome) ->
     exists outcome, eval_query env (QExpr_Project select_list input) outcome.
 Proof.
-intros env select_list input Hselect [[rows | error] Hinput].
-- destruct (query_expr_project_has_success_safe
-    (env := env) (select_list := select_list) (input := input)
-    Hselect (ex_intro _ rows Hinput)) as [output Houtput].
-  now exists (SqlSuccess output).
-- exists (SqlError error); now apply EQuery_ProjectChildError.
+intros env select_list input Hselect Hinput.
+eapply query_expr_project_has_outcome; [|exact Hinput].
+intros input_rows Hrows row Hrow.
+destruct (Hselect row) as [values Hvalues].
+now exists (SqlSuccess values).
 Qed.
 
 (** A deterministic row adapter is total as a semantic map when every input
@@ -4143,6 +4778,1134 @@ Qed.
     bags from the same input bag.  A caller may still use the generic
     [lift_possible_bag_unary_functional] interface, but must supply a genuine
     functionality proof for its particular window relation. *)
+
+(** * Outcome-progress interfaces
+
+    These lemmas expose inhabitation of the exact scheduled evaluator.  Their
+    conclusion is deliberately an arbitrary [sql_outcome]: a local or child
+    [SqlError] is an observation, not a stuck computation and not a successful
+    row.  Pointwise list premises conservatively cover every member, while the
+    proofs consume each tail only after its left-to-right prefix succeeds. *)
+
+Lemma eval_scalar_values_has_outcome :
+  forall env expressions,
+    (forall expression,
+      In expression expressions ->
+      exists outcome,
+        @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env expression outcome) ->
+    exists outcome,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expressions outcome.
+Proof.
+intros env expressions; induction expressions as [|expression expressions IH];
+  intro Htotal.
+- exists (SqlSuccess nil); constructor.
+- destruct (Htotal expression (or_introl eq_refl)) as
+    [[value | error] Hexpression].
+  + destruct IH as [tail Htail].
+    { intros other Hother; apply Htotal; now right. }
+    exists (@scalar_value_cons_outcome T value tail).
+    eapply EScalarValues_Cons; eassumption.
+  + exists (SqlError error); now apply EScalarValues_HeadError.
+Qed.
+
+Lemma eval_scalar_boolean_operands_has_outcome :
+  forall env operation expressions,
+    (forall expression,
+      In expression expressions ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env expression outcome) ->
+    exists outcome,
+      @eval_scalar_boolean_operands_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env operation expressions outcome.
+Proof.
+intros env operation expressions.
+induction expressions as [|expression expressions IH]; intro Htotal.
+- exists (SqlSuccess (@scalar_conj_identity T operation)); constructor.
+- destruct (Htotal expression (or_introl eq_refl)) as
+    [[truth | error] Hexpression].
+  + destruct (@scalar_conj_operand_decides T operation truth) eqn:Hdecides.
+    * exists (SqlSuccess (@scalar_conj_decisive_result T operation)).
+      eapply EScalarBooleanOperands_HeadDecides; eassumption.
+    * destruct IH as [tail Htail].
+      { intros other Hother; apply Htotal; now right. }
+      exists (@scalar_conj_cons_outcome T operation truth tail).
+      eapply EScalarBooleanOperands_Continue; eassumption.
+  + exists (SqlError error).
+    now apply EScalarBooleanOperands_HeadError.
+Qed.
+
+Lemma eval_project_join_sources_has_outcome :
+  forall env matched_select left_select right_select sources,
+    (forall source,
+      In source sources ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_t T env (query_join_source_row source))
+          (map fst
+            (query_join_source_select
+              matched_select left_select right_select source)) outcome) ->
+    exists outcome,
+      @eval_project_join_sources_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env matched_select left_select right_select
+        sources outcome.
+Proof.
+intros env matched_select left_select right_select sources.
+induction sources as [|source sources IH]; intro Htotal.
+- exists (SqlSuccess nil); constructor.
+- destruct (Htotal source (or_introl eq_refl)) as
+    [[values | error] Hhead].
+  + destruct IH as [tail Htail].
+    { intros other Hother; apply Htotal; now right. }
+    exists
+      (@project_cons_outcome T
+        (project_row
+          (query_join_source_select
+            matched_select left_select right_select source) values)
+        tail).
+    eapply EProjectJoinSources_Cons; eassumption.
+  + exists (SqlError error); now apply EProjectJoinSources_HeadError.
+Qed.
+
+Lemma eval_filter_exists_has_outcome :
+  forall env formula rows,
+    (forall row,
+      In row rows ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env row) formula outcome) ->
+    exists outcome,
+      @eval_filter_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env formula rows outcome.
+Proof.
+intros env formula rows; induction rows as [|row rows IH]; intro Htotal.
+- exists (SqlSuccess (Bool.false (B T))); constructor.
+- destruct (Htotal row (or_introl eq_refl)) as
+    [[truth | error] Hhead].
+  + destruct (Bool.is_true (B T) truth) eqn:Htruth.
+    * exists (SqlSuccess (Bool.true (B T))).
+      eapply EFilterExists_HeadTrue; eassumption.
+    * destruct IH as [tail Htail].
+      { intros other Hother; apply Htotal; now right. }
+      exists tail; eapply EFilterExists_HeadFalse; eassumption.
+  + exists (SqlError error); now apply EFilterExists_HeadError.
+Qed.
+
+Lemma eval_join_row_conditions_has_outcome :
+  forall env predicate left rights,
+    (forall right,
+      In right rights ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule (env_t T env (join_tuple T left right))
+          predicate outcome) ->
+    exists outcome,
+      @eval_join_row_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate left rights outcome.
+Proof.
+intros env predicate left rights.
+induction rights as [|right rights IH]; intro Htotal.
+- exists (SqlSuccess nil); constructor.
+- destruct (Htotal right (or_introl eq_refl)) as
+    [[truth | error] Hhead].
+  + destruct IH as [[flags | error] Htail].
+    { intros other Hother; apply Htotal; now right. }
+    * exists (SqlSuccess (Bool.is_true (B T) truth :: flags)).
+      eapply EJoinRowConditions_Cons; eassumption.
+    * exists (SqlError error).
+      eapply EJoinRowConditions_TailError; eassumption.
+  + exists (SqlError error); now apply EJoinRowConditions_HeadError.
+Qed.
+
+Lemma eval_join_conditions_has_outcome :
+  forall env predicate lefts rights,
+    (forall left,
+      In left lefts ->
+      exists outcome,
+        @eval_join_row_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left rights outcome) ->
+    exists outcome,
+      @eval_join_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate lefts rights outcome.
+Proof.
+intros env predicate lefts rights.
+induction lefts as [|left lefts IH]; intro Htotal.
+- exists (SqlSuccess nil); constructor.
+- destruct (Htotal left (or_introl eq_refl)) as
+    [[flags | error] Hrow].
+  + destruct IH as [[matrix | error] Htail].
+    { intros other Hother; apply Htotal; now right. }
+    * exists (SqlSuccess (flags :: matrix)).
+      eapply EJoinConditions_Cons; eassumption.
+    * exists (SqlError error).
+      eapply EJoinConditions_TailError; eassumption.
+  + exists (SqlError error); now apply EJoinConditions_RowError.
+Qed.
+
+Lemma eval_join_bag_has_outcome :
+  forall env kind predicate matched_select left_select right_select
+      left_bag right_bag,
+    (forall left_rows right_rows,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      exists outcome,
+        @eval_join_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left_rows right_rows outcome) ->
+    (forall left_rows right_rows matrix,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      @eval_join_conditions_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env predicate left_rows right_rows
+        (SqlSuccess matrix) ->
+      exists outcome,
+        @eval_project_join_sources_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env matched_select left_select right_select
+          (query_join_sources T kind left_rows right_rows matrix) outcome) ->
+    exists outcome,
+      @eval_join_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env kind predicate
+        matched_select left_select right_select left_bag right_bag outcome.
+Proof.
+intros env kind predicate matched_select left_select right_select
+  left_bag right_bag Hconditions Hproject.
+set (left_rows := Febag.elements (Fecol.CBag (CTuple T)) left_bag).
+set (right_rows := Febag.elements (Fecol.CBag (CTuple T)) right_bag).
+assert (Hleft : query_same_rows_as_bag left_rows left_bag).
+{ unfold left_rows; apply query_elements_same_rows_as_bag. }
+assert (Hright : query_same_rows_as_bag right_rows right_bag).
+{ unfold right_rows; apply query_elements_same_rows_as_bag. }
+destruct (Hconditions left_rows right_rows Hleft Hright) as
+  [[matrix | error] Hmatrix].
+- destruct (Hproject left_rows right_rows matrix Hleft Hright Hmatrix) as
+    [[projected | error] Hprojected].
+  + exists (SqlSuccess (query_rows_bag projected)).
+    eapply EJoinBag_Success with
+      (left_rows := left_rows) (right_rows := right_rows)
+      (matrix := matrix) (projected := projected); try eassumption.
+    unfold query_same_rows_as_bag; apply Febag.equal_refl.
+  + exists (SqlError error).
+    eapply EJoinBag_ProjectionError; eassumption.
+- exists (SqlError error).
+  eapply EJoinBag_ConditionError; eassumption.
+Qed.
+
+Lemma eval_join_cardinality_has_outcome :
+  forall env kind predicate left_bag right_bag,
+    (forall left_rows right_rows,
+      query_same_rows_as_bag left_rows left_bag ->
+      query_same_rows_as_bag right_rows right_bag ->
+      exists outcome,
+        @eval_join_conditions_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env predicate left_rows right_rows outcome) ->
+    exists outcome,
+      @eval_join_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env kind predicate left_bag right_bag outcome.
+Proof.
+intros env kind predicate left_bag right_bag Hconditions.
+set (left_rows := Febag.elements (Fecol.CBag (CTuple T)) left_bag).
+set (right_rows := Febag.elements (Fecol.CBag (CTuple T)) right_bag).
+assert (Hleft : query_same_rows_as_bag left_rows left_bag).
+{ unfold left_rows; apply query_elements_same_rows_as_bag. }
+assert (Hright : query_same_rows_as_bag right_rows right_bag).
+{ unfold right_rows; apply query_elements_same_rows_as_bag. }
+destruct (Hconditions left_rows right_rows Hleft Hright) as
+  [[matrix | error] Hmatrix].
+- exists
+    (SqlSuccess
+      (length (query_join_sources T kind left_rows right_rows matrix))).
+  eapply EJoinCardinality_Success; eassumption.
+- exists (SqlError error).
+  eapply EJoinCardinality_ConditionError; eassumption.
+Qed.
+
+(** GROUP preserves the evaluator's eager order: SELECT aggregate
+    finalization, HAVING aggregate finalization, HAVING, and only then the
+    reached SELECT value list. *)
+Lemma eval_groups_has_outcome :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group) having outcome) ->
+    (forall group truth,
+      In group groups ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule
+        (env_g T env (@Group_By T group_terms) group) having
+        (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = true ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group)
+          (map fst select_list) outcome) ->
+    exists outcome,
+      @eval_groups_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome.
+Proof.
+intros env select_list group_terms having groups.
+induction groups as [|group groups IH]; intros Hhaving Hselect.
+- exists (SqlSuccess nil); constructor.
+- remember
+    (eval_scalar_select_aggregate_runtime_error
+      symbol_runtime_error aggregate_runtime_error
+      (env_g T env (@Group_By T group_terms) group) select_list)
+    as select_aggregate_error eqn:Hselect_aggregate.
+  destruct select_aggregate_error as [select_error |].
+  + exists (SqlError select_error).
+    eapply EGroups_SelectAggregateError; symmetry; exact Hselect_aggregate.
+  + remember
+      (eval_scalar_expr_aggregate_runtime_error
+        symbol_runtime_error aggregate_runtime_error
+        (env_g T env (@Group_By T group_terms) group) having)
+      as having_aggregate_error eqn:Hhaving_aggregate.
+    destruct having_aggregate_error as [having_error |].
+    * exists (SqlError having_error).
+      eapply EGroups_HavingAggregateError;
+        symmetry; eassumption.
+    * destruct (Hhaving group (or_introl eq_refl)) as
+        [[truth | error] Htruth].
+      -- destruct (Bool.is_true (B T) truth) eqn:Haccepted.
+         ++ destruct (Hselect group truth (or_introl eq_refl)
+              Htruth Haccepted) as [[values | error] Hvalues].
+            ** destruct IH as [tail Htail].
+               { intros other Hother; apply Hhaving; now right. }
+               { intros other other_truth Hother Hother_truth Htrue.
+                 apply Hselect with (truth := other_truth);
+                   try assumption; now right. }
+               exists
+                 (@group_cons_outcome T
+                   (project_row select_list values) tail).
+               eapply EGroups_SelectSuccess; try eassumption;
+                 symmetry; assumption.
+            ** exists (SqlError error).
+               eapply EGroups_SelectError; try eassumption;
+                 symmetry; assumption.
+         ++ destruct IH as [tail Htail].
+            { intros other Hother; apply Hhaving; now right. }
+            { intros other other_truth Hother Hother_truth Htrue.
+              apply Hselect with (truth := other_truth);
+                try assumption; now right. }
+            exists tail.
+            eapply EGroups_HavingFalse; try eassumption;
+              symmetry; assumption.
+      -- exists (SqlError error).
+         eapply EGroups_HavingError; try eassumption;
+           symmetry; assumption.
+Qed.
+
+Lemma eval_group_bag_has_outcome :
+  forall env select_list group_keys group_terms having input_bag,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (forall representative,
+      query_same_rows_as_bag representative input_bag ->
+      @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
+        env group_terms representative = None ->
+      exists outcome,
+        @eval_groups_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_terms having
+          (query_make_groups env representative group_terms) outcome) ->
+    exists outcome,
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_keys having input_bag outcome.
+Proof.
+intros env select_list group_keys group_terms having input_bag
+  Hdecode Hgroups.
+set (representative := Febag.elements (Fecol.CBag (CTuple T)) input_bag).
+assert (Hrepresentative :
+  query_same_rows_as_bag representative input_bag).
+{ unfold representative; apply query_elements_same_rows_as_bag. }
+destruct (@group_keys_runtime_error T symbol_runtime_error
+  aggregate_runtime_error env group_terms representative)
+  as [error |] eqn:Hkeys.
+- exists (SqlError error).
+  eapply EGroupBag_KeyError; eassumption.
+- destruct (Hgroups representative Hrepresentative Hkeys) as
+    [[grouped_rows | error] Hgrouped].
+  + exists (SqlSuccess (query_rows_bag grouped_rows)).
+    eapply EGroupBag_Success with
+      (group_terms := group_terms) (representative := representative)
+      (grouped_rows := grouped_rows); try eassumption.
+    unfold query_same_rows_as_bag; apply Febag.equal_refl.
+  + exists (SqlError error).
+    eapply EGroupBag_ProcessError; eassumption.
+Qed.
+
+Lemma eval_groups_cardinality_has_outcome :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group) having outcome) ->
+    exists outcome,
+      @eval_groups_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome.
+Proof.
+intros env select_list group_terms having groups.
+induction groups as [|group groups IH]; intro Hhaving.
+- exists (SqlSuccess O); constructor.
+- remember
+    (eval_scalar_select_aggregate_runtime_error
+      symbol_runtime_error aggregate_runtime_error
+      (env_g T env (@Group_By T group_terms) group) select_list)
+    as select_aggregate_error eqn:Hselect_aggregate.
+  destruct select_aggregate_error as [select_error |].
+  + exists (SqlError select_error).
+    eapply EGroupsCardinality_SelectAggregateError;
+      symmetry; exact Hselect_aggregate.
+  + remember
+      (eval_scalar_expr_aggregate_runtime_error
+        symbol_runtime_error aggregate_runtime_error
+        (env_g T env (@Group_By T group_terms) group) having)
+      as having_aggregate_error eqn:Hhaving_aggregate.
+    destruct having_aggregate_error as [having_error |].
+    * exists (SqlError having_error).
+      eapply EGroupsCardinality_HavingAggregateError;
+        symmetry; eassumption.
+    * destruct (Hhaving group (or_introl eq_refl)) as
+        [[truth | error] Htruth].
+      -- destruct (Bool.is_true (B T) truth) eqn:Haccepted.
+         ++ destruct IH as [tail Htail].
+            { intros other Hother; apply Hhaving; now right. }
+            exists (query_cardinality_cons_outcome tail).
+            eapply EGroupsCardinality_HavingTrue; try eassumption;
+              symmetry; assumption.
+         ++ destruct IH as [tail Htail].
+            { intros other Hother; apply Hhaving; now right. }
+            exists tail.
+            eapply EGroupsCardinality_HavingFalse; try eassumption;
+              symmetry; assumption.
+      -- exists (SqlError error).
+         eapply EGroupsCardinality_HavingError; try eassumption;
+           symmetry; assumption.
+Qed.
+
+Lemma eval_group_cardinality_has_outcome :
+  forall env select_list group_terms having input_bag,
+    (forall representative,
+      query_same_rows_as_bag representative input_bag ->
+      @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
+        env group_terms representative = None ->
+      exists outcome,
+        @eval_groups_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env select_list group_terms having
+          (query_make_groups env representative group_terms) outcome) ->
+    exists outcome,
+      @eval_group_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having input_bag outcome.
+Proof.
+intros env select_list group_terms having input_bag Hgroups.
+set (representative := Febag.elements (Fecol.CBag (CTuple T)) input_bag).
+assert (Hrepresentative :
+  query_same_rows_as_bag representative input_bag).
+{ unfold representative; apply query_elements_same_rows_as_bag. }
+destruct (@group_keys_runtime_error T symbol_runtime_error
+  aggregate_runtime_error env group_terms representative)
+  as [error |] eqn:Hkeys.
+- exists (SqlError error).
+  eapply EGroupCardinality_KeyError; eassumption.
+- destruct (Hgroups representative Hrepresentative Hkeys) as
+    [outcome Houtcome].
+  exists outcome; eapply EGroupCardinality_Process; eassumption.
+Qed.
+
+Lemma eval_grouping_sets_bag_has_outcome :
+  forall env grouping_sets input_bag,
+    (forall select_list group_keys,
+      In (select_list, group_keys) grouping_sets ->
+      exists outcome,
+        @eval_group_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_keys SExpr_True
+          input_bag outcome) ->
+    exists outcome,
+      @eval_grouping_sets_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env grouping_sets input_bag outcome.
+Proof.
+intros env grouping_sets input_bag.
+induction grouping_sets as
+  [|[select_list group_keys] grouping_sets IH]; intro Hbranches.
+- exists (SqlSuccess (Febag.empty (Fecol.CBag (CTuple T)))); constructor.
+- destruct (Hbranches select_list group_keys (or_introl eq_refl)) as
+    [[head_bag | error] Hhead].
+  + destruct IH as [[tail_bag | error] Htail].
+    { intros other_select other_keys Hother.
+      apply Hbranches; now right. }
+    * exists (SqlSuccess (query_set_bag Union head_bag tail_bag)).
+      eapply EGroupingSets_ConsSuccess; eassumption.
+    * exists (SqlError error).
+      eapply EGroupingSets_TailError; eassumption.
+  + exists (SqlError error); now apply EGroupingSets_HeadError.
+Qed.
+
+Lemma eval_grouping_sets_cardinality_has_outcome :
+  forall env grouping_sets input_bag,
+    (forall select_list group_keys,
+      In (select_list, group_keys) grouping_sets ->
+      exists group_terms,
+        scalar_group_key_terms group_keys = Some group_terms /\
+        exists outcome,
+          @eval_group_cardinality_outcome T relname
+            basesort instance unknown symbol_runtime_error
+            aggregate_runtime_error value_is_null boolean_schedule
+            env select_list group_terms SExpr_True input_bag outcome) ->
+    exists outcome,
+      @eval_grouping_sets_cardinality_outcome T relname
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null boolean_schedule
+        env grouping_sets input_bag outcome.
+Proof.
+intros env grouping_sets input_bag.
+induction grouping_sets as
+  [|[select_list group_keys] grouping_sets IH]; intro Hbranches.
+- exists (SqlSuccess O); constructor.
+- destruct (Hbranches select_list group_keys (or_introl eq_refl)) as
+    [group_terms [Hdecode [[head | error] Hhead]]].
+  + destruct IH as [[tail | error] Htail].
+    { intros other_select other_keys Hother.
+      apply Hbranches; now right. }
+    * exists (SqlSuccess (head + tail)).
+      eapply EGroupingSetsCardinality_ConsSuccess; eassumption.
+    * exists (SqlError error).
+      eapply EGroupingSetsCardinality_TailError; eassumption.
+  + exists (SqlError error).
+    eapply EGroupingSetsCardinality_HeadError; eassumption.
+Qed.
+
+Lemma query_rank_rows_has_outcome :
+  forall partition_keys order_keys rank_attribute rank_value all_rows rows,
+    (exists ranked_rows,
+      @query_rank_rows_outcome T value_is_null
+        partition_keys order_keys rank_attribute rank_value
+        all_rows rows = Some ranked_rows) \/
+    @query_rank_rows_outcome T value_is_null
+      partition_keys order_keys rank_attribute rank_value
+      all_rows rows = None.
+Proof.
+intros partition_keys order_keys rank_attribute rank_value all_rows rows.
+destruct (@query_rank_rows_outcome T value_is_null
+  partition_keys order_keys rank_attribute rank_value all_rows rows)
+  as [ranked_rows |] eqn:Hrank; [left; eauto | now right].
+Qed.
+
+Lemma query_window_item_value_has_outcome :
+  forall env position prefix partition item,
+    exists outcome,
+      @query_window_item_value_outcome T symbol_runtime_error
+        aggregate_runtime_error env position prefix partition item =
+      Some outcome.
+Proof.
+intros env position prefix partition [attribute function].
+destruct function as [embed | term | term]; cbn.
+- destruct (embed position); eauto.
+- destruct (eval_aggterm_runtime_error symbol_runtime_error
+    aggregate_runtime_error
+    (env_g T env (@Group_By T nil) prefix) term); eauto.
+- destruct (eval_aggterm_runtime_error symbol_runtime_error
+    aggregate_runtime_error
+    (env_g T env (@Group_By T nil) partition) term); eauto.
+Qed.
+
+Lemma query_window_items_has_outcome :
+  forall env position prefix partition items row,
+    exists outcome,
+      @query_window_items_outcome T symbol_runtime_error
+        aggregate_runtime_error env position prefix partition items row =
+      Some outcome.
+Proof.
+intros env position prefix partition items.
+induction items as [|item items IH]; intro row.
+- exists (SqlSuccess row); reflexivity.
+- destruct (query_window_item_value_has_outcome
+    env position prefix partition item) as [item_outcome Hitem].
+  cbn [query_window_items_outcome].
+  rewrite Hitem.
+  destruct item_outcome as [value | error].
+  + apply IH.
+  + eexists; reflexivity.
+Qed.
+
+Lemma query_window_rows_has_outcome :
+  forall env partition_keys items previous position prefix rows,
+    exists outcome,
+      @query_window_rows_outcome T symbol_runtime_error
+        aggregate_runtime_error value_is_null env partition_keys items
+        previous position prefix rows = Some outcome.
+Proof.
+intros env partition_keys items previous position prefix rows.
+revert previous position prefix.
+induction rows as [|row rows IH]; intros previous position prefix.
+- exists (SqlSuccess nil); reflexivity.
+- cbn [query_window_rows_outcome].
+  set (same_partition :=
+    match previous with
+    | None => false
+    | Some previous_row =>
+        match compare_order_keys value_is_null partition_keys
+                previous_row row with
+        | Eq => true
+        | Lt | Gt => false
+        end
+    end).
+  set (current_position := if same_partition then S position else 1).
+  set (current_prefix :=
+    if same_partition then prefix ++ row :: nil else row :: nil).
+  set (current_partition :=
+    filter (query_window_same_partition value_is_null partition_keys row)
+      (current_prefix ++ rows)).
+  destruct (query_window_items_has_outcome env current_position
+    current_prefix current_partition items row) as [head Hhead].
+  rewrite Hhead.
+  destruct head as [output_row | error].
+  + destruct (IH (Some row) current_position current_prefix) as [tail Htail].
+    rewrite Htail.
+    destruct tail as [output_rows | error]; eexists; reflexivity.
+  + eexists; reflexivity.
+Qed.
+
+Lemma query_expr_natural_join_has_outcome :
+  forall env left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    exists outcome,
+      eval_query env (QExpr_NaturalJoin left right) outcome.
+Proof.
+intros env left right
+  [[left_rows | left_error] Hleft]
+  [[right_rows | right_error] Hright].
+- exists
+    (SqlSuccess
+      (Febag.elements (Fecol.CBag (CTuple T))
+        (query_natural_join_bag value_is_null
+          (query_rows_bag left_rows) (query_rows_bag right_rows)))).
+  eapply EQuery_NaturalJoinSuccess; try eassumption.
+  apply query_elements_same_rows_as_bag.
+- exists (SqlError right_error).
+  eapply EQuery_NaturalJoinRightError; eassumption.
+- exists (SqlError left_error); now apply EQuery_NaturalJoinLeftError.
+- exists (SqlError left_error); now apply EQuery_NaturalJoinLeftError.
+Qed.
+
+Lemma query_expr_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_RowMap outputs row_map input) outcome.
+Proof.
+intros env outputs row_map input [[input_rows | error] Hinput].
+- exists (row_map_rows_outcome row_map input_rows).
+  now apply EQuery_RowMapRows.
+- exists (SqlError error); now apply EQuery_RowMapChildError.
+Qed.
+
+Lemma query_expr_join_has_outcome :
+  forall env kind predicate matched_select left_select right_select left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      exists outcome,
+        @eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env kind predicate
+          matched_select left_select right_select
+          (query_rows_bag left_rows) (query_rows_bag right_rows) outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right) outcome.
+Proof.
+intros env kind predicate matched_select left_select right_select left right
+  [[left_rows | left_error] Hleft]
+  [[right_rows | right_error] Hright] Hjoin.
+- destruct (Hjoin left_rows right_rows Hleft Hright) as
+    [[output_bag | error] Houtput].
+  + exists
+      (SqlSuccess
+        (Febag.elements (Fecol.CBag (CTuple T)) output_bag)).
+    eapply EQuery_JoinSuccess; try eassumption.
+    apply query_elements_same_rows_as_bag.
+  + exists (SqlError error); eapply EQuery_JoinBagError; eassumption.
+- exists (SqlError right_error); eapply EQuery_JoinRightError; eassumption.
+- exists (SqlError left_error); now apply EQuery_JoinLeftError.
+- exists (SqlError left_error); now apply EQuery_JoinLeftError.
+Qed.
+
+Lemma query_expr_group_has_outcome :
+  forall env select_list group_keys group_terms having input,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_group_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_keys having
+          (query_rows_bag input_rows) outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Group select_list group_keys having input) outcome.
+Proof.
+intros env select_list group_keys group_terms having input Hdecode Hgroup
+  [[input_rows | error] Hinput].
+- destruct (Hgroup input_rows Hinput) as [[output_bag | error] Houtput].
+  + exists
+      (SqlSuccess
+        (Febag.elements (Fecol.CBag (CTuple T)) output_bag)).
+    eapply EQuery_GroupBagSuccess; try eassumption.
+    apply query_elements_same_rows_as_bag.
+  + exists (SqlError error); eapply EQuery_GroupBagError; eassumption.
+- exists (SqlError error); now apply EQuery_GroupChildError.
+Qed.
+
+Lemma query_expr_grouping_sets_has_outcome :
+  forall env grouping_sets input,
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_grouping_sets_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env grouping_sets
+          (query_rows_bag input_rows) outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_GroupingSets grouping_sets input) outcome.
+Proof.
+intros env grouping_sets input Hgroups [[input_rows | error] Hinput].
+- destruct (Hgroups input_rows Hinput) as [[output_bag | error] Houtput].
+  + exists
+      (SqlSuccess
+        (Febag.elements (Fecol.CBag (CTuple T)) output_bag)).
+    eapply EQuery_GroupingSetsSuccess; try eassumption.
+    apply query_elements_same_rows_as_bag.
+  + exists (SqlError error); eapply EQuery_GroupingSetsBagError; eassumption.
+- exists (SqlError error); now apply EQuery_GroupingSetsChildError.
+Qed.
+
+Lemma query_expr_rank_has_outcome :
+  forall env partition_keys order_keys rank_attribute rank_value input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Rank partition_keys order_keys rank_attribute rank_value input)
+        outcome.
+Proof.
+intros env partition_keys order_keys rank_attribute rank_value input
+  [[input_rows | error] Hinput].
+- destruct
+    (query_rank_rows_has_outcome partition_keys order_keys rank_attribute
+      rank_value
+      (query_rank_bag_rows (query_rows_bag input_rows))
+      (query_rank_bag_rows (query_rows_bag input_rows))) as
+    [[ranked_rows Hrank] | Hrank].
+  + exists
+      (SqlSuccess
+        (Febag.elements (Fecol.CBag (CTuple T))
+          (query_rows_bag ranked_rows))).
+    eapply EQuery_RankSuccess with
+      (input_rows := input_rows) (ranked_rows := ranked_rows);
+      try eassumption.
+    apply query_elements_same_rows_as_bag.
+  + exists (SqlError (DataException NumericValueOutOfRange)).
+    eapply EQuery_RankValueError; eassumption.
+- exists (SqlError error); now apply EQuery_RankChildError.
+Qed.
+
+Lemma query_expr_window_has_outcome :
+  forall env partition_keys order_keys items input,
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Window partition_keys order_keys items input) outcome.
+Proof.
+intros env partition_keys order_keys items input
+  [[input_rows | error] Hinput].
+- destruct
+    (@order_by_rows_has_observation T value_is_null
+      (partition_keys ++ order_keys)
+      (query_rank_bag_rows (query_rows_bag input_rows))) as
+    [ordered_rows Hordered].
+  destruct (query_window_rows_has_outcome env partition_keys items
+    None 0 nil ordered_rows) as [[window_rows | error] Hwindow].
+  + exists
+      (SqlSuccess
+        (Febag.elements (Fecol.CBag (CTuple T))
+          (query_rows_bag window_rows))).
+    eapply EQuery_WindowSuccess with
+      (input_rows := input_rows) (ordered_rows := ordered_rows)
+      (window_rows := window_rows); try eassumption.
+    apply query_elements_same_rows_as_bag.
+  + exists (SqlError error).
+    eapply EQuery_WindowRowsError with
+      (input_rows := input_rows) (ordered_rows := ordered_rows);
+      eassumption.
+- exists (SqlError error); now apply EQuery_WindowChildError.
+Qed.
+
+(** Cardinality and EXISTS have dedicated demand evaluators.  The following
+    rules close their progress interfaces without evaluating target
+    expressions that PostgreSQL may legitimately elide. *)
+
+Lemma eval_query_cardinality_demanded_has_outcome :
+  forall env query,
+    query_cardinality_requires_rows query = true ->
+    (exists query_outcome, eval_query env query query_outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+Proof.
+intros env query Hdemand [query_outcome Hquery].
+exists (@query_rows_cardinality_outcome T query_outcome).
+now apply ECardinality_Demanded.
+Qed.
+
+Lemma eval_query_cardinality_project_has_outcome :
+  forall env select_list input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Project select_list input) outcome.
+Proof.
+intros env select_list input [outcome Houtcome].
+exists outcome; now apply ECardinality_Project.
+Qed.
+
+Lemma eval_query_cardinality_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_RowMap outputs row_map input) outcome.
+Proof.
+intros env outputs row_map input [outcome Houtcome].
+exists outcome; now apply ECardinality_RowMap.
+Qed.
+
+Lemma eval_query_cardinality_order_by_has_outcome :
+  forall env keys input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_OrderBy keys input) outcome.
+Proof.
+intros env keys input [outcome Houtcome].
+exists outcome; now apply ECardinality_OrderBy.
+Qed.
+
+Lemma eval_query_cardinality_fetch_has_outcome :
+  forall env count input,
+    (exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Fetch count input) outcome.
+Proof.
+intros env count input [outcome Houtcome].
+exists (query_fetch_cardinality_outcome count outcome).
+now apply ECardinality_Fetch.
+Qed.
+
+Lemma eval_query_cardinality_join_has_outcome :
+  forall env kind predicate matched_select left_select right_select left right,
+    (exists outcome, eval_query env left outcome) ->
+    (exists outcome, eval_query env right outcome) ->
+    (forall left_rows right_rows,
+      eval_query env left (SqlSuccess left_rows) ->
+      eval_query env right (SqlSuccess right_rows) ->
+      exists outcome,
+        @eval_join_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env kind predicate (query_rows_bag left_rows)
+          (query_rows_bag right_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_Join kind predicate matched_select left_select right_select
+          left right) outcome.
+Proof.
+intros env kind predicate matched_select left_select right_select left right
+  [[left_rows | left_error] Hleft]
+  [[right_rows | right_error] Hright] Hjoin.
+- destruct (Hjoin left_rows right_rows Hleft Hright) as [outcome Houtcome].
+  exists outcome; eapply ECardinality_Join; eassumption.
+- exists (SqlError right_error); eapply ECardinality_JoinRightError; eassumption.
+- exists (SqlError left_error); now apply ECardinality_JoinLeftError.
+- exists (SqlError left_error); now apply ECardinality_JoinLeftError.
+Qed.
+
+Lemma eval_query_cardinality_group_has_outcome :
+  forall env select_list group_keys group_terms having input,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_group_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env select_list group_terms having
+          (query_rows_bag input_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_Group select_list group_keys having input) outcome.
+Proof.
+intros env select_list group_keys group_terms having input Hdecode
+  [[input_rows | error] Hinput] Hgroup.
+- destruct (Hgroup input_rows Hinput) as [outcome Houtcome].
+  exists outcome.
+  eapply ECardinality_Group with (group_terms := group_terms); eassumption.
+- exists (SqlError error); now apply ECardinality_GroupChildError.
+Qed.
+
+Lemma eval_query_cardinality_grouping_sets_has_outcome :
+  forall env grouping_sets input,
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_grouping_sets_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env grouping_sets (query_rows_bag input_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_GroupingSets grouping_sets input) outcome.
+Proof.
+intros env grouping_sets input [[input_rows | error] Hinput] Hgroups.
+- destruct (Hgroups input_rows Hinput) as [outcome Houtcome].
+  exists outcome; eapply ECardinality_GroupingSets; eassumption.
+- exists (SqlError error); now apply ECardinality_GroupingSetsChildError.
+Qed.
+
+Lemma eval_query_exists_demanded_has_outcome :
+  forall env query,
+    query_exists_requires_rows query = true ->
+    (exists query_outcome, eval_query env query query_outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+Proof.
+intros env query Hdemand [query_outcome Hquery].
+exists (@query_exists_rows_outcome T query_outcome).
+now apply EExists_Demanded.
+Qed.
+
+Lemma eval_query_exists_cardinality_has_outcome :
+  forall env query,
+    query_exists_uses_cardinality query = true ->
+    (exists cardinality_outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query cardinality_outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env query outcome.
+Proof.
+intros env query Hdemand [cardinality_outcome Hcardinality].
+exists (@query_exists_cardinality_outcome T cardinality_outcome).
+now apply EExists_Cardinality.
+Qed.
+
+Lemma eval_query_exists_project_has_outcome :
+  forall env select_list input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Project select_list input) outcome.
+Proof.
+intros env select_list input [outcome Houtcome].
+exists outcome; now apply EExists_Project.
+Qed.
+
+Lemma eval_query_exists_row_map_has_outcome :
+  forall env outputs row_map input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_RowMap outputs row_map input) outcome.
+Proof.
+intros env outputs row_map input [outcome Houtcome].
+exists outcome; now apply EExists_RowMap.
+Qed.
+
+Lemma eval_query_exists_filter_has_outcome :
+  forall env formula input,
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      forall row,
+        In row input_rows ->
+        exists outcome,
+          @eval_scalar_boolean_expr_outcome T relname
+            basesort instance unknown symbol_runtime_error
+            aggregate_runtime_error value_is_null boolean_schedule
+            (env_t T env row) formula outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Filter formula input) outcome.
+Proof.
+intros env formula input [[input_rows | error] Hinput] Htotal.
+- destruct (eval_filter_exists_has_outcome
+    (env := env) (formula := formula) input_rows
+    (Htotal input_rows Hinput)) as [outcome Houtcome].
+  exists outcome; eapply EExists_FilterRows; eassumption.
+- exists (SqlError error); now apply EExists_FilterChildError.
+Qed.
+
+Lemma eval_query_exists_distinct_has_outcome :
+  forall env input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Distinct input) outcome.
+Proof.
+intros env input [outcome Houtcome].
+exists outcome; now apply EExists_Distinct.
+Qed.
+
+Lemma eval_query_exists_order_by_has_outcome :
+  forall env keys input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_OrderBy keys input) outcome.
+Proof.
+intros env keys input [outcome Houtcome].
+exists outcome; now apply EExists_OrderBy.
+Qed.
+
+Lemma eval_query_exists_fetch_zero_has_outcome :
+  forall env input,
+    query_expr_contains_analysis_error input = false ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Fetch O input) outcome.
+Proof.
+intros env input Hanalysis.
+exists (SqlSuccess (Bool.false (B T))).
+now apply EExists_FetchZero.
+Qed.
+
+Lemma eval_query_exists_fetch_positive_has_outcome :
+  forall env count input,
+    (exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env input outcome) ->
+    exists outcome,
+      @eval_query_exists_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env (QExpr_Fetch (S count) input) outcome.
+Proof.
+intros env count input [outcome Houtcome].
+exists outcome; now apply EExists_FetchPositive.
+Qed.
+
+(** Scheduled progress quantifies over every compiled Boolean schedule.  The
+    possible-outcome bridge chooses one fixed legal schedule internally, so a
+    caller never has to manufacture an arbitrary observation or collapse the
+    nondeterministic union to that one witness. *)
+Definition query_expr_scheduled_progress
+    (env : Env.env T) (query : query_expr T relname) : Prop :=
+  forall schedule : boolean_site -> boolean_evaluation_order,
+    exists outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        schedule env query outcome.
+
+Lemma query_expr_scheduled_progress_has_possible_outcome :
+  forall env query,
+    query_expr_scheduled_progress env query ->
+    exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        env query outcome.
+Proof.
+intros env query Hprogress.
+destruct (Hprogress (fun _ => BooleanLeftFirst)) as [outcome Houtcome].
+exists outcome, (fun _ => BooleanLeftFirst); exact Houtcome.
+Qed.
+
 End ExactQueries.
 
 (** * Congruence over all legal Boolean schedules

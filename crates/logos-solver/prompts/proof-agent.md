@@ -37,45 +37,62 @@ host feedback.
 7. The generated goals and introduction helpers in `Problem.v`.
 
 State the SQL rewrite in one sentence and identify the smallest differing
-subtrees. Before developing local helpers, write a concise top-level route in
-`scratch/proof-plan.md`. The following structure is recommended:
+subtrees. Before developing local helpers, write a concise obligation DAG in
+`scratch/proof-plan.md`. This is agent-owned working state, not a plan that the
+host must approve or a new proof authority. The following structure is
+recommended:
 
 ```text
 route-revision: 1
 current-residual: initial-top-level
+active-node: root
 # Proof plan
 ## Claim
 equivalence or countermodel, with one-sentence SQL justification
 ## Static
 only unresolved prerequisites not consumed by the generated introduction helper
-## Top-level route
-finite theorem/application chain from generated_verification_goal to the core
-## Current residual
-the exact current Rocq obligation and the diagnostic that exposed it
-## Core
-at most one next helper, its exact statement, existing-interface search, and consumer
-## Lift
-the operator/program theorem that consumes Core
-## Assembly
-the exact Problem.v step that consumes Lift and closes or exposes the next residual
+## Root assembly
+the exact compile-clean theorem reducing generated_verification_goal to a
+finite set of explicit semantic contracts
+## Obligation DAG
+for every node: exact Rocq statement, direct consumer, direct dependencies,
+status, and latest diagnostic; dependencies must be acyclic
+## Active node
+one unresolved leaf or parent being refined, and why its statement is the
+smallest useful contract for its direct consumer
 ## Revision log
-route-revision, reason, and abandoned residuals
+route-revision, changed statements or edges, reason, and rechecked ancestors
 ```
 
-Treat the plan as a finite dependency route, not a list of potentially useful
-lemmas. Begin from the required final selector/theorem skeleton in `Problem.v`
-and apply the generated introduction helper. An early problem-mode assembly
-diagnostic is usually the fastest way to expose the first semantic residual;
-record that residual before investing in helper proofs. Static should contain
-only unresolved prerequisites because the introduction helper already consumes
-emitted signatures and admissibility.
+Treat the plan as a finite proof dependency graph, not a list of potentially
+useful lemmas. For a nontrivial goal, do not begin with an intentionally broken
+final theorem that will remain unchecked while local proofs accumulate.
+Instead, first prove a compile-clean composition theorem of the form
+`Contract1 -> ... -> ContractN -> generated_verification_goal ...`, using the
+generated introduction helper and public operator lifts. The contracts must be
+ordinary propositions over the generated Queries/Schema and public FormalSQL
+relations, never axioms, admitted facts, or hidden assumptions. During this
+development checkpoint `Problem.v` may omit the required final selector and
+theorem; add them only when the dependency DAG supplies every premise.
 
-Thereafter work one residual at a time. A helper is justified only by a named
-consumer in the current top-level route. Connect checked helpers back to
-`Problem.v` regularly so diagnostics confirm that the top-level residual closes
-or becomes smaller. If the route is wrong, revise it, explain why in the
-revision log, and stop investing in speculative lemmas from the abandoned
-route.
+If a direct contract is still too large, refine it top-down: first prove a
+compile-clean `Child1 -> ... -> ChildN -> Parent` composition lemma, add those
+children to the DAG, and only then prove the leaves. Work on one active leaf at
+a time. Every helper must name a direct consumer. After publishing a completed
+node, immediately consume it in the current application of its parent's
+composition theorem and recheck the affected path to the root. Never edit an
+already published parent module; instantiate it in `Problem.v` or a newly named
+successor assembly module. A checked leaf that has not reduced a rechecked
+ancestor is not progress. If a node statement or edge changes, build and check
+the revised ancestor path before extending its descendants. Abandon obsolete
+descendants when revising the route rather than growing a parallel helper
+stack.
+
+An early problem-mode assembly diagnostic should establish this root
+composition boundary and expose its direct contracts before deep helper work.
+Static should contain only unresolved prerequisites because the introduction
+helper already consumes emitted signatures and admissibility. Simple goals
+that close directly need no artificial DAG or extra modules.
 
 Use the two navigation JSON files to reject impossible typed boundaries before
 opening named definitions, and inspect `Schema.v` only for needed constraints.
@@ -183,12 +200,15 @@ successor module, which may import only modules that passed earlier, for example
 From LogosGenerated.ProofModules Require Import CoreFacts.
 ```
 
-`Problem.v` may import any successfully published modules in the same form and
-should contain the current thin top-level instantiation and required theorem.
-Do not remove or rewrite its generated base `Require` commands; adding these
-`LogosGenerated.ProofModules` imports is allowed. The host independently
-recompiles every published module in cache order before compiling `Problem.v`
-and `Goal.v` during the final trusted verification.
+`Problem.v` may import any successfully published modules in the same form. It
+should contain the current thin root composition and, once all contracts are
+proved, the required final selector and theorem. A compile-clean development
+checkpoint may intentionally omit that final theorem; an intentionally broken
+placeholder theorem is not a checkpoint. Do not remove or rewrite its
+generated base `Require` commands; adding these `LogosGenerated.ProofModules`
+imports is allowed. The host independently recompiles every published module
+in cache order before compiling `Problem.v` and `Goal.v` during the final
+trusted verification.
 
 Regular UTF-8 `.v`, `.md`, and `.txt` work files are retained below `scratch/`.
 Other regular-file extensions are dropped with a host warning at the round
@@ -206,13 +226,15 @@ used as an assumption. Scratch forbids assumptions, admits, aborts, `Defined`,
 unsafe commands, and untrusted imports. Every checked scratch subgoal must end
 in an opaque `Qed` result, and scratch files must not import one another.
 
-After a checked scratch theorem closes the single planned semantic boundary,
-move its opaque statement into a new proof module and check that module. Then
-import and instantiate the immutable module in `Problem.v` soon enough to
-confirm that it reduces the intended residual. If instantiation exposes a
-missing interface, record that exact new residual. If the helper does not
-reduce the top-level residual, revise the route instead of extending the helper
-stack.
+After a checked scratch theorem closes the active DAG node, move its opaque
+statement into a new proof module and check that module. Then import and
+instantiate the immutable module in the current assembly application of its
+direct parent, and continue rechecking the path through the root composition.
+Do not rewrite a published parent; create a successor assembly module if the
+application itself should be cached. If instantiation exposes a missing
+interface, prove a revised parent-from-children composition lemma before
+proving more leaves. If the helper does not reduce its named consumer, revise
+the route instead of extending the helper stack.
 Short, final-use-only definitions and `Qed` helpers remain allowed in
 `Problem.v`. All generated context artifacts and FormalSQL trees are read-only.
 Scratch may copy the exact trusted imports and previously published
@@ -299,20 +321,16 @@ Then prove
 `apply generated_equivalence_goal_intro`. A derived condition must follow from
 the original schema. An external condition must be jointly satisfiable with it.
 
-Keep the final theorem compositional, but keep its assembly route live throughout
-the search. Probe `Problem.v`, isolate only its current semantic residual in a
-short opaque `Qed` lemma, test that boundary in scratch, publish it if needed,
-and immediately reconnect it to `Problem.v`. Reuse an operator-level interface
-rather than rebuilding evaluator recursion. A parameterized helper must not
-encode a case ID, generated query name, schema constant, or complete benchmark
-rewrite; concrete facts may remain in the final local instantiation. A checked
-helper that has not been consumed by a new top-level diagnostic does not count
-as progress.
+Apply the same obligation-DAG discipline to conditional proofs. Reuse an
+operator-level interface rather than rebuilding evaluator recursion. A
+parameterized helper must not encode a case ID, generated query name, schema
+constant, or complete benchmark rewrite; concrete facts may remain in the
+final local instantiation.
 
 ## Requesting a diagnostic check
 
-Rocq runs only on the trusted host. After writing the plan and top-level
-skeleton, probe the real route first:
+Rocq runs only on the trusted host. After writing the obligation DAG and root
+composition theorem, probe that real route first:
 
 ```bash
 bash run-rocq-check.sh \
@@ -322,8 +340,9 @@ bash run-rocq-check.sh \
   --timeout-seconds 90
 ```
 
-This first diagnostic is allowed to fail and should expose the residual that
-drives `Core`. Once the route is established, check that isolated subgoal:
+The first exploratory diagnostic may fail while exposing the direct contracts,
+but replace that probe with a compile-clean root composition before deep local
+work. Once the route is established, check the active leaf in isolation:
 
 ```bash
 bash run-rocq-check.sh \
@@ -352,9 +371,10 @@ Do not modify it or resubmit the same name with different bytes. Create, check,
 and import a new successor such as `CoreBridge2.v` when extending or correcting
 the proof. This append-only discipline lets later diagnostics reuse earlier
 `.vo` files without recompiling their proofs. Module success closes the current
-local step, but it is not evidence that the top-level theorem progressed. Keep
-the route honest by importing useful modules into `Problem.v` and checking the
-resulting residual during proof development.
+local node, but it is not evidence that the root progressed. Keep the DAG
+honest by instantiating the module in the current parent application and
+rechecking the affected ancestor path during proof development; never modify a
+published parent module.
 
 After assembling coherent, previously checked pieces into the real file,
 compile it explicitly:

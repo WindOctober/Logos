@@ -297,6 +297,9 @@ fn print_report(report: &SolverReport) {
                     .bold()
             }
             BackendStatus::ProofSearchTimedOut => "proof search timed out".bright_yellow().bold(),
+            BackendStatus::NeedsManualReview => "proof search stopped for manual review"
+                .bright_yellow()
+                .bold(),
             BackendStatus::WorkspaceGenerated => "proof workspace generated".bright_cyan().bold(),
             BackendStatus::ProofAgentFailed => "proof agent failed".bright_red().bold(),
         };

@@ -1147,6 +1147,97 @@ destruct (Oeset.mem_bool (OTuple T) value left) eqn:Hleft_mem.
   congruence.
 Qed.
 
+(** DISTINCT preserves exactly the semantic support of its input bag.  This
+    occurrence-level fact is generic over every tuple model and is shared by
+    grouping, membership, and duplicate-elimination proofs. *)
+Lemma query_distinct_bag_occurrence_nonzero_iff :
+  forall (T : Tuple.Rcd) (bag : SqlBagAbstraction.bagT T) row,
+    Febag.nb_occ (Fecol.CBag (CTuple T)) row
+      (query_distinct_bag bag) <> 0%N <->
+    Febag.nb_occ (Fecol.CBag (CTuple T)) row bag <> 0%N.
+Proof.
+intros T bag row.
+assert (Hdistinct :
+  Febag.nb_occ (Fecol.CBag (CTuple T)) row
+    (query_distinct_bag bag) =
+  if Febag.mem (Fecol.CBag (CTuple T)) row bag then 1%N else 0%N).
+{
+  unfold query_distinct_bag.
+  rewrite Febag.nb_occ_mk_bag.
+  change
+    (Feset.nb_occ (Fecol.CSet (CTuple T)) row
+      (Feset.mk_set (Fecol.CSet (CTuple T))
+        (Febag.elements (Fecol.CBag (CTuple T)) bag)) =
+     if Febag.mem (Fecol.CBag (CTuple T)) row bag then 1%N else 0%N).
+  rewrite Feset.nb_occ_alt, Feset.mem_mk_set.
+  rewrite <- Febag.mem_unfold.
+  reflexivity.
+}
+rewrite Hdistinct.
+destruct (Febag.mem (Fecol.CBag (CTuple T)) row bag) eqn:Hmem.
+- split; [|intros _ Hzero; discriminate Hzero].
+  intros _ Hzero.
+  rewrite Febag.mem_nb_occ, Hzero in Hmem.
+  discriminate Hmem.
+- split.
+  + intros Hfalse; exfalso; apply Hfalse; reflexivity.
+  + intros Hnonzero.
+    exfalso; apply Hnonzero.
+    now apply Febag.not_mem_nb_occ.
+Qed.
+
+(** DISTINCT changes multiplicity to one but preserves row support in both
+    directions.  Keeping this theorem in the relational-algebra layer avoids
+    duplicating its occurrence proof in GROUP and membership developments. *)
+Theorem query_distinct_rows_support_rel :
+  forall (T : Tuple.Rcd) input output,
+    @query_same_rows_as_bag T output
+      (query_distinct_bag (query_rows_bag input)) ->
+    list_support_rel
+      (fun first second =>
+        Oeset.compare (OTuple T) first second = Eq)
+      output input.
+Proof.
+intros T input output Houtput.
+pose proof
+  ((proj1
+    (@query_same_rows_as_bag_iff_occurrences T output
+      (query_distinct_bag (query_rows_bag input)))) Houtput) as Hoccurrences.
+clear Houtput; rename Hoccurrences into Houtput.
+split.
+- intros row Hrow.
+  assert (Houtput_occ : Oeset.nb_occ (OTuple T) row output <> 0%N).
+  { now apply Oeset.In_nb_occ. }
+  rewrite Houtput in Houtput_occ.
+  apply (proj1
+    (@query_distinct_bag_occurrence_nonzero_iff
+      T (query_rows_bag input) row)) in Houtput_occ.
+  change
+    (Febag.nb_occ (Fecol.CBag (CTuple T)) row
+      (rows_bag T input) <> 0%N) in Houtput_occ.
+  rewrite (rows_bag_occ T input row) in Houtput_occ.
+  apply Oeset.nb_occ_mem in Houtput_occ.
+  apply Oeset.mem_bool_true_iff in Houtput_occ.
+  destruct Houtput_occ as [other [Hequal Hother]].
+  exists other; now split.
+- intros row Hrow.
+  assert (Hinput_occ : Oeset.nb_occ (OTuple T) row input <> 0%N).
+  { now apply Oeset.In_nb_occ. }
+  rewrite <- (rows_bag_occ T input row) in Hinput_occ.
+  change
+    (Febag.nb_occ (Fecol.CBag (CTuple T)) row
+      (query_rows_bag input) <> 0%N) in Hinput_occ.
+  apply (proj2
+    (@query_distinct_bag_occurrence_nonzero_iff
+      T (query_rows_bag input) row)) in Hinput_occ.
+  rewrite <- Houtput in Hinput_occ.
+  apply Oeset.nb_occ_mem in Hinput_occ.
+  apply Oeset.mem_bool_true_iff in Hinput_occ.
+  destruct Hinput_occ as [other [Hequal Hother]].
+  exists other; split; [exact Hother|].
+  now apply Oeset.compare_eq_sym.
+Qed.
+
 Lemma alpha_membership_iff_occurrence_representative :
   forall (T : Tuple.Rcd) (observations : list (tuple T) -> Prop)
          (bag : SqlBagAbstraction.bagT T),
@@ -3172,6 +3263,11 @@ induction rights as [|right rights IH]; intros accepted Haccepted outcome.
   + intro Heval; inversion Heval; subst.
     * exfalso; eapply Hno_error; eassumption.
     * match goal with
+      | Hrest : context [eval_join_row_conditions_outcome] |- _ =>
+          apply (proj1 (IH accepted Htail _)) in Hrest;
+          discriminate
+      end.
+    * match goal with
       | Hpredicate : eval_scalar_boolean _ predicate (SqlSuccess ?actual_truth),
         Hrest : context [eval_join_row_conditions_outcome] |- _ =>
           pose proof (Hsuccess_accepted actual_truth Hpredicate)
@@ -3234,6 +3330,11 @@ induction lefts as [|left lefts IH];
           (env := env) (predicate := predicate) (left := left)
           rights (accepted left) Hrow (SqlError _))) in H4.
       discriminate.
+    * match goal with
+      | Hrest : context [eval_join_conditions_outcome] |- _ =>
+          apply (proj1 (IH rights accepted Htail _)) in Hrest;
+          discriminate
+      end.
     * match goal with
       | Hrow_success : context [eval_join_row_conditions_outcome],
         Hrest : context [eval_join_conditions_outcome] |- _ =>

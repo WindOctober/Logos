@@ -382,6 +382,148 @@ apply rows_bag_eq_of_nodup_support_rel.
     exact (Hright_member right_group right_row Hright_group Hright_row).
 Qed.
 
+(** A nonempty GROUP BY that emits one key-complete row per group denotes
+    exactly DISTINCT over the corresponding row projection.  The conclusion
+    is an exact bag law: both sides contain every projected key once, including
+    the SQL NULL key, and contain no additional multiplicity.  Aggregate,
+    HAVING, SELECT-evaluation, and runtime-error obligations intentionally stay
+    outside this support theorem. *)
+Theorem query_make_groups_projected_distinct_bag_eq :
+  forall env rows group_terms
+      (project : tuple T -> tuple T)
+      (emit : list (tuple T) -> tuple T),
+    group_terms <> nil ->
+    (forall group row,
+      In group (@query_make_groups T env rows group_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env group_terms left =
+      query_grouping_key env group_terms right) ->
+    bag_eq T
+      (rows_bag T
+        (map emit (@query_make_groups T env rows group_terms)))
+      (query_distinct_bag (rows_bag T (map project rows))).
+Proof.
+intros env rows group_terms project emit Hterms Hmember Hreflect.
+set (group_rows :=
+  map emit (@query_make_groups T env rows group_terms)).
+set (projected_rows := map project rows).
+set (distinct_rows :=
+  Feset.elements (Fecol.CSet (CTuple T))
+    (Feset.mk_set (Fecol.CSet (CTuple T))
+      (Febag.elements (Fecol.CBag (CTuple T))
+        (rows_bag T projected_rows)))).
+assert (Hgroup_support :
+  list_support_rel
+    (fun row output =>
+      Oeset.compare (OTuple T) (project row) output = Eq)
+    rows group_rows).
+{
+  unfold group_rows.
+  eapply query_make_groups_support_rel; [exact Hterms|].
+  intros group row Hgroup Hrow.
+  exact (Hmember group row Hgroup Hrow).
+}
+assert (Hdistinct_represents :
+  @query_same_rows_as_bag T distinct_rows
+    (query_distinct_bag (rows_bag T projected_rows))).
+{
+  unfold distinct_rows, query_distinct_bag, query_same_rows_as_bag,
+    query_rows_bag, rows_bag.
+  apply bag_eq_refl.
+}
+assert (Hdistinct_support :
+  list_support_rel
+    (fun first second =>
+      Oeset.compare (OTuple T) first second = Eq)
+    distinct_rows projected_rows).
+{
+  unfold projected_rows in Hdistinct_represents |- *.
+  exact (@query_distinct_rows_support_rel T _ _ Hdistinct_represents).
+}
+assert (Houtput_support :
+  list_support_rel
+    (fun first second =>
+      Oeset.compare (OTuple T) first second = Eq)
+    group_rows distinct_rows).
+{
+  split.
+  - intros output Houtput.
+    destruct (proj2 Hgroup_support output Houtput)
+      as [row [Hrow Hproject]].
+    assert (Hprojected : In (project row) projected_rows).
+    { unfold projected_rows; now apply in_map. }
+    destruct (proj2 Hdistinct_support (project row) Hprojected)
+      as [distinct [Hdistinct Hdistinct_project]].
+    exists distinct; split; [exact Hdistinct|].
+    eapply Oeset.compare_eq_trans.
+    + apply Oeset.compare_eq_sym; exact Hproject.
+    + apply Oeset.compare_eq_sym; exact Hdistinct_project.
+  - intros distinct Hdistinct.
+    destruct (proj1 Hdistinct_support distinct Hdistinct)
+      as [projected [Hprojected Hdistinct_project]].
+    unfold projected_rows in Hprojected.
+    apply in_map_iff in Hprojected.
+    destruct Hprojected as [row [Hprojected Hrow]].
+    subst projected.
+    destruct (proj1 Hgroup_support row Hrow)
+      as [output [Houtput Hproject]].
+    exists output; split; [exact Houtput|].
+    eapply Oeset.compare_eq_trans.
+    + apply Oeset.compare_eq_sym; exact Hproject.
+    + apply Oeset.compare_eq_sym; exact Hdistinct_project.
+}
+assert (Hgroup_nodup :
+  SetoidList.NoDupA
+    (fun first second =>
+      Oeset.compare (OTuple T) first second = Eq)
+    group_rows).
+{
+  unfold group_rows.
+  eapply query_make_groups_projected_NoDupA;
+    [exact Hterms|exact Hmember|exact Hreflect].
+}
+assert (Hdistinct_nodup :
+  SetoidList.NoDupA
+    (fun first second =>
+      Oeset.compare (OTuple T) first second = Eq)
+    distinct_rows).
+{
+  apply oeset_sorted_NoDupA.
+  unfold distinct_rows; apply Feset.elements_spec3.
+}
+eapply bag_eq_trans.
+- apply rows_bag_eq_of_nodup_support_rel;
+    [exact Houtput_support|exact Hgroup_nodup|exact Hdistinct_nodup].
+- unfold distinct_rows, query_distinct_bag, rows_bag.
+  apply bag_eq_refl.
+Qed.
+
+(** Direct single-key form used by GROUP BY x / SELECT DISTINCT x proofs. *)
+Corollary query_make_groups_single_key_projected_distinct_bag_eq :
+  forall env rows group_term
+      (project : tuple T -> tuple T)
+      (emit : list (tuple T) -> tuple T),
+    (forall group row,
+      In group (@query_make_groups T env rows [group_term]) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env [group_term] left =
+      query_grouping_key env [group_term] right) ->
+    bag_eq T
+      (rows_bag T
+        (map emit (@query_make_groups T env rows [group_term])))
+      (query_distinct_bag (rows_bag T (map project rows))).
+Proof.
+intros env rows group_term project emit Hmember Hreflect.
+eapply query_make_groups_projected_distinct_bag_eq;
+  [discriminate|exact Hmember|exact Hreflect].
+Qed.
+
 End GroupSupportRelations.
 
 (** Semantic permutation has the expected support projection.  This bridge
@@ -557,6 +699,213 @@ Definition scalar_value_list_exact_at
     values = expected) /\
   (forall error,
     ~ eval_scalar_values env expressions (SqlError error)).
+
+(** Exact observation of one scalar-value expression.  Keeping this separate
+    from list exactness lets proofs assemble SELECT lists and operator
+    argument lists compositionally instead of re-inverting the relational
+    evaluator at every cons cell. *)
+Definition scalar_value_expr_exact_at
+    (env : Env.env T)
+    (expression : scalar_expr T relname ScalarResultValue)
+    (expected : Tuple.value T) : Prop :=
+  eval_scalar_value_expr_outcome basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null
+    boolean_schedule env expression (SqlSuccess expected) /\
+  (forall value,
+    eval_scalar_value_expr_outcome basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env expression (SqlSuccess value) ->
+    value = expected) /\
+  (forall error,
+    ~ eval_scalar_value_expr_outcome basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env expression (SqlError error)).
+
+Lemma scalar_value_list_exact_nil :
+  forall env, scalar_value_list_exact_at env nil nil.
+Proof.
+intro env; unfold scalar_value_list_exact_at.
+split; [constructor|].
+split.
+- intros values Heval; inversion Heval; reflexivity.
+- intros error Heval; inversion Heval.
+Qed.
+
+(** The cons rule preserves the evaluator's left-to-right error behavior.
+    In particular, exactness of the tail is used only after the head succeeds. *)
+Lemma scalar_value_list_exact_cons :
+  forall env expression expressions value values,
+    scalar_value_expr_exact_at env expression value ->
+    scalar_value_list_exact_at env expressions values ->
+    scalar_value_list_exact_at env
+      (expression :: expressions) (value :: values).
+Proof.
+intros env expression expressions value values
+  [Hhead [Hhead_unique Hhead_safe]]
+  [Htail [Htail_unique Htail_safe]].
+unfold scalar_value_list_exact_at.
+split.
+- change
+    (eval_scalar_values env (expression :: expressions)
+      (@scalar_value_cons_outcome T value (SqlSuccess values))).
+  eapply EScalarValues_Cons; [exact Hhead|exact Htail].
+- split.
+  + intros observed Heval.
+    remember (expression :: expressions) as input eqn:Hinput in Heval.
+    remember (SqlSuccess observed) as result eqn:Hresult in Heval.
+    revert observed Hinput Hresult.
+    induction Heval; intros observed Hinput Hresult.
+    * discriminate Hinput.
+    * inversion Hinput; subst; discriminate Hresult.
+    * inversion Hinput; subst.
+      destruct tail as [tail_values|tail_error].
+      -- cbn [scalar_value_cons_outcome] in Hresult;
+         inversion Hresult; subst.
+         match goal with
+         | Hhead0 : eval_scalar_value_expr_outcome _ _ _ _ _ _ _ _ _
+             (SqlSuccess ?head_value),
+           Htail0 : eval_scalar_values_outcome _ _ _ _ _ _ _ _ _
+             (SqlSuccess ?tail_values0) |- _ =>
+             rewrite (Hhead_unique head_value Hhead0),
+               (Htail_unique tail_values0 Htail0); reflexivity
+         end.
+      -- discriminate Hresult.
+  + intros error Heval.
+    inversion Heval; subst; try discriminate.
+    all: try (match goal with
+    | Hout : @scalar_value_cons_outcome _ _ ?tail0 = SqlError _ |- _ =>
+        destruct tail0; try discriminate
+    end).
+    all: first
+    [ match goal with
+      | Hvalue : eval_scalar_value_expr_outcome _ _ _ _ _ _ _ _ _
+          (SqlError ?error0) |- _ =>
+          exact (Hhead_safe error0 Hvalue)
+      end
+    | match goal with
+      | Hvalues : eval_scalar_values_outcome _ _ _ _ _ _ _ _ _
+          (SqlError ?error0) |- _ =>
+          exact (Htail_safe error0 Hvalues)
+      end ].
+Qed.
+
+(** Leaf exactness is a direct corollary of the total leaf outcome.  The
+    premise may describe a constant, column lookup, or aggregate leaf; no
+    TNull-specific term shape is baked into the theorem. *)
+Lemma scalar_value_expr_leaf_exact :
+  forall env result_type term expected,
+    @scalar_leaf_value_outcome T symbol_runtime_error
+      aggregate_runtime_error env term = SqlSuccess expected ->
+    scalar_value_expr_exact_at env
+      (SExpr_Leaf result_type term) expected.
+Proof.
+intros env result_type term expected Hleaf.
+unfold scalar_value_expr_exact_at.
+split.
+- pose proof
+    (@EScalar_Leaf T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env result_type term) as Heval.
+  now rewrite Hleaf in Heval.
+- split.
+  + intros value Heval; inversion Heval; subst; congruence.
+  + intros error Heval; inversion Heval; subst; congruence.
+Qed.
+
+(** Operator-call exactness factors through exact evaluation of its argument
+    list and the authoritative local call outcome.  This covers every scalar
+    operator uniformly, including calls that may return a runtime error. *)
+Lemma scalar_value_expr_call_exact :
+  forall env result_type operator arguments values expected,
+    scalar_value_list_exact_at env arguments values ->
+    @scalar_call_value_outcome T symbol_runtime_error
+      operator values = SqlSuccess expected ->
+    scalar_value_expr_exact_at env
+      (SExpr_Call result_type operator arguments) expected.
+Proof.
+intros env result_type operator arguments values expected
+  [Harguments [Harguments_unique Harguments_safe]] Hcall.
+unfold scalar_value_expr_exact_at.
+split.
+- pose proof
+    (@EScalar_CallSuccess T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env result_type operator arguments values Harguments)
+    as Heval.
+  now rewrite Hcall in Heval.
+- split.
+  + intros value Heval; inversion Heval; subst.
+    match goal with
+    | Hvalues : eval_scalar_values_outcome _ _ _ _ _ _ _ _
+        arguments
+        (SqlSuccess ?observed) |- _ =>
+        rewrite (Harguments_unique observed Hvalues) in *
+    end.
+    rewrite Hcall in *; congruence.
+  + intros error Heval; inversion Heval; subst.
+    * match goal with
+      | Hvalues : eval_scalar_values_outcome _ _ _ _ _ _ _ _
+          arguments (SqlError ?actual) |- _ =>
+          exact (Harguments_safe actual Hvalues)
+      end.
+    * match goal with
+      | Hvalues : eval_scalar_values_outcome _ _ _ _ _ _ _ _
+          arguments
+          (SqlSuccess ?observed) |- _ =>
+          rewrite (Harguments_unique observed Hvalues) in *
+      end.
+      rewrite Hcall in *; congruence.
+Qed.
+
+(** Exact row-list projection from exact scalar-list observations on every
+    reached row.  This is the reusable list-level bridge between scalar
+    contracts and Project; it preserves order and duplicate occurrences and
+    rules out every projection error through the per-row premises. *)
+Theorem eval_project_rows_exact_map :
+  forall env select_list rows
+      (values : Tuple.tuple T -> list (Tuple.value T)),
+    (forall row,
+      In row rows ->
+      scalar_value_list_exact_at
+        (Env.env_t T env row) (map fst select_list) (values row)) ->
+    forall outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome <->
+      outcome = SqlSuccess
+        (map (fun row => project_row select_list (values row)) rows).
+Proof.
+intros env select_list rows values Hvalues.
+induction rows as [|row rows IH]; intro outcome.
+- split; intro Heval.
+  + inversion Heval; reflexivity.
+  + subst outcome; constructor.
+- specialize (IH (fun other Hin => Hvalues other (or_intror Hin))).
+  destruct (Hvalues row (or_introl eq_refl)) as
+    [Hhead [Hhead_unique Hhead_error]].
+  split; intro Heval.
+  + inversion Heval; subst.
+    * exfalso; eapply Hhead_error; eassumption.
+    * match goal with
+      | Hscalar : context [eval_scalar_values_outcome]
+          |- _ =>
+          match type of Hscalar with
+          | context [SqlSuccess ?observed] =>
+            match goal with
+            | Htail : context [eval_project_rows_outcome] |- _ =>
+              rewrite (Hhead_unique observed Hscalar);
+              apply IH in Htail; subst; reflexivity
+            end
+          end
+      end.
+  + subst outcome.
+    eapply EProjectRows_Cons with
+      (values := values row)
+      (tail := SqlSuccess
+        (map (fun other => project_row select_list (values other)) rows)).
+    * exact Hhead.
+    * apply IH; reflexivity.
+Qed.
 
 Lemma scalar_expr_acceptance_exact_total_success :
   forall env expression accepted,
@@ -966,6 +1315,10 @@ Arguments scalar_expr_acceptance_exact_at
 Arguments scalar_value_list_exact_at
   {T relname} basesort instance unknown symbol_runtime_error
   aggregate_runtime_error value_is_null boolean_schedule env expressions
+  expected.
+Arguments scalar_value_expr_exact_at
+  {T relname} basesort instance unknown symbol_runtime_error
+  aggregate_runtime_error value_is_null boolean_schedule env expression
   expected.
 
 (** Exact row-filter execution from per-row acceptance contracts.  Requiring

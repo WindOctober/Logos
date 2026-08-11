@@ -2,7 +2,7 @@
 
 Route here for: bag/list abstraction, multiplicity, filter/project/join/set operators.
 
-This focused catalog contains 275 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 288 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `join_matched_rows_filter_inputs_exact`
 
@@ -511,9 +511,41 @@ Theorem query_expr_outcome_equiv_of_shared_exact_error :
       boolean_schedule env first second.
 ```
 
+## `eval_project_rows_exact_map`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:864`](../GroupedFilterOutcomeFacts.v#L864)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the eval project rows exact map law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `eval_project_rows_exact_map` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `projection`
+
+Search aliases: `relational algebra`, `projection`, `SELECT list`
+
+```rocq
+Theorem eval_project_rows_exact_map :
+  forall env select_list rows
+      (values : Tuple.tuple T -> list (Tuple.value T)),
+    (forall row,
+      In row rows ->
+      scalar_value_list_exact_at
+        (Env.env_t T env row) (map fst select_list) (values row)) ->
+    forall outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome <->
+      outcome = SqlSuccess
+        (map (fun row => project_row select_list (values row)) rows).
+```
+
 ## `scalar_expr_pred_acceptance_exact_safe`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:589`](../GroupedFilterOutcomeFacts.v#L589)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:938`](../GroupedFilterOutcomeFacts.v#L938)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -537,7 +569,7 @@ Lemma scalar_expr_pred_acceptance_exact_safe :
 
 ## `eval_filter_rows_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:998`](../GroupedFilterOutcomeFacts.v#L998)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1351`](../GroupedFilterOutcomeFacts.v#L1351)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -567,7 +599,7 @@ Theorem eval_filter_rows_acceptance_exact :
 
 ## `filter_scalar_observation_equiv_at_sym`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1150`](../GroupedFilterOutcomeFacts.v#L1150)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1503`](../GroupedFilterOutcomeFacts.v#L1503)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -592,7 +624,7 @@ Lemma filter_scalar_observation_equiv_at_sym :
 
 ## `eval_filter_rows_ordered_outcome_congr_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1188`](../GroupedFilterOutcomeFacts.v#L1188)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1541`](../GroupedFilterOutcomeFacts.v#L1541)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -625,7 +657,7 @@ Lemma eval_filter_rows_ordered_outcome_congr_forward :
 
 ## `eval_filter_rows_ordered_outcome_congr`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1275`](../GroupedFilterOutcomeFacts.v#L1275)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1628`](../GroupedFilterOutcomeFacts.v#L1628)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -658,7 +690,7 @@ Theorem eval_filter_rows_ordered_outcome_congr :
 
 ## `query_expr_filter_outcome_congr_extensional_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1348`](../GroupedFilterOutcomeFacts.v#L1348)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1701`](../GroupedFilterOutcomeFacts.v#L1701)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -693,7 +725,7 @@ Lemma query_expr_filter_outcome_congr_extensional_forward :
 
 ## `query_expr_filter_outcome_congr_extensional`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1419`](../GroupedFilterOutcomeFacts.v#L1419)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1772`](../GroupedFilterOutcomeFacts.v#L1772)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_filter_possible_outcome_equiv_congr_stable_total` for the public result.
 
@@ -1739,7 +1771,7 @@ Lemma relational_permutation_map_inv :
 
 ## `eval_project_rows_has_success`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3465`](../OrderedQueryFacts.v#L3465)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3657`](../OrderedQueryFacts.v#L3657)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1768,7 +1800,7 @@ Lemma eval_project_rows_has_success :
 
 ## `query_row_map_success_bags_total`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3628`](../OrderedQueryFacts.v#L3628)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4263`](../OrderedQueryFacts.v#L4263)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1797,7 +1829,7 @@ Theorem query_row_map_success_bags_total :
 
 ## `query_row_map_success_bags_functional_of_contract`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3758`](../OrderedQueryFacts.v#L3758)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4393`](../OrderedQueryFacts.v#L4393)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1827,7 +1859,7 @@ Theorem query_row_map_success_bags_functional_of_contract :
 
 ## `query_values_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3839`](../OrderedQueryFacts.v#L3839)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4474`](../OrderedQueryFacts.v#L4474)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1851,7 +1883,7 @@ Theorem query_values_success_bags :
 
 ## `query_table_success_bags`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3857`](../OrderedQueryFacts.v#L3857)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4492`](../OrderedQueryFacts.v#L4492)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -1878,7 +1910,7 @@ Theorem query_table_success_bags :
 
 ## `query_table_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3928`](../OrderedQueryFacts.v#L3928)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4563`](../OrderedQueryFacts.v#L4563)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1902,7 +1934,7 @@ Theorem query_table_success_bags_functional :
 
 ## `query_set_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3953`](../OrderedQueryFacts.v#L3953)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4588`](../OrderedQueryFacts.v#L4588)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1935,7 +1967,7 @@ Theorem query_set_success_bags_functional :
 
 ## `query_cross_join_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3993`](../OrderedQueryFacts.v#L3993)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4628`](../OrderedQueryFacts.v#L4628)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1968,7 +2000,7 @@ Theorem query_cross_join_success_bags_functional :
 
 ## `query_natural_join_success_bags_functional`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4034`](../OrderedQueryFacts.v#L4034)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:4669`](../OrderedQueryFacts.v#L4669)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2001,7 +2033,7 @@ Theorem query_natural_join_success_bags_functional :
 
 ## `query_expr_permutation_closure_certified_possible_bag_closed`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:4185`](../OrderedQueryFacts.v#L4185)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5948`](../OrderedQueryFacts.v#L5948)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2027,7 +2059,7 @@ Lemma query_expr_permutation_closure_certified_possible_bag_closed :
 
 ## `rows_key_aligned_filter`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5005`](../OrderedQueryFacts.v#L5005)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6768`](../OrderedQueryFacts.v#L6768)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2168,7 +2200,7 @@ Lemma filter_join_unmatched_right_rows_false :
 
 ## `tnull_row_eq_refl`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:58`](../ProofAgentFacade.v#L58)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:59`](../ProofAgentFacade.v#L59)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2189,7 +2221,7 @@ Lemma tnull_row_eq_refl :
 
 ## `tnull_row_eq_sym`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:65`](../ProofAgentFacade.v#L65)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:66`](../ProofAgentFacade.v#L66)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2212,7 +2244,7 @@ Lemma tnull_row_eq_sym :
 
 ## `tnull_row_eq_trans`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:74`](../ProofAgentFacade.v#L74)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:75`](../ProofAgentFacade.v#L75)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2236,7 +2268,7 @@ Lemma tnull_row_eq_trans :
 
 ## `tnull_row_permut_implies_rows_bag_eq`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:98`](../ProofAgentFacade.v#L98)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:99`](../ProofAgentFacade.v#L99)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2259,7 +2291,7 @@ Lemma tnull_row_permut_implies_rows_bag_eq :
 
 ## `tnull_query_program_head_separation_sound`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:363`](../ProofAgentFacade.v#L363)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:364`](../ProofAgentFacade.v#L364)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2283,7 +2315,7 @@ Lemma tnull_query_program_head_separation_sound :
 
 ## `tnull_query_program_prefix_separation_sound`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:379`](../ProofAgentFacade.v#L379)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:380`](../ProofAgentFacade.v#L380)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -2309,7 +2341,7 @@ Lemma tnull_query_program_prefix_separation_sound :
 
 ## `tnull_map_theta_join_total_functional`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:428`](../ProofAgentFacade.v#L428)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:429`](../ProofAgentFacade.v#L429)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2344,7 +2376,7 @@ Lemma tnull_map_theta_join_total_functional :
 
 ## `tnull_map_left_join_total_functional`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:451`](../ProofAgentFacade.v#L451)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:452`](../ProofAgentFacade.v#L452)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2382,7 +2414,7 @@ Lemma tnull_map_left_join_total_functional :
 
 ## `tnull_map_theta_join_total_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:481`](../ProofAgentFacade.v#L481)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:482`](../ProofAgentFacade.v#L482)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2418,7 +2450,7 @@ Lemma tnull_map_theta_join_total_functional_permut :
 
 ## `tnull_map_theta_join_total_functional_permut_accepted`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:538`](../ProofAgentFacade.v#L538)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:539`](../ProofAgentFacade.v#L539)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2457,7 +2489,7 @@ Lemma tnull_map_theta_join_total_functional_permut_accepted :
 
 ## `tnull_map_theta_join_functional_permut_filter_exists`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:604`](../ProofAgentFacade.v#L604)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:605`](../ProofAgentFacade.v#L605)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2494,7 +2526,7 @@ Lemma tnull_map_theta_join_functional_permut_filter_exists :
 
 ## `tnull_map_left_join_total_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:630`](../ProofAgentFacade.v#L630)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:631`](../ProofAgentFacade.v#L631)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2534,7 +2566,7 @@ Lemma tnull_map_left_join_total_functional_permut :
 
 ## `tnull_map_left_join_functional_permut`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:664`](../ProofAgentFacade.v#L664)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:665`](../ProofAgentFacade.v#L665)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2570,7 +2602,7 @@ Lemma tnull_map_left_join_functional_permut :
 
 ## `tnull_row_eq_of_labels_and_values`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:689`](../ProofAgentFacade.v#L689)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:690`](../ProofAgentFacade.v#L690)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2596,7 +2628,7 @@ Lemma tnull_row_eq_of_labels_and_values :
 
 ## `tnull_theta_join_by_witness`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:754`](../ProofAgentFacade.v#L754)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:755`](../ProofAgentFacade.v#L755)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2638,7 +2670,7 @@ Lemma tnull_theta_join_by_witness :
 
 ## `tnull_total_functional_theta_project_nodup`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:815`](../ProofAgentFacade.v#L815)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:816`](../ProofAgentFacade.v#L816)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2674,7 +2706,7 @@ Lemma tnull_total_functional_theta_project_nodup :
 
 ## `tnull_total_functional_theta_project_nodup_accepted`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:850`](../ProofAgentFacade.v#L850)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:851`](../ProofAgentFacade.v#L851)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2713,7 +2745,7 @@ Lemma tnull_total_functional_theta_project_nodup_accepted :
 
 ## `tnull_functional_theta_project_nodup_of_key_reflection`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:890`](../ProofAgentFacade.v#L890)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:891`](../ProofAgentFacade.v#L891)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2753,7 +2785,7 @@ Lemma tnull_functional_theta_project_nodup_of_key_reflection :
 
 ## `tnull_nodup_occ_le_one`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:936`](../ProofAgentFacade.v#L936)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:937`](../ProofAgentFacade.v#L937)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2773,6 +2805,288 @@ Lemma tnull_nodup_occ_le_one :
     NoDupA TNullRowEq rows ->
     forall row,
       (Oeset.nb_occ TNullRowOrder row rows <= 1)%N.
+```
+
+## `query_scalar_expr_well_placed_progress_ready`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:1270`](../ProofAgentFacade.v#L1270)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the query scalar expr well placed progress ready law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `query_scalar_expr_well_placed_progress_ready` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `facade`
+
+Search aliases: `relational algebra`
+
+```rocq
+Lemma query_scalar_expr_well_placed_progress_ready :
+  (forall query,
+    QueryAccepted query ->
+    QueryContainsAnalysisError query = false ->
+    QueryProgressReady query) /\
+  (forall kind (expression : @scalar_expr T generic_relname kind) phase,
+    ScalarAccepted phase kind expression ->
+    ScalarContainsAnalysisError kind expression = false ->
+    ScalarProgressReady kind expression).
+```
+
+## `query_expr_well_placed_progress_ready`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:1333`](../ProofAgentFacade.v#L1333)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the query expr well placed progress ready law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_well_placed_progress_ready` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `facade`
+
+Search aliases: `relational algebra`
+
+```rocq
+Theorem query_expr_well_placed_progress_ready :
+  forall query,
+    QueryAccepted query ->
+    query_expr_analysis_error_well_placed query ->
+    QueryProgressReady query.
+```
+
+## `tnull_query_expr_well_placed_progress_ready`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:1352`](../ProofAgentFacade.v#L1352)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull query expr well placed progress ready law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_well_placed_progress_ready` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `facade`
+
+Search aliases: `relational algebra`
+
+```rocq
+Theorem tnull_query_expr_well_placed_progress_ready :
+  forall basesort query,
+    TNullQueryExprAdmissible basesort query ->
+    @query_expr_progress_ready TNull relname
+      NullValues.is_null_value query.
+```
+
+## `query_scalar_expr_progress_ready_has_outcomes`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:1861`](../ProofAgentFacade.v#L1861)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the query scalar expr progress ready has outcomes law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `query_scalar_expr_progress_ready_has_outcomes` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `facade`
+
+Search aliases: `relational algebra`
+
+```rocq
+Lemma query_scalar_expr_progress_ready_has_outcomes :
+  (forall query, QueryScheduledOutcomeProgress query) /\
+  (forall kind (expression : @scalar_expr T generic_relname kind),
+    ScalarScheduledOutcomeProgress kind expression).
+```
+
+## `tnull_query_expr_progress_ready_scheduled_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2487`](../ProofAgentFacade.v#L2487)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull query expr progress ready scheduled progress law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_progress_ready_scheduled_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `facade`, `scalar`
+
+Search aliases: `relational algebra`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Theorem tnull_query_expr_progress_ready_scheduled_progress :
+  forall db env query,
+    @query_expr_progress_ready TNull relname
+      NullValues.is_null_value query ->
+    forall schedule,
+      exists outcome,
+        @eval_query_expr_outcome TNull relname
+          (@_basesort TNull db) (@_instance TNull db) unknown3
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          NullValues.is_null_value schedule env query outcome.
+```
+
+## `tnull_query_expr_progress_ready_scheduled_cardinality_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2514`](../ProofAgentFacade.v#L2514)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates relational algebra to the exact list length or bag cardinality shown below.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_progress_ready_scheduled_cardinality_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `facade`, `scalar`
+
+Search aliases: `relational algebra`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Theorem tnull_query_expr_progress_ready_scheduled_cardinality_progress :
+  forall db env query,
+    @query_expr_progress_ready TNull relname
+      NullValues.is_null_value query ->
+    forall schedule,
+      exists outcome,
+        @eval_query_cardinality_outcome TNull relname
+          (@_basesort TNull db) (@_instance TNull db) unknown3
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          NullValues.is_null_value schedule env query outcome.
+```
+
+## `tnull_query_expr_progress_ready_scheduled_exists_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2541`](../ProofAgentFacade.v#L2541)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull query expr progress ready scheduled exists progress law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_progress_ready_scheduled_exists_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `facade`, `scalar`
+
+Search aliases: `relational algebra`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Theorem tnull_query_expr_progress_ready_scheduled_exists_progress :
+  forall db env query,
+    @query_expr_progress_ready TNull relname
+      NullValues.is_null_value query ->
+    forall schedule,
+      exists outcome,
+        @eval_query_exists_outcome TNull relname
+          (@_basesort TNull db) (@_instance TNull db) unknown3
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          NullValues.is_null_value schedule env query outcome.
+```
+
+## `tnull_scalar_expr_progress_ready_scheduled_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2569`](../ProofAgentFacade.v#L2569)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull scalar expr progress ready scheduled progress law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_scalar_expr_progress_ready_scheduled_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `facade`, `scalar`
+
+Search aliases: `relational algebra`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Theorem tnull_scalar_expr_progress_ready_scheduled_progress :
+  forall db env kind (expression : @scalar_expr TNull relname kind),
+    @scalar_expr_progress_ready TNull relname
+      NullValues.is_null_value kind expression ->
+    forall schedule,
+      match kind as result_kind return
+          @scalar_expr TNull relname result_kind -> Prop with
+      | ScalarResultValue =>
+          fun value_expression => exists outcome,
+            @eval_scalar_value_expr_outcome TNull relname
+              (@_basesort TNull db) (@_instance TNull db) unknown3
+              NullValues.interp_scalar_operator_runtime_error
+              NullValues.interp_aggregate_runtime_error
+              NullValues.is_null_value schedule env value_expression outcome
+      | ScalarResultBoolean =>
+          fun boolean_expression => exists outcome,
+            @eval_scalar_boolean_expr_outcome TNull relname
+              (@_basesort TNull db) (@_instance TNull db) unknown3
+              NullValues.interp_scalar_operator_runtime_error
+              NullValues.interp_aggregate_runtime_error
+              NullValues.is_null_value schedule env boolean_expression outcome
+      end expression.
+```
+
+## `tnull_query_expr_well_placed_scheduled_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2606`](../ProofAgentFacade.v#L2606)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the tnull query expr well placed scheduled progress law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_well_placed_scheduled_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `facade`, `scalar`
+
+Search aliases: `relational algebra`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Theorem tnull_query_expr_well_placed_scheduled_progress :
+  forall db env query,
+    TNullQueryExprAdmissible (@_basesort TNull db) query ->
+    forall schedule,
+      exists outcome,
+        @eval_query_expr_outcome TNull relname
+          (@_basesort TNull db) (@_instance TNull db) unknown3
+          NullValues.interp_scalar_operator_runtime_error
+          NullValues.interp_aggregate_runtime_error
+          NullValues.is_null_value schedule env query outcome.
+```
+
+## `tnull_query_expr_well_placed_possible_progress`
+
+Source: [`theories/FormalSQL/ProofAgentFacade.v:2627`](../ProofAgentFacade.v#L2627)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the tnull query expr well placed possible progress law for relational algebra, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `tnull_query_expr_well_placed_possible_progress` direction for relational algebra; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `possible`, `facade`, `outcome`, `runtime`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `relational algebra`
+
+```rocq
+Theorem tnull_query_expr_well_placed_possible_progress :
+  forall db env query,
+    TNullQueryExprAdmissible (@_basesort TNull db) query ->
+    exists outcome, TNullQueryExprOutcome db env query outcome.
 ```
 
 ## `list_flat_map_permut_rel`
@@ -3935,9 +4249,60 @@ Lemma rows_bag_eq_of_nodup_support_rel :
     bag_eq T (rows_bag T left) (rows_bag T right).
 ```
 
+## `query_distinct_bag_occurrence_nonzero_iff`
+
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1153`](../RelationalAlgebraFacts.v#L1153)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for bag multiplicity.
+
+Applicability: Use in either direction to invert or construct a goal about bag multiplicity.
+
+Important premises: respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`
+
+Search aliases: `relational algebra`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma query_distinct_bag_occurrence_nonzero_iff :
+  forall (T : Tuple.Rcd) (bag : SqlBagAbstraction.bagT T) row,
+    Febag.nb_occ (Fecol.CBag (CTuple T)) row
+      (query_distinct_bag bag) <> 0%N <->
+    Febag.nb_occ (Fecol.CBag (CTuple T)) row bag <> 0%N.
+```
+
+## `query_distinct_rows_support_rel`
+
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1192`](../RelationalAlgebraFacts.v#L1192)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Relates every legal DISTINCT output representative bidirectionally to the input's semantic row support without preserving duplicate counts.
+
+Applicability: Use only for duplicate-insensitive support or IN TRUE-acceptance.  DISTINCT changes row multiplicity and may not be erased for COUNT, bags, exact ordered results, or full FALSE/UNKNOWN truth without additional premises.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`
+
+Search aliases: `relational algebra`, `DISTINCT`, `duplicate elimination`, `bag semantics`, `list/bag bridge`, `semantic support`, `duplicates`, `IN`
+
+```rocq
+Theorem query_distinct_rows_support_rel :
+  forall (T : Tuple.Rcd) input output,
+    @query_same_rows_as_bag T output
+      (query_distinct_bag (query_rows_bag input)) ->
+    list_support_rel
+      (fun first second =>
+        Oeset.compare (OTuple T) first second = Eq)
+      output input.
+```
+
 ## `alpha_membership_iff_occurrence_representative`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1150`](../RelationalAlgebraFacts.v#L1150)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1241`](../RelationalAlgebraFacts.v#L1241)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3965,7 +4330,7 @@ Lemma alpha_membership_iff_occurrence_representative :
 
 ## `query_set_union_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1183`](../RelationalAlgebraFacts.v#L1183)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1274`](../RelationalAlgebraFacts.v#L1274)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3990,7 +4355,7 @@ Lemma query_set_union_empty_left :
 
 ## `query_set_union_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1196`](../RelationalAlgebraFacts.v#L1196)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1287`](../RelationalAlgebraFacts.v#L1287)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4015,7 +4380,7 @@ Lemma query_set_union_empty_right :
 
 ## `query_set_union_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1209`](../RelationalAlgebraFacts.v#L1209)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1300`](../RelationalAlgebraFacts.v#L1300)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4038,7 +4403,7 @@ Lemma query_set_union_comm :
 
 ## `query_set_union_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1220`](../RelationalAlgebraFacts.v#L1220)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1311`](../RelationalAlgebraFacts.v#L1311)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4062,7 +4427,7 @@ Lemma query_set_union_assoc :
 
 ## `query_set_union_max_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1232`](../RelationalAlgebraFacts.v#L1232)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1323`](../RelationalAlgebraFacts.v#L1323)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4085,7 +4450,7 @@ Lemma query_set_union_max_comm :
 
 ## `query_set_union_max_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1243`](../RelationalAlgebraFacts.v#L1243)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1334`](../RelationalAlgebraFacts.v#L1334)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4111,7 +4476,7 @@ Lemma query_set_union_max_assoc :
 
 ## `query_set_union_max_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1257`](../RelationalAlgebraFacts.v#L1257)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1348`](../RelationalAlgebraFacts.v#L1348)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4133,7 +4498,7 @@ Lemma query_set_union_max_idempotent :
 
 ## `query_set_union_max_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1267`](../RelationalAlgebraFacts.v#L1267)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1358`](../RelationalAlgebraFacts.v#L1358)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4158,7 +4523,7 @@ Lemma query_set_union_max_empty_left :
 
 ## `query_set_union_max_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1280`](../RelationalAlgebraFacts.v#L1280)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1371`](../RelationalAlgebraFacts.v#L1371)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4183,7 +4548,7 @@ Lemma query_set_union_max_empty_right :
 
 ## `query_set_inter_comm`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1293`](../RelationalAlgebraFacts.v#L1293)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1384`](../RelationalAlgebraFacts.v#L1384)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4206,7 +4571,7 @@ Lemma query_set_inter_comm :
 
 ## `query_set_inter_assoc`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1304`](../RelationalAlgebraFacts.v#L1304)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1395`](../RelationalAlgebraFacts.v#L1395)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4232,7 +4597,7 @@ Lemma query_set_inter_assoc :
 
 ## `query_set_inter_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1318`](../RelationalAlgebraFacts.v#L1318)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1409`](../RelationalAlgebraFacts.v#L1409)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4254,7 +4619,7 @@ Lemma query_set_inter_idempotent :
 
 ## `query_set_inter_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1328`](../RelationalAlgebraFacts.v#L1328)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1419`](../RelationalAlgebraFacts.v#L1419)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4279,7 +4644,7 @@ Lemma query_set_inter_empty_left :
 
 ## `query_set_inter_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1341`](../RelationalAlgebraFacts.v#L1341)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1432`](../RelationalAlgebraFacts.v#L1432)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4304,7 +4669,7 @@ Lemma query_set_inter_empty_right :
 
 ## `query_set_union_max_inter_absorb`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1354`](../RelationalAlgebraFacts.v#L1354)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1445`](../RelationalAlgebraFacts.v#L1445)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4328,7 +4693,7 @@ Lemma query_set_union_max_inter_absorb :
 
 ## `query_set_inter_union_max_absorb`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1366`](../RelationalAlgebraFacts.v#L1366)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1457`](../RelationalAlgebraFacts.v#L1457)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4352,7 +4717,7 @@ Lemma query_set_inter_union_max_absorb :
 
 ## `query_set_diff_empty_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1378`](../RelationalAlgebraFacts.v#L1378)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1469`](../RelationalAlgebraFacts.v#L1469)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4377,7 +4742,7 @@ Lemma query_set_diff_empty_left :
 
 ## `query_set_diff_empty_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1391`](../RelationalAlgebraFacts.v#L1391)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1482`](../RelationalAlgebraFacts.v#L1482)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4402,7 +4767,7 @@ Lemma query_set_diff_empty_right :
 
 ## `query_set_diff_self_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1404`](../RelationalAlgebraFacts.v#L1404)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1495`](../RelationalAlgebraFacts.v#L1495)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4425,7 +4790,7 @@ Lemma query_set_diff_self_empty :
 
 ## `query_set_diff_union_cancel_right`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1415`](../RelationalAlgebraFacts.v#L1415)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1506`](../RelationalAlgebraFacts.v#L1506)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4449,7 +4814,7 @@ Lemma query_set_diff_union_cancel_right :
 
 ## `query_set_diff_union_cancel_left`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1427`](../RelationalAlgebraFacts.v#L1427)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1518`](../RelationalAlgebraFacts.v#L1518)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4473,7 +4838,7 @@ Lemma query_set_diff_union_cancel_left :
 
 ## `query_cross_join_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1439`](../RelationalAlgebraFacts.v#L1439)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1530`](../RelationalAlgebraFacts.v#L1530)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4502,7 +4867,7 @@ Lemma query_cross_join_empty :
 
 ## `query_natural_join_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1465`](../RelationalAlgebraFacts.v#L1465)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1556`](../RelationalAlgebraFacts.v#L1556)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4531,7 +4896,7 @@ Lemma query_natural_join_empty :
 
 ## `query_distinct_bag_empty`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1492`](../RelationalAlgebraFacts.v#L1492)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1583`](../RelationalAlgebraFacts.v#L1583)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4554,7 +4919,7 @@ Lemma query_distinct_bag_empty :
 
 ## `query_distinct_bag_idempotent`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1510`](../RelationalAlgebraFacts.v#L1510)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1601`](../RelationalAlgebraFacts.v#L1601)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4577,7 +4942,7 @@ Lemma query_distinct_bag_idempotent :
 
 ## `query_cross_join_bag_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1528`](../RelationalAlgebraFacts.v#L1528)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1619`](../RelationalAlgebraFacts.v#L1619)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4602,7 +4967,7 @@ Lemma query_cross_join_bag_cardinal :
 
 ## `query_natural_join_bag_cardinal_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1562`](../RelationalAlgebraFacts.v#L1562)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1653`](../RelationalAlgebraFacts.v#L1653)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4627,7 +4992,7 @@ Lemma query_natural_join_bag_cardinal_le :
 
 ## `query_join_matched_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1611`](../RelationalAlgebraFacts.v#L1611)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1702`](../RelationalAlgebraFacts.v#L1702)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4649,7 +5014,7 @@ Lemma query_join_matched_sources_length_le :
 
 ## `query_join_left_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1620`](../RelationalAlgebraFacts.v#L1620)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1711`](../RelationalAlgebraFacts.v#L1711)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4677,7 +5042,7 @@ Lemma query_join_left_sources_length_le :
 
 ## `query_join_unmatched_right_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1651`](../RelationalAlgebraFacts.v#L1651)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1742`](../RelationalAlgebraFacts.v#L1742)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4701,7 +5066,7 @@ Lemma query_join_unmatched_right_sources_length_le :
 
 ## `query_join_sources_length_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1663`](../RelationalAlgebraFacts.v#L1663)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1754`](../RelationalAlgebraFacts.v#L1754)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4731,7 +5096,7 @@ Lemma query_join_sources_length_le :
 
 ## `query_join_full_sources_member_iff`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:1921`](../RelationalAlgebraFacts.v#L1921)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2012`](../RelationalAlgebraFacts.v#L2012)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4768,7 +5133,7 @@ Theorem query_join_full_sources_member_iff :
 
 ## `query_join_sources_member_iff`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2229`](../RelationalAlgebraFacts.v#L2229)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2320`](../RelationalAlgebraFacts.v#L2320)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4793,7 +5158,7 @@ Theorem query_join_sources_member_iff :
 
 ## `query_join_sources_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2592`](../RelationalAlgebraFacts.v#L2592)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2683`](../RelationalAlgebraFacts.v#L2683)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4827,7 +5192,7 @@ Theorem query_join_sources_support_rel :
 
 ## `query_join_sources_projected_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2661`](../RelationalAlgebraFacts.v#L2661)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2752`](../RelationalAlgebraFacts.v#L2752)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4872,7 +5237,7 @@ Theorem query_join_sources_projected_support_rel :
 
 ## `query_join_full_projected_support_rel`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2723`](../RelationalAlgebraFacts.v#L2723)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2814`](../RelationalAlgebraFacts.v#L2814)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4928,7 +5293,7 @@ Theorem query_join_full_projected_support_rel :
 
 ## `query_bag_filter_union`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2886`](../RelationalAlgebraFacts.v#L2886)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2977`](../RelationalAlgebraFacts.v#L2977)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4958,7 +5323,7 @@ Lemma query_bag_filter_union :
 
 ## `query_bag_map_union`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2909`](../RelationalAlgebraFacts.v#L2909)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3000`](../RelationalAlgebraFacts.v#L3000)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4990,7 +5355,7 @@ Lemma query_bag_map_union :
 
 ## `query_bag_map_congr`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2951`](../RelationalAlgebraFacts.v#L2951)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3042`](../RelationalAlgebraFacts.v#L3042)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5020,7 +5385,7 @@ Lemma query_bag_map_congr :
 
 ## `query_bag_filter_commute`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:2976`](../RelationalAlgebraFacts.v#L2976)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3067`](../RelationalAlgebraFacts.v#L3067)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5052,7 +5417,7 @@ Lemma query_bag_filter_commute :
 
 ## `query_bag_filter_map_fusion`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3003`](../RelationalAlgebraFacts.v#L3003)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3094`](../RelationalAlgebraFacts.v#L3094)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5087,7 +5452,7 @@ Lemma query_bag_filter_map_fusion :
 
 ## `query_bag_map_pairwise_equiv_of_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3039`](../RelationalAlgebraFacts.v#L3039)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3130`](../RelationalAlgebraFacts.v#L3130)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5120,7 +5485,7 @@ Lemma query_bag_map_pairwise_equiv_of_cardinal :
 
 ## `eval_join_row_conditions_acceptance_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3141`](../RelationalAlgebraFacts.v#L3141)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3232`](../RelationalAlgebraFacts.v#L3232)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5150,7 +5515,7 @@ Lemma eval_join_row_conditions_acceptance_exact :
 
 ## `eval_join_conditions_acceptance_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3194`](../RelationalAlgebraFacts.v#L3194)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3290`](../RelationalAlgebraFacts.v#L3290)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5184,7 +5549,7 @@ Lemma eval_join_conditions_acceptance_exact :
 
 ## `eval_project_join_sources_exact_map`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3285`](../RelationalAlgebraFacts.v#L3285)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3386`](../RelationalAlgebraFacts.v#L3386)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5216,7 +5581,7 @@ Lemma eval_project_join_sources_exact_map :
 
 ## `eval_join_bag_safe_of_acceptance_projection_exact`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3341`](../RelationalAlgebraFacts.v#L3341)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3442`](../RelationalAlgebraFacts.v#L3442)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5256,7 +5621,7 @@ Theorem eval_join_bag_safe_of_acceptance_projection_exact :
 
 ## `eval_join_row_conditions_success_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3424`](../RelationalAlgebraFacts.v#L3424)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3525`](../RelationalAlgebraFacts.v#L3525)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5281,7 +5646,7 @@ Lemma eval_join_row_conditions_success_length :
 
 ## `eval_join_conditions_success_dimensions`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3438`](../RelationalAlgebraFacts.v#L3438)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3539`](../RelationalAlgebraFacts.v#L3539)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5307,7 +5672,7 @@ Lemma eval_join_conditions_success_dimensions :
 
 ## `query_join_right_single_left_sources_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3498`](../RelationalAlgebraFacts.v#L3498)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3599`](../RelationalAlgebraFacts.v#L3599)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5333,7 +5698,7 @@ Lemma query_join_right_single_left_sources_length :
 
 ## `query_same_rows_as_bag_map`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3517`](../RelationalAlgebraFacts.v#L3517)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3618`](../RelationalAlgebraFacts.v#L3618)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5362,7 +5727,7 @@ Lemma query_same_rows_as_bag_map :
 
 ## `project_join_sources_success_length`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3544`](../RelationalAlgebraFacts.v#L3544)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3645`](../RelationalAlgebraFacts.v#L3645)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5388,7 +5753,7 @@ Lemma project_join_sources_success_length :
 
 ## `eval_join_bag_success_cardinal_le`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3573`](../RelationalAlgebraFacts.v#L3573)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3674`](../RelationalAlgebraFacts.v#L3674)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5434,7 +5799,7 @@ Theorem eval_join_bag_success_cardinal_le :
 
 ## `eval_join_bag_right_single_left_success_cardinal`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3653`](../RelationalAlgebraFacts.v#L3653)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3754`](../RelationalAlgebraFacts.v#L3754)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5464,7 +5829,7 @@ Theorem eval_join_bag_right_single_left_success_cardinal :
 
 ## `query_grouping_sets_actual_success_bags_congr`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3702`](../RelationalAlgebraFacts.v#L3702)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3803`](../RelationalAlgebraFacts.v#L3803)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5489,7 +5854,7 @@ Lemma query_grouping_sets_actual_success_bags_congr :
 
 ## `query_expr_equiv_implies_success_bags`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3731`](../RelationalAlgebraFacts.v#L3731)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3832`](../RelationalAlgebraFacts.v#L3832)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5514,7 +5879,7 @@ Lemma query_expr_equiv_implies_success_bags :
 
 ## `query_expr_outcome_equiv_implies_success_bags`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3748`](../RelationalAlgebraFacts.v#L3748)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3849`](../RelationalAlgebraFacts.v#L3849)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5539,7 +5904,7 @@ Lemma query_expr_outcome_equiv_implies_success_bags :
 
 ## `query_set_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3761`](../RelationalAlgebraFacts.v#L3761)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3862`](../RelationalAlgebraFacts.v#L3862)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5569,7 +5934,7 @@ Lemma query_set_success_bags_congr_of_query_expr_equiv :
 
 ## `query_natural_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3785`](../RelationalAlgebraFacts.v#L3785)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3886`](../RelationalAlgebraFacts.v#L3886)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5599,7 +5964,7 @@ Lemma query_natural_join_success_bags_congr_of_query_expr_equiv :
 
 ## `query_cross_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3803`](../RelationalAlgebraFacts.v#L3803)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3904`](../RelationalAlgebraFacts.v#L3904)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5629,7 +5994,7 @@ Lemma query_cross_join_success_bags_congr_of_query_expr_equiv :
 
 ## `query_join_success_bags_congr_of_query_expr_equiv`
 
-Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3821`](../RelationalAlgebraFacts.v#L3821)
+Source: [`theories/FormalSQL/RelationalAlgebraFacts.v:3922`](../RelationalAlgebraFacts.v#L3922)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5997,7 +6362,7 @@ Lemma eval_join_row_conditions_expression_global_congr_forward :
 
 ## `eval_join_row_conditions_expression_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1673`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1673)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1679`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1679)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6022,7 +6387,7 @@ Lemma eval_join_row_conditions_expression_global_congr :
 
 ## `eval_join_conditions_expression_global_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1687`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1687)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1693`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1693)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6047,7 +6412,7 @@ Lemma eval_join_conditions_expression_global_congr_forward :
 
 ## `eval_join_conditions_expression_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1706`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1706)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1720`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1720)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6072,7 +6437,7 @@ Lemma eval_join_conditions_expression_global_congr :
 
 ## `eval_join_bag_scalar_global_congr_forward`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1809`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1809)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1823`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1823)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6103,7 +6468,7 @@ Lemma eval_join_bag_scalar_global_congr_forward :
 
 ## `eval_join_bag_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1845`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1845)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:1859`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L1859)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6134,7 +6499,7 @@ Lemma eval_join_bag_scalar_global_congr :
 
 ## `query_binary_bag_outcome_operation`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3923`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3923)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3937`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3937)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6156,7 +6521,7 @@ Definition query_binary_bag_outcome_operation : Type :=
 
 ## `query_success_only_binary_bag_operation`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3929`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3929)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3943`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3943)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6183,7 +6548,7 @@ Definition query_success_only_binary_bag_operation
 
 ## `query_eager_left_binary_outcome_relation`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3938`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3938)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3952`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3952)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6214,7 +6579,7 @@ Definition query_eager_left_binary_outcome_relation
 
 ## `query_binary_bag_outcome_operation_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3952`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3952)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3966`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3966)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6241,7 +6606,7 @@ Definition query_binary_bag_outcome_operation_extensional
 
 ## `query_binary_bag_outcome_operations_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3964`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3964)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3978`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3978)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6269,7 +6634,7 @@ Definition query_binary_bag_outcome_operations_compatible
 
 ## `binary_bag_outcome_relations_cross_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3974`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3974)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3988`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3988)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6296,7 +6661,7 @@ Definition binary_bag_outcome_relations_cross_compatible
 
 ## `query_error_singleton_outcome_relation_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3983`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3983)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3997`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3997)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6322,7 +6687,7 @@ Lemma query_error_singleton_outcome_relation_equiv :
 
 ## `query_eager_left_binary_outcome_relation_cross_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:3997`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L3997)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4011`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4011)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6348,7 +6713,7 @@ Lemma query_eager_left_binary_outcome_relation_cross_compatible :
 
 ## `query_scheduled_binary_parent_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4113`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4113)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4127`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4127)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6404,7 +6769,7 @@ Theorem query_scheduled_binary_parent_bag_outcomes_characterization :
 
 ## `query_success_only_binary_bag_operation_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4298`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4298)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4312`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4312)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6428,7 +6793,7 @@ Lemma query_success_only_binary_bag_operation_extensional :
 
 ## `query_success_only_binary_bag_operations_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4311`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4311)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4325`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4325)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6455,7 +6820,7 @@ Lemma query_success_only_binary_bag_operations_compatible :
 
 ## `query_set_outcome_operations_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4344`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4344)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4358`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4358)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6481,7 +6846,7 @@ Lemma query_set_outcome_operations_compatible :
 
 ## `query_natural_join_outcome_operations_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4394`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4394)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4408`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4408)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6504,7 +6869,7 @@ Lemma query_natural_join_outcome_operations_compatible :
 
 ## `query_cross_join_outcome_operations_compatible`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4407`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4407)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4421`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4421)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6527,7 +6892,7 @@ Lemma query_cross_join_outcome_operations_compatible :
 
 ## `query_join_outcome_operation_extensional`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4422`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4422)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4436`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4436)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6551,7 +6916,7 @@ Lemma query_join_outcome_operation_extensional :
 
 ## `eval_adapter_query_set_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4468`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4468)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4482`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4482)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6578,7 +6943,7 @@ Lemma eval_adapter_query_set_error_iff :
 
 ## `eval_adapter_query_natural_join_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4484`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4484)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4498`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4498)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6605,7 +6970,7 @@ Lemma eval_adapter_query_natural_join_error_iff :
 
 ## `eval_adapter_query_cross_join_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4500`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4500)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4514`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4514)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6632,7 +6997,7 @@ Lemma eval_adapter_query_cross_join_error_iff :
 
 ## `query_set_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4516`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4516)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4530`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4530)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6670,7 +7035,7 @@ Theorem query_set_scheduled_bag_outcomes_characterization :
 
 ## `query_natural_join_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4577`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4577)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4591`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4591)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6708,7 +7073,7 @@ Theorem query_natural_join_scheduled_bag_outcomes_characterization :
 
 ## `query_cross_join_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4639`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4639)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4653`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4653)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6746,7 +7111,7 @@ Theorem query_cross_join_scheduled_bag_outcomes_characterization :
 
 ## `query_join_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4701`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4701)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4715`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4715)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6787,7 +7152,7 @@ Theorem query_join_scheduled_bag_outcomes_characterization :
 
 ## `query_set_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4734`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4734)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4748`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4748)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6832,7 +7197,7 @@ Theorem query_set_scheduled_bag_outcomes_congr :
 
 ## `query_natural_join_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4776`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4776)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4790`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4790)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6875,7 +7240,7 @@ Theorem query_natural_join_scheduled_bag_outcomes_congr :
 
 ## `query_cross_join_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4815`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4815)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4829`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4829)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6918,7 +7283,7 @@ Theorem query_cross_join_scheduled_bag_outcomes_congr :
 
 ## `query_join_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4854`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4854)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4868`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4868)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6971,7 +7336,7 @@ Theorem query_join_scheduled_bag_outcomes_congr :
 
 ## `query_expr_set_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4909`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4909)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4923`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4923)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7000,7 +7365,7 @@ Theorem query_expr_set_possible_bag_schedule_transport :
 
 ## `query_expr_set_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4934`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4934)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4948`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4948)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7029,7 +7394,7 @@ Corollary query_expr_set_possible_bag_outcome_equiv :
 
 ## `query_expr_natural_join_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4950`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4950)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4964`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4964)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7058,7 +7423,7 @@ Theorem query_expr_natural_join_possible_bag_schedule_transport :
 
 ## `query_expr_natural_join_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4976`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4976)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4990`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4990)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7087,7 +7452,7 @@ Corollary query_expr_natural_join_possible_bag_outcome_equiv :
 
 ## `query_expr_cross_join_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:4992`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L4992)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5006`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5006)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7116,7 +7481,7 @@ Theorem query_expr_cross_join_possible_bag_schedule_transport :
 
 ## `query_expr_cross_join_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5013`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5013)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5027`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5027)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7145,7 +7510,7 @@ Corollary query_expr_cross_join_possible_bag_outcome_equiv :
 
 ## `query_expr_join_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5034`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5034)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5048`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5048)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7201,7 +7566,7 @@ Theorem query_expr_join_possible_bag_schedule_transport :
 
 ## `query_expr_join_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5084`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5084)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5098`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5098)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7257,7 +7622,7 @@ Corollary query_expr_join_possible_bag_outcome_equiv :
 
 ## `query_rows_to_bag_outcome_relation`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5162`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5162)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5176`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5176)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7278,7 +7643,7 @@ Definition query_rows_to_bag_outcome_relation : Type :=
 
 ## `query_actual_rows_bag_outcome_bind`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5168`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5168)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5182`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5182)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7313,7 +7678,7 @@ Definition query_actual_rows_bag_outcome_bind
 
 ## `scheduled_local_rows_to_bag_contract`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5190`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5190)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5204`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5204)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7341,7 +7706,7 @@ Definition scheduled_local_rows_to_bag_contract
 
 ## `outcome_alpha_success_match_left_rows`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5200`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5200)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5214`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5214)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7368,7 +7733,7 @@ Lemma outcome_alpha_success_match_left_rows :
 
 ## `outcome_alpha_success_match_right_rows`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5223`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5223)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5237`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5237)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7395,7 +7760,7 @@ Lemma outcome_alpha_success_match_right_rows :
 
 ## `outcome_alpha_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5245`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5245)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5259`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5259)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7419,7 +7784,7 @@ Lemma outcome_alpha_error_iff :
 
 ## `query_actual_rows_bag_outcome_bind_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5258`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5258)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5272`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5272)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7447,7 +7812,7 @@ Theorem query_actual_rows_bag_outcome_bind_congr :
 
 ## `query_project_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5370`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5370)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5384`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5384)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7474,7 +7839,7 @@ Definition query_project_rows_bag_outcomes
 
 ## `query_row_map_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5379`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5379)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5393`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5393)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7486,7 +7851,7 @@ Important premises: every explicit antecedent (`->`) in the declaration is requi
 
 Cross-index: `scheduled`, `outcome`, `runtime`, `projection`, `bag`
 
-Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `multiplicity`, `bag semantics`, `list/bag bridge`
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `multiplicity`, `bag semantics`, `list/bag bridge`
 
 ```rocq
 Definition query_row_map_rows_bag_outcomes
@@ -7498,7 +7863,7 @@ Definition query_row_map_rows_bag_outcomes
 
 ## `query_filter_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5385`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5385)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5399`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5399)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7526,7 +7891,7 @@ Definition query_filter_rows_bag_outcomes
 
 ## `eval_unary_project_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5460`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5460)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5474`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5474)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7555,7 +7920,7 @@ Lemma eval_unary_project_error_iff :
 
 ## `eval_unary_row_map_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5478`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5478)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5492`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5492)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7582,7 +7947,7 @@ Lemma eval_unary_row_map_error_iff :
 
 ## `eval_unary_filter_error_iff`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5494`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5494)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5508`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5508)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7611,7 +7976,7 @@ Lemma eval_unary_filter_error_iff :
 
 ## `query_project_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5540`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5540)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5554`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5554)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7639,7 +8004,7 @@ Theorem query_project_scheduled_bag_outcomes_characterization :
 
 ## `query_row_map_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5567`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5567)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5581`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5581)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7667,7 +8032,7 @@ Theorem query_row_map_scheduled_bag_outcomes_characterization :
 
 ## `query_filter_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5594`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5594)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5608`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5608)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7695,7 +8060,7 @@ Theorem query_filter_scheduled_bag_outcomes_characterization :
 
 ## `query_project_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5821`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5821)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5835`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5835)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7739,7 +8104,7 @@ Theorem query_project_scheduled_bag_outcomes_congr :
 
 ## `query_row_map_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5855`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5855)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5869`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5869)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7780,7 +8145,7 @@ Theorem query_row_map_scheduled_bag_outcomes_congr :
 
 ## `query_filter_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5886`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5886)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5900`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5900)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -7825,7 +8190,7 @@ Theorem query_filter_scheduled_bag_outcomes_congr :
 
 ## `query_expr_project_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6062`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6062)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6076`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6076)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7873,7 +8238,7 @@ Theorem query_expr_project_possible_bag_schedule_transport :
 
 ## `query_expr_project_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6102`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6102)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6116`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6116)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7921,7 +8286,7 @@ Corollary query_expr_project_possible_bag_outcome_equiv :
 
 ## `query_expr_row_map_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6137`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6137)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6151`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6151)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7964,7 +8329,7 @@ Theorem query_expr_row_map_possible_bag_schedule_transport :
 
 ## `query_expr_row_map_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6173`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6173)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6187`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6187)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8007,7 +8372,7 @@ Corollary query_expr_row_map_possible_bag_outcome_equiv :
 
 ## `query_expr_filter_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6204`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6204)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6218`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6218)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -8052,7 +8417,7 @@ Theorem query_expr_filter_possible_bag_schedule_transport :
 
 ## `query_expr_filter_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6242`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6242)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6256`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6256)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

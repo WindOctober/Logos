@@ -168,97 +168,6 @@ Context {T : Tuple.Rcd} {relname : Type}.
 Variable unknown : Bool.b (B T).
 Variable value_is_null : value T -> bool.
 
-Local Lemma query_rows_bag_occ_local : forall rows row,
-  Febag.nb_occ (Fecol.CBag (CTuple T)) row (query_rows_bag rows) =
-  Oeset.nb_occ (OTuple T) row rows.
-Proof.
-intros rows row.
-unfold query_rows_bag, SqlQuerySemantics.BTupleT.
-apply Febag.nb_occ_mk_bag.
-Qed.
-
-Local Lemma query_distinct_bag_occurrence_nonzero_iff :
-  forall bag row,
-    Febag.nb_occ (Fecol.CBag (CTuple T)) row
-      (query_distinct_bag bag) <> 0%N <->
-    Febag.nb_occ (Fecol.CBag (CTuple T)) row bag <> 0%N.
-Proof.
-intros bag row.
-assert (Hdistinct :
-  Febag.nb_occ (Fecol.CBag (CTuple T)) row
-    (query_distinct_bag bag) =
-  if Febag.mem (Fecol.CBag (CTuple T)) row bag then 1%N else 0%N).
-{
-  unfold query_distinct_bag.
-  rewrite Febag.nb_occ_mk_bag.
-  change
-    (Feset.nb_occ (Fecol.CSet (CTuple T)) row
-      (Feset.mk_set (Fecol.CSet (CTuple T))
-        (Febag.elements (Fecol.CBag (CTuple T)) bag)) =
-     if Febag.mem (Fecol.CBag (CTuple T)) row bag then 1%N else 0%N).
-  rewrite Feset.nb_occ_alt, Feset.mem_mk_set.
-  rewrite <- Febag.mem_unfold.
-  reflexivity.
-}
-rewrite Hdistinct.
-destruct (Febag.mem (Fecol.CBag (CTuple T)) row bag) eqn:Hmem.
-- split; [|intros _ Hzero; discriminate Hzero].
-  intros _ Hzero.
-  rewrite Febag.mem_nb_occ, Hzero in Hmem.
-  discriminate Hmem.
-- split.
-  + intros Hfalse; exfalso; apply Hfalse; reflexivity.
-  + intros Hnonzero.
-    exfalso.
-    apply Hnonzero.
-    now apply Febag.not_mem_nb_occ.
-Qed.
-
-(** DISTINCT changes multiplicity but not semantic row support. *)
-Theorem query_distinct_rows_support_rel :
-  forall input output,
-    query_same_rows_as_bag output
-      (query_distinct_bag (query_rows_bag input)) ->
-    list_support_rel
-      (fun first second =>
-        Oeset.compare (OTuple T) first second = Eq)
-      output input.
-Proof.
-intros input output Houtput.
-pose proof
-  ((proj1
-    (@query_same_rows_as_bag_iff_occurrences T output
-      (query_distinct_bag (query_rows_bag input)))) Houtput) as Hoccurrences.
-clear Houtput; rename Hoccurrences into Houtput.
-split.
-- intros row Hrow.
-  assert (Houtput_occ : Oeset.nb_occ (OTuple T) row output <> 0%N).
-  { now apply Oeset.In_nb_occ. }
-  rewrite Houtput in Houtput_occ.
-  apply (proj1
-    (@query_distinct_bag_occurrence_nonzero_iff
-      (query_rows_bag input) row)) in Houtput_occ.
-  rewrite query_rows_bag_occ_local in Houtput_occ.
-  apply Oeset.nb_occ_mem in Houtput_occ.
-  apply Oeset.mem_bool_true_iff in Houtput_occ.
-  destruct Houtput_occ as [other [Hequal Hother]].
-  exists other; now split.
-- intros row Hrow.
-  assert (Hinput_occ : Oeset.nb_occ (OTuple T) row input <> 0%N).
-  { now apply Oeset.In_nb_occ. }
-  rewrite <- query_rows_bag_occ_local in Hinput_occ.
-  rename Hinput_occ into Hinput_bag_occ.
-  apply (proj2
-    (@query_distinct_bag_occurrence_nonzero_iff
-      (query_rows_bag input) row)) in Hinput_bag_occ.
-  rewrite <- Houtput in Hinput_bag_occ.
-  apply Oeset.nb_occ_mem in Hinput_bag_occ.
-  apply Oeset.mem_bool_true_iff in Hinput_bag_occ.
-  destruct Hinput_bag_occ as [other [Hequal Hother]].
-  exists other; split; [exact Hother|].
-  now apply Oeset.compare_eq_sym.
-Qed.
-
 (** Membership acceptance is insensitive to DISTINCT, while the underlying
     row bag and its duplicate multiplicities are not identified. *)
 Theorem in_rows_acceptance_distinct :
@@ -276,7 +185,7 @@ Theorem in_rows_acceptance_distinct :
 Proof.
 intros values subquery input output Hinput Houtput.
 pose proof
-  (@query_distinct_rows_support_rel input output Houtput) as Hsupport.
+  (@query_distinct_rows_support_rel T input output Houtput) as Hsupport.
 assert (Houtput_rows :
   Forall (query_row_has_outputs (query_expr_outputs subquery)) output).
 {

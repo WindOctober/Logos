@@ -351,7 +351,7 @@ publish_authority_closure() {
     600
 }
 
-for name in Problem.v Schema.v Queries.v Witness.v Goal.v source.sql target.sql query-shape.json ordered-signatures.json \
+for name in Problem.v Schema.v Queries.v WitnessData.v Witness.v Goal.v source.sql target.sql query-shape.json ordered-signatures.json \
   observation-certificates.json semantic-primer.md search-rocq-declarations.py context-manifest.json \
   proof-agent-prompt.md run-rocq-check.sh; do
   [[ -f "$WORKDIR/$name" && ! -L "$WORKDIR/$name" ]] || {
@@ -359,6 +359,11 @@ for name in Problem.v Schema.v Queries.v Witness.v Goal.v source.sql target.sql 
     exit 2
   }
 done
+if [[ ! -d "$WORKDIR/WitnessModules" || -L "$WORKDIR/WitnessModules" ||
+      ! -f "$WORKDIR/WitnessModules/ORDER" || -L "$WORKDIR/WitnessModules/ORDER" ]]; then
+  echo "WitnessModules must be a real host-generated directory with an order manifest" >&2
+  exit 2
+fi
 if [[ -e "$WORKDIR/checker-request.json" || -L "$WORKDIR/checker-request.json" ]]; then
   echo "refusing to launch with a stale checker-request.json in the proof workspace" >&2
   exit 2
@@ -728,11 +733,12 @@ install -d -m 0700 /workspace/problem/ProofModules /workspace/problem/scratch
 install -m 0600 /seed/problem/Problem.v /workspace/problem/Problem.v
 : > /workspace/problem/counterexample-handoff.json
 
-for name in Schema.v Queries.v Witness.v Goal.v source.sql target.sql query-shape.json \
+for name in Schema.v Queries.v WitnessData.v Witness.v Goal.v source.sql target.sql query-shape.json \
   ordered-signatures.json observation-certificates.json semantic-primer.md \
   search-rocq-declarations.py context-manifest.json proof-agent-prompt.md run-rocq-check.sh; do
   ln -s "/seed/context/$name" "/workspace/problem/$name"
 done
+ln -s /seed/context/WitnessModules /workspace/problem/WitnessModules
 
 if [[ -d /seed/problem/scratch ]]; then
   cp -a /seed/problem/scratch/. /workspace/problem/scratch/

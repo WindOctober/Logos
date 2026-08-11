@@ -236,7 +236,7 @@ pub fn solve(
                         .to_owned(),
                 )),
                 CounterexampleStageResult::ProceedToProof(report) => {
-                    let resolution = proof_handoff_resolution(&report);
+                    let resolution = proof_handoff_resolution(&report)?;
                     counterexample_report = report;
                     Ok(resolution)
                 }
@@ -265,13 +265,20 @@ pub fn solve(
     let verification_report = match proof_stage_result {
         ProofStageResult::Finished(report) => *report,
     };
+    if counterexample_report.outcome == SearchStatus::NeedsManualReview
+        && verification_report.certification.is_some()
+    {
+        return Err(Error::ProofAgentCommand(
+            "manual-review proof termination cannot carry a trusted certification".to_owned(),
+        ));
+    }
     let outcome = final_solver_outcome(
         verification_report.certification,
         counterexample_report.outcome,
     );
     let status_reason = if outcome == SolverOutcome::NeedsManualReview {
         format!(
-            "{}; the subsequent FormalSQL equivalence attempt produced no accepted certificate: {}",
+            "{}; proof-directed FormalSQL verification stopped without accepting EQ or NEQ: {}",
             counterexample_report.reason, verification_report.status_reason
         )
     } else {
@@ -334,13 +341,24 @@ fn final_solver_outcome(
     }
 }
 
-fn proof_handoff_resolution(report: &SearchReport) -> ProofHandoffResolution {
-    match report.formal_witness_snapshot.clone() {
-        Some(snapshot) => ProofHandoffResolution::RestartWithFormalWitness {
-            feedback: report.reason.clone(),
-            snapshot,
-        },
-        None => ProofHandoffResolution::Continue(report.reason.clone()),
+fn proof_handoff_resolution(report: &SearchReport) -> Result<ProofHandoffResolution> {
+    match (report.outcome, report.formal_witness_snapshot.clone()) {
+        (SearchStatus::MaybeEquivalent, Some(snapshot)) => {
+            Ok(ProofHandoffResolution::RestartWithFormalWitness {
+                feedback: report.reason.clone(),
+                snapshot,
+            })
+        }
+        (SearchStatus::NeedsManualReview, None) => Ok(ProofHandoffResolution::NeedsManualReview(
+            report.reason.clone(),
+        )),
+        (SearchStatus::MaybeEquivalent, None) => {
+            Ok(ProofHandoffResolution::Continue(report.reason.clone()))
+        }
+        (status, snapshot) => Err(Error::ProposalCommand(format!(
+            "proof-directed counterexample search returned inconsistent host state: status {status:?}, typed snapshot present={} ",
+            snapshot.is_some()
+        ))),
     }
 }
 
@@ -370,28 +388,48 @@ mod tests {
         )
         .expect("search report");
 
-        match proof_handoff_resolution(&report) {
+        match proof_handoff_resolution(&report).expect("ordinary no-candidate routing") {
             ProofHandoffResolution::Continue(feedback) => {
                 assert_eq!(feedback, "formal observation required")
             }
             _ => panic!("a handoff without a typed snapshot must remain fail-closed"),
         }
 
+        report.outcome = SearchStatus::NeedsManualReview;
+        report.reason =
+            "the suspected counterexample requires an unavailable symbolic witness".to_owned();
+        match proof_handoff_resolution(&report).expect("manual-review routing") {
+            ProofHandoffResolution::NeedsManualReview(reason) => assert_eq!(
+                reason,
+                "the suspected counterexample requires an unavailable symbolic witness"
+            ),
+            _ => panic!("manual review without a typed snapshot must stop uncertified"),
+        }
+
         let snapshot = FormalWitnessSnapshot {
             schema_version: 1,
             tables: Vec::new(),
         };
+        report.outcome = SearchStatus::MaybeEquivalent;
+        report.reason = "typed witness materialized".to_owned();
         report.formal_witness_snapshot = Some(snapshot.clone());
-        match proof_handoff_resolution(&report) {
+        match proof_handoff_resolution(&report).expect("typed-witness routing") {
             ProofHandoffResolution::RestartWithFormalWitness {
                 feedback,
                 snapshot: observed,
             } => {
-                assert_eq!(feedback, "formal observation required");
+                assert_eq!(feedback, "typed witness materialized");
                 assert_eq!(observed, snapshot);
             }
             _ => panic!("a typed snapshot must request a fresh fixed-witness proof"),
         }
+
+        report.outcome = SearchStatus::NotEquivalent;
+        report.formal_witness_snapshot = None;
+        assert!(
+            proof_handoff_resolution(&report).is_err(),
+            "an untrusted NEQ status without a typed snapshot must fail closed"
+        );
     }
 
     #[test]

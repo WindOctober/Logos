@@ -15,6 +15,175 @@ From Logos.FormalSQL Require Import
 Import Tuple.
 Import ListNotations.
 
+(** Bidirectional transport is the relational part of
+    [outcome_relation_equiv], without either nonemptiness obligation.  Keeping
+    it separate is useful for syntax constructors: a parent witness supplies
+    inhabitation, while the operator proof only has to transport successes and
+    preserve every observable error category. *)
+Definition outcome_relation_transport {A B : Type}
+    (value_rel : A -> B -> Prop)
+    (left : sql_outcome A -> Prop) (right : sql_outcome B -> Prop) : Prop :=
+  (forall left_value,
+    left (SqlSuccess left_value) ->
+    exists right_value,
+      right (SqlSuccess right_value) /\ value_rel left_value right_value) /\
+  (forall right_value,
+    right (SqlSuccess right_value) ->
+    exists left_value,
+      left (SqlSuccess left_value) /\ value_rel left_value right_value) /\
+  (forall error, left (SqlError error) <-> right (SqlError error)).
+
+Lemma outcome_relation_equiv_of_left_inhabited_transport :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    (exists outcome, left outcome) ->
+    outcome_relation_transport value_rel left right ->
+    outcome_relation_equiv value_rel left right.
+Proof.
+intros A value_rel left right Hleft [Hforward [Hbackward Herrors]].
+apply outcome_relation_equiv_intro.
+- exact Hleft.
+- destruct Hleft as [[left_value|error] Houtcome].
+  + destruct (Hforward left_value Houtcome)
+      as [right_value [Hright _]].
+    now exists (SqlSuccess right_value).
+  + exists (SqlError error); now apply (proj1 (Herrors error)).
+- exact Hforward.
+- exact Hbackward.
+- exact Herrors.
+Qed.
+
+Lemma outcome_relation_equiv_value_relation_morphism :
+  forall (A : Type) (left_rel right_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    (forall left_value right_value,
+      left_rel left_value right_value <->
+      right_rel left_value right_value) ->
+    outcome_relation_equiv left_rel left right ->
+    outcome_relation_equiv right_rel left right.
+Proof.
+intros A left_rel right_rel left right Hrel
+  [Hleft [Hright [Hforward [Hbackward Herrors]]]].
+apply outcome_relation_equiv_intro; try assumption.
+- intros left_value Hleft_value.
+  destruct (Hforward left_value Hleft_value) as
+    [right_value [Hright_value Hrelated]].
+  exists right_value; split; [exact Hright_value|].
+  now apply (proj1 (Hrel left_value right_value)).
+- intros right_value Hright_value.
+  destruct (Hbackward right_value Hright_value) as
+    [left_value [Hleft_value Hrelated]].
+  exists left_value; split; [exact Hleft_value|].
+  now apply (proj1 (Hrel left_value right_value)).
+Qed.
+
+(** Reverse a heterogeneous-looking relation on one carrier without requiring
+    it to be symmetric.  This is the direction needed when a constructor's
+    backward traversal reuses its forward transport theorem. *)
+Lemma outcome_relation_equiv_flip :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_equiv value_rel left right ->
+    outcome_relation_equiv (fun right_value left_value =>
+      value_rel left_value right_value) right left.
+Proof.
+intros A value_rel left right
+  [Hleft [Hright [Hforward [Hbackward Herrors]]]].
+apply outcome_relation_equiv_intro.
+- exact Hright.
+- exact Hleft.
+- exact Hbackward.
+- exact Hforward.
+- intro error; symmetry; apply Herrors.
+Qed.
+
+Lemma outcome_equiv_flip_relation :
+  forall (A : Type) (value_rel : A -> A -> Prop) left right,
+    outcome_equiv value_rel left right ->
+    outcome_equiv
+      (fun right_value left_value => value_rel left_value right_value)
+      right left.
+Proof.
+intros A value_rel [left_value|left_error] [right_value|right_error];
+  cbn; intro Hrelated; try contradiction.
+- exact Hrelated.
+- now symmetry.
+Qed.
+
+Lemma outcome_relation_transport_flip :
+  forall (A : Type) (value_rel : A -> A -> Prop)
+      (left right : sql_outcome A -> Prop),
+    outcome_relation_transport value_rel left right ->
+    outcome_relation_transport (fun right_value left_value =>
+      value_rel left_value right_value) right left.
+Proof.
+intros A value_rel left right [Hforward [Hbackward Herrors]].
+split; [exact Hbackward|].
+split; [exact Hforward|].
+intro error; symmetry; apply Herrors.
+Qed.
+
+Lemma Forall2_relation_flip :
+  forall (A : Type) (relation : A -> A -> Prop) left right,
+    Forall2 relation left right ->
+    Forall2 (fun right_value left_value =>
+      relation left_value right_value) right left.
+Proof.
+intros A relation left right Hrelated.
+induction Hrelated; constructor; assumption.
+Qed.
+
+Lemma outcome_relation_transport_Forall2_flip :
+  forall (A : Type) (relation : A -> A -> Prop)
+      (left right : sql_outcome (list A) -> Prop),
+    outcome_relation_transport (Forall2 relation) left right ->
+    outcome_relation_transport
+      (Forall2 (fun right_value left_value =>
+        relation left_value right_value)) right left.
+Proof.
+intros A relation left right [Hforward [Hbackward Herrors]].
+split.
+- intros right_values Hright.
+  destruct (Hbackward right_values Hright) as
+    [left_values [Hleft Hrelated]].
+  exists left_values; split; [exact Hleft|].
+  now apply Forall2_relation_flip.
+- split.
+  + intros left_values Hleft.
+    destruct (Hforward left_values Hleft) as
+      [right_values [Hright Hrelated]].
+    exists right_values; split; [exact Hright|].
+    now apply Forall2_relation_flip.
+  + intro error; symmetry; apply Herrors.
+Qed.
+
+Lemma outcome_relation_transport_exists_same_index :
+  forall (Index A : Type) (value_rel : A -> A -> Prop)
+      (left right : Index -> sql_outcome A -> Prop),
+    (forall index,
+      outcome_relation_transport value_rel (left index) (right index)) ->
+    outcome_relation_transport value_rel
+      (fun outcome => exists index, left index outcome)
+      (fun outcome => exists index, right index outcome).
+Proof.
+intros Index A value_rel left right Hall.
+split.
+- intros left_value [index Hleft].
+  destruct (Hall index) as [Hforward _].
+  destruct (Hforward left_value Hleft) as
+    [right_value [Hright Hrelated]].
+  exists right_value; split; [now exists index|exact Hrelated].
+- split.
+  + intros right_value [index Hright].
+    destruct (Hall index) as [_ [Hbackward _]].
+    destruct (Hbackward right_value Hright) as
+      [left_value [Hleft Hrelated]].
+    exists left_value; split; [now exists index|exact Hrelated].
+  + intro error; split; intros [index Herror]; exists index.
+    * now apply (proj1 ((proj2 (proj2 (Hall index))) error)).
+    * now apply (proj2 ((proj2 (proj2 (Hall index))) error)).
+Qed.
+
 (** These relation lemmas are independent of SQL syntax.  They make the
     quantifier change from one scheduled relation to the union of all
     scheduled relations explicit, so no proof can silently promote a theorem
@@ -169,6 +338,1727 @@ Variable aggregate_runtime_error :
   aggregate T -> list (option sql_runtime_error * value T) ->
   option sql_runtime_error.
 Variable value_is_null : value T -> bool.
+
+(** Relation-parametric public observations deliberately omit schema equality.
+    This is the reusable transport layer for heterogeneous operators; ordinary
+    query equivalence is recovered by instantiating [rows_rel] with
+    [ordered_rows_equiv] and proving the endpoint signatures equal. *)
+Definition query_expr_possible_outcome_related
+    (env : Env.env T) (rows_rel : list (tuple T) -> list (tuple T) -> Prop)
+    (left right : query_expr T relname) : Prop :=
+  outcome_relation_equiv rows_rel
+    (@eval_query_expr_possible_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null env left)
+    (@eval_query_expr_possible_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null env right).
+
+(** A local scalar-value contract may relate different expressions evaluated
+    in different environments.  It is deliberately evaluator-level: all
+    successful values are related in both directions and every runtime-error
+    category is preserved.  This is the scalar analogue of the row contracts
+    used below by Project and Filter. *)
+Definition scalar_value_observation_related_at
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (left_env : Env.env T)
+    (left_expression : scalar_expr T relname ScalarResultValue)
+    (right_env : Env.env T)
+    (right_expression : scalar_expr T relname ScalarResultValue)
+    (value_rel : value T -> value T -> Prop) : Prop :=
+  outcome_relation_equiv value_rel
+    (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_expression)
+    (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      right_env right_expression).
+
+(** Pointwise contract for the deterministic callback carried by RowMap. *)
+Definition row_map_observation_related_at
+    (left_map : tuple T -> sql_outcome (tuple T)) (left_row : tuple T)
+    (right_map : tuple T -> sql_outcome (tuple T)) (right_row : tuple T)
+    (output_rel : tuple T -> tuple T -> Prop) : Prop :=
+  outcome_equiv output_rel (left_map left_row) (right_map right_row).
+
+(** A deterministic RowMap transports any positional input-row relation when
+    its callbacks preserve the requested output relation.  The recursive
+    definition returns the first callback error, so exact error categories are
+    retained rather than hidden behind list mapping. *)
+Lemma row_map_rows_outcome_relation :
+  forall left_map right_map left_rows right_rows row_rel output_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    outcome_equiv (Forall2 output_rel)
+      (@row_map_rows_outcome T left_map left_rows)
+      (@row_map_rows_outcome T right_map right_rows).
+Proof.
+intros left_map right_map left_rows right_rows row_rel output_rel Hrows.
+induction Hrows as
+  [|left_row right_row left_rows right_rows Hrow Hrows IH]; intro Hpoint.
+- constructor.
+- cbn [row_map_rows_outcome].
+  pose proof (Hpoint left_row right_row Hrow) as Hhead.
+  unfold row_map_observation_related_at in Hhead.
+  destruct (left_map left_row) as [left_output|left_error];
+    destruct (right_map right_row) as [right_output|right_error];
+    cbn in Hhead |- *; try contradiction.
+  + specialize (IH Hpoint).
+    destruct (row_map_rows_outcome left_map left_rows)
+      as [left_outputs|left_tail_error];
+      destruct (row_map_rows_outcome right_map right_rows)
+      as [right_outputs|right_tail_error];
+      cbn in IH |- *; try contradiction.
+    * now constructor.
+    * exact IH.
+  + exact Hhead.
+Qed.
+
+(** Structural forward traversal for a scalar SELECT/argument list.  The
+    theorem preserves positional multiplicity and the first reached error;
+    it does not model the evaluator as a pure [map]. *)
+Lemma eval_scalar_values_relation_forward :
+  forall schedule left_env left_expressions left_outcome,
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_expressions left_outcome ->
+    forall right_env right_expressions value_rel,
+      Forall2
+        (fun left_expression right_expression =>
+          scalar_value_observation_related_at schedule
+            left_env left_expression right_env right_expression value_rel)
+        left_expressions right_expressions ->
+      exists right_outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_expressions right_outcome /\
+        outcome_equiv (Forall2 value_rel) left_outcome right_outcome.
+Proof.
+intros schedule left_env left_expressions left_outcome Heval.
+induction Heval as
+  [left_env
+  |left_env left_expression left_expressions error Hleft_head
+  |left_env left_expression left_expressions left_value left_tail
+      Hleft_head Hleft_tail IHtail];
+  intros right_env right_expressions value_rel Hexpressions.
+- inversion Hexpressions; subst.
+  exists (SqlSuccess nil); split; [constructor|constructor].
+- inversion Hexpressions as
+    [|left_head right_head left_tail right_tail Hhead Htail]; subst.
+  unfold scalar_value_observation_related_at in Hhead.
+  destruct Hhead as [_ [_ [_ [_ Herrors]]]].
+  exists (SqlError error); split.
+  + apply EScalarValues_HeadError.
+    now apply (proj1 (Herrors error)).
+  + reflexivity.
+- inversion Hexpressions as
+    [|left_head right_head left_tail_exprs right_tail_exprs Hhead Htail];
+    subst.
+  unfold scalar_value_observation_related_at in Hhead.
+  destruct Hhead as [_ [_ [Hforward _]]].
+  destruct (Hforward left_value Hleft_head) as
+    [right_value [Hright_head Hvalue]].
+  destruct (IHtail right_env right_tail_exprs value_rel Htail) as
+    [right_tail [Hright_tail Hrelated_tail]].
+  exists (@scalar_value_cons_outcome T right_value right_tail); split.
+  + eapply EScalarValues_Cons; eassumption.
+  + destruct left_tail as [left_values|left_error];
+      destruct right_tail as [right_values|right_error];
+      cbn [scalar_value_cons_outcome] in Hrelated_tail |- *;
+      try contradiction.
+    * now constructor.
+    * exact Hrelated_tail.
+Qed.
+
+(** Bidirectional relation-parametric lifting for scalar value lists.  This
+    is reusable by predicate calls, SELECT lists, aggregate inputs, and
+    window arguments; callers prove only the per-expression contracts. *)
+Theorem eval_scalar_values_relation_transport :
+  forall schedule left_env left_expressions
+      right_env right_expressions value_rel,
+    Forall2
+      (fun left_expression right_expression =>
+        scalar_value_observation_related_at schedule
+          left_env left_expression right_env right_expression value_rel)
+      left_expressions right_expressions ->
+    outcome_relation_transport (Forall2 value_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_expressions)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_expressions).
+Proof.
+intros schedule left_env left_expressions right_env right_expressions
+  value_rel Hexpressions.
+assert (Hexpressions_flip :
+  Forall2
+    (fun right_expression left_expression =>
+      scalar_value_observation_related_at schedule
+        right_env right_expression left_env left_expression
+        (fun right_value left_value => value_rel left_value right_value))
+    right_expressions left_expressions).
+{
+  induction Hexpressions as
+    [|left_expression right_expression lefts rights Hhead Htail IH].
+  - constructor.
+  - constructor; [|exact IH].
+    unfold scalar_value_observation_related_at in *.
+    now apply outcome_relation_equiv_flip.
+}
+split.
+- intros left_values Hleft.
+  destruct (@eval_scalar_values_relation_forward
+    schedule left_env left_expressions (SqlSuccess left_values) Hleft
+    right_env right_expressions value_rel Hexpressions) as
+    [observed [Hobserved Hrelated]].
+  destruct observed as [right_values|right_error]; cbn in Hrelated.
+  + exists right_values; now split.
+  + contradiction.
+- split.
+  + intros right_values Hright.
+    destruct (@eval_scalar_values_relation_forward
+      schedule right_env right_expressions (SqlSuccess right_values) Hright
+      left_env left_expressions
+      (fun right_value left_value => value_rel left_value right_value)
+      Hexpressions_flip) as [observed [Hobserved Hrelated]].
+    destruct observed as [left_values|left_error]; cbn in Hrelated.
+    * exists left_values; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (@eval_scalar_values_relation_forward
+        schedule left_env left_expressions (SqlError error) Herror
+        right_env right_expressions value_rel Hexpressions) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [right_values|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@eval_scalar_values_relation_forward
+        schedule right_env right_expressions (SqlError error) Herror
+        left_env left_expressions
+        (fun right_value left_value => value_rel left_value right_value)
+        Hexpressions_flip) as [observed [Hobserved Hrelated]].
+      destruct observed as [left_values|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** Apply a scalar operator after its argument-list observation.  This is only
+    the sequencing already present in [EScalar_CallArgumentsError] and
+    [EScalar_CallSuccess]; keeping it explicit lets operator-local value/error
+    facts compose without reopening the scalar evaluator. *)
+Definition scalar_call_apply_outcome
+    (operator : scalar_operator T)
+    (arguments : sql_outcome (list (value T))) : sql_outcome (value T) :=
+  match arguments with
+  | SqlSuccess values =>
+      @scalar_call_value_outcome T symbol_runtime_error operator values
+  | SqlError error => SqlError error
+  end.
+
+Lemma eval_scalar_value_call_outcome_iff :
+  forall schedule env result_type operator arguments outcome,
+    @eval_scalar_value_expr_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      env (SExpr_Call result_type operator arguments) outcome <->
+    exists argument_outcome,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env arguments argument_outcome /\
+      scalar_call_apply_outcome operator argument_outcome = outcome.
+Proof.
+intros schedule env result_type operator arguments outcome; split.
+- intro Heval; inversion Heval; subst.
+  + exists (SqlError error); now split.
+  + exists (SqlSuccess values); now split.
+- intros [[values | error] [Harguments Houtcome]]; cbn in Houtcome.
+  + rewrite <- Houtcome; now apply EScalar_CallSuccess.
+  + rewrite <- Houtcome; now apply EScalar_CallArgumentsError.
+Qed.
+
+(** The complete local contract for two scalar operators.  The operators and
+    represented values may differ; corresponding argument lists must produce
+    related successful values and exactly the same SQL runtime-error category.
+    Range, typmod, NULL, and provenance facts are intentionally kept outside
+    this definition and are used only to establish its semantic premise. *)
+Definition scalar_call_local_observation_related
+    (left_operator right_operator : scalar_operator T)
+    (argument_rel result_rel : value T -> value T -> Prop) : Prop :=
+  forall left_values right_values,
+    Forall2 argument_rel left_values right_values ->
+    outcome_equiv result_rel
+      (@scalar_call_value_outcome T symbol_runtime_error
+        left_operator left_values)
+      (@scalar_call_value_outcome T symbol_runtime_error
+        right_operator right_values).
+
+Lemma scalar_call_expression_relation_forward :
+  forall schedule left_env left_result_type left_operator left_arguments
+      right_env right_result_type right_operator right_arguments
+      argument_rel result_rel,
+    outcome_relation_transport (Forall2 argument_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_arguments)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_arguments) ->
+    scalar_call_local_observation_related
+      left_operator right_operator argument_rel result_rel ->
+    forall left_outcome,
+      @eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env (SExpr_Call left_result_type left_operator left_arguments)
+        left_outcome ->
+      exists right_outcome,
+        @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env
+          (SExpr_Call right_result_type right_operator right_arguments)
+          right_outcome /\
+        outcome_equiv result_rel left_outcome right_outcome.
+Proof.
+intros schedule left_env left_result_type left_operator left_arguments
+  right_env right_result_type right_operator right_arguments
+  argument_rel result_rel
+  [Harguments_forward [_ Hargument_errors]] Hlocal
+  left_outcome Hleft.
+apply eval_scalar_value_call_outcome_iff in Hleft.
+destruct Hleft as [[left_values | left_error]
+  [Hleft_arguments Hleft_outcome]].
+- destruct (Harguments_forward left_values Hleft_arguments) as
+    [right_values [Hright_arguments Hvalues]].
+  pose proof (Hlocal left_values right_values Hvalues) as Hresult.
+  exists (@scalar_call_value_outcome T symbol_runtime_error
+    right_operator right_values); split.
+  + apply eval_scalar_value_call_outcome_iff.
+    exists (SqlSuccess right_values); now split.
+  + now rewrite <- Hleft_outcome.
+- assert (Hright_arguments :
+    @eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      right_env right_arguments (SqlError left_error)).
+  { now apply (proj1 (Hargument_errors left_error)). }
+  exists (SqlError left_error); split.
+  + apply eval_scalar_value_call_outcome_iff.
+    exists (SqlError left_error); now split.
+  + now rewrite <- Hleft_outcome.
+Qed.
+
+(** Bidirectional evaluator-level Scalar Outcome Bridge.  It preserves child
+    argument errors, operator-local errors, NULL payloads through [result_rel],
+    and successful values in one interface. *)
+Theorem scalar_call_expression_relation_transport :
+  forall schedule left_env left_result_type left_operator left_arguments
+      right_env right_result_type right_operator right_arguments
+      argument_rel result_rel,
+    outcome_relation_transport (Forall2 argument_rel)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_arguments)
+      (@eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_arguments) ->
+    scalar_call_local_observation_related
+      left_operator right_operator argument_rel result_rel ->
+    outcome_relation_transport result_rel
+      (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env (SExpr_Call left_result_type left_operator left_arguments))
+      (@eval_scalar_value_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env
+          (SExpr_Call right_result_type right_operator right_arguments)).
+Proof.
+intros schedule left_env left_result_type left_operator left_arguments
+  right_env right_result_type right_operator right_arguments
+  argument_rel result_rel Harguments Hlocal.
+pose proof (outcome_relation_transport_Forall2_flip Harguments)
+  as Harguments_flip.
+assert (Hlocal_flip : scalar_call_local_observation_related
+  right_operator left_operator
+  (fun right_value left_value => argument_rel left_value right_value)
+  (fun right_value left_value => result_rel left_value right_value)).
+{
+  intros right_values left_values Hvalues.
+  apply outcome_equiv_flip_relation.
+  apply Hlocal.
+  now apply Forall2_relation_flip in Hvalues.
+}
+split.
+- intros left_value Hleft.
+  destruct (scalar_call_expression_relation_forward
+    (left_result_type := left_result_type)
+    (left_operator := left_operator) (right_operator := right_operator)
+    right_result_type Harguments Hlocal Hleft) as
+    [[right_value | right_error] [Hright Hrelated]];
+    cbn in Hrelated; [eauto|contradiction].
+- split.
+  + intros right_value Hright.
+    destruct (scalar_call_expression_relation_forward
+      (left_result_type := right_result_type)
+      (left_operator := right_operator) (right_operator := left_operator)
+      left_result_type Harguments_flip Hlocal_flip Hright) as
+      [[left_value | left_error] [Hleft Hrelated]];
+      cbn in Hrelated; [eauto|contradiction].
+  + intro error; split; intro Herror.
+    * destruct (scalar_call_expression_relation_forward
+        (left_result_type := left_result_type)
+        (left_operator := left_operator) (right_operator := right_operator)
+        right_result_type Harguments Hlocal Herror) as
+        [[right_value | right_error] [Hright Hrelated]];
+        cbn in Hrelated; [contradiction|now subst right_error].
+    * destruct (scalar_call_expression_relation_forward
+        (left_result_type := right_result_type)
+        (left_operator := right_operator) (right_operator := left_operator)
+        left_result_type Harguments_flip Hlocal_flip Herror) as
+        [[left_value | left_error] [Hleft Hrelated]];
+        cbn in Hrelated; [contradiction|now subst left_error].
+Qed.
+
+(** Reachable-argument safety corollary.  It does not require an operator to
+    be globally total: only argument lists that the expression can actually
+    produce must have no local error. *)
+Lemma scalar_call_expression_runtime_safe_of_reachable_local_safe :
+  forall schedule env result_type operator arguments,
+    (forall error,
+      ~ @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env arguments (SqlError error)) ->
+    (forall values,
+      @eval_scalar_values_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env arguments (SqlSuccess values) ->
+      forall error,
+        @scalar_call_value_outcome T symbol_runtime_error operator values <>
+          SqlError error) ->
+    forall error,
+      ~ @eval_scalar_value_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (SExpr_Call result_type operator arguments) (SqlError error).
+Proof.
+intros schedule env result_type operator arguments
+  Harguments_safe Hlocal_safe error Heval.
+apply eval_scalar_value_call_outcome_iff in Heval.
+destruct Heval as [[values | argument_error]
+  [Harguments Houtcome]].
+- exact (Hlocal_safe values Harguments error Houtcome).
+- inversion Houtcome; subst argument_error.
+  exact (Harguments_safe error Harguments).
+Qed.
+
+Lemma query_expr_possible_outcome_equiv_of_related :
+  forall env left right,
+    query_expr_outputs left = query_expr_outputs right ->
+    query_expr_possible_outcome_related env (@ordered_rows_equiv T) left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right.
+Proof.
+intros env left right Houtputs Hrelated.
+now split.
+Qed.
+
+(** Final bridge for the common positional-row relation emitted by Project and
+    Filter transport.  Static output-signature equality remains explicit. *)
+Lemma query_expr_possible_outcome_equiv_of_Forall2_rows :
+  forall env left right,
+    query_expr_outputs left = query_expr_outputs right ->
+    query_expr_possible_outcome_related env
+      (Forall2
+        (fun left_row right_row =>
+          Oeset.compare (OTuple T) left_row right_row = Eq))
+      left right ->
+    @query_expr_possible_outcome_equiv T relname
+      basesort instance unknown symbol_runtime_error aggregate_runtime_error
+      value_is_null env left right.
+Proof.
+intros env left right Houtputs Hrelated.
+apply query_expr_possible_outcome_equiv_of_related; [exact Houtputs|].
+unfold query_expr_possible_outcome_related in *.
+eapply outcome_relation_equiv_value_relation_morphism; [|exact Hrelated].
+intros left_rows right_rows; symmetry.
+apply ordered_rows_equiv_iff_Forall2.
+Qed.
+
+(** Per-row projection contract.  Successful scalar value lists are related
+    only through the rows ultimately constructed by the two SELECT lists;
+    every scalar error category is preserved by [outcome_relation_equiv]. *)
+Definition project_row_observation_related_at
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (left_env : Env.env T) (left_select : @query_select_list T relname)
+    (left_row : tuple T)
+    (right_env : Env.env T) (right_select : @query_select_list T relname)
+    (right_row : tuple T)
+    (output_rel : tuple T -> tuple T -> Prop) : Prop :=
+  outcome_relation_equiv
+    (fun left_values right_values =>
+      output_rel
+        (@project_row T relname left_select left_values)
+        (@project_row T relname right_select right_values))
+    (@eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      (env_t T left_env left_row) (map fst left_select))
+    (@eval_scalar_values_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      (env_t T right_env right_row) (map fst right_select)).
+
+(** One-directional structural induction for Project.  Positional [Forall2]
+    preserves list order and multiplicity; the scalar contract preserves the
+    first reached error instead of treating projection as a pure [map]. *)
+Lemma eval_project_rows_relation_forward :
+  forall schedule left_env left_select left_rows left_outcome,
+    @eval_project_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_select left_rows left_outcome ->
+    forall right_env right_select right_rows row_rel output_rel,
+      Forall2 row_rel left_rows right_rows ->
+      (forall left_row right_row,
+        row_rel left_row right_row ->
+        project_row_observation_related_at schedule
+          left_env left_select left_row
+          right_env right_select right_row output_rel) ->
+      exists right_outcome,
+        @eval_project_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_select right_rows right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+Proof.
+intros schedule left_env left_select left_rows left_outcome Heval.
+induction Heval as
+  [left_env left_select
+  |left_env left_select left_row left_rows error Hleft_scalar
+  |left_env left_select left_row left_rows left_values left_tail
+      Hleft_scalar Hleft_tail IHtail];
+  intros right_env right_select right_rows row_rel output_rel
+    Hrows Hpoint.
+- inversion Hrows; subst.
+  exists (SqlSuccess nil); split; [constructor|constructor].
+- inversion Hrows as
+    [|left_head right_head left_tail_rows right_tail_rows Hrow Hrest]; subst.
+  pose proof (Hpoint left_row right_head Hrow) as Hlocal.
+  destruct Hlocal as [_ [_ [_ [_ Herrors]]]].
+  exists (SqlError error); split.
+  + apply EProjectRows_HeadError.
+    now apply (proj1 (Herrors error)).
+  + reflexivity.
+- inversion Hrows as
+    [|left_head right_head left_tail_rows right_tail_rows Hrow Hrest]; subst.
+  pose proof (Hpoint left_row right_head Hrow) as Hlocal.
+  destruct Hlocal as [_ [_ [Hforward _]]].
+  destruct (Hforward left_values Hleft_scalar) as
+    [right_values [Hright_scalar Hhead]].
+  destruct (IHtail right_env right_select right_tail_rows
+    row_rel output_rel Hrest Hpoint) as
+    [right_tail [Hright_tail Htail]].
+  exists
+    (@project_cons_outcome T
+      (@project_row T relname right_select right_values) right_tail).
+  split.
+  + eapply EProjectRows_Cons; eassumption.
+  + destruct left_tail as [left_rows'|left_error];
+      destruct right_tail as [right_rows'|right_error];
+      cbn [project_cons_outcome] in Htail |- *; try contradiction.
+    * now constructor.
+    * exact Htail.
+Qed.
+
+(** Bidirectional evaluator-level Project transport.  No tuple equality,
+    schema identity, or concrete SELECT shape is built into this theorem. *)
+Theorem eval_project_rows_relation_transport :
+  forall schedule left_env left_select left_rows
+      right_env right_select right_rows row_rel output_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        left_env left_select left_row
+        right_env right_select right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_select left_rows)
+      (@eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_select right_rows).
+Proof.
+intros schedule left_env left_select left_rows
+  right_env right_select right_rows row_rel output_rel Hrows Hpoint.
+assert (Hrows_flip :
+  Forall2 (fun right_row left_row => row_rel left_row right_row)
+    right_rows left_rows).
+{ now apply Forall2_relation_flip. }
+assert (Hpoint_flip : forall right_row left_row,
+  (fun right_row left_row => row_rel left_row right_row)
+      right_row left_row ->
+  project_row_observation_related_at schedule
+    right_env right_select right_row
+    left_env left_select left_row
+    (fun right_output left_output => output_rel left_output right_output)).
+{
+  intros right_row left_row Hrow.
+  unfold project_row_observation_related_at.
+  apply outcome_relation_equiv_flip.
+  now apply Hpoint.
+}
+split.
+- intros left_output Hleft.
+  destruct (@eval_project_rows_relation_forward
+    schedule left_env left_select left_rows (SqlSuccess left_output) Hleft
+    right_env right_select right_rows row_rel output_rel Hrows Hpoint) as
+    [observed [Hobserved Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists right_output; now split.
+  + contradiction.
+- split.
+  + intros right_output Hright.
+    destruct (@eval_project_rows_relation_forward
+      schedule right_env right_select right_rows (SqlSuccess right_output)
+      Hright left_env left_select left_rows
+      (fun right_row left_row => row_rel left_row right_row)
+      (fun right_output left_output => output_rel left_output right_output)
+      Hrows_flip Hpoint_flip) as
+      [observed [Hobserved Hrelated]].
+    destruct observed as [left_output|left_error]; cbn in Hrelated.
+    * exists left_output; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (@eval_project_rows_relation_forward
+        schedule left_env left_select left_rows (SqlError error) Herror
+        right_env right_select right_rows row_rel output_rel Hrows Hpoint) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [right_output|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@eval_project_rows_relation_forward
+        schedule right_env right_select right_rows (SqlError error) Herror
+        left_env left_select left_rows
+        (fun right_row left_row => row_rel left_row right_row)
+        (fun right_output left_output => output_rel left_output right_output)
+        Hrows_flip Hpoint_flip) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [left_output|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** Constructor-level RowMap transport.  Output attribute lists are metadata
+    and therefore may differ at this relation layer; a final query-equivalence
+    theorem must still prove the endpoint signatures equal. *)
+Lemma query_expr_row_map_relation_forward :
+  forall schedule env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap left_outputs left_map left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_RowMap right_outputs right_map right_input) right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+Proof.
+intros schedule env left_outputs left_map left_input
+  right_outputs right_map right_input row_rel output_rel
+  [Hchild_forward [_ Hchild_errors]] Hpoint left_outcome Hleft.
+inversion Hleft; subst.
+- exists (SqlError error); split; [|reflexivity].
+  apply EQuery_RowMapChildError.
+  match goal with
+  | Herror : context [eval_query_expr_outcome] |- _ =>
+      now apply (proj1 (Hchild_errors error)) in Herror
+  end.
+- match goal with
+  | Hchild : context [eval_query_expr_outcome] |- _ =>
+      destruct (Hchild_forward _ Hchild) as
+        [right_rows [Hright_child Hrows]];
+      exists (@row_map_rows_outcome T right_map right_rows); split;
+      [now apply EQuery_RowMapRows|]
+  end.
+  now apply row_map_rows_outcome_relation with (row_rel := row_rel).
+Qed.
+
+Theorem query_expr_row_map_relation_transport :
+  forall schedule env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap left_outputs left_map left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_RowMap right_outputs right_map right_input)).
+Proof.
+intros schedule env left_outputs left_map left_input
+  right_outputs right_map right_input row_rel output_rel Hchild Hpoint.
+pose proof (outcome_relation_transport_Forall2_flip Hchild) as Hchild_flip.
+assert (Hpoint_flip : forall right_row left_row,
+  (fun right_row left_row => row_rel left_row right_row)
+      right_row left_row ->
+  row_map_observation_related_at right_map right_row left_map left_row
+    (fun right_output left_output => output_rel left_output right_output)).
+{
+  intros right_row left_row Hrow.
+  unfold row_map_observation_related_at.
+  apply outcome_equiv_flip_relation.
+  now apply Hpoint.
+}
+split.
+- intros left_output Hleft.
+  destruct (@query_expr_row_map_relation_forward
+    schedule env left_outputs left_map left_input
+    right_outputs right_map right_input row_rel output_rel
+    Hchild Hpoint (SqlSuccess left_output) Hleft) as
+    [observed [Hobserved Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists right_output; now split.
+  + contradiction.
+- split.
+  + intros right_output Hright.
+    destruct (@query_expr_row_map_relation_forward
+      schedule env right_outputs right_map right_input
+      left_outputs left_map left_input
+      (fun right_row left_row => row_rel left_row right_row)
+      (fun right_output left_output => output_rel left_output right_output)
+      Hchild_flip Hpoint_flip (SqlSuccess right_output) Hright) as
+      [observed [Hobserved Hrelated]].
+    destruct observed as [left_output|left_error]; cbn in Hrelated.
+    * exists left_output; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (@query_expr_row_map_relation_forward
+        schedule env left_outputs left_map left_input
+        right_outputs right_map right_input row_rel output_rel
+        Hchild Hpoint (SqlError error) Herror) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [right_output|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@query_expr_row_map_relation_forward
+        schedule env right_outputs right_map right_input
+        left_outputs left_map left_input
+        (fun right_row left_row => row_rel left_row right_row)
+        (fun right_output left_output => output_rel left_output right_output)
+        Hchild_flip Hpoint_flip (SqlError error) Herror) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [left_output|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** One-directional Filter traversal under an arbitrary positional row
+    relation.  [filter_scalar_observation_equiv_at] compares SQL acceptance
+    (TRUE versus non-TRUE) and exact errors, rather than requiring equal Bool3
+    payloads. *)
+Lemma eval_filter_rows_relation_forward :
+  forall schedule left_env left_formula left_rows left_outcome,
+    @eval_filter_rows_outcome T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null schedule
+      left_env left_formula left_rows left_outcome ->
+    forall right_env right_formula right_rows row_rel,
+      Forall2 row_rel left_rows right_rows ->
+      (forall left_row right_row,
+        row_rel left_row right_row ->
+        @filter_scalar_observation_equiv_at T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          (env_t T left_env left_row) left_formula
+          (env_t T right_env right_row) right_formula) ->
+      exists right_outcome,
+        @eval_filter_rows_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          right_env right_formula right_rows right_outcome /\
+        outcome_equiv (Forall2 row_rel) left_outcome right_outcome.
+Proof.
+intros schedule left_env left_formula left_rows left_outcome Heval.
+induction Heval as
+  [left_env left_formula
+  |left_env left_formula left_row left_rows error Hleft_formula
+  |left_env left_formula left_row left_rows left_truth left_tail
+      Hleft_formula Hleft_tail IHtail];
+  intros right_env right_formula right_rows row_rel Hrows Hpoint.
+- inversion Hrows; subst.
+  exists (SqlSuccess nil); split; [constructor|constructor].
+- inversion Hrows as
+    [|left_head right_head left_tail_rows right_tail_rows Hrow Hrest]; subst.
+  pose proof (Hpoint left_row right_head Hrow) as Hlocal.
+  destruct Hlocal as [_ [_ Herrors]].
+  exists (SqlError error); split.
+  + apply EFilterRows_HeadError.
+    now apply (proj1 (Herrors error)).
+  + reflexivity.
+- inversion Hrows as
+    [|left_head right_head left_tail_rows right_tail_rows Hrow Hrest]; subst.
+  pose proof (Hpoint left_row right_head Hrow) as Hlocal.
+  destruct Hlocal as [Hforward _].
+  destruct (Hforward left_truth Hleft_formula) as
+    [right_truth [Hright_formula Haccept]].
+  destruct (IHtail right_env right_formula right_tail_rows
+    row_rel Hrest Hpoint) as [right_tail [Hright_tail Htail]].
+  exists (@filter_cons_outcome T right_truth right_head right_tail); split.
+  + eapply EFilterRows_Cons; eassumption.
+  + destruct left_tail as [left_rows'|left_error];
+      destruct right_tail as [right_rows'|right_error];
+      cbn in Htail |- *; try contradiction.
+    * unfold filter_cons_outcome.
+      destruct (Bool.is_true (B T) left_truth) eqn:Hleft;
+        destruct (Bool.is_true (B T) right_truth) eqn:Hright;
+        try discriminate Haccept; cbn.
+      -- now constructor.
+      -- exact Htail.
+    * exact Htail.
+Qed.
+
+Theorem eval_filter_rows_relation_transport :
+  forall schedule left_env left_formula left_rows
+      right_env right_formula right_rows row_rel,
+    Forall2 row_rel left_rows right_rows ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T left_env left_row) left_formula
+        (env_t T right_env right_row) right_formula) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        left_env left_formula left_rows)
+      (@eval_filter_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        right_env right_formula right_rows).
+Proof.
+intros schedule left_env left_formula left_rows
+  right_env right_formula right_rows row_rel Hrows Hpoint.
+assert (Hrows_flip :
+  Forall2 (fun right_row left_row => row_rel left_row right_row)
+    right_rows left_rows).
+{ now apply Forall2_relation_flip. }
+assert (Hpoint_flip : forall right_row left_row,
+  (fun right_row left_row => row_rel left_row right_row)
+      right_row left_row ->
+  @filter_scalar_observation_equiv_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null schedule
+    (env_t T right_env right_row) right_formula
+    (env_t T left_env left_row) left_formula).
+{
+  intros right_row left_row Hrow.
+  apply filter_scalar_observation_equiv_at_sym.
+  now apply Hpoint.
+}
+split.
+- intros left_output Hleft.
+  destruct (@eval_filter_rows_relation_forward
+    schedule left_env left_formula left_rows (SqlSuccess left_output) Hleft
+    right_env right_formula right_rows row_rel Hrows Hpoint) as
+    [observed [Hobserved Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists right_output; now split.
+  + contradiction.
+- split.
+  + intros right_output Hright.
+    destruct (@eval_filter_rows_relation_forward
+      schedule right_env right_formula right_rows (SqlSuccess right_output)
+      Hright left_env left_formula left_rows
+      (fun right_row left_row => row_rel left_row right_row)
+      Hrows_flip Hpoint_flip) as
+      [observed [Hobserved Hrelated]].
+    destruct observed as [left_output|left_error]; cbn in Hrelated.
+    * exists left_output; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (@eval_filter_rows_relation_forward
+        schedule left_env left_formula left_rows (SqlError error) Herror
+        right_env right_formula right_rows row_rel Hrows Hpoint) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [right_output|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@eval_filter_rows_relation_forward
+        schedule right_env right_formula right_rows (SqlError error) Herror
+        left_env left_formula left_rows
+        (fun right_row left_row => row_rel left_row right_row)
+        Hrows_flip Hpoint_flip) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [left_output|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** Constructor-level forward transport for Project.  Child failures and
+    per-row projection failures are kept distinct in the proof, but exported
+    through one outcome relation. *)
+Lemma query_expr_project_relation_forward :
+  forall schedule env left_select left_input right_select right_input
+      row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project left_select left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_Project right_select right_input) right_outcome /\
+        outcome_equiv (Forall2 output_rel) left_outcome right_outcome.
+Proof.
+intros schedule env left_select left_input right_select right_input
+  row_rel output_rel [Hchild_forward [_ Hchild_errors]] Hpoint
+  left_outcome Hleft.
+destruct left_outcome as [left_output|error].
+- inversion Hleft; subst.
+  match goal with
+  | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+      (SqlSuccess ?left_rows) |- _ =>
+      rename H into Hleft_child
+  end.
+  match goal with
+  | H : @eval_project_rows_outcome _ _ _ _ _ _ _ _ _ _ _ _
+      (SqlSuccess left_output) |- _ => rename H into Hleft_project
+  end.
+  destruct (Hchild_forward _ Hleft_child) as
+    [right_rows [Hright_child Hrows]].
+  destruct (@eval_project_rows_relation_forward
+    schedule env left_select _ (SqlSuccess left_output) Hleft_project
+    env right_select right_rows row_rel output_rel Hrows Hpoint) as
+    [observed [Hright_project Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists (SqlSuccess right_output); split; [|exact Hrelated].
+    eapply EQuery_ProjectRows; eassumption.
+  + contradiction.
+- inversion Hleft; subst.
+  + exists (SqlError error); split; [|reflexivity].
+    apply EQuery_ProjectChildError.
+    match goal with
+    | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+        (SqlError error) |- _ =>
+        now apply (proj1 (Hchild_errors error)) in H
+    end.
+  + match goal with
+    | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+        (SqlSuccess ?left_rows) |- _ => rename H into Hleft_child
+    end.
+    match goal with
+    | H : @eval_project_rows_outcome _ _ _ _ _ _ _ _ _ _ _ _
+        (SqlError error) |- _ => rename H into Hleft_project
+    end.
+    destruct (Hchild_forward _ Hleft_child) as
+      [right_rows [Hright_child Hrows]].
+    destruct (@eval_project_rows_relation_forward
+      schedule env left_select _ (SqlError error) Hleft_project
+      env right_select right_rows row_rel output_rel Hrows Hpoint) as
+      [observed [Hright_project Hrelated]].
+    destruct observed as [right_output|right_error]; cbn in Hrelated.
+    * contradiction.
+    * subst right_error.
+      exists (SqlError error); split; [|reflexivity].
+      eapply EQuery_ProjectRows; eassumption.
+Qed.
+
+Theorem query_expr_project_relation_transport :
+  forall schedule env left_select left_input right_select right_input
+      row_rel output_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    outcome_relation_transport (Forall2 output_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project left_select left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Project right_select right_input)).
+Proof.
+intros schedule env left_select left_input right_select right_input
+  row_rel output_rel Hchild Hpoint.
+pose proof (outcome_relation_transport_Forall2_flip Hchild) as Hchild_flip.
+assert (Hpoint_flip : forall right_row left_row,
+  (fun right_row left_row => row_rel left_row right_row)
+      right_row left_row ->
+  project_row_observation_related_at schedule
+    env right_select right_row env left_select left_row
+    (fun right_output left_output => output_rel left_output right_output)).
+{
+  intros right_row left_row Hrow.
+  unfold project_row_observation_related_at.
+  apply outcome_relation_equiv_flip.
+  now apply Hpoint.
+}
+split.
+- intros left_output Hleft.
+  destruct (query_expr_project_relation_forward
+    Hchild Hpoint Hleft) as [observed [Hobserved Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists right_output; now split.
+  + contradiction.
+- split.
+  + intros right_output Hright.
+    destruct (@query_expr_project_relation_forward
+      schedule env right_select right_input left_select left_input
+      (fun right_row left_row => row_rel left_row right_row)
+      (fun right_output left_output => output_rel left_output right_output)
+      Hchild_flip Hpoint_flip (SqlSuccess right_output) Hright) as
+      [observed [Hobserved Hrelated]].
+    destruct observed as [left_output|left_error]; cbn in Hrelated.
+    * exists left_output; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (query_expr_project_relation_forward
+        Hchild Hpoint Herror) as [observed [Hobserved Hrelated]].
+      destruct observed as [right_output|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@query_expr_project_relation_forward
+        schedule env right_select right_input left_select left_input
+        (fun right_row left_row => row_rel left_row right_row)
+        (fun right_output left_output => output_rel left_output right_output)
+        Hchild_flip Hpoint_flip (SqlError error) Herror) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [left_output|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** Filter constructor lift.  The output relation is the input row relation:
+    corresponding rows are retained or rejected together by the pointwise SQL
+    acceptance contract. *)
+Lemma query_expr_filter_relation_forward :
+  forall schedule env left_formula left_input right_formula right_input row_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    forall left_outcome,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter left_formula left_input) left_outcome ->
+      exists right_outcome,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env (QExpr_Filter right_formula right_input) right_outcome /\
+        outcome_equiv (Forall2 row_rel) left_outcome right_outcome.
+Proof.
+intros schedule env left_formula left_input right_formula right_input row_rel
+  [Hchild_forward [_ Hchild_errors]] Hpoint left_outcome Hleft.
+destruct left_outcome as [left_output|error].
+- inversion Hleft; subst.
+  match goal with
+  | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+      (SqlSuccess ?left_rows) |- _ => rename H into Hleft_child
+  end.
+  match goal with
+  | H : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ _
+      (SqlSuccess left_output) |- _ => rename H into Hleft_filter
+  end.
+  destruct (Hchild_forward _ Hleft_child) as
+    [right_rows [Hright_child Hrows]].
+  destruct (@eval_filter_rows_relation_forward
+    schedule env left_formula _ (SqlSuccess left_output) Hleft_filter
+    env right_formula right_rows row_rel Hrows Hpoint) as
+    [observed [Hright_filter Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists (SqlSuccess right_output); split; [|exact Hrelated].
+    eapply EQuery_FilterRows; eassumption.
+  + contradiction.
+- inversion Hleft; subst.
+  + exists (SqlError error); split; [|reflexivity].
+    apply EQuery_FilterChildError.
+    match goal with
+    | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+        (SqlError error) |- _ =>
+        now apply (proj1 (Hchild_errors error)) in H
+    end.
+  + match goal with
+    | H : @eval_query_expr_outcome _ _ _ _ _ _ _ _ _ _ left_input
+        (SqlSuccess ?left_rows) |- _ => rename H into Hleft_child
+    end.
+    match goal with
+    | H : @eval_filter_rows_outcome _ _ _ _ _ _ _ _ _ _ _ _
+        (SqlError error) |- _ => rename H into Hleft_filter
+    end.
+    destruct (Hchild_forward _ Hleft_child) as
+      [right_rows [Hright_child Hrows]].
+    destruct (@eval_filter_rows_relation_forward
+      schedule env left_formula _ (SqlError error) Hleft_filter
+      env right_formula right_rows row_rel Hrows Hpoint) as
+      [observed [Hright_filter Hrelated]].
+    destruct observed as [right_output|right_error]; cbn in Hrelated.
+    * contradiction.
+    * subst right_error.
+      exists (SqlError error); split; [|reflexivity].
+      eapply EQuery_FilterRows; eassumption.
+Qed.
+
+Theorem query_expr_filter_relation_transport :
+  forall schedule env left_formula left_input right_formula right_input row_rel,
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_input)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_input) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    outcome_relation_transport (Forall2 row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter left_formula left_input))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env (QExpr_Filter right_formula right_input)).
+Proof.
+intros schedule env left_formula left_input right_formula right_input row_rel
+  Hchild Hpoint.
+pose proof (outcome_relation_transport_Forall2_flip Hchild) as Hchild_flip.
+assert (Hpoint_flip : forall right_row left_row,
+  (fun right_row left_row => row_rel left_row right_row)
+      right_row left_row ->
+  @filter_scalar_observation_equiv_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null schedule
+    (env_t T env right_row) right_formula
+    (env_t T env left_row) left_formula).
+{
+  intros right_row left_row Hrow.
+  apply filter_scalar_observation_equiv_at_sym.
+  now apply Hpoint.
+}
+split.
+- intros left_output Hleft.
+  destruct (query_expr_filter_relation_forward
+    Hchild Hpoint Hleft) as [observed [Hobserved Hrelated]].
+  destruct observed as [right_output|right_error]; cbn in Hrelated.
+  + exists right_output; now split.
+  + contradiction.
+- split.
+  + intros right_output Hright.
+    destruct (@query_expr_filter_relation_forward
+      schedule env right_formula right_input left_formula left_input
+      (fun right_row left_row => row_rel left_row right_row)
+      Hchild_flip Hpoint_flip (SqlSuccess right_output) Hright) as
+      [observed [Hobserved Hrelated]].
+    destruct observed as [left_output|left_error]; cbn in Hrelated.
+    * exists left_output; split; [exact Hobserved|].
+      now apply Forall2_relation_flip in Hrelated.
+    * contradiction.
+  + intro error; split; intro Herror.
+    * destruct (query_expr_filter_relation_forward
+        Hchild Hpoint Herror) as [observed [Hobserved Hrelated]].
+      destruct observed as [right_output|right_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst right_error.
+    * destruct (@query_expr_filter_relation_forward
+        schedule env right_formula right_input left_formula left_input
+        (fun right_row left_row => row_rel left_row right_row)
+        Hchild_flip Hpoint_flip (SqlError error) Herror) as
+        [observed [Hobserved Hrelated]].
+      destruct observed as [left_output|left_error]; cbn in Hrelated.
+      -- contradiction.
+      -- now subst left_error.
+Qed.
+
+(** Public possible-schedule Project lift.  The same-schedule premise is a
+    sufficient compositional interface; rewrites that remap schedules can
+    first use the general schedule-transport lemmas above. *)
+Theorem query_expr_project_possible_outcome_related :
+  forall env left_select left_input right_select right_input
+      row_rel output_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall schedule left_row right_row,
+      row_rel left_row right_row ->
+      project_row_observation_related_at schedule
+        env left_select left_row env right_select right_row output_rel) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env (QExpr_Project left_select left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_rel)
+      (QExpr_Project left_select left_input)
+      (QExpr_Project right_select right_input).
+Proof.
+intros env left_select left_input right_select right_input
+  row_rel output_rel Hchild Hpoint Hinhabited.
+unfold query_expr_possible_outcome_related,
+  eval_query_expr_possible_outcome in *.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hinhabited|].
+apply outcome_relation_transport_exists_same_index.
+intro schedule.
+apply (query_expr_project_relation_transport (row_rel := row_rel)).
+- exact (Hchild schedule).
+- exact (Hpoint schedule).
+Qed.
+
+Theorem query_expr_row_map_possible_outcome_related :
+  forall env
+      left_outputs left_map left_input
+      right_outputs right_map right_input row_rel output_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall left_row right_row,
+      row_rel left_row right_row ->
+      row_map_observation_related_at
+        left_map left_row right_map right_row output_rel) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env
+        (QExpr_RowMap left_outputs left_map left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_rel)
+      (QExpr_RowMap left_outputs left_map left_input)
+      (QExpr_RowMap right_outputs right_map right_input).
+Proof.
+intros env left_outputs left_map left_input
+  right_outputs right_map right_input row_rel output_rel
+  Hchild Hpoint Hinhabited.
+unfold query_expr_possible_outcome_related,
+  eval_query_expr_possible_outcome in *.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hinhabited|].
+apply outcome_relation_transport_exists_same_index.
+intro schedule.
+eapply query_expr_row_map_relation_transport.
+- exact (Hchild schedule).
+- exact Hpoint.
+Qed.
+
+Theorem query_expr_filter_possible_outcome_related :
+  forall env left_formula left_input right_formula right_input row_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env left_input)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null schedule
+          env right_input)) ->
+    (forall schedule left_row right_row,
+      row_rel left_row right_row ->
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        (env_t T env left_row) left_formula
+        (env_t T env right_row) right_formula) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname
+        basesort instance unknown symbol_runtime_error aggregate_runtime_error
+        value_is_null env (QExpr_Filter left_formula left_input) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 row_rel)
+      (QExpr_Filter left_formula left_input)
+      (QExpr_Filter right_formula right_input).
+Proof.
+intros env left_formula left_input right_formula right_input
+  row_rel Hchild Hpoint Hinhabited.
+unfold query_expr_possible_outcome_related,
+  eval_query_expr_possible_outcome in *.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hinhabited|].
+apply outcome_relation_transport_exists_same_index.
+intro schedule.
+apply (query_expr_filter_relation_transport (row_rel := row_rel)).
+- exact (Hchild schedule).
+- exact (Hpoint schedule).
+Qed.
+
+(** The local continuation after both children of a native JOIN have
+    succeeded.  Keeping the arbitrary output-list representative inside this
+    relation is essential: JOIN is a bag-reset operator, while its enclosing
+    query observes rows rather than the implementation's output bag. *)
+Definition query_join_rows_outcomes
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (env : Env.env T) (kind : query_join_kind)
+    (predicate : scalar_expr T relname ScalarResultBoolean)
+    (matched_select left_select right_select : @query_select_list T relname)
+    (left_rows right_rows : list (tuple T)) :
+    sql_outcome (list (tuple T)) -> Prop :=
+  fun outcome =>
+    match outcome with
+    | SqlSuccess output_rows =>
+        exists output_bag,
+          @eval_join_bag_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            schedule env kind predicate matched_select left_select right_select
+            (rows_bag T left_rows) (rows_bag T right_rows)
+            (SqlSuccess output_bag) /\
+          query_same_rows_as_bag output_rows output_bag
+    | SqlError error =>
+        @eval_join_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env kind predicate matched_select left_select right_select
+          (rows_bag T left_rows) (rows_bag T right_rows)
+          (SqlError error)
+    end.
+
+(** Complete scheduled evaluator transport for native JOIN.  The two child
+    row relations and the output row relation are arbitrary.  Predicate
+    acceptance, matched/unmatched projection, multiplicity, NULL-extension,
+    and local errors remain together in the continuation contract instead of
+    being approximated by tuple equality or a particular rewrite pattern. *)
+Theorem query_expr_join_relation_transport :
+  forall left_schedule right_schedule env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    outcome_relation_transport (Forall2 left_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_first)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_first) ->
+    outcome_relation_transport (Forall2 right_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left_second)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right_second) ->
+    (forall left_first_rows right_first_rows,
+      Forall2 left_row_rel left_first_rows right_first_rows ->
+      forall left_second_rows right_second_rows,
+        Forall2 right_row_rel left_second_rows right_second_rows ->
+        outcome_relation_transport (Forall2 output_row_rel)
+          (query_join_rows_outcomes left_schedule env left_kind
+            left_predicate left_matched_select left_left_select
+            left_right_select left_first_rows left_second_rows)
+          (query_join_rows_outcomes right_schedule env right_kind
+            right_predicate right_matched_select right_left_select
+            right_right_select right_first_rows right_second_rows)) ->
+    outcome_relation_transport (Forall2 output_row_rel)
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second))
+      (@eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env
+        (QExpr_Join right_kind right_predicate right_matched_select
+          right_left_select right_right_select right_first right_second)).
+Proof.
+intros left_schedule right_schedule env
+  left_kind left_predicate
+  left_matched_select left_left_select left_right_select
+  left_first left_second
+  right_kind right_predicate
+  right_matched_select right_left_select right_right_select
+  right_first right_second
+  left_row_rel right_row_rel output_row_rel
+  Hfirst Hsecond Hlocal.
+destruct Hfirst as [Hfirst_forward [Hfirst_backward Hfirst_errors]].
+destruct Hsecond as [Hsecond_forward [Hsecond_backward Hsecond_errors]].
+split.
+- intros left_output Hleft_parent.
+  apply eval_query_expr_join_success_iff in Hleft_parent.
+  destruct Hleft_parent as
+    [left_first_rows [left_second_rows [left_output_bag
+      [Hleft_first [Hleft_second [Hleft_join Hleft_output]]]]]].
+  destruct (Hfirst_forward left_first_rows Hleft_first) as
+    [right_first_rows [Hright_first Hfirst_rows]].
+  destruct (Hsecond_forward left_second_rows Hleft_second) as
+    [right_second_rows [Hright_second Hsecond_rows]].
+  destruct (Hlocal left_first_rows right_first_rows Hfirst_rows
+    left_second_rows right_second_rows Hsecond_rows) as [Hforward _].
+  destruct (Hforward left_output
+    (ex_intro _ left_output_bag (conj Hleft_join Hleft_output))) as
+    [right_output [Hright_local Houtput_rows]].
+  exists right_output; split; [|exact Houtput_rows].
+  destruct Hright_local as
+    [right_output_bag [Hright_join Hright_output]].
+  apply eval_query_expr_join_success_iff.
+  now exists right_first_rows, right_second_rows, right_output_bag.
+- split.
+  + intros right_output Hright_parent.
+    apply eval_query_expr_join_success_iff in Hright_parent.
+    destruct Hright_parent as
+      [right_first_rows [right_second_rows [right_output_bag
+        [Hright_first [Hright_second [Hright_join Hright_output]]]]]].
+    destruct (Hfirst_backward right_first_rows Hright_first) as
+      [left_first_rows [Hleft_first Hfirst_rows]].
+    destruct (Hsecond_backward right_second_rows Hright_second) as
+      [left_second_rows [Hleft_second Hsecond_rows]].
+    destruct (Hlocal left_first_rows right_first_rows Hfirst_rows
+      left_second_rows right_second_rows Hsecond_rows) as
+      [_ [Hbackward _]].
+    destruct (Hbackward right_output
+      (ex_intro _ right_output_bag (conj Hright_join Hright_output))) as
+      [left_output [Hleft_local Houtput_rows]].
+    exists left_output; split; [|exact Houtput_rows].
+    destruct Hleft_local as
+      [left_output_bag [Hleft_join Hleft_output]].
+    apply eval_query_expr_join_success_iff.
+    now exists left_first_rows, left_second_rows, left_output_bag.
+  + intro error; split; intro Hparent_error.
+    * apply eval_query_expr_join_error_iff in Hparent_error.
+      destruct Hparent_error as
+        [Hleft_first_error |
+         [left_first_rows [Hleft_first Hleft_rest]]].
+      -- apply eval_query_expr_join_error_iff; left.
+         now apply (proj1 (Hfirst_errors error)).
+      -- destruct Hleft_rest as
+           [Hleft_second_error |
+            [left_second_rows [Hleft_second Hleft_local_error]]].
+         ++ destruct (Hfirst_forward left_first_rows Hleft_first) as
+              [right_first_rows [Hright_first _]].
+            apply eval_query_expr_join_error_iff; right.
+            exists right_first_rows; split; [exact Hright_first|left].
+            now apply (proj1 (Hsecond_errors error)).
+         ++ destruct (Hfirst_forward left_first_rows Hleft_first) as
+              [right_first_rows [Hright_first Hfirst_rows]].
+            destruct (Hsecond_forward left_second_rows Hleft_second) as
+              [right_second_rows [Hright_second Hsecond_rows]].
+            destruct (Hlocal left_first_rows right_first_rows Hfirst_rows
+              left_second_rows right_second_rows Hsecond_rows) as
+              [_ [_ Hlocal_errors]].
+            apply eval_query_expr_join_error_iff; right.
+            exists right_first_rows; split; [exact Hright_first|right].
+            exists right_second_rows; split; [exact Hright_second|].
+            now apply (proj1 (Hlocal_errors error)).
+    * apply eval_query_expr_join_error_iff in Hparent_error.
+      destruct Hparent_error as
+        [Hright_first_error |
+         [right_first_rows [Hright_first Hright_rest]]].
+      -- apply eval_query_expr_join_error_iff; left.
+         now apply (proj2 (Hfirst_errors error)).
+      -- destruct Hright_rest as
+           [Hright_second_error |
+            [right_second_rows [Hright_second Hright_local_error]]].
+         ++ destruct (Hfirst_backward right_first_rows Hright_first) as
+              [left_first_rows [Hleft_first _]].
+            apply eval_query_expr_join_error_iff; right.
+            exists left_first_rows; split; [exact Hleft_first|left].
+            now apply (proj2 (Hsecond_errors error)).
+         ++ destruct (Hfirst_backward right_first_rows Hright_first) as
+              [left_first_rows' [Hleft_first' Hfirst_rows]].
+            destruct (Hsecond_backward right_second_rows Hright_second) as
+              [left_second_rows [Hleft_second Hsecond_rows]].
+            destruct (Hlocal left_first_rows' right_first_rows Hfirst_rows
+              left_second_rows right_second_rows Hsecond_rows) as
+              [_ [_ Hlocal_errors]].
+            apply eval_query_expr_join_error_iff; right.
+            exists left_first_rows'; split; [exact Hleft_first'|right].
+            exists left_second_rows; split; [exact Hleft_second|].
+            now apply (proj2 (Hlocal_errors error)).
+Qed.
+
+(** Public all-schedule specialization.  It does not require the two sides to
+    use identical JOIN syntax: kind, predicate, three projection branches,
+    children, and row schemas may all differ.  The only semantic obligations
+    are child relation transport and the local JOIN continuation contract. *)
+Theorem query_expr_join_possible_outcome_related_same_schedule :
+  forall env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    (forall schedule,
+      outcome_relation_transport (Forall2 left_row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left_first)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right_first)) ->
+    (forall schedule,
+      outcome_relation_transport (Forall2 right_row_rel)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env left_second)
+        (@eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env right_second)) ->
+    (forall schedule left_first_rows right_first_rows,
+      Forall2 left_row_rel left_first_rows right_first_rows ->
+      forall left_second_rows right_second_rows,
+        Forall2 right_row_rel left_second_rows right_second_rows ->
+        outcome_relation_transport (Forall2 output_row_rel)
+          (query_join_rows_outcomes schedule env left_kind left_predicate
+            left_matched_select left_left_select left_right_select
+            left_first_rows left_second_rows)
+          (query_join_rows_outcomes schedule env right_kind right_predicate
+            right_matched_select right_left_select right_right_select
+            right_first_rows right_second_rows)) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_row_rel)
+      (QExpr_Join left_kind left_predicate left_matched_select
+        left_left_select left_right_select left_first left_second)
+      (QExpr_Join right_kind right_predicate right_matched_select
+        right_left_select right_right_select right_first right_second).
+Proof.
+intros env
+  left_kind left_predicate
+  left_matched_select left_left_select left_right_select
+  left_first left_second
+  right_kind right_predicate
+  right_matched_select right_left_select right_right_select
+  right_first right_second
+  left_row_rel right_row_rel output_row_rel
+  Hfirst Hsecond Hlocal Hinhabited.
+unfold query_expr_possible_outcome_related,
+  eval_query_expr_possible_outcome in *.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hinhabited|].
+apply outcome_relation_transport_exists_same_index.
+intro schedule.
+eapply query_expr_join_relation_transport.
+- exact (Hfirst schedule).
+- exact (Hsecond schedule).
+- intros; now apply Hlocal.
+Qed.
+
+(** Fully general all-schedule JOIN transport.  Each source schedule may be
+    paired with a different target schedule, and conversely.  The paired
+    schedule must transport both children coherently and use that same pair
+    for the local JOIN continuation; this prevents predicate, projection, or
+    error witnesses from being assembled from incompatible executions. *)
+Theorem query_expr_join_possible_outcome_related :
+  forall env
+      left_kind left_predicate
+      left_matched_select left_left_select left_right_select
+      left_first left_second
+      right_kind right_predicate
+      right_matched_select right_left_select right_right_select
+      right_first right_second
+      left_row_rel right_row_rel output_row_rel,
+    (forall left_schedule,
+      exists right_schedule,
+        outcome_relation_transport (Forall2 left_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_first)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_first) /\
+        outcome_relation_transport (Forall2 right_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_second)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_second) /\
+        (forall left_first_rows right_first_rows,
+          Forall2 left_row_rel left_first_rows right_first_rows ->
+          forall left_second_rows right_second_rows,
+            Forall2 right_row_rel left_second_rows right_second_rows ->
+            outcome_relation_transport (Forall2 output_row_rel)
+              (query_join_rows_outcomes left_schedule env left_kind
+                left_predicate left_matched_select left_left_select
+                left_right_select left_first_rows left_second_rows)
+              (query_join_rows_outcomes right_schedule env right_kind
+                right_predicate right_matched_select right_left_select
+                right_right_select right_first_rows right_second_rows))) ->
+    (forall right_schedule,
+      exists left_schedule,
+        outcome_relation_transport (Forall2 left_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_first)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_first) /\
+        outcome_relation_transport (Forall2 right_row_rel)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            left_schedule env left_second)
+          (@eval_query_expr_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            right_schedule env right_second) /\
+        (forall left_first_rows right_first_rows,
+          Forall2 left_row_rel left_first_rows right_first_rows ->
+          forall left_second_rows right_second_rows,
+            Forall2 right_row_rel left_second_rows right_second_rows ->
+            outcome_relation_transport (Forall2 output_row_rel)
+              (query_join_rows_outcomes left_schedule env left_kind
+                left_predicate left_matched_select left_left_select
+                left_right_select left_first_rows left_second_rows)
+              (query_join_rows_outcomes right_schedule env right_kind
+                right_predicate right_matched_select right_left_select
+                right_right_select right_first_rows right_second_rows))) ->
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Join left_kind left_predicate left_matched_select
+          left_left_select left_right_select left_first left_second) outcome) ->
+    query_expr_possible_outcome_related env (Forall2 output_row_rel)
+      (QExpr_Join left_kind left_predicate left_matched_select
+        left_left_select left_right_select left_first left_second)
+      (QExpr_Join right_kind right_predicate right_matched_select
+        right_left_select right_right_select right_first right_second).
+Proof.
+intros env
+  left_kind left_predicate
+  left_matched_select left_left_select left_right_select
+  left_first left_second
+  right_kind right_predicate
+  right_matched_select right_left_select right_right_select
+  right_first right_second
+  left_row_rel right_row_rel output_row_rel
+  Hschedule_forward Hschedule_backward Hinhabited.
+unfold query_expr_possible_outcome_related,
+  eval_query_expr_possible_outcome in *.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hinhabited|].
+split.
+- intros left_output [left_schedule Hleft].
+  destruct (Hschedule_forward left_schedule) as
+    [right_schedule [Hfirst [Hsecond Hlocal]]].
+  pose proof (@query_expr_join_relation_transport
+    left_schedule right_schedule env
+    left_kind left_predicate left_matched_select left_left_select
+    left_right_select left_first left_second
+    right_kind right_predicate right_matched_select right_left_select
+    right_right_select right_first right_second
+    left_row_rel right_row_rel output_row_rel
+    Hfirst Hsecond Hlocal) as Hparent.
+  destruct (proj1 Hparent left_output Hleft) as
+    [right_output [Hright Hrelated]].
+  exists right_output; split; [now exists right_schedule|exact Hrelated].
+- split.
+  + intros right_output [right_schedule Hright].
+    destruct (Hschedule_backward right_schedule) as
+      [left_schedule [Hfirst [Hsecond Hlocal]]].
+    pose proof (@query_expr_join_relation_transport
+      left_schedule right_schedule env
+      left_kind left_predicate left_matched_select left_left_select
+      left_right_select left_first left_second
+      right_kind right_predicate right_matched_select right_left_select
+      right_right_select right_first right_second
+      left_row_rel right_row_rel output_row_rel
+      Hfirst Hsecond Hlocal) as Hparent.
+    destruct (proj1 (proj2 Hparent) right_output Hright) as
+      [left_output [Hleft Hrelated]].
+    exists left_output; split; [now exists left_schedule|exact Hrelated].
+  + intro error; split.
+    * intros [left_schedule Hleft].
+      destruct (Hschedule_forward left_schedule) as
+        [right_schedule [Hfirst [Hsecond Hlocal]]].
+      pose proof (@query_expr_join_relation_transport
+        left_schedule right_schedule env
+        left_kind left_predicate left_matched_select left_left_select
+        left_right_select left_first left_second
+        right_kind right_predicate right_matched_select right_left_select
+        right_right_select right_first right_second
+        left_row_rel right_row_rel output_row_rel
+        Hfirst Hsecond Hlocal) as Hparent.
+      exists right_schedule.
+      now apply (proj1 ((proj2 (proj2 Hparent)) error)).
+    * intros [right_schedule Hright].
+      destruct (Hschedule_backward right_schedule) as
+        [left_schedule [Hfirst [Hsecond Hlocal]]].
+      pose proof (@query_expr_join_relation_transport
+        left_schedule right_schedule env
+        left_kind left_predicate left_matched_select left_left_select
+        left_right_select left_first left_second
+        right_kind right_predicate right_matched_select right_left_select
+        right_right_select right_first right_second
+        left_row_rel right_row_rel output_row_rel
+        Hfirst Hsecond Hlocal) as Hparent.
+      exists left_schedule.
+      now apply (proj2 ((proj2 (proj2 Hparent)) error)).
+Qed.
+
+(** The local continuation after a successful GROUP child.  It includes the
+    arbitrary list representative chosen for the result bag, so its relation
+    parameter describes exactly the rows observable by the enclosing query,
+    not an implementation-specific bag or group-list representation. *)
+Definition query_group_rows_outcomes
+    (schedule : boolean_site -> boolean_evaluation_order)
+    (env : Env.env T) (select_list : @query_select_list T relname)
+    (group_keys : list (scalar_expr T relname ScalarResultValue))
+    (having : scalar_expr T relname ScalarResultBoolean)
+    (input_rows : list (tuple T)) : sql_outcome (list (tuple T)) -> Prop :=
+  fun outcome =>
+    match outcome with
+    | SqlSuccess output_rows =>
+        exists output_bag,
+          @eval_group_bag_outcome T relname basesort instance unknown
+            symbol_runtime_error aggregate_runtime_error value_is_null
+            schedule env select_list group_keys having
+            (rows_bag T input_rows) (SqlSuccess output_bag) /\
+          query_same_rows_as_bag output_rows output_bag
+    | SqlError error =>
+        @eval_group_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          schedule env select_list group_keys having
+          (rows_bag T input_rows) (SqlError error)
+    end.
 
 (** Public introduction rules consume the complete possible relations
     directly, quantifying over Boolean evaluation schedules rather than
@@ -384,6 +2274,28 @@ Definition scalar_expr_uniform_global_group_outcome_equiv
       basesort instance unknown symbol_runtime_error aggregate_runtime_error
       value_is_null schedule kind left right.
 
+Lemma scalar_expr_uniform_global_group_outcome_equiv_outcomes :
+  forall kind (left right : scalar_expr T relname kind),
+    scalar_expr_uniform_global_group_outcome_equiv left right ->
+    scalar_expr_uniform_global_outcome_equiv left right.
+Proof.
+intros [|] left right Hequiv schedule.
+all: exact (proj1 (Hequiv schedule)).
+Qed.
+
+Lemma scalar_expr_uniform_global_group_outcome_equiv_aggregates :
+  forall kind (left right : scalar_expr T relname kind),
+    scalar_expr_uniform_global_group_outcome_equiv left right ->
+    forall env,
+      @eval_scalar_expr_aggregate_runtime_error T relname
+        symbol_runtime_error aggregate_runtime_error kind env left =
+      @eval_scalar_expr_aggregate_runtime_error T relname
+        symbol_runtime_error aggregate_runtime_error kind env right.
+Proof.
+intros kind left right Hequiv env.
+exact (proj2 (Hequiv (fun _ => BooleanLeftFirst)) env).
+Qed.
+
 Definition scalar_value_expr_list_uniform_global_outcome_equiv
     (left right : list (scalar_expr T relname ScalarResultValue)) : Prop :=
   Forall2 scalar_expr_uniform_global_outcome_equiv left right.
@@ -407,6 +2319,16 @@ Lemma scalar_expr_uniform_global_outcome_equiv_refl :
     scalar_expr_uniform_global_outcome_equiv expression expression.
 Proof.
 intros [|] expression; intros schedule env outcome; tauto.
+Qed.
+
+Lemma scalar_select_list_uniform_global_outcome_equiv_refl :
+  forall select_list,
+    scalar_select_list_uniform_global_outcome_equiv select_list select_list.
+Proof.
+intro select_list; induction select_list as [|[expression attribute] rest IH].
+- constructor.
+- constructor; [split; [reflexivity|apply scalar_expr_uniform_global_outcome_equiv_refl]|].
+  exact IH.
 Qed.
 
 Lemma scalar_value_expr_list_uniform_global_outcome_equiv_refl :
@@ -1377,6 +3299,172 @@ induction groups as [|group groups IH]; intro outcome; split; intro Heval;
   + now apply (proj2 (IH _)).
 Qed.
 
+(** The fundamental GROUP composition law is heterogeneous and
+    relation-parametric.  [scheduled_rows_rel] relates both the child rows and
+    the schedules that produced them; this is essential because two possible
+    outcomes need not come from the same Boolean evaluation order.  The local
+    premise may simultaneously change GROUP keys, aggregates, HAVING, and
+    projection syntax, provided their complete continuation relations preserve
+    [output_rows_rel]. *)
+Theorem query_expr_group_possible_outcome_transport :
+  forall env left_select right_select left_group_keys right_group_keys
+      left_having right_having left right
+      (scheduled_rows_rel :
+        (boolean_site -> boolean_evaluation_order) -> list (tuple T) ->
+        (boolean_site -> boolean_evaluation_order) -> list (tuple T) -> Prop)
+      (output_rows_rel : list (tuple T) -> list (tuple T) -> Prop),
+    (exists outcome,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env
+        (QExpr_Group left_select left_group_keys left_having left) outcome) ->
+    (forall left_schedule left_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule env left (SqlSuccess left_rows) ->
+      exists right_schedule, exists right_rows,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          right_schedule env right (SqlSuccess right_rows) /\
+        scheduled_rows_rel
+          left_schedule left_rows right_schedule right_rows) ->
+    (forall right_schedule right_rows,
+      @eval_query_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule env right (SqlSuccess right_rows) ->
+      exists left_schedule, exists left_rows,
+        @eval_query_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          left_schedule env left (SqlSuccess left_rows) /\
+        scheduled_rows_rel
+          left_schedule left_rows right_schedule right_rows) ->
+    (forall error,
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env left
+        (SqlError error) <->
+      @eval_query_expr_possible_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null env right
+        (SqlError error)) ->
+    (forall left_schedule left_rows right_schedule right_rows,
+      scheduled_rows_rel left_schedule left_rows right_schedule right_rows ->
+      outcome_relation_transport output_rows_rel
+        (query_group_rows_outcomes
+          left_schedule env left_select left_group_keys left_having left_rows)
+        (query_group_rows_outcomes
+          right_schedule env right_select right_group_keys right_having
+          right_rows)) ->
+    query_expr_possible_outcome_related env output_rows_rel
+      (QExpr_Group left_select left_group_keys left_having left)
+      (QExpr_Group right_select right_group_keys right_having right).
+Proof.
+intros env left_select right_select left_group_keys right_group_keys
+  left_having right_having left right scheduled_rows_rel output_rows_rel
+  Hparent Hchild_forward Hchild_backward Hchild_errors Hlocal.
+unfold query_expr_possible_outcome_related.
+apply outcome_relation_equiv_of_left_inhabited_transport; [exact Hparent|].
+split.
+- intros left_output [left_schedule Hleft_parent].
+  apply eval_query_expr_group_success_iff in Hleft_parent.
+  destruct Hleft_parent as
+    [left_rows [left_bag [Hleft [Hleft_group Hleft_output]]]].
+  destruct (Hchild_forward left_schedule left_rows Hleft) as
+    [right_schedule [right_rows [Hright Hrows]]].
+  destruct (Hlocal left_schedule left_rows right_schedule right_rows Hrows)
+    as [Hlocal_forward _].
+  destruct (Hlocal_forward left_output
+    (ex_intro _ left_bag (conj Hleft_group Hleft_output))) as
+    [right_output [Hright_local Houtput]].
+  exists right_output; split; [|exact Houtput].
+  exists right_schedule.
+  destruct Hright_local as [right_bag [Hright_group Hright_output]].
+  apply eval_query_expr_group_success_iff.
+  now exists right_rows, right_bag.
+- split.
+  + intros right_output [right_schedule Hright_parent].
+    apply eval_query_expr_group_success_iff in Hright_parent.
+    destruct Hright_parent as
+      [right_rows [right_bag [Hright [Hright_group Hright_output]]]].
+    destruct (Hchild_backward right_schedule right_rows Hright) as
+      [left_schedule [left_rows [Hleft Hrows]]].
+    destruct (Hlocal left_schedule left_rows right_schedule right_rows Hrows)
+      as [_ [Hlocal_backward _]].
+    destruct (Hlocal_backward right_output
+      (ex_intro _ right_bag (conj Hright_group Hright_output))) as
+      [left_output [Hleft_local Houtput]].
+    exists left_output; split; [|exact Houtput].
+    exists left_schedule.
+    destruct Hleft_local as [left_bag [Hleft_group Hleft_output]].
+    apply eval_query_expr_group_success_iff.
+    now exists left_rows, left_bag.
+  + intro error; split; intros [schedule Hparent_error].
+    * apply eval_query_expr_group_error_iff in Hparent_error.
+      destruct Hparent_error as
+        [Hchild_error|[left_rows [Hleft Hlocal_error]]].
+      -- destruct (proj1 (Hchild_errors error)
+            (ex_intro _ schedule Hchild_error)) as
+           [right_schedule Hright_error].
+         exists right_schedule; now apply EQuery_GroupChildError.
+      -- destruct (Hchild_forward schedule left_rows Hleft) as
+           [right_schedule [right_rows [Hright Hrows]]].
+         destruct (Hlocal schedule left_rows right_schedule right_rows Hrows)
+           as [_ [_ Hlocal_errors]].
+         exists right_schedule.
+         eapply EQuery_GroupBagError; [exact Hright|].
+         now apply (proj1 (Hlocal_errors error)).
+    * apply eval_query_expr_group_error_iff in Hparent_error.
+      destruct Hparent_error as
+        [Hchild_error|[right_rows [Hright Hlocal_error]]].
+      -- destruct (proj2 (Hchild_errors error)
+            (ex_intro _ schedule Hchild_error)) as
+           [left_schedule Hleft_error].
+         exists left_schedule; now apply EQuery_GroupChildError.
+      -- destruct (Hchild_backward schedule right_rows Hright) as
+           [left_schedule [left_rows [Hleft Hrows]]].
+         destruct (Hlocal left_schedule left_rows schedule right_rows Hrows)
+           as [_ [_ Hlocal_errors]].
+         exists left_schedule.
+         eapply EQuery_GroupBagError; [exact Hleft|].
+         now apply (proj2 (Hlocal_errors error)).
+Qed.
+
+(** Exact equality of local bag outcomes is the common specialization of the
+    relation-parametric interface.  Reusing the same output representative
+    yields ordinary ordered-row equivalence without inspecting GROUP syntax. *)
+Lemma query_group_rows_outcomes_transport_of_exact_bag_outcomes :
+  forall left_schedule left_env left_select left_group_keys left_having left_rows
+      right_schedule right_env right_select right_group_keys right_having
+      right_rows,
+    (forall outcome,
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        left_schedule left_env left_select left_group_keys left_having
+        (rows_bag T left_rows) outcome <->
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        right_schedule right_env right_select right_group_keys right_having
+        (rows_bag T right_rows) outcome) ->
+    outcome_relation_transport (@ordered_rows_equiv T)
+      (query_group_rows_outcomes
+        left_schedule left_env left_select left_group_keys left_having left_rows)
+      (query_group_rows_outcomes
+        right_schedule right_env right_select right_group_keys right_having
+        right_rows).
+Proof.
+intros left_schedule left_env left_select left_group_keys left_having left_rows
+  right_schedule right_env right_select right_group_keys right_having right_rows
+  Hbag.
+split.
+- intros output [output_bag [Heval Houtput]].
+  exists output; split.
+  + exists output_bag; split; [now apply (proj1 (Hbag _))|exact Houtput].
+  + apply ordered_rows_equiv_refl.
+- split.
+  + intros output [output_bag [Heval Houtput]].
+    exists output; split.
+    * exists output_bag; split; [now apply (proj2 (Hbag _))|exact Houtput].
+    * apply ordered_rows_equiv_refl.
+  + intro error; apply Hbag.
+Qed.
+
 Lemma eval_group_bag_outcome_exact_local_congr :
   forall left_select right_select group_keys left_having right_having,
     (forall schedule env group_terms groups outcome,
@@ -1413,10 +3501,10 @@ split; intro Heval; inversion Heval; subst.
     (query_make_groups env representative group_terms) _)).
 Qed.
 
-(** Complete local group-bag outcomes are the most general typed GROUP
-    replacement boundary.  Group keys may differ here only because the
-    premise explicitly compares every resulting group-bag success and error
-    under the same schedule, environment, and input bag. *)
+(** Exact local group-bag equality is the common [eq]-style specialization of
+    the relation-parametric transport above.  Group keys may differ because
+    the premise explicitly compares every resulting success and error under
+    the same schedule, environment, and input bag. *)
 Theorem query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes :
   forall env left_select right_select left_group_keys right_group_keys
       left_having right_having input,
@@ -1443,28 +3531,22 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes :
 Proof.
 intros env left_select right_select left_group_keys right_group_keys
   left_having right_having input Houtputs Hbag Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule; split; [exact Houtputs|].
-  intros current_env outcome; split; intro Heval; inversion Heval; subst.
-  + now apply EQuery_GroupChildError.
-  + eapply EQuery_GroupBagError; [eassumption|].
-    now apply (proj1
-      (Hbag schedule current_env (query_rows_bag input_rows)
-        (SqlError error))).
-  + eapply EQuery_GroupBagSuccess; [eassumption| |eassumption].
-    now apply (proj1
-      (Hbag schedule current_env (query_rows_bag input_rows)
-        (SqlSuccess output_bag))).
-  + now apply EQuery_GroupChildError.
-  + eapply EQuery_GroupBagError; [eassumption|].
-    now apply (proj2
-      (Hbag schedule current_env (query_rows_bag input_rows)
-        (SqlError error))).
-  + eapply EQuery_GroupBagSuccess; [eassumption| |eassumption].
-    now apply (proj2
-      (Hbag schedule current_env (query_rows_bag input_rows)
-        (SqlSuccess output_bag))).
+apply query_expr_possible_outcome_equiv_of_related; [exact Houtputs|].
+eapply query_expr_group_possible_outcome_transport with
+  (scheduled_rows_rel :=
+    fun left_schedule left_rows right_schedule right_rows =>
+      left_schedule = right_schedule /\ left_rows = right_rows).
 - exact Houtcome.
+- intros schedule rows Heval.
+  exists schedule, rows; now repeat split.
+- intros schedule rows Heval.
+  exists schedule, rows; now repeat split.
+- intro error; reflexivity.
+- intros left_schedule left_rows right_schedule right_rows
+    [Hschedules Hrows].
+  subst right_schedule right_rows.
+  apply query_group_rows_outcomes_transport_of_exact_bag_outcomes.
+  intro outcome; apply Hbag.
 Qed.
 
 (** This public corollary exposes the exact group-list boundary directly.  The
@@ -1682,11 +3764,11 @@ Theorem query_expr_group_possible_outcome_equiv_of_uniform_having :
 Proof.
 intros env select_list group_keys left_having right_having input
   Hhaving Houtcome.
-apply query_expr_possible_outcome_equiv_of_uniform_global_typed.
-- intro schedule; apply query_expr_group_scalar_global_typed_congr.
-  + apply scalar_select_list_global_outcome_equiv_refl.
-  + exact (Hhaving schedule).
-  + reflexivity.
+eapply query_expr_group_clauses_possible_outcome_equiv.
+- apply scalar_select_list_uniform_global_outcome_equiv_refl.
+- now apply scalar_expr_uniform_global_group_outcome_equiv_outcomes.
+- reflexivity.
+- now apply scalar_expr_uniform_global_group_outcome_equiv_aggregates.
 - exact Houtcome.
 Qed.
 
@@ -1809,11 +3891,38 @@ Theorem query_expr_group_possible_outcome_equiv_congr_uniform :
       (QExpr_Group select_list group_terms having right).
 Proof.
 intros env select_list group_terms having left right Hchild Houtcomes.
-apply query_expr_all_schedules_outcome_equiv_implies_possible_outcome_equiv.
-intro schedule.
-apply query_expr_group_outcome_equiv_congr.
-- exact (Hchild schedule).
-- exact (Houtcomes schedule).
+apply query_expr_possible_outcome_equiv_of_related.
+- reflexivity.
+- eapply query_expr_group_possible_outcome_transport with
+    (scheduled_rows_rel :=
+      fun left_schedule left_rows right_schedule right_rows =>
+        left_schedule = right_schedule /\
+        ordered_rows_equiv T left_rows right_rows).
+  + destruct (Houtcomes (fun _ => BooleanLeftFirst)) as [outcome Houtcome].
+    now exists outcome, (fun _ => BooleanLeftFirst).
+  + intros schedule rows Heval.
+    destruct (proj2 (Hchild schedule)) as
+      [_ [_ [Hforward [_ _]]]].
+    destruct (Hforward rows Heval) as [right_rows [Hright Hrows]].
+    exists schedule, right_rows; now repeat split.
+  + intros schedule rows Heval.
+    destruct (proj2 (Hchild schedule)) as
+      [_ [_ [_ [Hbackward _]]]].
+    destruct (Hbackward rows Heval) as [left_rows [Hleft Hrows]].
+    exists schedule, left_rows; now repeat split.
+  + intro error; unfold eval_query_expr_possible_outcome; split.
+    * intros [schedule Herror]; exists schedule.
+      destruct (proj2 (Hchild schedule)) as [_ [_ [_ [_ Herrors]]]].
+      now apply (proj1 (Herrors error)).
+    * intros [schedule Herror]; exists schedule.
+      destruct (proj2 (Hchild schedule)) as [_ [_ [_ [_ Herrors]]]].
+      now apply (proj2 (Herrors error)).
+  + intros left_schedule left_rows right_schedule right_rows
+      [Hschedules Hrows].
+    subst right_schedule.
+    apply query_group_rows_outcomes_transport_of_exact_bag_outcomes.
+    intro outcome; apply eval_group_bag_outcome_input_equiv.
+    now apply ordered_rows_equiv_implies_bag_eq.
 Qed.
 
 Theorem query_expr_window_possible_outcome_equiv_congr_uniform :
@@ -2152,12 +4261,12 @@ apply outcome_relation_equiv_intro.
       discriminate.
 Qed.
 
-(** Generic possible-outcome GROUP lift.  The support relation may remember
-    keys, projections, multiplicity refinements, or another reusable child
-    correspondence.  The decisive premise compares the complete group-bag
-    outcome under the independently chosen child schedules, so aggregate and
-    HAVING errors cannot be lost and order-sensitive floating aggregates are
-    not silently treated as permutation-invariant. *)
+(** Row-support corollary of the relation-parametric GROUP lift.  The support
+    relation may remember keys, projections, or multiplicity refinements, but
+    does not constrain the schedules paired by the child witnesses.  Therefore
+    its local premise still compares every independently chosen schedule, so
+    aggregate/HAVING errors and order-sensitive floating aggregates are not
+    silently erased. *)
 Theorem query_expr_group_possible_outcome_equiv_of_supported_child_outcomes :
   forall env select_list group_terms having left right
       (supported : list (tuple T) -> list (tuple T) -> Prop),
@@ -2209,110 +4318,23 @@ Theorem query_expr_group_possible_outcome_equiv_of_supported_child_outcomes :
 Proof.
 intros env select_list group_terms having left right supported
   Hparent Hforward Hbackward Herrors Hgroup.
-assert (Hparent_forward :
-  forall schedule outcome,
-    @eval_query_expr_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-      (QExpr_Group select_list group_terms having left) outcome ->
-    exists right_schedule,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        right_schedule env
-        (QExpr_Group select_list group_terms having right) outcome).
-{
-  intros left_schedule [output|error] Heval.
-  - apply eval_query_expr_group_success_iff in Heval.
-    destruct Heval as
-      [left_rows [output_bag [Hleft [Hleft_group Houtput]]]].
-    destruct (Hforward left_rows (ex_intro _ left_schedule Hleft))
-      as [right_rows [[right_schedule Hright] Hsupport]].
-    exists right_schedule.
-    apply eval_query_expr_group_success_iff.
-    exists right_rows, output_bag; repeat split; try assumption.
-    apply (proj1
-      (Hgroup left_schedule right_schedule left_rows right_rows Hsupport
-        (SqlSuccess output_bag))).
-    exact Hleft_group.
-  - apply eval_query_expr_group_error_iff in Heval.
-    destruct Heval as [Hchild|[left_rows [Hleft Hleft_group]]].
-    + destruct (proj1 (Herrors error) (ex_intro _ left_schedule Hchild))
-        as [right_schedule Hright].
-      exists right_schedule; now apply EQuery_GroupChildError.
-    + destruct (Hforward left_rows (ex_intro _ left_schedule Hleft))
-        as [right_rows [[right_schedule Hright] Hsupport]].
-      exists right_schedule.
-      eapply EQuery_GroupBagError with (input_rows := right_rows).
-      * exact Hright.
-      * apply (proj1
-          (Hgroup left_schedule right_schedule left_rows right_rows Hsupport
-            (SqlError error))).
-        exact Hleft_group.
-}
-assert (Hparent_backward :
-  forall schedule outcome,
-    @eval_query_expr_outcome T relname basesort instance unknown
-      symbol_runtime_error aggregate_runtime_error value_is_null schedule env
-      (QExpr_Group select_list group_terms having right) outcome ->
-    exists left_schedule,
-      @eval_query_expr_outcome T relname basesort instance unknown
-        symbol_runtime_error aggregate_runtime_error value_is_null
-        left_schedule env
-        (QExpr_Group select_list group_terms having left) outcome).
-{
-  intros right_schedule [output|error] Heval.
-  - apply eval_query_expr_group_success_iff in Heval.
-    destruct Heval as
-      [right_rows [output_bag [Hright [Hright_group Houtput]]]].
-    destruct (Hbackward right_rows (ex_intro _ right_schedule Hright))
-      as [left_rows [[left_schedule Hleft] Hsupport]].
-    exists left_schedule.
-    apply eval_query_expr_group_success_iff.
-    exists left_rows, output_bag; repeat split; try assumption.
-    apply (proj2
-      (Hgroup left_schedule right_schedule left_rows right_rows Hsupport
-        (SqlSuccess output_bag))).
-    exact Hright_group.
-  - apply eval_query_expr_group_error_iff in Heval.
-    destruct Heval as [Hchild|[right_rows [Hright Hright_group]]].
-    + destruct (proj2 (Herrors error) (ex_intro _ right_schedule Hchild))
-        as [left_schedule Hleft].
-      exists left_schedule; now apply EQuery_GroupChildError.
-    + destruct (Hbackward right_rows (ex_intro _ right_schedule Hright))
-        as [left_rows [[left_schedule Hleft] Hsupport]].
-      exists left_schedule.
-      eapply EQuery_GroupBagError with (input_rows := left_rows).
-      * exact Hleft.
-      * apply (proj2
-          (Hgroup left_schedule right_schedule left_rows right_rows Hsupport
-            (SqlError error))).
-        exact Hright_group.
-}
-split; [reflexivity|].
-unfold query_expr_possible_outcome_observation_equiv,
-  eval_query_expr_possible_outcome in *.
-apply outcome_relation_equiv_intro.
+apply query_expr_possible_outcome_equiv_of_related; [reflexivity|].
+eapply query_expr_group_possible_outcome_transport with
+  (scheduled_rows_rel :=
+    fun _ left_rows _ right_rows => supported left_rows right_rows).
 - exact Hparent.
-- destruct Hparent as [outcome [schedule Heval]].
-  destruct (Hparent_forward schedule outcome Heval)
-    as [right_schedule Hright].
-  now exists outcome, right_schedule.
-- intros output [schedule Heval].
-  destruct (Hparent_forward schedule (SqlSuccess output) Heval)
-    as [right_schedule Hright].
-  exists output; split; [now exists right_schedule|].
-  apply ordered_rows_equiv_refl.
-- intros output [schedule Heval].
-  destruct (Hparent_backward schedule (SqlSuccess output) Heval)
-    as [left_schedule Hleft].
-  exists output; split; [now exists left_schedule|].
-  apply ordered_rows_equiv_refl.
-- intro error; split; intros [schedule Heval].
-  + destruct (Hparent_forward schedule (SqlError error) Heval)
-      as [right_schedule Hright].
-    now exists right_schedule.
-  + destruct (Hparent_backward schedule (SqlError error) Heval)
-      as [left_schedule Hleft].
-    now exists left_schedule.
+- intros left_schedule left_rows Hleft.
+  destruct (Hforward left_rows (ex_intro _ left_schedule Hleft)) as
+    [right_rows [[right_schedule Hright] Hsupported]].
+  now exists right_schedule, right_rows.
+- intros right_schedule right_rows Hright.
+  destruct (Hbackward right_rows (ex_intro _ right_schedule Hright)) as
+    [left_rows [[left_schedule Hleft] Hsupported]].
+  now exists left_schedule, left_rows.
+- exact Herrors.
+- intros left_schedule left_rows right_schedule right_rows Hsupported.
+  apply query_group_rows_outcomes_transport_of_exact_bag_outcomes.
+  intro outcome; now apply Hgroup.
 Qed.
 
 (** Read-only query programs compose the public relation statement by

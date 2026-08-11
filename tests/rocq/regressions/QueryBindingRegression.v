@@ -1,6 +1,6 @@
-From SQLFS Require Import FiniteBag FiniteCollection Formula FTuples GenericInstance
+From SQLFS Require Import FiniteBag FiniteCollection Formula FTuples GenericInstance Bool3
   SqlSyntax SqlOutcome SqlBagAbstraction SqlQuerySyntax SqlQuerySemantics
-  SqlQueryWellFormed Values.
+  SqlQueryWellFormed SqlQueryContexts Values.
 From Logos Require Import FormalSQL.TNullSyntax FormalSQL.QueryTNullSyntax
   FormalSQL.QueryBindingSemantics.
 From Stdlib Require Import List String ZArith.
@@ -530,6 +530,140 @@ Example scalar_subquery_analysis_error_is_rejected :
 Proof.
 intros [_ [Herror _]].
 discriminate Herror.
+Qed.
+
+(******************************************************************************)
+(** Generic CTE materialization/substitution and inline-transport interfaces. *)
+(******************************************************************************)
+
+Definition regression_declared_good_db : db_state :=
+  declare_local_query_schemas init_db [regression_good_schema].
+
+Lemma regression_good_reference_well_typed :
+  local_query_binding_reference_well_typed
+    regression_declared_good_db regression_good_binding.
+Proof.
+reflexivity.
+Qed.
+
+Example materialized_reference_substitutes_through_query_context :
+  @query_expr_global_typed_outcome_equiv TNull relname
+    (@_basesort TNull
+      (set_local_query_binding_rows regression_declared_good_db
+        regression_good_binding nil))
+    (@_instance TNull
+      (set_local_query_binding_rows regression_declared_good_db
+        regression_good_binding nil))
+    unknown3 NullValues.interp_scalar_operator_runtime_error
+    NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+    regression_schedule
+    (plug_query_expr_context QCtx_Hole
+      (local_query_binding_reference regression_good_binding))
+    (plug_query_expr_context QCtx_Hole
+      (local_query_binding_values regression_good_binding nil)).
+Proof.
+apply local_query_binding_reference_context_substitution.
+exact regression_good_reference_well_typed.
+Qed.
+
+Lemma regression_safe_bound_query_inline_contract :
+  local_query_binding_inline_possible_outcome_contract
+    init_db [regression_good_schema] nil regression_good_binding
+    regression_body regression_body.
+Proof.
+unfold local_query_binding_inline_possible_outcome_contract,
+  bound_query_inline_possible_outcome_contract.
+split; [reflexivity|].
+split.
+- exists (SqlSuccess nil), regression_schedule.
+  cbn [regression_good_binding regression_empty_rows regression_body
+    eval_local_query_bindings_with_schedule].
+  right; exists nil; split; constructor;
+    unfold query_same_rows_as_bag, query_rows_bag;
+    apply Febag.equal_refl.
+- split.
+  + exists (SqlSuccess nil), regression_schedule.
+    constructor.
+    unfold regression_body, query_same_rows_as_bag, query_rows_bag.
+    apply Febag.equal_refl.
+  + split.
+    * intros bound_rows
+        [schedule [reached [_ Hbody]]].
+      inversion Hbody; subst.
+      exists bound_rows; split.
+      -- exists schedule; now constructor.
+      -- apply ordered_rows_equiv_refl.
+    * split.
+      -- intros inlined_rows [schedule Hbody].
+         inversion Hbody; subst.
+         exists inlined_rows; split.
+         ++ unfold eval_bound_query_body_possible_outcome.
+            exists schedule.
+            exists (set_local_query_binding_rows regression_declared_good_db
+              regression_good_binding nil).
+            split.
+            ** apply LocalQueryBindingsReachableCons with (rows := nil).
+               --- constructor.
+                   unfold regression_good_binding, regression_empty_rows,
+                     query_same_rows_as_bag, query_rows_bag.
+                   apply Febag.equal_refl.
+               --- constructor.
+            ** now constructor.
+         ++ apply ordered_rows_equiv_refl.
+      -- intro error; split; intro Herror.
+         ++ destruct Herror as
+              [[schedule Hprefix] | [schedule [reached [_ Hbody]]]].
+            ** inversion Hprefix; subst.
+               all: match goal with
+               | Hbinding : eval_query_expr_with_schedule
+                   _ _ _ _ (SqlError _) |- _ => inversion Hbinding
+               | Hlater : local_query_bindings_error_with_schedule
+                   _ _ _ nil _ |- _ => inversion Hlater
+               end.
+            ** inversion Hbody.
+         ++ destruct Herror as [schedule Herror]; inversion Herror.
+Qed.
+
+Example single_binding_inline_contract_lifts_to_bound_query_equivalence :
+  bound_query_possible_outcome_equiv init_db [regression_good_schema] nil
+    regression_safe_bound_query (MakeBoundQuery nil regression_body).
+Proof.
+apply local_query_binding_inline_possible_outcome_contract_sound.
+exact regression_safe_bound_query_inline_contract.
+Qed.
+
+Example inline_contract_lifts_to_demand_safe_program_equivalence :
+  bound_query_program_demand_safe_outcome_equiv
+    init_db [regression_good_schema] nil
+    [regression_safe_bound_query]
+    (inlined_query_program [regression_body]).
+Proof.
+apply bound_query_program_inline_possible_outcome_contract_demand_safe.
+- cbn; split; [exact regression_safe_bound_query_inline_contract|exact I].
+- cbn [bound_query_program_materialization_safe
+    bound_query_materialization_safe regression_safe_bound_query].
+  split; [exact regression_safe_bound_query_runtime_safe|exact I].
+Qed.
+
+Example unused_failing_binding_is_not_silently_inlineable :
+  ~ local_query_binding_inline_possible_outcome_contract
+      init_db [regression_binding_schema] nil regression_binding
+      regression_body regression_body.
+Proof.
+intros [_ [_ [_ [_ [_ Herrors]]]]].
+assert (Hprefix :
+  eval_bound_query_prefix_error_possible
+    init_db [regression_binding_schema] nil
+    (MakeBoundQuery [regression_binding] regression_body)
+    UndefinedFunction).
+{
+  exists regression_schedule.
+  apply LocalQueryBindingsErrorHere.
+  constructor.
+}
+pose proof
+  (proj1 (Herrors UndefinedFunction) (or_introl Hprefix)) as Hinline_error.
+destruct Hinline_error as [schedule Herror]; inversion Herror.
 Qed.
 
 Definition regression_two_column_subquery : QueryExpr :=

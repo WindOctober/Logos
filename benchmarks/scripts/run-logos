@@ -145,19 +145,6 @@ PROOF_AGENT_SESSION_RESTART_AFTER_FAILED_ROUNDS = 16
 PROOF_AGENT_SESSION_HOME_POLICY = "isolated_per_generation"
 PROOF_AGENT_DIAGNOSTIC_TRANSPORT = "host_unix_broker"
 PROOF_AGENT_DIAGNOSTIC_CACHE_POLICY = "preflight_built_source_digest_bound_host_only"
-TRUSTED_DIAGNOSTIC_CACHE_ENTRIES = (
-    "Schema.v",
-    "Schema.vo",
-    "Queries.v",
-    "Queries.vo",
-    "Witness.v",
-    "Witness.vo",
-)
-TRUSTED_DIAGNOSTIC_CACHE_SOURCE_ENTRIES = (
-    "Schema.v",
-    "Queries.v",
-    "Witness.v",
-)
 PROOF_AGENT_DIAGNOSTIC_TIMEOUT_POLICY = (
     "positive_request_bounded_only_by_current_invocation_deadline"
 )
@@ -10605,114 +10592,97 @@ def validate_trusted_diagnostic_cache(
     if manifest_sha256 != sha256_file(manifest_path):
         raise RunnerError("trusted diagnostic cache manifest digest drifted")
 
-    proof_modules_dir = cache_dir / "ProofModules"
-    require_real_directory(proof_modules_dir, "trusted proof-module cache")
-    order_path = proof_modules_dir / "ORDER"
-    require_regular_nonsymlink_file(
-        order_path, "trusted proof-module order", allow_empty=True
-    )
     try:
-        order_text = order_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
-        raise RunnerError("trusted proof-module order is not UTF-8 text") from error
-    module_names = order_text.splitlines()
-    if order_text != "".join(f"{name}\n" for name in module_names):
-        raise RunnerError("trusted proof-module order is not canonical")
-    if (
-        len(module_names) != len(set(module_names))
-        or any(
-            re.fullmatch(r"[A-Z][A-Za-z0-9_]*\.v", name) is None
-            for name in module_names
-        )
-    ):
-        raise RunnerError("trusted proof-module order has invalid or duplicate entries")
-
-    expected_root_entries = set(TRUSTED_DIAGNOSTIC_CACHE_ENTRIES) | {
-        "SHA256SUMS",
-        "ProofModules",
-    }
-    actual_root_entries = {entry.name for entry in cache_dir.iterdir()}
-    if actual_root_entries != expected_root_entries:
-        raise RunnerError("trusted diagnostic cache contains unexpected root entries")
-
-    expected_module_entries = {"ORDER"}
-    for name in module_names:
-        expected_module_entries.add(name)
-        expected_module_entries.add(f"{name[:-2]}.vo")
-    actual_module_entries = {entry.name for entry in proof_modules_dir.iterdir()}
-    if actual_module_entries != expected_module_entries:
-        raise RunnerError(
-            "trusted proof-module cache differs from its exact ordered source/object set"
-        )
-
-    ordered_manifest_entries = list(TRUSTED_DIAGNOSTIC_CACHE_ENTRIES) + [
-        "ProofModules/ORDER"
-    ]
-    checked_modules: dict[str, str] = {}
-    for name in TRUSTED_DIAGNOSTIC_CACHE_ENTRIES:
-        require_regular_nonsymlink_file(
-            cache_dir / name, f"trusted diagnostic cache entry {name}"
-        )
-    for name in module_names:
-        source_relative = f"ProofModules/{name}"
-        object_relative = f"ProofModules/{name[:-2]}.vo"
-        require_regular_nonsymlink_file(
-            cache_dir / source_relative,
-            f"trusted proof-module source {source_relative}",
-        )
-        require_regular_nonsymlink_file(
-            cache_dir / object_relative,
-            f"trusted proof-module object {object_relative}",
-        )
-        ordered_manifest_entries.extend((source_relative, object_relative))
-        checked_modules[source_relative] = sha256_file(cache_dir / source_relative)
-
-    expected_manifest = "".join(
-        f"{sha256_file(cache_dir / name)}  {name}\n"
-        for name in ordered_manifest_entries
-    )
-    try:
-        actual_manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_text = manifest_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         raise RunnerError("trusted diagnostic cache manifest is not UTF-8 text") from error
-    if actual_manifest != expected_manifest:
+    manifest_entries: list[tuple[str, str]] = []
+    seen_manifest_paths: set[str] = set()
+    for line_number, line in enumerate(manifest_text.splitlines(), start=1):
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\n]+)", line)
+        if match is None:
+            raise RunnerError(
+                f"trusted diagnostic cache manifest line {line_number} is malformed"
+            )
+        digest, relative_text = match.groups()
+        relative = Path(relative_text)
+        if (
+            relative_text == "SHA256SUMS"
+            or relative.is_absolute()
+            or relative.as_posix() != relative_text
+            or "\\" in relative_text
+            or not relative.parts
+            or any(part in {"", ".", ".."} for part in relative.parts)
+            or relative_text in seen_manifest_paths
+        ):
+            raise RunnerError(
+                f"trusted diagnostic cache manifest path is unsafe or duplicate: {relative_text}"
+            )
+        seen_manifest_paths.add(relative_text)
+        manifest_entries.append((relative_text, digest))
+    if not manifest_entries or manifest_text != "".join(
+        f"{digest}  {relative}\n" for relative, digest in manifest_entries
+    ):
         raise RunnerError("trusted diagnostic cache manifest is not canonical")
+
+    # The trusted cache manifest is the layout authority.  The runner verifies
+    # its complete recursive file set and every digest, but deliberately does
+    # not duplicate the solver's knowledge of generated Rocq module names or
+    # directories.  Adding a new generated module therefore changes only the
+    # producer and its trusted checker, not this experiment-accounting layer.
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    for root, directories, files in os.walk(cache_dir, followlinks=False):
+        root_path = Path(root)
+        for name in directories:
+            path = root_path / name
+            metadata = path.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise RunnerError(
+                    f"trusted diagnostic cache directory is unsafe: {path}"
+                )
+            actual_directories.add(path.relative_to(cache_dir).as_posix())
+        for name in files:
+            path = root_path / name
+            require_regular_nonsymlink_file(
+                path, f"trusted diagnostic cache file {path}", allow_empty=True
+            )
+            actual_files.add(path.relative_to(cache_dir).as_posix())
+
+    expected_files = {relative for relative, _ in manifest_entries} | {"SHA256SUMS"}
+    expected_directories: set[str] = set()
+    for relative, _ in manifest_entries:
+        parent = Path(relative).parent
+        while parent != Path("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+    if actual_files != expected_files or actual_directories != expected_directories:
+        raise RunnerError(
+            "trusted diagnostic cache manifest does not describe the exact cache tree"
+        )
+
+    for relative, digest in manifest_entries:
+        if sha256_file(cache_dir / relative) != digest:
+            raise RunnerError(
+                f"trusted diagnostic cache entry digest drifted: {relative}"
+            )
 
     formal_root = source_binding_root or (case_dir / "proof-stage/formal-sql")
     require_real_directory(formal_root, "cache-bound proof workspace")
-    for name in TRUSTED_DIAGNOSTIC_CACHE_SOURCE_ENTRIES:
-        final_source = formal_root / name
+    checked_modules: dict[str, str] = {}
+    for relative, digest in manifest_entries:
+        if Path(relative).suffix != ".v":
+            continue
+        final_source = formal_root / relative
         require_regular_nonsymlink_file(
-            final_source, f"cache-bound generated source {name}"
+            final_source, f"cache-bound generated source {relative}"
         )
-        if (cache_dir / name).read_bytes() != final_source.read_bytes():
-            raise RunnerError("trusted diagnostic cache source binding drifted")
-
-    final_module_root = formal_root / "ProofModules"
-    try:
-        final_module_metadata = final_module_root.lstat()
-    except FileNotFoundError:
-        if module_names:
-            raise RunnerError("cache-bound workspace is missing checked ProofModules")
-    except OSError as error:
-        raise RunnerError("cannot inspect final ProofModules workspace") from error
-    else:
-        if not stat.S_ISDIR(final_module_metadata.st_mode):
-            raise RunnerError("cache-bound ProofModules workspace is not a real directory")
-        final_entries = {entry.name for entry in final_module_root.iterdir()}
-        if final_entries != set(module_names):
+        if sha256_file(final_source) != digest:
             raise RunnerError(
-                "cache-bound ProofModules workspace differs from the checked module order"
+                f"cache-bound generated source differs from trusted cache: {relative}"
             )
-        for name in module_names:
-            final_source = final_module_root / name
-            require_regular_nonsymlink_file(
-                final_source, f"cache-bound checked proof module {name}"
-            )
-            if final_source.read_bytes() != (proof_modules_dir / name).read_bytes():
-                raise RunnerError(
-                    f"final checked proof module differs from trusted cache: {name}"
-                )
+        if relative.startswith("ProofModules/"):
+            checked_modules[relative] = digest
     return checked_modules
 
 

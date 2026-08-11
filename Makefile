@@ -78,6 +78,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/GroupedFilterOutcomeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FilterExtensionalOutcomeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/GroupingGenericInterfacesRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/GroupDistinctRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AggregatePartitionSupportRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/IdempotentAggregateSupportRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/AggregateOutcomeBridgeRegression.v
@@ -99,6 +100,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProjectionSelectListExtensionalityRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProjectionUnionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/OperatorOutcomeInterfacesRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/QueryOutcomeProgressRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SuccessForallCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/NullableTableObservationRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PostgresValueDomainRegression.v
@@ -111,6 +113,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/InSemijoinAcceptanceRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/SemijoinCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/RenamingTransportRegression.v
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ScopedRenameTransportRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofAgentFacadeOnlyRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofAgentFacadeRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ProofSelectorAuthorityRegression.v

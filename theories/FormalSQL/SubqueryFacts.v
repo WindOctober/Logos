@@ -2,14 +2,15 @@
 
 Set Implicit Arguments.
 
-From Stdlib Require Import Bool List Sorting.Permutation.
+From Stdlib Require Import Bool Lia List Sorting.Permutation.
 From SQLFS Require Import
   ATerms Bool3 Env FiniteBag FiniteCollection FiniteSet FlatData Formula FTuples
   ListPermut OrderedSet SqlErrorSemantics SqlOutcome
   SqlBagAbstraction SqlQueryContexts SqlQueryFacts SqlQuerySemantics SqlQuerySyntax
   SqlQueryWellFormed.
 From Logos.FormalSQL Require Import
-  GroupedFilterOutcomeFacts RelationalAlgebraFacts ScalarPredicateFacts.
+  GroupedFilterOutcomeFacts QueryCardinality RelationalAlgebraFacts
+  ScalarPredicateFacts.
 
 Import ListNotations.
 Import Tuple.
@@ -1158,6 +1159,49 @@ replace (SqlError CardinalityViolation) with
     (query_expr_outputs subquery)
     (SqlSuccess (first :: second :: rest))) by reflexivity.
 apply EScalar_Subquery; assumption.
+Qed.
+
+(** A successful scalar-subquery observation with at most one row cannot
+    manufacture an error.  The output-schema fallback remains total; exact
+    one-column typing is an independent admissibility obligation. *)
+Lemma scalar_subquery_value_outcome_safe_of_length_le_one :
+  forall null_value outputs rows,
+    (List.length rows <= 1)%nat ->
+    forall error,
+      @scalar_subquery_value_outcome T null_value outputs
+        (SqlSuccess rows) <> SqlError error.
+Proof.
+intros null_value outputs [|first [|second rest]] Hlength error.
+- discriminate.
+- destruct outputs as [|output [|other outputs]]; discriminate.
+- cbn in Hlength; lia.
+Qed.
+
+(** Cardinality and child safety lift directly to scalar-subquery safety.
+    The bound ranges over every reachable successful child observation, so it
+    remains valid for relational/possible query semantics and does not choose
+    one convenient representative. *)
+Theorem scalar_subquery_runtime_safe_of_cardinality :
+  forall env result_type null_value subquery,
+    value_is_null null_value = true ->
+    @query_success_length_le T relname basesort instance unknown
+      symbol_runtime_error aggregate_runtime_error value_is_null
+      boolean_schedule env subquery 1 ->
+    (forall error, ~ eval_query env subquery (SqlError error)) ->
+    forall error,
+      ~ eval_scalar_value env
+          (SExpr_Subquery result_type null_value subquery) (SqlError error).
+Proof.
+intros env result_type null_value subquery Hnull Hbound Hquery_safe
+  error Heval.
+apply eval_scalar_value_subquery_outcome_iff in Heval.
+destruct Heval as [_ [[rows | child_error] [Hquery Houtcome]]].
+- pose proof (scalar_subquery_value_outcome_safe_of_length_le_one
+    null_value (query_expr_outputs subquery) rows (Hbound rows Hquery))
+    as Hsafe.
+  exact (Hsafe error Houtcome).
+- cbn in Houtcome; inversion Houtcome; subst child_error.
+  exact (Hquery_safe error Hquery).
 Qed.
 
 Lemma eval_scalar_boolean_quant_error_iff :

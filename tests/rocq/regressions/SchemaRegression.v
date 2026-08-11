@@ -4,7 +4,7 @@ From SQLFS Require Import
   FiniteSet OrderedSet ValueInteger Bool3 Formula SqlErrorSemantics
   SchemaConstraints.
 From Logos.FormalSQL Require Import
-  TNullSyntax SchemaCardinality IntegrityFacts.
+  TNullSyntax SchemaCardinality IntegrityFacts WitnessFacts.
 
 Import ListNotations.
 Import Tuple.
@@ -331,6 +331,11 @@ vm_compute.
 split; [reflexivity|discriminate].
 Qed.
 
+Example witness_check_true_reflects :
+  check_row_conformsb
+    init_db regression_positive_payload_check (regression_row 1 10) = true.
+Proof. reflexivity. Qed.
+
 Example check_unknown_satisfies_constraint :
   check_row_conforms
     init_db regression_positive_payload_check
@@ -340,6 +345,12 @@ vm_compute.
 split; [reflexivity|discriminate].
 Qed.
 
+Example witness_check_unknown_reflects_as_accepted :
+  check_row_conformsb
+    init_db regression_positive_payload_check
+      (regression_optional_row (Some 1) None) = true.
+Proof. reflexivity. Qed.
+
 Example check_false_violates_constraint :
   ~ check_row_conforms
       init_db regression_positive_payload_check (regression_row 1 (-10)).
@@ -347,6 +358,11 @@ Proof.
 vm_compute.
 intros [_ Hnot_false]; now apply Hnot_false.
 Qed.
+
+Example witness_check_false_reflects_as_rejected :
+  check_row_conformsb
+    init_db regression_positive_payload_check (regression_row 1 (-10)) = false.
+Proof. reflexivity. Qed.
 
 Definition regression_int32_zero : int32.
 Proof.
@@ -374,6 +390,11 @@ Proof.
 intros [Herror _].
 vm_compute in Herror; discriminate.
 Qed.
+
+Example witness_check_error_reflects_as_rejected :
+  check_row_conformsb
+    init_db regression_error_check (regression_row 1 10) = false.
+Proof. reflexivity. Qed.
 
 Definition regression_key_index_term : constraint_term :=
   Dot regression_key.
@@ -407,6 +428,13 @@ change
 split; [reflexivity|exact I].
 Qed.
 
+Example witness_duplicate_partial_index_key_reflects_as_rejected :
+  unique_index_conformsb
+    init_db
+    [regression_row 1 10; regression_row 1 20]
+    regression_partial_positive_index = false.
+Proof. reflexivity. Qed.
+
 Example false_predicate_rows_do_not_participate_in_partial_index :
   unique_index_conforms
     init_db
@@ -434,6 +462,13 @@ split.
     now rewrite Hfirst, Hsecond; constructor.
 Qed.
 
+Example witness_false_partial_index_predicates_reflect_as_conforming :
+  unique_index_conformsb
+    init_db
+    [regression_row 1 (-10); regression_row 1 (-20)]
+    regression_partial_positive_index = true.
+Proof. reflexivity. Qed.
+
 Example unknown_predicate_rows_do_not_participate_in_partial_index :
   unique_index_conforms
     init_db
@@ -459,6 +494,14 @@ split.
     now rewrite Hfirst; constructor.
 Qed.
 
+Example witness_unknown_partial_index_predicates_reflect_as_conforming :
+  unique_index_conformsb
+    init_db
+    [regression_optional_row (Some 1) None;
+     regression_optional_row (Some 1) None]
+    regression_partial_positive_index = true.
+Proof. reflexivity. Qed.
+
 Definition regression_error_index_term : constraint_term :=
   ScalarCall (ScalarDivide ScalarInt32)
     [Constant (NullValues.Value_int32 (Some regression_int32_one));
@@ -478,6 +521,11 @@ unfold unique_index_row_terms_succeed in Hterms.
 inversion Hterms as [|term terms Herror _].
 vm_compute in Herror; discriminate.
 Qed.
+
+Example witness_participating_index_expression_error_reflects_as_rejected :
+  unique_index_conformsb
+    init_db [regression_row 1 10] regression_error_expression_index = false.
+Proof. reflexivity. Qed.
 
 Definition regression_nonparticipating_error_expression_index
     : unique_index_constraint :=
@@ -510,6 +558,13 @@ split.
     now rewrite Hrow; constructor.
 Qed.
 
+Example witness_nonparticipating_index_expression_error_is_not_evaluated :
+  unique_index_conformsb
+    init_db
+    [regression_row 1 (-10)]
+    regression_nonparticipating_error_expression_index = true.
+Proof. reflexivity. Qed.
+
 Definition regression_error_predicate_index : unique_index_constraint :=
   UniqueIndexConstraint
     [regression_key_index_term]
@@ -524,6 +579,11 @@ specialize Hpredicate_error with
   (row := regression_row 1 10) (1 := or_introl eq_refl).
 vm_compute in Hpredicate_error; discriminate.
 Qed.
+
+Example witness_partial_index_predicate_error_reflects_as_rejected :
+  unique_index_conformsb
+    init_db [regression_row 1 10] regression_error_predicate_index = false.
+Proof. reflexivity. Qed.
 
 Definition regression_is_null_index : unique_index_constraint :=
   UniqueIndexConstraint

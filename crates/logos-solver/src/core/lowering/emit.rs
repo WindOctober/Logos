@@ -175,12 +175,14 @@ pub(super) fn emit_rocq_schema_module(
     tables: &[FormalTable],
     sql_environment: SqlEnvironment,
 ) -> String {
+    let schema_constraint_definitions = emit_rocq_schema_constraint_definitions(tables);
     let schema_constraints = emit_rocq_schema_constraints(tables);
+    let schema_constraint_certificates = emit_rocq_schema_constraint_certificates(tables);
     format!(
         "\
 From SQLFS Require Import SqlSyntax GenericInstance ValueCore ValueInteger ValueString Formula SchemaConstraints.
-From Logos Require Import FormalSQL.TNullSyntax.
-From Stdlib Require Import String ZArith List.
+From Logos Require Import FormalSQL.TNullSyntax FormalSQL.WitnessFacts.
+From Stdlib Require Import String ZArith List Lia.
 Import ListNotations.
 Open Scope string_scope.
 Open Scope Z_scope.
@@ -192,8 +194,12 @@ Definition generated_sql_server_encoding : string := {}.
 
 {}
 
+{}
+
 Definition generated_schema_constraints : list table_constraint :=
 {}.
+
+{}
 
 Definition generated_schema_conforms (db : db_state) : Prop :=
   database_conforms_schema
@@ -204,16 +210,171 @@ Definition generated_schema_conforms (db : db_state) : Prop :=
         rocq_string_literal(sql_environment.locale_provider_label()),
         rocq_string_literal(sql_environment.server_encoding_label()),
         emit_rocq_schema_definition("generated_schema", schema_expr),
-        indent_rocq_expr(&schema_constraints, 2)
+        schema_constraint_definitions,
+        indent_rocq_expr(&schema_constraints, 2),
+        schema_constraint_certificates,
     )
+}
+
+fn generated_table_constraint_name(index: usize) -> String {
+    format!("generated_table_constraint_{index}")
+}
+
+fn emit_rocq_schema_constraint_definitions(tables: &[FormalTable]) -> String {
+    tables
+        .iter()
+        .enumerate()
+        .map(|(index, table)| {
+            format!(
+                "Definition {} : table_constraint :=\n{}.",
+                generated_table_constraint_name(index),
+                indent_rocq_expr(&emit_rocq_table_constraint(table), 2),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn emit_rocq_schema_constraints(tables: &[FormalTable]) -> String {
     let rendered = tables
         .iter()
-        .map(emit_rocq_table_constraint)
+        .enumerate()
+        .map(|(index, _)| generated_table_constraint_name(index))
         .collect::<Vec<_>>();
     emit_rocq_list_expr(&rendered)
+}
+
+fn emit_rocq_forall_certificate_chain(lemmas: &[String]) -> String {
+    let mut proof = String::new();
+    for lemma in lemmas {
+        proof.push_str(&format!("  constructor; [exact {lemma}|].\n"));
+    }
+    proof.push_str("  constructor.");
+    proof
+}
+
+fn emit_rocq_schema_constraint_certificates(tables: &[FormalTable]) -> String {
+    // Keep the generated constraint record opaque to downstream witness
+    // certificates.  Projecting a field by unfolding a wide table declaration
+    // can make Rocq repeatedly normalize the whole record (notably its long
+    // NOT NULL list).  These tiny opaque equalities let the witness assembler
+    // expose only the field that it is currently composing.
+    let projection_lemmas = tables
+        .iter()
+        .enumerate()
+        .flat_map(|(index, table)| {
+            let constraint = generated_table_constraint_name(index);
+            let primary_key = match &table.constraints.primary_key {
+                None => "None".to_owned(),
+                Some(attributes) => {
+                    format!("Some ({})", emit_rocq_attribute_list(attributes))
+                }
+            };
+            let unique_keys = table
+                .constraints
+                .unique
+                .iter()
+                .map(|constraint| emit_rocq_attribute_list(&constraint.columns))
+                .collect::<Vec<_>>();
+            let foreign_keys = table
+                .constraints
+                .foreign_keys
+                .iter()
+                .map(emit_rocq_foreign_key_constraint)
+                .collect::<Vec<_>>();
+            let checks = table
+                .constraints
+                .checks
+                .iter()
+                .map(|constraint| {
+                    format!(
+                        "CheckConstraint ({})",
+                        emit_rocq_constraint_formula(&constraint.formula)
+                    )
+                })
+                .collect::<Vec<_>>();
+            let unique_indexes = table
+                .constraints
+                .unique_indexes
+                .iter()
+                .map(emit_rocq_unique_index_constraint)
+                .collect::<Vec<_>>();
+            [
+                (
+                    "primary_key",
+                    "constraint_primary_key",
+                    primary_key,
+                ),
+                (
+                    "unique_keys",
+                    "constraint_unique_keys",
+                    emit_rocq_list_expr(&unique_keys),
+                ),
+                (
+                    "foreign_keys",
+                    "constraint_foreign_keys",
+                    emit_rocq_list_expr(&foreign_keys),
+                ),
+                (
+                    "checks",
+                    "constraint_checks",
+                    emit_rocq_list_expr(&checks),
+                ),
+                (
+                    "unique_indexes",
+                    "constraint_unique_indexes",
+                    emit_rocq_list_expr(&unique_indexes),
+                ),
+            ]
+            .into_iter()
+            .map(move |(suffix, projection, value)| {
+                format!(
+                    "Lemma {constraint}_{suffix} :\n  {projection} {constraint} = ({value}).\nProof. reflexivity. Qed."
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    let declaration_lemmas = tables
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            let constraint = generated_table_constraint_name(index);
+            let lemma = format!("{constraint}_declarations_well_formed");
+            format!(
+                "Lemma {lemma} :\n\
+  table_constraint_declarations_well_formed\n\
+    generated_schema_constraints {constraint}.\n\
+Proof.\n\
+  apply table_constraint_declarations_well_formedb_sound.\n\
+  vm_compute.\n\
+  reflexivity.\n\
+Qed."
+            )
+        })
+        .collect::<Vec<_>>();
+    let lemma_names = (0..tables.len())
+        .map(|index| {
+            format!(
+                "{}_declarations_well_formed",
+                generated_table_constraint_name(index)
+            )
+        })
+        .collect::<Vec<_>>();
+    let aggregate = format!(
+        "Lemma generated_schema_constraints_well_formed :\n\
+  schema_constraints_well_formed generated_schema_constraints.\n\
+Proof.\n\
+  unfold schema_constraints_well_formed, generated_schema_constraints.\n{}\n\
+Qed.",
+        emit_rocq_forall_certificate_chain(&lemma_names)
+    );
+    projection_lemmas
+        .into_iter()
+        .chain(declaration_lemmas)
+        .into_iter()
+        .chain(std::iter::once(aggregate))
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn emit_rocq_table_constraint(table: &FormalTable) -> String {
@@ -274,7 +435,7 @@ fn emit_rocq_unique_index_constraint(constraint: &FormalUniqueIndexConstraint) -
     let terms = constraint
         .terms
         .iter()
-        .map(emit_rocq_function_term)
+        .map(emit_rocq_constraint_function_term)
         .collect::<Vec<_>>();
     let predicate = match &constraint.predicate {
         None => "None".to_owned(),
@@ -5183,6 +5344,90 @@ fn emit_rocq_function_term(term: &FormalFunctionTerm) -> String {
     }
 }
 
+fn emit_rocq_constraint_integer_value(
+    raw: &str,
+    ty: Option<FormalAttributeType>,
+) -> Option<String> {
+    let trimmed = raw.trim();
+    if !is_integer_literal(trimmed) {
+        return None;
+    }
+    match ty {
+        Some(FormalAttributeType::Int32) => Some(format!(
+            "Value_int32 (Some (Int32 ({trimmed})%Z ltac:(unfold int32_min, int32_max; lia)))"
+        )),
+        Some(FormalAttributeType::Int64) => Some(format!(
+            "Value_int64 (Some (Int64 ({trimmed})%Z ltac:(unfold int64_min, int64_max; lia)))"
+        )),
+        _ => None,
+    }
+}
+
+// Schema constraints have already passed Rust-side literal range validation.
+// Emit their fixed-width integer constants with an explicit payload proof so
+// closed witness reflection never has to reduce the proof-driven
+// [int32_checked]/[int64_checked] constructors.
+fn emit_rocq_constraint_function_term(term: &FormalFunctionTerm) -> String {
+    match term {
+        FormalFunctionTerm::Constant { raw, ty } => {
+            if let Some(value) = emit_rocq_constraint_integer_value(raw, *ty) {
+                format!("Constant ({value})")
+            } else {
+                emit_rocq_constant_function(raw, *ty)
+            }
+        }
+        FormalFunctionTerm::Attribute { name, ty } => {
+            format!("Dot ({})", emit_rocq_attribute(*ty, name))
+        }
+        FormalFunctionTerm::ScalarCall { operator, args } => format!(
+            "ScalarCall ({}) ({})",
+            emit_rocq_scalar_operator(*operator),
+            emit_rocq_list(args, emit_rocq_constraint_function_term)
+        ),
+    }
+}
+
+fn emit_rocq_constraint_aggregate_term(term: &FormalAggregateTerm) -> String {
+    match term {
+        FormalAggregateTerm::Expr { term } => match term {
+            FormalFunctionTerm::Attribute { name, ty } => {
+                if let Some(dot_constructor) = dot_constructor(*ty) {
+                    emit_rocq_named_helper(dot_constructor, name, *ty)
+                } else {
+                    format!("AExpr ({})", emit_rocq_constraint_function_term(term))
+                }
+            }
+            _ => format!("AExpr ({})", emit_rocq_constraint_function_term(term)),
+        },
+        FormalAggregateTerm::Aggregate {
+            function,
+            quantifier,
+            arg,
+        } => format!(
+            "AAggregate {} {} ({})",
+            emit_rocq_aggregate_function(*function),
+            emit_rocq_aggregate_quantifier(*quantifier),
+            emit_rocq_constraint_function_term(arg)
+        ),
+        FormalAggregateTerm::CountStar => "ACountStar".to_owned(),
+        FormalAggregateTerm::ScalarCall { operator, args } => format!(
+            "AScalarCall ({}) ({})",
+            emit_rocq_scalar_operator(*operator),
+            emit_rocq_list(args, emit_rocq_constraint_aggregate_term)
+        ),
+        FormalAggregateTerm::Case {
+            branches,
+            else_expr,
+        } => format!(
+            "AScalarCall ScalarCase ({})",
+            emit_rocq_list(
+                &case_function_args(branches, else_expr),
+                emit_rocq_constraint_aggregate_term
+            )
+        ),
+    }
+}
+
 fn emit_rocq_scalar_operator(operator: ScalarOperator) -> String {
     match operator {
         ScalarOperator::PredicateValue(predicate) => {
@@ -5302,7 +5547,7 @@ fn emit_rocq_constraint_formula(formula: &FormalConstraintFormula) -> String {
         FormalConstraintFormula::Predicate { predicate, args } => format!(
             "@Sql_Pred TNull constraint_query {} ({})",
             predicate.rocq_constructor(),
-            emit_rocq_list(args, emit_rocq_aggregate_term)
+            emit_rocq_list(args, emit_rocq_constraint_aggregate_term)
         ),
         FormalConstraintFormula::And { left, right } => emit_rocq_call(
             "@Sql_Conj TNull constraint_query And_F",

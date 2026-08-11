@@ -2,7 +2,7 @@
 
 Route here for: query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup.
 
-This focused catalog contains 62 declarations routed at declaration granularity from `QueryBindingSemantics.v`, `QueryTNullSyntax.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 73 declarations routed at declaration granularity from `QueryBindingSemantics.v`, `QueryTNullSyntax.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `query_local_references_allowed_available_monotone`
 
@@ -195,9 +195,162 @@ Lemma set_local_query_binding_rows_instance_neq :
     @_instance TNull db relation.
 ```
 
+## `set_local_query_binding_rows_table_bag`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:291`](../QueryBindingSemantics.v#L291)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the set local query binding rows table bag law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `bag`
+
+Search aliases: `query syntax bridge`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma set_local_query_binding_rows_table_bag :
+  forall db binding rows,
+    local_query_binding_reference_well_typed db binding ->
+    @query_table_bag TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      (local_binding_outputs binding)
+      (local_binding_relation binding) =
+    @query_rows_bag TNull rows.
+```
+
+## `eval_local_query_binding_reference_values_iff`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:311`](../QueryBindingSemantics.v#L311)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for projection and tuple-syntax bridging.
+
+Applicability: Use in either direction to invert or construct a goal about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: primary card only
+
+Search aliases: `query syntax bridge`
+
+```rocq
+Lemma eval_local_query_binding_reference_values_iff :
+  forall db binding rows schedule env outcome,
+    local_query_binding_reference_well_typed db binding ->
+    eval_query_expr_with_schedule
+      (set_local_query_binding_rows db binding rows) schedule env
+      (local_query_binding_reference binding) outcome <->
+    eval_query_expr_with_schedule
+      (set_local_query_binding_rows db binding rows) schedule env
+      (local_query_binding_values binding rows) outcome.
+```
+
+## `eval_local_query_binding_reference_values_exists_iff`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:334`](../QueryBindingSemantics.v#L334)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Gives necessary and sufficient conditions for projection and tuple-syntax bridging.
+
+Applicability: Use in either direction to invert or construct a goal about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `scalar`
+
+Search aliases: `query syntax bridge`, `NULL`, `UNKNOWN`, `three-valued logic`
+
+```rocq
+Lemma eval_local_query_binding_reference_values_exists_iff :
+  forall db binding rows schedule env outcome,
+    local_query_binding_reference_well_typed db binding ->
+    @eval_query_exists_outcome TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule env (local_query_binding_reference binding) outcome <->
+    @eval_query_exists_outcome TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule env (local_query_binding_values binding rows) outcome.
+```
+
+## `local_query_binding_reference_values_global_demand_equiv`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:366`](../QueryBindingSemantics.v#L366)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports or composes projection and tuple-syntax bridging across the declared equivalence.
+
+Applicability: Use to orient, transport, or compose a semantic relation about projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; preserve the stated SQL NULL/Bool3 hypotheses; supply the declared equivalence/properness relation.
+
+Cross-index: `scalar`
+
+Search aliases: `query syntax bridge`, `NULL`, `UNKNOWN`, `three-valued logic`, `equivalence`, `congruence`
+
+```rocq
+Lemma local_query_binding_reference_values_global_demand_equiv :
+  forall db binding rows schedule demand,
+    local_query_binding_reference_well_typed db binding ->
+    @query_expr_global_demand_equiv TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule demand
+      (local_query_binding_reference binding)
+      (local_query_binding_values binding rows).
+```
+
+## `local_query_binding_reference_context_substitution`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:391`](../QueryBindingSemantics.v#L391)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the local query binding reference context substitution law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; preserve the stated SQL NULL/Bool3 hypotheses.
+
+Cross-index: `outcome`, `runtime`, `scalar`
+
+Search aliases: `query syntax bridge`, `NULL`, `UNKNOWN`, `three-valued logic`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem local_query_binding_reference_context_substitution :
+  forall db binding rows schedule
+      (context : @query_expr_context TNull relname),
+    local_query_binding_reference_well_typed db binding ->
+    @query_expr_global_typed_outcome_equiv TNull relname
+      (@_basesort TNull (set_local_query_binding_rows db binding rows))
+      (@_instance TNull (set_local_query_binding_rows db binding rows))
+      unknown3 NullValues.interp_scalar_operator_runtime_error
+      NullValues.interp_aggregate_runtime_error NullValues.is_null_value
+      schedule
+      (plug_query_expr_context context
+        (local_query_binding_reference binding))
+      (plug_query_expr_context context
+        (local_query_binding_values binding rows)).
+```
+
 ## `eval_local_query_bindings_with_schedule_decompose`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:382`](../QueryBindingSemantics.v#L382)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:528`](../QueryBindingSemantics.v#L528)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -228,7 +381,7 @@ Lemma eval_local_query_bindings_with_schedule_decompose :
 
 ## `eval_bound_query_possible_outcome_decompose`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:434`](../QueryBindingSemantics.v#L434)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:580`](../QueryBindingSemantics.v#L580)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -254,9 +407,84 @@ Lemma eval_bound_query_possible_outcome_decompose :
     eval_bound_query_body_possible_outcome db schemas env query outcome.
 ```
 
+## `eval_bound_query_without_bindings_with_schemas`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:634`](../QueryBindingSemantics.v#L634)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the eval bound query without bindings with schemas law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `eval_bound_query_without_bindings_with_schemas` direction for projection and tuple-syntax bridging; do not reverse or strengthen the displayed conclusion.
+
+Important premises: keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `schema conformance`, `typing`
+
+```rocq
+Lemma eval_bound_query_without_bindings_with_schemas :
+  forall db schemas env query outcome,
+    eval_bound_query_possible_outcome db schemas env
+      (MakeBoundQuery nil query) outcome <->
+    eval_inlined_query_possible_outcome db schemas env query outcome.
+```
+
+## `bound_query_inline_possible_outcome_contract_sound`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:689`](../QueryBindingSemantics.v#L689)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the bound query inline possible outcome contract sound law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_inline_possible_outcome_contract_sound :
+  forall db schemas env bound inlined,
+    bound_query_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_possible_outcome_equiv db schemas env
+      bound (MakeBoundQuery nil inlined).
+```
+
+## `local_query_binding_inline_possible_outcome_contract_sound`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:746`](../QueryBindingSemantics.v#L746)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the local query binding inline possible outcome contract sound law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Corollary local_query_binding_inline_possible_outcome_contract_sound :
+  forall db schemas env binding body inlined,
+    local_query_binding_inline_possible_outcome_contract
+      db schemas env binding body inlined ->
+    bound_query_possible_outcome_equiv db schemas env
+      (MakeBoundQuery (binding :: nil) body)
+      (MakeBoundQuery nil inlined).
+```
+
 ## `bound_query_body_possible_outcome_lift_refl`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:480`](../QueryBindingSemantics.v#L480)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:774`](../QueryBindingSemantics.v#L774)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -282,7 +510,7 @@ Lemma bound_query_body_possible_outcome_lift_refl :
 
 ## `bound_query_body_possible_outcome_lift_sound`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:496`](../QueryBindingSemantics.v#L496)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:790`](../QueryBindingSemantics.v#L790)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -306,7 +534,7 @@ Theorem bound_query_body_possible_outcome_lift_sound :
 
 ## `bound_query_possible_equiv_implies_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:577`](../QueryBindingSemantics.v#L577)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:871`](../QueryBindingSemantics.v#L871)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -327,9 +555,34 @@ Lemma bound_query_possible_equiv_implies_possible_outcome_equiv :
     bound_query_possible_outcome_equiv db schemas env left right.
 ```
 
+## `bound_query_program_inline_possible_outcome_contract_sound`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:930`](../QueryBindingSemantics.v#L930)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: States the bound query program inline possible outcome contract sound law for projection and tuple-syntax bridging, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_program_inline_possible_outcome_contract_sound :
+  forall db schemas env bound inlined,
+    bound_query_program_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_program_possible_outcome_equiv
+      db schemas env bound (inlined_query_program inlined).
+```
+
 ## `bound_query_program_body_possible_outcome_lift_sound`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:630`](../QueryBindingSemantics.v#L630)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:963`](../QueryBindingSemantics.v#L963)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -352,9 +605,58 @@ Theorem bound_query_program_body_possible_outcome_lift_sound :
       db schemas env left right.
 ```
 
+## `inlined_query_program_materialization_safe`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:998`](../QueryBindingSemantics.v#L998)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for projection and tuple-syntax bridging.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `runtime`, `schema`
+
+Search aliases: `query syntax bridge`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Lemma inlined_query_program_materialization_safe :
+  forall db schemas env queries,
+    bound_query_program_materialization_safe db schemas env
+      (inlined_query_program queries).
+```
+
+## `bound_query_program_inline_possible_outcome_contract_demand_safe`
+
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1025`](../QueryBindingSemantics.v#L1025)
+
+Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for projection and tuple-syntax bridging.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for projection and tuple-syntax bridging.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; keep schema/integrity conformance premises explicit.
+
+Cross-index: `possible`, `outcome`, `runtime`, `schema`
+
+Search aliases: `possible outcome`, `all Boolean schedules`, `query syntax bridge`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `schema conformance`, `typing`
+
+```rocq
+Theorem bound_query_program_inline_possible_outcome_contract_demand_safe :
+  forall db schemas env bound inlined,
+    bound_query_program_inline_possible_outcome_contract
+      db schemas env bound inlined ->
+    bound_query_program_materialization_safe db schemas env bound ->
+    bound_query_program_demand_safe_outcome_equiv db schemas env
+      bound (inlined_query_program inlined).
+```
+
 ## `bound_query_program_body_possible_outcome_lift_demand_safe`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:681`](../QueryBindingSemantics.v#L681)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1043`](../QueryBindingSemantics.v#L1043)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -381,7 +683,7 @@ Theorem bound_query_program_body_possible_outcome_lift_demand_safe :
 
 ## `bound_query_possible_equiv_runtime_safe`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:696`](../QueryBindingSemantics.v#L696)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1058`](../QueryBindingSemantics.v#L1058)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -405,7 +707,7 @@ Lemma bound_query_possible_equiv_runtime_safe :
 
 ## `bound_query_program_possible_equiv_materialization_safe`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:715`](../QueryBindingSemantics.v#L715)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1077`](../QueryBindingSemantics.v#L1077)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -429,7 +731,7 @@ Lemma bound_query_program_possible_equiv_materialization_safe :
 
 ## `bound_query_program_possible_equiv_implies_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:738`](../QueryBindingSemantics.v#L738)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1100`](../QueryBindingSemantics.v#L1100)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -452,7 +754,7 @@ Lemma bound_query_program_possible_equiv_implies_possible_outcome_equiv :
 
 ## `bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:751`](../QueryBindingSemantics.v#L751)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1113`](../QueryBindingSemantics.v#L1113)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -476,7 +778,7 @@ Lemma bound_query_program_possible_equiv_implies_demand_safe_outcome_equiv :
 
 ## `declare_local_query_schemas_basesort_extensional`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:804`](../QueryBindingSemantics.v#L804)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1166`](../QueryBindingSemantics.v#L1166)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -503,7 +805,7 @@ Lemma declare_local_query_schemas_basesort_extensional :
 
 ## `bound_query_admissible_database_shape_extensional`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:824`](../QueryBindingSemantics.v#L824)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1186`](../QueryBindingSemantics.v#L1186)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -530,7 +832,7 @@ Lemma bound_query_admissible_database_shape_extensional :
 
 ## `bound_query_program_admissible_database_shape_extensional`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:874`](../QueryBindingSemantics.v#L874)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1236`](../QueryBindingSemantics.v#L1236)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -557,7 +859,7 @@ Lemma bound_query_program_admissible_database_shape_extensional :
 
 ## `bound_query_program_admissible_database_schema_transport`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:891`](../QueryBindingSemantics.v#L891)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1253`](../QueryBindingSemantics.v#L1253)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -581,7 +883,7 @@ Lemma bound_query_program_admissible_database_schema_transport :
 
 ## `eval_bound_query_without_bindings`
 
-Source: [`theories/FormalSQL/QueryBindingSemantics.v:912`](../QueryBindingSemantics.v#L912)
+Source: [`theories/FormalSQL/QueryBindingSemantics.v:1274`](../QueryBindingSemantics.v#L1274)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

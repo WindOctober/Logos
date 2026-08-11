@@ -794,10 +794,14 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                 / "proof-stage/proof-agent/trusted-diagnostic-cache"
             )
             module_root = cache_root / "ProofModules"
+            witness_module_root = cache_root / "WitnessModules"
             final_module_root = formal_root / "ProofModules"
+            final_witness_module_root = formal_root / "WitnessModules"
             module_root.mkdir(parents=True)
+            witness_module_root.mkdir(parents=True)
             final_module_root.mkdir(parents=True)
-            for name in ("Schema.v", "Queries.v", "Witness.v"):
+            final_witness_module_root.mkdir(parents=True)
+            for name in ("Schema.v", "Queries.v", "WitnessData.v", "Witness.v"):
                 source = f"Definition {name[:-2].lower()} : True := I.\n".encode()
                 (formal_root / name).write_bytes(source)
                 (cache_root / name).write_bytes(source)
@@ -815,15 +819,34 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                     f"object:{name}".encode()
                 )
                 (final_module_root / name).write_bytes(source)
+            witness_module_names = ("Table0001Check.v",)
+            (witness_module_root / "ORDER").write_text(
+                "".join(f"{name}\n" for name in witness_module_names),
+                encoding="utf-8",
+            )
+            for name in witness_module_names:
+                source = f"Lemma {name[:-2]} : True. exact I. Qed.\n".encode()
+                (witness_module_root / name).write_bytes(source)
+                (witness_module_root / f"{name[:-2]}.vo").write_bytes(
+                    f"object:{name}".encode()
+                )
+                (final_witness_module_root / name).write_bytes(source)
             manifest_entries = [
                 "Schema.v",
                 "Schema.vo",
                 "Queries.v",
                 "Queries.vo",
+                "WitnessData.v",
+                "WitnessData.vo",
                 "Witness.v",
                 "Witness.vo",
-                "ProofModules/ORDER",
+                "WitnessModules/ORDER",
             ]
+            for name in witness_module_names:
+                manifest_entries.extend(
+                    (f"WitnessModules/{name}", f"WitnessModules/{name[:-2]}.vo")
+                )
+            manifest_entries.append("ProofModules/ORDER")
             for name in module_names:
                 manifest_entries.extend(
                     (f"ProofModules/{name}", f"ProofModules/{name[:-2]}.vo")
@@ -871,7 +894,7 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                 "Lemma unordered : True. exact I. Qed.\n", encoding="utf-8"
             )
             with self.assertRaisesRegex(
-                self.runner_error, "exact ordered source/object set"
+                self.runner_error, "does not describe the exact cache tree"
             ):
                 self.runner["validate_trusted_diagnostic_cache"](case_dir, agent)
 

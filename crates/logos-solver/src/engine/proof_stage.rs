@@ -61,6 +61,7 @@ const PROOF_AGENT_WRITABLE_STORAGE_POLICY: &str =
 const SCRATCH_ALLOWED_EXTENSIONS: &[&str] = &["v", "md", "txt"];
 const CHECKED_SCRATCH_DIRECTORY: &str = "checked";
 const PROOF_MODULE_DIRECTORY: &str = "ProofModules";
+const WITNESS_MODULE_DIRECTORY: &str = "WitnessModules";
 const DIAGNOSTIC_SOCKET_FILE: &str = "socket";
 const DIAGNOSTIC_SOCKET_TEMP_ROOT: &str = "/tmp";
 // The request header contains only fixed protocol metadata. This protects the
@@ -134,8 +135,21 @@ const FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT: &str =
     include_str!("../../scripts/run-trusted-rocq-check.sh");
 const FORMAL_SQL_DOCKER_AGENT_SCRIPT: &str =
     include_str!("../../scripts/run-proof-agent-docker.sh");
-const PROOF_SOURCE_FILES: &[&str] = &["Schema.v", "Queries.v", "Witness.v", "Problem.v", "Goal.v"];
-const TRUSTED_PROOF_SOURCE_FILES: &[&str] = &["Schema.v", "Queries.v", "Witness.v", "Goal.v"];
+const PROOF_SOURCE_FILES: &[&str] = &[
+    "Schema.v",
+    "Queries.v",
+    "WitnessData.v",
+    "Witness.v",
+    "Problem.v",
+    "Goal.v",
+];
+const TRUSTED_PROOF_SOURCE_FILES: &[&str] = &[
+    "Schema.v",
+    "Queries.v",
+    "WitnessData.v",
+    "Witness.v",
+    "Goal.v",
+];
 const PROOF_CONTEXT_FILES: &[&str] = &[
     "source.sql",
     "target.sql",
@@ -154,6 +168,7 @@ type TrustedProofSources = BTreeMap<&'static str, String>;
 
 pub(super) enum ProofHandoffResolution {
     Continue(String),
+    NeedsManualReview(String),
     RestartWithFormalWitness {
         feedback: String,
         snapshot: FormalWitnessSnapshot,
@@ -1428,12 +1443,35 @@ fn rocq_list(items: &[String]) -> String {
     }
 }
 
-fn formal_sql_witness_module(
+fn rocq_forall_certificate_chain(lemmas: &[String]) -> String {
+    let mut proof = String::new();
+    for lemma in lemmas {
+        proof.push_str(&format!("  constructor; [exact {lemma}|].\n"));
+    }
+    proof.push_str("  constructor.");
+    proof
+}
+
+struct FormalSqlWitnessModules {
+    witness: String,
+    data: Option<String>,
+    constraint_modules: Vec<(String, String)>,
+}
+
+fn formal_sql_witness_modules(
     schema: &FormalSchema,
     snapshot: Option<&FormalWitnessSnapshot>,
-) -> Result<String> {
+) -> Result<FormalSqlWitnessModules> {
     let Some(snapshot) = snapshot else {
-        return Ok(unavailable_formal_sql_witness_module());
+        return Ok(FormalSqlWitnessModules {
+            witness: unavailable_formal_sql_witness_module(),
+            data: Some(
+                "From LogosGenerated Require Import Schema.\n\
+                 Definition generated_witness_data_unavailable_marker : Prop := True.\n"
+                    .to_owned(),
+            ),
+            constraint_modules: Vec::new(),
+        });
     };
     if snapshot.schema_version != 1 || snapshot.tables.len() != schema.tables.len() {
         return Err(Error::ProofAgentCommand(format!(
@@ -1446,6 +1484,7 @@ fn formal_sql_witness_module(
 
     let mut row_definitions = Vec::with_capacity(schema.tables.len());
     let mut table_values = Vec::with_capacity(schema.tables.len());
+    let mut table_relations = Vec::with_capacity(schema.tables.len());
     let mut cardinality_lemmas = Vec::with_capacity(schema.tables.len());
     for (index, (table, snapshot_table)) in schema.tables.iter().zip(&snapshot.tables).enumerate() {
         let snapshot_attributes = snapshot_table
@@ -1513,13 +1552,204 @@ Qed.",
             snapshot_table.rows.len()
         ));
         table_values.push(format!("WitnessTable (Rel ({})) {row_name}", relation));
+        table_relations.push(format!("Rel ({relation})"));
     }
     // [create_table] prepends each relation to [_relnames].  The witness
     // inventory follows that exact generated-schema order, while the snapshot
     // JSON remains in declaration order for a direct schema binding audit.
     table_values.reverse();
+    table_relations.reverse();
 
-    Ok(format!(
+    let mut table_constraint_certificates = Vec::new();
+    let mut constraint_modules = Vec::new();
+    let mut table_constraint_lemma_names = Vec::with_capacity(schema.tables.len());
+    for (index, (table, snapshot_table)) in schema.tables.iter().zip(&snapshot.tables).enumerate() {
+        if snapshot_table.rows.is_empty() {
+            let relation = rocq_identifier_string(&table.relation);
+            table_constraint_certificates.push(format!(
+                "Lemma generated_witness_table_constraint_{index}_conforms :\n\
+  table_constraint_conforms generated_witness_db\n\
+    Schema.generated_table_constraint_{index}.\n\
+Proof.\n\
+  apply (table_constraint_conforms_empty\n\
+    generated_witness_db Schema.generated_schema_constraints).\n\
+  - exact Schema.generated_table_constraint_{index}_declarations_well_formed.\n\
+  - change (instance_rows\n\
+      (witness_database Schema.generated_schema WitnessData.generated_witness_tables)\n\
+      (constraint_relation Schema.generated_table_constraint_{index}) = nil).\n\
+    rewrite witness_database_instance_rows.\n\
+    change (witness_instance_rows WitnessData.generated_witness_tables\n\
+      (Rel ({relation})) = nil).\n\
+    apply witness_instance_rows_absent.\n\
+    rewrite WitnessData.generated_witness_table_relations.\n\
+    vm_compute.\n\
+    intuition discriminate.\n\
+Qed."
+            ));
+            table_constraint_lemma_names.push(format!(
+                "generated_witness_table_constraint_{index}_conforms"
+            ));
+        } else {
+            let relation = rocq_identifier_string(&table.relation);
+            let rows = format!(
+                "witness_instance_rows WitnessData.generated_witness_tables (Rel ({relation}))"
+            );
+            let header = "From SQLFS Require Import SqlSyntax GenericInstance Values FTuples SchemaConstraints.\nFrom Logos Require Import FormalSQL.WitnessFacts.\nFrom LogosGenerated Require Import Schema.\nFrom LogosGenerated Require WitnessData.\nFrom Stdlib Require Import List String SetoidList.\nImport ListNotations.\nOpen Scope string_scope.\n\n";
+            let mut component_imports = Vec::new();
+            let mut add_component = |module: String,
+                                     theorem: String,
+                                     statement: String,
+                                     proof: String| {
+                constraint_modules.push((
+                    module.clone(),
+                    format!("{header}Lemma {theorem} :\n  {statement}.\nProof.\n{proof}\nQed.\n"),
+                ));
+                component_imports.push(module.clone());
+                format!("{module}.{theorem}")
+            };
+            let not_null = add_component(
+                format!("Table{index:04}NotNull"),
+                format!("generated_witness_table_{index}_not_null"),
+                format!(
+                    "rows_attributes_not_null (constraint_not_null Schema.generated_table_constraint_{index}) ({rows})"
+                ),
+                "  apply rows_attributes_not_nullb_sound.\n  vm_compute.\n  reflexivity."
+                    .to_owned(),
+            );
+            let primary = table.constraints.primary_key.as_ref().map(|_| add_component(
+                format!("Table{index:04}Primary"),
+                format!("generated_witness_table_{index}_primary"),
+                format!("forall key, constraint_primary_key Schema.generated_table_constraint_{index} = Some key -> primary_key_conforms key ({rows})"),
+                "  intros key Hkey.\n  vm_compute in Hkey.\n  inversion Hkey; subst; clear Hkey.\n  apply primary_key_conformsb_sound.\n  vm_compute.\n  reflexivity.".to_owned(),
+            ));
+            let mut make_group = |kind: &str,
+                                  count: usize,
+                                  list: &str,
+                                  conclusion: &str,
+                                  sound: &str| {
+                (0..count).map(|position| {
+                    let module = format!("Table{index:04}{kind}{position:04}");
+                    let theorem = format!("generated_witness_table_{index}_{}_{}", kind.to_ascii_lowercase(), position);
+                    add_component(
+                        module,
+                        theorem,
+                        format!("forall item, nth_error ({list}) {position} = Some item -> {conclusion}"),
+                        format!("  intros item Hitem.\n  vm_compute in Hitem.\n  inversion Hitem; subst; clear Hitem.\n  {sound}\n  vm_compute.\n  reflexivity."),
+                    )
+                }).collect::<Vec<_>>()
+            };
+            let unique = make_group(
+                "Unique",
+                table.constraints.unique.len(),
+                &format!("constraint_unique_keys Schema.generated_table_constraint_{index}"),
+                &format!("unique_key_conforms item ({rows})"),
+                "apply unique_key_conformsb_sound.",
+            );
+            let foreign = make_group(
+                "Foreign",
+                table.constraints.foreign_keys.len(),
+                &format!("constraint_foreign_keys Schema.generated_table_constraint_{index}"),
+                &format!("foreign_key_conforms WitnessData.generated_witness_db ({rows}) item"),
+                "apply (foreign_key_conformsb_sound Schema.generated_schema WitnessData.generated_witness_tables).",
+            );
+            let checks = make_group(
+                "Check",
+                table.constraints.checks.len(),
+                &format!("constraint_checks Schema.generated_table_constraint_{index}"),
+                &format!(
+                    "check_constraint_conforms WitnessData.generated_witness_db ({rows}) item"
+                ),
+                "apply check_constraint_conformsb_sound.",
+            );
+            drop(make_group);
+            drop(add_component);
+            let index_list =
+                format!("constraint_unique_indexes Schema.generated_table_constraint_{index}");
+            let mut indexes = Vec::new();
+            for position in 0..table.constraints.unique_indexes.len() {
+                let premise = format!("nth_error ({index_list}) {position} = Some item");
+                let mut parts = Vec::new();
+                for (suffix, conclusion, finish) in [
+                    (
+                        "Nonempty",
+                        "list_nonemptyb (unique_index_terms item) = true".to_owned(),
+                        "  vm_compute.\n  reflexivity.".to_owned(),
+                    ),
+                    (
+                        "Predicate",
+                        format!(
+                            "forallb (fun row => unique_index_predicate_succeedsb WitnessData.generated_witness_db row item) ({rows}) = true"
+                        ),
+                        "  vm_compute.\n  reflexivity.".to_owned(),
+                    ),
+                    (
+                        "Terms",
+                        format!(
+                            "forallb (fun row => if unique_index_row_participates WitnessData.generated_witness_db item row then unique_index_row_terms_succeedb item row else true) ({rows}) = true"
+                        ),
+                        "  vm_compute.\n  reflexivity.".to_owned(),
+                    ),
+                    (
+                        "Unique",
+                        format!(
+                            "no_relatedb sql_key_equal_trueb (map (unique_index_key (unique_index_terms item)) (filter (unique_index_row_participates WitnessData.generated_witness_db item) ({rows}))) = true"
+                        ),
+                        "  vm_compute.\n  reflexivity.".to_owned(),
+                    ),
+                ] {
+                    let module = format!("Table{index:04}Index{position:04}{suffix}");
+                    let theorem = format!(
+                        "generated_witness_table_{index}_index_{position}_{}",
+                        suffix.to_ascii_lowercase()
+                    );
+                    constraint_modules.push((module.clone(), format!(
+                        "{header}Lemma {theorem} :\n  forall item, {premise} -> {conclusion}.\nProof.\n  intros item Hitem.\n  vm_compute in Hitem.\n  inversion Hitem; subst; clear Hitem.\n{finish}\nQed.\n"
+                    )));
+                    component_imports.push(module.clone());
+                    parts.push(format!("{module}.{theorem}"));
+                }
+                let module = format!("Table{index:04}Index{position:04}");
+                let theorem = format!("generated_witness_table_{index}_index_{position}");
+                let imports = component_imports.join(" ");
+                constraint_modules.push((module.clone(), format!(
+                    "{header}From LogosGenerated.WitnessModules Require {imports}.\nLemma {theorem} :\n  forall item, {premise} -> unique_index_conforms WitnessData.generated_witness_db ({rows}) item.\nProof.\n  intros item Hitem.\n  apply unique_index_conforms_of_reflected_components.\n  - apply {}; exact Hitem.\n  - apply {}; exact Hitem.\n  - apply {}; exact Hitem.\n  - apply {}; exact Hitem.\nQed.\n",
+                    parts[0], parts[1], parts[2], parts[3],
+                )));
+                component_imports.push(module.clone());
+                indexes.push(format!("{module}.{theorem}"));
+            }
+            let forall_proof = |references: &[String]| {
+                let mut result = String::new();
+                for reference in references {
+                    result.push_str(&format!(
+                        "    constructor; [apply {reference}; reflexivity|].\n"
+                    ));
+                }
+                result.push_str("    constructor.");
+                result
+            };
+            let module = format!("TableConstraint{index:04}");
+            let theorem = format!("generated_witness_table_constraint_{index}_conforms");
+            let imports = component_imports.join(" ");
+            constraint_modules.push((module.clone(), format!(
+                "From SQLFS Require Import SqlSyntax GenericInstance SchemaConstraints.\nFrom Logos Require Import FormalSQL.WitnessFacts.\nFrom LogosGenerated Require Import Schema.\nFrom LogosGenerated Require WitnessData.\nFrom LogosGenerated.WitnessModules Require {imports}.\nFrom Stdlib Require Import List String.\nImport ListNotations.\nOpen Scope string_scope.\n\nLemma {theorem} :\n  table_constraint_conforms WitnessData.generated_witness_db Schema.generated_table_constraint_{index}.\nProof.\n  change (table_constraint_conforms (witness_database Schema.generated_schema WitnessData.generated_witness_tables) Schema.generated_table_constraint_{index}).\n  apply table_constraint_conforms_of_components with (rows := {rows}).\n  - apply witness_database_instance_rows.\n  - exact {not_null}.\n  - rewrite Schema.generated_table_constraint_{index}_primary_key.\n    {}\n  - rewrite Schema.generated_table_constraint_{index}_unique_keys.\n{}\n  - rewrite Schema.generated_table_constraint_{index}_foreign_keys.\n{}\n  - rewrite Schema.generated_table_constraint_{index}_checks.\n{}\n  - rewrite Schema.generated_table_constraint_{index}_unique_indexes.\n{}\nQed.\n",
+                primary.as_ref().map_or("exact I.".to_owned(), |reference| format!("apply {reference}; reflexivity.")),
+                forall_proof(&unique), forall_proof(&foreign), forall_proof(&checks), forall_proof(&indexes),
+            )));
+            table_constraint_lemma_names.push(format!("{module}.{theorem}"));
+        }
+    }
+    let table_constraints_aggregate = format!(
+        "Lemma generated_witness_table_constraints_conform :\n\
+  Forall (table_constraint_conforms generated_witness_db)\n\
+    Schema.generated_schema_constraints.\n\
+Proof.\n\
+  unfold Schema.generated_schema_constraints.\n{}\n\
+Qed.",
+        rocq_forall_certificate_chain(&table_constraint_lemma_names)
+    );
+
+    let data = format!(
         "From SQLFS Require Import SqlSyntax GenericInstance Values FTuples FiniteBag FiniteCollection SchemaConstraints.\n\
 From Logos Require Import FormalSQL.TNullSyntax FormalSQL.WitnessFacts.\n\
 From LogosGenerated Require Import Schema.\n\
@@ -1531,6 +1761,13 @@ Open Scope Z_scope.\n\
 {}\n\
 \n\
 Definition generated_witness_tables : list witness_table :=\n  {}.\n\
+\n\
+Definition generated_witness_relations : list relname :=\n  {}.\n\
+\n\
+Lemma generated_witness_table_relations :\n\
+  map witness_table_relation generated_witness_tables =\n\
+  generated_witness_relations.\n\
+Proof. reflexivity. Qed.\n\
 \n\
 Definition generated_witness_available : bool := true.\n\
 Definition generated_witness_db : db_state :=\n\
@@ -1549,25 +1786,92 @@ Qed.\n\
 \n\
 {}\n\
 \n\
-Lemma generated_witness_reflection :\n\
-  witness_database_conformsb\n\
-    Schema.generated_schema\n\
-    Schema.generated_schema_constraints\n\
-    generated_witness_tables = true.\n\
-Proof. vm_compute. reflexivity. Qed.\n\
+Lemma generated_witness_values_reflection :\n\
+  witness_values_conformb\n\
+    Schema.generated_schema generated_witness_tables = true.\n\
+Proof.\n\
+  vm_compute.\n\
+  reflexivity.\n\
+Qed.\n\
+\n\
+",
+        row_definitions.join("\n\n"),
+        rocq_list(&table_values),
+        rocq_list(&table_relations),
+        cardinality_lemmas.join("\n\n"),
+    );
+    let constraint_imports = constraint_modules
+        .iter()
+        .map(|(module, _)| module.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let witness = format!(
+        "From SQLFS Require Import SqlSyntax GenericInstance SchemaConstraints.\n\
+From Logos Require Import FormalSQL.WitnessFacts.\n\
+From LogosGenerated Require Import Schema.\n\
+From LogosGenerated Require WitnessData.\n\
+{}\n\
+From Stdlib Require Import List String.\n\
+Import ListNotations.\n\
+Open Scope string_scope.\n\
+\n\
+Definition generated_witness_available : bool :=\n\
+  WitnessData.generated_witness_available.\n\
+Definition generated_witness_db : db_state :=\n\
+  WitnessData.generated_witness_db.\n\
+\n\
+{}\n\
+\n\
+{}\n\
 \n\
 Lemma generated_witness_schema_conforms :\n\
   generated_witness_available = true ->\n\
   Schema.generated_schema_conforms generated_witness_db.\n\
 Proof.\n\
   intros _.\n\
-  apply witness_database_conformsb_sound.\n\
-  exact generated_witness_reflection.\n\
+  unfold Schema.generated_schema_conforms, generated_witness_db.\n\
+  apply witness_database_conforms_of_certificates.\n\
+  - exact WitnessData.generated_witness_values_reflection.\n\
+  - exact Schema.generated_schema_constraints_well_formed.\n\
+  - exact generated_witness_table_constraints_conform.\n\
 Qed.\n",
-        row_definitions.join("\n\n"),
-        rocq_list(&table_values),
-        cardinality_lemmas.join("\n\n"),
-    ))
+        if constraint_imports.is_empty() {
+            String::new()
+        } else {
+            format!("From LogosGenerated.WitnessModules Require {constraint_imports}.")
+        },
+        table_constraint_certificates.join("\n\n"),
+        table_constraints_aggregate,
+    );
+    Ok(FormalSqlWitnessModules {
+        witness,
+        data: Some(data),
+        constraint_modules,
+    })
+}
+
+fn write_formal_sql_witness_modules(
+    artifacts: &ArtifactWriter,
+    modules: &FormalSqlWitnessModules,
+) -> Result<()> {
+    artifacts.write_text("proof-stage/formal-sql/Witness.v", &modules.witness)?;
+    if let Some(data) = modules.data.as_ref() {
+        artifacts.write_text("proof-stage/formal-sql/WitnessData.v", data)?;
+    }
+    let mut order = String::new();
+    for (module, source) in &modules.constraint_modules {
+        let file = format!("{module}.v");
+        artifacts.write_text(
+            &format!("proof-stage/formal-sql/{WITNESS_MODULE_DIRECTORY}/{file}"),
+            source,
+        )?;
+        order.push_str(&file);
+        order.push('\n');
+    }
+    artifacts.write_text(
+        &format!("proof-stage/formal-sql/{WITNESS_MODULE_DIRECTORY}/ORDER"),
+        &order,
+    )
 }
 
 /// Write the minimal trusted-check workspace used only by the deterministic
@@ -1579,14 +1883,14 @@ pub(super) fn write_typed_witness_audit_workspace(
     schema: &FormalSchema,
     snapshot: &FormalWitnessSnapshot,
 ) -> Result<()> {
-    let witness_module = formal_sql_witness_module(schema, Some(snapshot))?;
+    let witness_modules = formal_sql_witness_modules(schema, Some(snapshot))?;
     artifacts.write_text("proof-stage/formal-sql/Schema.v", &schema.rocq_module)?;
     artifacts.write_text(
         "proof-stage/formal-sql/Queries.v",
         "From LogosGenerated Require Import Schema.\n\
          Definition typed_witness_audit_queries_marker : Prop := True.\n",
     )?;
-    artifacts.write_text("proof-stage/formal-sql/Witness.v", &witness_module)?;
+    write_formal_sql_witness_modules(artifacts, &witness_modules)?;
     artifacts.write_text(
         "proof-stage/formal-sql/Problem.v",
         "From LogosGenerated Require Import Schema Queries Witness.\n\
@@ -4253,7 +4557,7 @@ fn restart_proof_workspace_with_formal_witness(
     // than trying to patch Witness.v in place: Problem.v checkpoints, scratch
     // lemmas, handoff files, compiled debris, and context bindings all belong
     // to the old database and must not cross the witness boundary.
-    let witness_module = formal_sql_witness_module(schema, Some(snapshot))?;
+    let witness_modules = formal_sql_witness_modules(schema, Some(snapshot))?;
     remove_proof_workspace_for_formal_witness_restart(artifacts)?;
     artifacts.write_text("proof-stage/formal-sql/Schema.v", &schema.rocq_module)?;
     artifacts.write_text(
@@ -4264,6 +4568,7 @@ fn restart_proof_workspace_with_formal_witness(
         "proof-stage/formal-sql/Problem.v",
         &proof_module.rocq_module,
     )?;
+    write_formal_sql_witness_modules(artifacts, &witness_modules)?;
     let (workspace, context) = write_proof_workspace(
         artifacts,
         input,
@@ -4272,7 +4577,7 @@ fn restart_proof_workspace_with_formal_witness(
         observation_certificates,
         &schema.rocq_module,
         &query_module.rocq_module,
-        &witness_module,
+        &witness_modules.witness,
         &proof_module.rocq_module,
         &goal_module.rocq_module,
         options,
@@ -4327,8 +4632,8 @@ pub(super) fn run_proof_stage(
             lowering_report.proof_module.as_ref(),
             lowering_report.goal_module.as_ref(),
         ) {
-            let witness_module =
-                formal_sql_witness_module(schema, formal_witness_snapshot.as_ref())?;
+            let witness_modules =
+                formal_sql_witness_modules(schema, formal_witness_snapshot.as_ref())?;
             artifacts.write_text("proof-stage/formal-sql/Schema.v", &schema.rocq_module)?;
             artifacts.write_text(
                 "proof-stage/formal-sql/Queries.v",
@@ -4338,6 +4643,7 @@ pub(super) fn run_proof_stage(
                 "proof-stage/formal-sql/Problem.v",
                 &proof_module.rocq_module,
             )?;
+            write_formal_sql_witness_modules(artifacts, &witness_modules)?;
             let (workspace, context) = write_proof_workspace(
                 artifacts,
                 input,
@@ -4346,7 +4652,7 @@ pub(super) fn run_proof_stage(
                 &observation_certificates,
                 &schema.rocq_module,
                 &query_module.rocq_module,
-                &witness_module,
+                &witness_modules.witness,
                 &proof_module.rocq_module,
                 &goal_module.rocq_module,
                 options,
@@ -4410,6 +4716,7 @@ pub(super) fn run_proof_stage(
     let mut repair_feedback = initial_feedback;
     let mut proof_search_timed_out = false;
     let mut proof_resume_unavailable = false;
+    let mut proof_manual_review_reason = None;
     let mut proof_agent_session_id = None;
     let mut proof_agent_cumulative_usage = None;
     let mut proof_agent_session_generation = 1usize;
@@ -4533,6 +4840,10 @@ pub(super) fn run_proof_stage(
                             repair_feedback = Some(format!(
                                 "The counterexample handoff from proof round {round} was not validated. Resume the proof and account for this feedback:\n{feedback}"
                             ));
+                        }
+                        ProofHandoffResolution::NeedsManualReview(reason) => {
+                            proof_manual_review_reason = Some(reason);
+                            break;
                         }
                         ProofHandoffResolution::RestartWithFormalWitness { feedback, snapshot } => {
                             let from_workspace_generation = proof_workspace_generation;
@@ -4684,6 +4995,7 @@ pub(super) fn run_proof_stage(
         proof_backend_status(
             proof_workspace.is_some(),
             proof_search_timed_out,
+            proof_manual_review_reason.is_some(),
             proof_agent.as_ref().map(|run| (run.success, run.exit_code)),
         )
     };
@@ -4735,6 +5047,12 @@ pub(super) fn run_proof_stage(
                 proof_agent_rounds.len()
             )
         }
+        BackendStatus::NeedsManualReview => format!(
+            "FormalSQL/Rocq proof search stopped without accepting an EQ or NEQ certificate after proof-directed counterexample synthesis requested manual review: {}",
+            proof_manual_review_reason
+                .as_deref()
+                .expect("manual-review backend status carries its host-authored reason")
+        ),
         BackendStatus::ProofAgentFailed => {
             "FormalSQL/Rocq proof agent failed; see proof-stage/proof-agent logs".to_owned()
         }
@@ -4788,11 +5106,13 @@ fn proof_agent_completion_reason() -> String {
 fn proof_backend_status(
     workspace_generated: bool,
     proof_search_timed_out: bool,
+    needs_manual_review: bool,
     agent_run: Option<(bool, Option<i32>)>,
 ) -> BackendStatus {
     match (workspace_generated, agent_run) {
         (false, _) => BackendStatus::LoweringBlocked,
         (true, Some((true, _))) => BackendStatus::ProofComplete,
+        (true, _) if needs_manual_review => BackendStatus::NeedsManualReview,
         (true, _) if proof_search_timed_out => BackendStatus::ProofSearchTimedOut,
         (true, Some((false, Some(0)))) => BackendStatus::ProofAgentRunCompleted,
         (true, Some((false, _))) => BackendStatus::ProofAgentFailed,
@@ -6117,19 +6437,77 @@ fn archive_trusted_diagnostic_cache(
         }
     }
 
+    let witness_module_root = source_root.join(WITNESS_MODULE_DIRECTORY);
+    let witness_module_metadata =
+        std::fs::symlink_metadata(&witness_module_root).map_err(|source| Error::Read {
+            path: witness_module_root.clone(),
+            source,
+        })?;
+    if witness_module_metadata.file_type().is_symlink() || !witness_module_metadata.is_dir() {
+        return Err(Error::TrustedRocqEnvironment(format!(
+            "trusted witness module cache archive source is unsafe: {}",
+            witness_module_root.display()
+        )));
+    }
+    let witness_order_relative = PathBuf::from("WitnessModules/ORDER");
+    let witness_order_bytes = read_regular(&witness_order_relative, true)?;
+    let witness_order = std::str::from_utf8(&witness_order_bytes).map_err(|source| {
+        Error::TrustedRocqEnvironment(format!(
+            "trusted witness module order is not UTF-8: {source}"
+        ))
+    })?;
+    let witness_module_names = witness_order.lines().map(str::to_owned).collect::<Vec<_>>();
+    if witness_order
+        != witness_module_names
+            .iter()
+            .map(|name| format!("{name}\n"))
+            .collect::<String>()
+    {
+        return Err(Error::TrustedRocqEnvironment(
+            "trusted witness module order is not canonical newline-delimited text".to_owned(),
+        ));
+    }
+    let mut unique_witness_modules = BTreeSet::new();
+    for name in &witness_module_names {
+        let valid = name.strip_suffix(".v").is_some_and(|stem| {
+            stem.starts_with(|character: char| character.is_ascii_uppercase())
+                && stem
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        });
+        if !valid || !unique_witness_modules.insert(name.clone()) {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted witness module order contains an invalid or duplicate entry: {name}"
+            )));
+        }
+    }
+
     let mut expected_relative = [
         "Schema.v",
         "Schema.vo",
         "Queries.v",
         "Queries.vo",
+        "WitnessData.v",
+        "WitnessData.vo",
         "Witness.v",
         "Witness.vo",
+        "WitnessModules/ORDER",
         "ProofModules/ORDER",
     ]
     .into_iter()
     .map(PathBuf::from)
     .collect::<Vec<_>>();
     let mut expected_module_names = BTreeSet::from(["ORDER".to_owned()]);
+    let mut expected_witness_module_names = BTreeSet::from(["ORDER".to_owned()]);
+    for name in &witness_module_names {
+        let stem = name
+            .strip_suffix(".v")
+            .expect("validated witness module has .v suffix");
+        expected_relative.push(PathBuf::from(format!("WitnessModules/{name}")));
+        expected_relative.push(PathBuf::from(format!("WitnessModules/{stem}.vo")));
+        expected_witness_module_names.insert(name.clone());
+        expected_witness_module_names.insert(format!("{stem}.vo"));
+    }
     for name in &module_names {
         let stem = name
             .strip_suffix(".v")
@@ -6144,13 +6522,17 @@ fn archive_trusted_diagnostic_cache(
         "Schema.vo".to_owned(),
         "Queries.v".to_owned(),
         "Queries.vo".to_owned(),
+        "WitnessData.v".to_owned(),
+        "WitnessData.vo".to_owned(),
         "Witness.v".to_owned(),
         "Witness.vo".to_owned(),
+        "WitnessModules".to_owned(),
         "ProofModules".to_owned(),
         "SHA256SUMS".to_owned(),
     ]);
     if directory_names(&source_root)? != expected_root_names
         || directory_names(&module_root)? != expected_module_names
+        || directory_names(&witness_module_root)? != expected_witness_module_names
     {
         return Err(Error::TrustedRocqEnvironment(
             "trusted diagnostic cache contains unexpected or missing entries".to_owned(),
@@ -6160,7 +6542,10 @@ fn archive_trusted_diagnostic_cache(
     let mut files = Vec::new();
     let mut expected_manifest = String::new();
     for relative in &expected_relative {
-        let bytes = read_regular(relative, relative == &order_relative)?;
+        let bytes = read_regular(
+            relative,
+            relative == &order_relative || relative == &witness_order_relative,
+        )?;
         let relative_text = relative.to_str().ok_or_else(|| {
             Error::TrustedRocqEnvironment(
                 "trusted diagnostic cache relative path is not UTF-8".to_owned(),
@@ -6177,7 +6562,7 @@ fn archive_trusted_diagnostic_cache(
                 .to_owned(),
         ));
     }
-    for name in ["Schema.v", "Queries.v", "Witness.v"] {
+    for name in ["Schema.v", "Queries.v", "WitnessData.v", "Witness.v"] {
         let live = artifacts.root().join("proof-stage/formal-sql").join(name);
         let live_bytes =
             std::fs::read(&live).map_err(|source| Error::Read { path: live, source })?;
@@ -6212,6 +6597,11 @@ fn archive_trusted_diagnostic_cache(
     let destination_modules = destination_root.join(PROOF_MODULE_DIRECTORY);
     std::fs::create_dir(&destination_modules).map_err(|source| Error::CreateDir {
         path: destination_modules,
+        source,
+    })?;
+    let destination_witness_modules = destination_root.join(WITNESS_MODULE_DIRECTORY);
+    std::fs::create_dir(&destination_witness_modules).map_err(|source| Error::CreateDir {
+        path: destination_witness_modules,
         source,
     })?;
     for (relative, bytes) in files {
@@ -8663,6 +9053,43 @@ fn validated_proof_module_sources(root: &Path) -> Result<Vec<(PathBuf, Vec<u8>)>
     Ok(modules)
 }
 
+fn copy_witness_support_sources(source_root: &Path, destination_root: &Path) -> Result<()> {
+    let source_modules = source_root.join(WITNESS_MODULE_DIRECTORY);
+    let destination_modules = destination_root.join(WITNESS_MODULE_DIRECTORY);
+    std::fs::create_dir(&destination_modules).map_err(|source| Error::CreateDir {
+        path: destination_modules.clone(),
+        source,
+    })?;
+    for entry in std::fs::read_dir(&source_modules).map_err(|source| Error::Read {
+        path: source_modules.clone(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| Error::Read {
+            path: source_modules.clone(),
+            source,
+        })?;
+        let source_path = entry.path();
+        let metadata = std::fs::symlink_metadata(&source_path).map_err(|source| Error::Read {
+            path: source_path.clone(),
+            source,
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "generated witness support entry is unsafe: {}",
+                source_path.display()
+            )));
+        }
+        let destination = destination_modules.join(entry.file_name());
+        std::fs::copy(&source_path, &destination)
+            .map(|_| ())
+            .map_err(|source| Error::Write {
+                path: destination,
+                source,
+            })?;
+    }
+    Ok(())
+}
+
 fn snapshot_proof_workspace(artifacts: &ArtifactWriter, round: usize) -> Result<PathBuf> {
     let source_dir = artifacts.root().join("proof-stage/formal-sql");
     let snapshot_dir = artifacts.root().join(format!(
@@ -8702,6 +9129,7 @@ fn snapshot_proof_workspace(artifacts: &ArtifactWriter, round: usize) -> Result<
             source,
         })?;
     }
+    copy_witness_support_sources(&source_dir, &snapshot_dir)?;
     let module_snapshot_root = snapshot_dir.join(PROOF_MODULE_DIRECTORY);
     std::fs::create_dir(&module_snapshot_root).map_err(|source| Error::CreateDir {
         path: module_snapshot_root.clone(),
@@ -8759,7 +9187,13 @@ fn snapshot_interactive_diagnostic_candidate(
         path: snapshot_dir.clone(),
         source,
     })?;
-    for name in ["Schema.v", "Queries.v", "Witness.v", "Goal.v"] {
+    for name in [
+        "Schema.v",
+        "Queries.v",
+        "WitnessData.v",
+        "Witness.v",
+        "Goal.v",
+    ] {
         let source_path = proof_workdir.join(name);
         let source_metadata =
             std::fs::symlink_metadata(&source_path).map_err(|source| Error::Read {
@@ -8780,6 +9214,7 @@ fn snapshot_interactive_diagnostic_candidate(
                 source,
             })?;
     }
+    copy_witness_support_sources(proof_workdir, &snapshot_dir)?;
     let snapshot_candidate = match mode {
         DiagnosticCandidateMode::Problem | DiagnosticCandidateMode::Scratch => {
             snapshot_dir.join("Problem.v")
@@ -10122,9 +10557,10 @@ mod tests {
     };
     use crate::artifacts::ArtifactWriter;
     use crate::core::{
-        FormalAttribute, FormalAttributeType, FormalQueryExpr, FormalScalarExpr, FormalSchema,
-        FormalTable, FormalTableConstraints, LoweredProgram, LoweredQuery, LoweringStatus,
-        SqlEnvironment, SqlTimeZone, VerificationInput, VerificationMode,
+        FormalAttribute, FormalAttributeType, FormalFunctionTerm, FormalQueryExpr,
+        FormalScalarExpr, FormalSchema, FormalTable, FormalTableConstraints,
+        FormalUniqueIndexConstraint, LoweredProgram, LoweredQuery, LoweringStatus, SqlEnvironment,
+        SqlTimeZone, VerificationInput, VerificationMode,
         emit_rocq_query_expr_proof_module_for_mode, query_expr_output_signature,
     };
     use crate::engine::config::Config;
@@ -10230,7 +10666,22 @@ mod tests {
         let table = |relation: &str| FormalTable {
             relation: relation.to_owned(),
             attributes: vec![attribute.clone()],
-            constraints: FormalTableConstraints::default(),
+            constraints: if relation == "nonempty_table" {
+                FormalTableConstraints {
+                    not_null: vec![attribute.clone()],
+                    primary_key: Some(vec![attribute.clone()]),
+                    unique_indexes: vec![FormalUniqueIndexConstraint {
+                        terms: vec![FormalFunctionTerm::Attribute {
+                            name: "id".to_owned(),
+                            ty: FormalAttributeType::Int32,
+                        }],
+                        predicate: None,
+                    }],
+                    ..FormalTableConstraints::default()
+                }
+            } else {
+                FormalTableConstraints::default()
+            },
         };
         let witness_table = |relation: &str, rows| FormalWitnessTable {
             relation: relation.to_owned(),
@@ -10257,15 +10708,83 @@ mod tests {
             ],
         };
 
-        let module = super::formal_sql_witness_module(&schema, Some(&snapshot)).unwrap();
-        assert!(module.contains("Lemma generated_witness_instance_cardinal"));
-        assert!(!module.contains("generated_witness_table_0_attributes"));
-        assert!(module.contains("Definition generated_witness_table_1_attributes"));
-        assert!(!module.contains("Definition generated_witness_table_0_rows"));
-        assert!(module.contains("Definition generated_witness_table_1_rows"));
-        assert!(!module.contains("generated_witness_table_0_instance_cardinal"));
-        assert!(module.contains("generated_witness_table_1_instance_cardinal"));
-        assert!(module.contains("WitnessTable (Rel (\"nonempty_table\"))"));
+        let modules = super::formal_sql_witness_modules(&schema, Some(&snapshot)).unwrap();
+        let data = modules.data.as_ref().unwrap();
+        assert!(data.contains("Lemma generated_witness_instance_cardinal"));
+        assert!(!data.contains("generated_witness_table_0_attributes"));
+        assert!(data.contains("Definition generated_witness_table_1_attributes"));
+        assert!(!data.contains("Definition generated_witness_table_0_rows"));
+        assert!(data.contains("Definition generated_witness_table_1_rows"));
+        assert!(!data.contains("generated_witness_table_0_instance_cardinal"));
+        assert!(data.contains("generated_witness_table_1_instance_cardinal"));
+        assert!(data.contains("WitnessTable (Rel (\"nonempty_table\"))"));
+        assert!(modules.witness.contains("From Stdlib Require Import List String."));
+        assert!(modules.witness.contains("Open Scope string_scope."));
+        assert!(
+            modules
+                .witness
+                .contains("generated_witness_table_constraint_0_conforms")
+        );
+        assert_eq!(modules.constraint_modules.len(), 8);
+        for expected in [
+            "Table0001NotNull",
+            "Table0001Primary",
+            "Table0001Index0000Nonempty",
+            "Table0001Index0000Predicate",
+            "Table0001Index0000Terms",
+            "Table0001Index0000Unique",
+            "Table0001Index0000",
+            "TableConstraint0001",
+        ] {
+            assert!(
+                modules
+                    .constraint_modules
+                    .iter()
+                    .any(|(name, _)| name == expected)
+            );
+        }
+        assert!(modules.constraint_modules.iter().any(|(_, source)| source
+            .contains("generated_witness_table_constraint_1_conforms")));
+        let table_assembly = modules
+            .constraint_modules
+            .iter()
+            .find(|(name, _)| name == "TableConstraint0001")
+            .map(|(_, source)| source)
+            .expect("populated table assembly module");
+        assert!(
+            table_assembly.contains("rewrite Schema.generated_table_constraint_1_unique_indexes")
+        );
+        assert!(!table_assembly.contains("unfold Schema.generated_table_constraint_1"));
+        let index_terms = modules
+            .constraint_modules
+            .iter()
+            .find(|(name, _)| name == "Table0001Index0000Terms")
+            .map(|(_, source)| source)
+            .expect("partial-index term certificate module");
+        assert!(index_terms.contains("if unique_index_row_participates"));
+        assert!(!index_terms.contains("unique_index_all_row_terms_succeedb_sound"));
+        let index_assembly = modules
+            .constraint_modules
+            .iter()
+            .find(|(name, _)| name == "Table0001Index0000")
+            .map(|(_, source)| source)
+            .expect("partial-index assembly module");
+        assert!(index_assembly.contains("unique_index_conforms_of_reflected_components"));
+        assert!(
+            modules
+                .witness
+                .contains("generated_witness_table_constraints_conform")
+        );
+        assert!(
+            modules
+                .witness
+                .contains("witness_database_conforms_of_certificates")
+        );
+        assert!(
+            !modules
+                .witness
+                .contains("Lemma generated_witness_reflection")
+        );
     }
 
     fn command_environment(command: &Command) -> BTreeMap<String, String> {
@@ -13217,28 +13736,37 @@ mod tests {
     #[test]
     fn proof_backend_status_distinguishes_agent_completion_from_certification() {
         assert_eq!(
-            proof_backend_status(false, false, None),
+            proof_backend_status(false, false, false, None),
             BackendStatus::LoweringBlocked
         );
         assert_eq!(
-            proof_backend_status(true, false, None),
+            proof_backend_status(true, false, false, None),
             BackendStatus::WorkspaceGenerated
         );
         assert_eq!(
-            proof_backend_status(true, false, Some((false, Some(0)))),
+            proof_backend_status(true, false, false, Some((false, Some(0)))),
             BackendStatus::ProofAgentRunCompleted
         );
         assert_eq!(
-            proof_backend_status(true, false, Some((false, Some(1)))),
+            proof_backend_status(true, false, false, Some((false, Some(1)))),
             BackendStatus::ProofAgentFailed
         );
         assert_eq!(
-            proof_backend_status(true, false, Some((true, Some(0)))),
+            proof_backend_status(true, false, false, Some((true, Some(0)))),
             BackendStatus::ProofComplete
         );
         assert_eq!(
-            proof_backend_status(true, true, Some((false, Some(0)))),
+            proof_backend_status(true, true, false, Some((false, Some(0)))),
             BackendStatus::ProofSearchTimedOut
+        );
+        assert_eq!(
+            proof_backend_status(true, false, true, Some((false, Some(0)))),
+            BackendStatus::NeedsManualReview
+        );
+        assert_eq!(
+            proof_backend_status(true, false, true, Some((true, Some(0)))),
+            BackendStatus::ProofComplete,
+            "a trusted certificate must take priority over a stale stop flag"
         );
     }
 
@@ -13265,6 +13793,10 @@ mod tests {
         let handoff_resolution = source
             .find("if let Some(handoff) = handoff {")
             .expect("host handoff resolution");
+        let manual_review_terminal = source[handoff_resolution..]
+            .find("ProofHandoffResolution::NeedsManualReview(reason)")
+            .map(|offset| handoff_resolution + offset)
+            .expect("manual-review terminal disposition");
         let fatal_resume_break = source[handoff_resolution..]
             .find("if !session_resumable {")
             .map(|offset| handoff_resolution + offset)
@@ -13273,7 +13805,8 @@ mod tests {
         assert!(round_recorded < successful_terminal);
         assert!(successful_terminal < handoff_resolution);
         assert!(round_recorded < handoff_resolution);
-        assert!(handoff_resolution < fatal_resume_break);
+        assert!(handoff_resolution < manual_review_terminal);
+        assert!(manual_review_terminal < fatal_resume_break);
     }
 
     #[test]
@@ -14865,11 +15398,11 @@ Definition generated_precondition_source :\n\
             "scratch/proof-plan.md",
             "route-revision: 1",
             "current-residual: initial-top-level",
-            "## Top-level route",
-            "## Current residual",
-            "## Core",
-            "## Lift",
-            "## Assembly",
+            "active-node: root",
+            "## Root assembly",
+            "## Obligation DAG",
+            "## Active node",
+            "compile-clean composition theorem",
             "--mode scratch",
             "--candidate scratch/core-bridge.v",
             "--purpose semantic-equivalence",
@@ -14877,7 +15410,7 @@ Definition generated_precondition_source :\n\
             "--candidate Problem.v",
             "operator-level",
             "rebuilding evaluator recursion",
-            "import and instantiate the immutable module in `Problem.v` soon enough",
+            "instantiate it in `Problem.v`",
             "search-rocq-declarations.py",
             "Filters are mechanical and conjunctive",
             "Prove wide SELECT-list membership",
@@ -14896,7 +15429,7 @@ Definition generated_precondition_source :\n\
             "immutable dependency",
             "without recompiling their proofs",
             "container handoff never publishes that directory",
-            "does not count",
+            "is not progress",
             "30--90 seconds",
             "120--180 seconds",
             "two or three minutes",
@@ -15258,11 +15791,19 @@ Definition generated_precondition_source :\n\
             .join("proof-stage/proof-agent/trusted-diagnostic-cache");
         std::fs::create_dir_all(formal_root.join("ProofModules"))
             .expect("create formal module root");
+        std::fs::create_dir_all(formal_root.join("WitnessModules"))
+            .expect("create formal witness module root");
         std::fs::create_dir_all(cache_root.join("ProofModules"))
             .expect("create trusted module cache");
+        std::fs::create_dir_all(cache_root.join("WitnessModules"))
+            .expect("create trusted witness module cache");
         for (name, bytes) in [
             ("Schema.v", b"Definition schema := True.\n".as_slice()),
             ("Queries.v", b"Definition queries := True.\n".as_slice()),
+            (
+                "WitnessData.v",
+                b"Definition witness_data := True.\n".as_slice(),
+            ),
             ("Witness.v", b"Definition witness := True.\n".as_slice()),
         ] {
             std::fs::write(formal_root.join(name), bytes).expect("write live trusted source");
@@ -15271,6 +15812,7 @@ Definition generated_precondition_source :\n\
         for (name, bytes) in [
             ("Schema.vo", b"schema object".as_slice()),
             ("Queries.vo", b"queries object".as_slice()),
+            ("WitnessData.vo", b"witness data object".as_slice()),
             ("Witness.vo", b"witness object".as_slice()),
         ] {
             std::fs::write(cache_root.join(name), bytes).expect("write cached object");
@@ -15287,13 +15829,20 @@ Definition generated_precondition_source :\n\
         .expect("write cached module object");
         std::fs::write(cache_root.join("ProofModules/ORDER"), b"CheckedFacts.v\n")
             .expect("write module order");
+        std::fs::write(formal_root.join("WitnessModules/ORDER"), b"")
+            .expect("write live witness module order");
+        std::fs::write(cache_root.join("WitnessModules/ORDER"), b"")
+            .expect("write witness module order");
         let entries = [
             "Schema.v",
             "Schema.vo",
             "Queries.v",
             "Queries.vo",
+            "WitnessData.v",
+            "WitnessData.vo",
             "Witness.v",
             "Witness.vo",
+            "WitnessModules/ORDER",
             "ProofModules/ORDER",
             "ProofModules/CheckedFacts.v",
             "ProofModules/CheckedFacts.vo",
@@ -15551,6 +16100,9 @@ Definition generated_precondition_source :\n\
                 )
                 .expect("write proof source");
         }
+        artifacts
+            .write_text("proof-stage/formal-sql/WitnessModules/ORDER", "")
+            .expect("write witness module order");
         write_placeholder_proof_context(&artifacts);
         artifacts
             .write_text(
@@ -15614,6 +16166,9 @@ Definition generated_precondition_source :\n\
                 )
                 .expect("write proof source");
         }
+        artifacts
+            .write_text("proof-stage/formal-sql/WitnessModules/ORDER", "")
+            .expect("write witness module order");
         write_placeholder_proof_context(&artifacts);
         let trusted_sources =
             capture_trusted_proof_sources(&artifacts).expect("capture trusted proof sources");

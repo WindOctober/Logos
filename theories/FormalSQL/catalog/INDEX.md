@@ -33,19 +33,19 @@ The catalog is not an admissibility prover: use the generated `Queries.v` admiss
 | Goal shape / SQL feature | Focused catalog | Declarations |
 |---|---|---:|
 | UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE | [null-predicates.md](null-predicates.md) | 97 |
-| query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 62 |
-| collision-safe tuple, row, outcome, and compositional query alpha-renaming | [renaming-transport.md](renaming-transport.md) | 141 |
+| query-level nullable syntax adapters, query-local bindings, tuple projection, attribute lookup | [query-syntax-bridges.md](query-syntax-bridges.md) | 73 |
+| collision-safe tuple, row, outcome, and compositional query alpha-renaming | [renaming-transport.md](renaming-transport.md) | 155 |
 | NUMERIC representation, precision/scale, division, rounding, AVG states | [numeric-primitives.md](numeric-primitives.md) | 125 |
 | INTEGER/BIGINT bounds, derived NUMERIC laws, floats, casts, overflow | [numeric-derived.md](numeric-derived.md) | 127 |
 | integer bit operations, shifts, BIT_AND/BIT_OR aggregate laws | [bitwise.md](bitwise.md) | 47 |
 | CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ | [string-temporal.md](string-temporal.md) | 80 |
-| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 275 |
-| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 94 |
-| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 203 |
-| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 93 |
-| typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 101 |
+| bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 288 |
+| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 116 |
+| COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 239 |
+| EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 109 |
+| typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 113 |
 | row-count bounds, functional joins, filters, groups, finite images | [cardinality-composition.md](cardinality-composition.md) | 137 |
-| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 288 |
+| success/error outcomes, safe vs error-preserving equivalence, rewrite contracts | [runtime-verification-rewrite.md](runtime-verification-rewrite.md) | 356 |
 
 ## Stable paged search
 

@@ -544,7 +544,7 @@ fn finish_manual_review(
     run.finish_without_counterexample(
         SearchStatus::NeedsManualReview,
         format!(
-            "counterexample assessment requested manual review without a materialized typed witness: {reason}; resuming unified FormalSQL verification"
+            "counterexample assessment requested manual review without a materialized typed witness: {reason}"
         ),
     )
 }
@@ -1577,7 +1577,7 @@ mod tests {
     }
 
     #[test]
-    fn manual_review_continues_to_proof_except_in_assessment_only_mode() {
+    fn manual_review_is_carried_to_the_proof_runner_except_in_assessment_only_mode() {
         let full_root = TestDirectory::new("manual-review-full");
         let full_artifacts = ArtifactWriter::new(Some(full_root.path().to_owned()))
             .expect("create full-flow artifacts");
@@ -1588,14 +1588,11 @@ mod tests {
         )
         .expect("finish full-flow manual review");
         let CounterexampleStageResult::ProceedToProof(report) = full_result else {
-            panic!("manual review must not terminate the full verification flow")
+            panic!("manual review must be carried to the proof-runner boundary")
         };
         assert_eq!(report.outcome, SearchStatus::NeedsManualReview);
-        assert!(
-            report
-                .reason
-                .contains("resuming unified FormalSQL verification")
-        );
+        assert!(report.reason.contains("requested manual review"));
+        assert!(!report.reason.contains("resuming"));
 
         let assessment_root = TestDirectory::new("manual-review-assessment-only");
         let assessment_artifacts = ArtifactWriter::new(Some(assessment_root.path().to_owned()))
@@ -1635,7 +1632,7 @@ mod tests {
         )
         .expect("contract failure must become a bounded repair");
         let CounterexampleStageResult::ProceedToProof(report) = result else {
-            panic!("needs_review repair must continue to proof")
+            panic!("needs_review repair must reach the proof-runner boundary")
         };
         assert_eq!(report.outcome, SearchStatus::NeedsManualReview);
         assert_eq!(report.rounds.len(), 2);
@@ -1732,7 +1729,7 @@ mod tests {
         )
         .expect("each fresh session must receive one bounded contract repair");
         let CounterexampleStageResult::ProceedToProof(report) = result else {
-            panic!("needs_review must continue to proof")
+            panic!("needs_review must reach the proof-runner boundary")
         };
         assert_eq!(report.outcome, SearchStatus::NeedsManualReview);
         assert_eq!(report.rounds.len(), 4);

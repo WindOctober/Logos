@@ -21,5 +21,8 @@ pub(crate) use syntax::{
     ProofLoweringReport, query_expr_output_signature,
 };
 #[cfg(test)]
-pub(crate) use syntax::{FormalTable, FormalTableConstraints, LoweringStatus};
+pub(crate) use syntax::{
+    FormalFunctionTerm, FormalTable, FormalTableConstraints, FormalUniqueIndexConstraint,
+    LoweringStatus,
+};
 pub use verification::VerificationMode;

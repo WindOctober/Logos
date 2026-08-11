@@ -2,7 +2,7 @@
 
 Route here for: typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes.
 
-This focused catalog contains 101 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`, `WitnessFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 113 declarations routed at declaration granularity from `IntegrityFacts.v`, `SchemaCardinality.v`, `WitnessFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `project_row_length`
 
@@ -1680,9 +1680,55 @@ Lemma witness_database_instance_rows :
     witness_instance_rows tables relation.
 ```
 
-## `witness_database_instance_cardinal`
+## `witness_rows_for_absent`
 
 Source: [`theories/FormalSQL/WitnessFacts.v:57`](../WitnessFacts.v#L57)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the witness rows for absent law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_rows_for_absent` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma witness_rows_for_absent :
+  forall tables relation,
+    ~ In relation (map witness_table_relation tables) ->
+    witness_rows_for tables relation = nil.
+```
+
+## `witness_instance_rows_absent`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:72`](../WitnessFacts.v#L72)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the witness instance rows absent law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_instance_rows_absent` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma witness_instance_rows_absent :
+  forall tables relation,
+    ~ In relation (map witness_table_relation tables) ->
+    witness_instance_rows tables relation = nil.
+```
+
+## `witness_database_instance_cardinal`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:87`](../WitnessFacts.v#L87)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1706,7 +1752,7 @@ Lemma witness_database_instance_cardinal :
 
 ## `witness_query_table_bag_cardinal`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:72`](../WitnessFacts.v#L72)
+Source: [`theories/FormalSQL/WitnessFacts.v:102`](../WitnessFacts.v#L102)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1735,7 +1781,7 @@ Lemma witness_query_table_bag_cardinal :
 
 ## `witness_query_table_bag_cardinal_generated_sort`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:101`](../WitnessFacts.v#L101)
+Source: [`theories/FormalSQL/WitnessFacts.v:131`](../WitnessFacts.v#L131)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1764,7 +1810,7 @@ Corollary witness_query_table_bag_cardinal_generated_sort :
 
 ## `option_numeric_eqb_true`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:174`](../WitnessFacts.v#L174)
+Source: [`theories/FormalSQL/WitnessFacts.v:204`](../WitnessFacts.v#L204)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1786,7 +1832,7 @@ Lemma option_numeric_eqb_true :
 
 ## `value_conforms_attributeb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:183`](../WitnessFacts.v#L183)
+Source: [`theories/FormalSQL/WitnessFacts.v:213`](../WitnessFacts.v#L213)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1809,7 +1855,7 @@ Lemma value_conforms_attributeb_sound :
 
 ## `tuple_conforms_sortb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:222`](../WitnessFacts.v#L222)
+Source: [`theories/FormalSQL/WitnessFacts.v:252`](../WitnessFacts.v#L252)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1832,7 +1878,7 @@ Lemma tuple_conforms_sortb_sound :
 
 ## `row_attributes_not_nullb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:263`](../WitnessFacts.v#L263)
+Source: [`theories/FormalSQL/WitnessFacts.v:293`](../WitnessFacts.v#L293)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1855,7 +1901,7 @@ Lemma row_attributes_not_nullb_sound :
 
 ## `rows_attributes_not_nullb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:275`](../WitnessFacts.v#L275)
+Source: [`theories/FormalSQL/WitnessFacts.v:305`](../WitnessFacts.v#L305)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1878,7 +1924,7 @@ Lemma rows_attributes_not_nullb_sound :
 
 ## `sql_value_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:303`](../WitnessFacts.v#L303)
+Source: [`theories/FormalSQL/WitnessFacts.v:333`](../WitnessFacts.v#L333)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1901,7 +1947,7 @@ Lemma sql_value_equal_trueb_sound :
 
 ## `sql_value_equal_trueb_iff`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:313`](../WitnessFacts.v#L313)
+Source: [`theories/FormalSQL/WitnessFacts.v:343`](../WitnessFacts.v#L343)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1924,7 +1970,7 @@ Lemma sql_value_equal_trueb_iff :
 
 ## `sql_key_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:323`](../WitnessFacts.v#L323)
+Source: [`theories/FormalSQL/WitnessFacts.v:353`](../WitnessFacts.v#L353)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1947,7 +1993,7 @@ Lemma sql_key_equal_trueb_sound :
 
 ## `sql_key_equal_trueb_iff`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:335`](../WitnessFacts.v#L335)
+Source: [`theories/FormalSQL/WitnessFacts.v:365`](../WitnessFacts.v#L365)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1970,7 +2016,7 @@ Lemma sql_key_equal_trueb_iff :
 
 ## `no_relatedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:356`](../WitnessFacts.v#L356)
+Source: [`theories/FormalSQL/WitnessFacts.v:386`](../WitnessFacts.v#L386)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -1996,7 +2042,7 @@ Lemma no_relatedb_sound :
 
 ## `list_nonemptyb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:382`](../WitnessFacts.v#L382)
+Source: [`theories/FormalSQL/WitnessFacts.v:412`](../WitnessFacts.v#L412)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2018,7 +2064,7 @@ Lemma list_nonemptyb_sound :
 
 ## `unique_key_rows_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:394`](../WitnessFacts.v#L394)
+Source: [`theories/FormalSQL/WitnessFacts.v:424`](../WitnessFacts.v#L424)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2041,7 +2087,7 @@ Lemma unique_key_rows_conformb_sound :
 
 ## `unique_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:408`](../WitnessFacts.v#L408)
+Source: [`theories/FormalSQL/WitnessFacts.v:438`](../WitnessFacts.v#L438)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2064,7 +2110,7 @@ Lemma unique_key_conformsb_sound :
 
 ## `primary_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:426`](../WitnessFacts.v#L426)
+Source: [`theories/FormalSQL/WitnessFacts.v:456`](../WitnessFacts.v#L456)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2087,7 +2133,7 @@ Lemma primary_key_conformsb_sound :
 
 ## `foreign_key_attribute_compatibleb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:467`](../WitnessFacts.v#L467)
+Source: [`theories/FormalSQL/WitnessFacts.v:497`](../WitnessFacts.v#L497)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2110,7 +2156,7 @@ Lemma foreign_key_attribute_compatibleb_sound :
 
 ## `foreign_key_value_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:489`](../WitnessFacts.v#L489)
+Source: [`theories/FormalSQL/WitnessFacts.v:519`](../WitnessFacts.v#L519)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2135,7 +2181,7 @@ Lemma foreign_key_value_equal_trueb_sound :
 
 ## `foreign_key_key_equal_trueb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:522`](../WitnessFacts.v#L522)
+Source: [`theories/FormalSQL/WitnessFacts.v:552`](../WitnessFacts.v#L552)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2160,7 +2206,7 @@ Lemma foreign_key_key_equal_trueb_sound :
 
 ## `foreign_key_row_conforms_againstb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:551`](../WitnessFacts.v#L551)
+Source: [`theories/FormalSQL/WitnessFacts.v:581`](../WitnessFacts.v#L581)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2185,7 +2231,7 @@ Lemma foreign_key_row_conforms_againstb_sound :
 
 ## `foreign_key_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:585`](../WitnessFacts.v#L585)
+Source: [`theories/FormalSQL/WitnessFacts.v:615`](../WitnessFacts.v#L615)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2209,7 +2255,7 @@ Lemma foreign_key_conformsb_sound :
 
 ## `attribute_list_eqb_true`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:613`](../WitnessFacts.v#L613)
+Source: [`theories/FormalSQL/WitnessFacts.v:643`](../WitnessFacts.v#L643)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2231,7 +2277,7 @@ Lemma attribute_list_eqb_true :
 
 ## `compatible_attribute_listsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:635`](../WitnessFacts.v#L635)
+Source: [`theories/FormalSQL/WitnessFacts.v:665`](../WitnessFacts.v#L665)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2254,7 +2300,7 @@ Lemma compatible_attribute_listsb_sound :
 
 ## `table_declares_unique_keyb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:659`](../WitnessFacts.v#L659)
+Source: [`theories/FormalSQL/WitnessFacts.v:689`](../WitnessFacts.v#L689)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2277,7 +2323,7 @@ Lemma table_declares_unique_keyb_sound :
 
 ## `foreign_key_reference_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:695`](../WitnessFacts.v#L695)
+Source: [`theories/FormalSQL/WitnessFacts.v:725`](../WitnessFacts.v#L725)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2300,7 +2346,7 @@ Lemma foreign_key_reference_well_formedb_sound :
 
 ## `table_constraint_declarations_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:730`](../WitnessFacts.v#L730)
+Source: [`theories/FormalSQL/WitnessFacts.v:760`](../WitnessFacts.v#L760)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2323,7 +2369,7 @@ Lemma table_constraint_declarations_well_formedb_sound :
 
 ## `schema_constraints_well_formedb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:759`](../WitnessFacts.v#L759)
+Source: [`theories/FormalSQL/WitnessFacts.v:789`](../WitnessFacts.v#L789)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2344,15 +2390,15 @@ Lemma schema_constraints_well_formedb_sound :
     schema_constraints_well_formed constraints.
 ```
 
-## `deferred_row_constraints_conformb_sound`
+## `check_row_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:797`](../WitnessFacts.v#L797)
+Source: [`theories/FormalSQL/WitnessFacts.v:826`](../WitnessFacts.v#L826)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
-Purpose/direction: States the deferred row constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+Purpose/direction: States the check row conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
 
-Applicability: Use when the goal or a hypothesis matches the `deferred_row_constraints_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+Applicability: Use when the goal or a hypothesis matches the `check_row_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
 
 Important premises: every explicit antecedent (`->`) in the declaration is required.
 
@@ -2361,16 +2407,187 @@ Cross-index: `schema`
 Search aliases: `schema and integrity semantics`
 
 ```rocq
-Lemma deferred_row_constraints_conformb_sound :
+Lemma check_row_conformsb_sound :
+  forall db check row,
+    check_row_conformsb db check row = true ->
+    check_row_conforms db check row.
+```
+
+## `check_constraint_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:850`](../WitnessFacts.v#L850)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the check constraint conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `check_constraint_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma check_constraint_conformsb_sound :
+  forall db rows check,
+    check_constraint_conformsb db rows check = true ->
+    check_constraint_conforms db rows check.
+```
+
+## `unique_index_predicate_succeedsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:873`](../WitnessFacts.v#L873)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the unique index predicate succeedsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_index_predicate_succeedsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`, `scalar`
+
+Search aliases: `schema and integrity semantics`, `predicate`, `Bool3`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_index_predicate_succeedsb_sound :
+  forall db row index,
+    unique_index_predicate_succeedsb db row index = true ->
+    unique_index_predicate_error db row index = None.
+```
+
+## `constraint_term_succeedsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:891`](../WitnessFacts.v#L891)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the constraint term succeedsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `constraint_term_succeedsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma constraint_term_succeedsb_sound :
+  forall row term,
+    constraint_term_succeedsb row term = true ->
+    constraint_term_runtime_error row term = None.
+```
+
+## `unique_index_row_terms_succeedb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:906`](../WitnessFacts.v#L906)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the unique index row terms succeedb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_index_row_terms_succeedb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_index_row_terms_succeedb_sound :
+  forall index row,
+    unique_index_row_terms_succeedb index row = true ->
+    unique_index_row_terms_succeed index row.
+```
+
+## `unique_index_conformsb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:938`](../WitnessFacts.v#L938)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the unique index conformsb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_index_conformsb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_index_conformsb_sound :
+  forall db rows index,
+    unique_index_conformsb db rows index = true ->
+    unique_index_conforms db rows index.
+```
+
+## `unique_index_conforms_of_reflected_components`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:962`](../WitnessFacts.v#L962)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the unique index conforms of reflected components law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `unique_index_conforms_of_reflected_components` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `integrity constraint`, `key`
+
+```rocq
+Lemma unique_index_conforms_of_reflected_components :
+  forall db rows index,
+    list_nonemptyb (unique_index_terms index) = true ->
+    forallb (fun row => unique_index_predicate_succeedsb db row index) rows = true ->
+    forallb
+      (fun row =>
+        if unique_index_row_participates db index row
+        then unique_index_row_terms_succeedb index row
+        else true)
+      rows = true ->
+    no_relatedb sql_key_equal_trueb
+      (map (unique_index_key (unique_index_terms index))
+        (filter (unique_index_row_participates db index) rows)) = true ->
+    unique_index_conforms db rows index.
+```
+
+## `row_expression_constraints_conformb_sound`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:990`](../WitnessFacts.v#L990)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the row expression constraints conformb sound law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `row_expression_constraints_conformb_sound` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma row_expression_constraints_conformb_sound :
   forall db rows checks indexes,
-    deferred_row_constraints_conformb rows checks indexes = true ->
+    row_expression_constraints_conformb db rows checks indexes = true ->
     Forall (check_constraint_conforms db rows) checks /\
     Forall (unique_index_conforms db rows) indexes.
 ```
 
 ## `rows_constraint_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:837`](../WitnessFacts.v#L837)
+Source: [`theories/FormalSQL/WitnessFacts.v:1026`](../WitnessFacts.v#L1026)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2392,9 +2609,69 @@ Lemma rows_constraint_conformb_sound :
       (witness_database expected tables) constraint.
 ```
 
+## `table_constraint_conforms_empty`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:1067`](../WitnessFacts.v#L1067)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the exact empty-input or empty-result law for schema and integrity reasoning.
+
+Applicability: Use when the goal or a hypothesis matches the `table_constraint_conforms_empty` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma table_constraint_conforms_empty :
+  forall db constraints constraint,
+    table_constraint_declarations_well_formed constraints constraint ->
+    instance_rows db (constraint_relation constraint) = nil ->
+    table_constraint_conforms db constraint.
+```
+
+## `table_constraint_conforms_of_components`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:1112`](../WitnessFacts.v#L1112)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the table constraint conforms of components law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `table_constraint_conforms_of_components` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`
+
+```rocq
+Lemma table_constraint_conforms_of_components :
+  forall db constraint rows,
+    instance_rows db (constraint_relation constraint) = rows ->
+    rows_attributes_not_null (constraint_not_null constraint) rows ->
+    (match constraint_primary_key constraint with
+     | None => True
+     | Some key => primary_key_conforms key rows
+     end) ->
+    Forall (fun key => unique_key_conforms key rows)
+      (constraint_unique_keys constraint) ->
+    Forall (foreign_key_conforms db rows)
+      (constraint_foreign_keys constraint) ->
+    Forall (check_constraint_conforms db rows)
+      (constraint_checks constraint) ->
+    Forall (unique_index_conforms db rows)
+      (constraint_unique_indexes constraint) ->
+    table_constraint_conforms db constraint.
+```
+
 ## `schema_constraints_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:879`](../WitnessFacts.v#L879)
+Source: [`theories/FormalSQL/WitnessFacts.v:1142`](../WitnessFacts.v#L1142)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2418,7 +2695,7 @@ Lemma schema_constraints_conformb_sound :
 
 ## `witness_values_conformb_lookup_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:893`](../WitnessFacts.v#L893)
+Source: [`theories/FormalSQL/WitnessFacts.v:1156`](../WitnessFacts.v#L1156)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2442,7 +2719,7 @@ Lemma witness_values_conformb_lookup_sound :
 
 ## `witness_values_conformb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:917`](../WitnessFacts.v#L917)
+Source: [`theories/FormalSQL/WitnessFacts.v:1180`](../WitnessFacts.v#L1180)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2465,7 +2742,7 @@ Lemma witness_values_conformb_sound :
 
 ## `witness_database_conformsb_sound`
 
-Source: [`theories/FormalSQL/WitnessFacts.v:941`](../WitnessFacts.v#L941)
+Source: [`theories/FormalSQL/WitnessFacts.v:1204`](../WitnessFacts.v#L1204)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -2483,6 +2760,34 @@ Search aliases: `schema and integrity semantics`
 Theorem witness_database_conformsb_sound :
   forall expected constraints tables,
     witness_database_conformsb expected constraints tables = true ->
+    database_conforms_schema expected constraints
+      (witness_database expected tables).
+```
+
+## `witness_database_conforms_of_certificates`
+
+Source: [`theories/FormalSQL/WitnessFacts.v:1230`](../WitnessFacts.v#L1230)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the witness database conforms of certificates law for schema and integrity reasoning, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `witness_database_conforms_of_certificates` direction for schema and integrity reasoning; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `schema`
+
+Search aliases: `schema and integrity semantics`, `schema conformance`, `typing`
+
+```rocq
+Theorem witness_database_conforms_of_certificates :
+  forall expected constraints tables,
+    witness_values_conformb expected tables = true ->
+    schema_constraints_well_formed constraints ->
+    Forall
+      (table_constraint_conforms (witness_database expected tables))
+      constraints ->
     database_conforms_schema expected constraints
       (witness_database expected tables).
 ```

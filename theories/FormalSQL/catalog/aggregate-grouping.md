@@ -2,11 +2,573 @@
 
 Route here for: COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality.
 
-This focused catalog contains 203 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 239 declarations routed at declaration granularity from `AggregateOutcomeBridgeFacts.v`, `AggregateRuntimeFacts.v`, `GroupedFilterOutcomeFacts.v`, `GroupingRewriteFacts.v`, `OrderedQueryFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+
+## `aggregate_observation_outcome_transport`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:37`](../AggregateOutcomeBridgeFacts.v#L37)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for aggregate evaluation.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem aggregate_observation_outcome_transport :
+  forall (value_rel : value -> value -> Prop)
+    left_call right_call left_observations right_observations,
+    interp_aggregate_runtime_error left_call left_observations =
+      interp_aggregate_runtime_error right_call right_observations ->
+    (interp_aggregate_runtime_error left_call left_observations = None ->
+      value_rel
+        (interp_aggregate left_call
+          (observation_values left_observations))
+        (interp_aggregate right_call
+          (observation_values right_observations))) ->
+    outcome_equiv value_rel
+      (aggregate_observation_outcome left_call left_observations)
+      (aggregate_observation_outcome right_call right_observations).
+```
+
+## `aggregate_call_observation_outcome_transport`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:67`](../AggregateOutcomeBridgeFacts.v#L67)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Transports the displayed hypotheses and conclusion for aggregate evaluation.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem aggregate_call_observation_outcome_transport :
+  forall (value_rel : value -> value -> Prop)
+    left_function left_quantifier right_function right_quantifier
+    left_observations right_observations,
+    first_observation_error left_observations =
+      first_observation_error right_observations ->
+    aggregate_local_runtime_error
+      (AggregateCall left_function left_quantifier)
+      (observation_values left_observations) =
+    aggregate_local_runtime_error
+      (AggregateCall right_function right_quantifier)
+      (observation_values right_observations) ->
+    value_rel
+      (interp_aggregate (AggregateCall left_function left_quantifier)
+        (observation_values left_observations))
+      (interp_aggregate (AggregateCall right_function right_quantifier)
+        (observation_values right_observations)) ->
+    outcome_equiv value_rel
+      (aggregate_observation_outcome
+        (AggregateCall left_function left_quantifier) left_observations)
+      (aggregate_observation_outcome
+        (AggregateCall right_function right_quantifier) right_observations).
+```
+
+## `first_observation_error_none_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:103`](../AggregateOutcomeBridgeFacts.v#L103)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for aggregate evaluation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma first_observation_error_none_permutation :
+  forall left right,
+    Permutation left right ->
+    first_observation_error left = None ->
+    first_observation_error right = None.
+```
+
+## `observation_values_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:118`](../AggregateOutcomeBridgeFacts.v#L118)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma observation_values_permutation :
+  forall left right,
+    Permutation left right ->
+    Permutation (observation_values left) (observation_values right).
+```
+
+## `first_observation_error_map_none`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:127`](../AggregateOutcomeBridgeFacts.v#L127)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Exposes the modeled SQL error condition or propagation direction for aggregate evaluation.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma first_observation_error_map_none :
+  forall (A : Type) (project : A -> value) rows,
+    first_observation_error
+      (map (fun row => (None, project row)) rows) = None.
+```
+
+## `aggregate_observation_outcome_permutation_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:147`](../AggregateOutcomeBridgeFacts.v#L147)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem aggregate_observation_outcome_permutation_exact :
+  forall call left_observations right_observations,
+    aggregate_value_local_permutation_stable call ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome call left_observations =
+      aggregate_observation_outcome call right_observations.
+```
+
+## `count_observation_outcome_permutation_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:176`](../AggregateOutcomeBridgeFacts.v#L176)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem count_observation_outcome_permutation_exact :
+  forall quantifier left_observations right_observations,
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome
+      (AggregateCall AggregateCount quantifier) left_observations =
+    aggregate_observation_outcome
+      (AggregateCall AggregateCount quantifier) right_observations.
+```
+
+## `count_star_observation_outcome_permutation_exact`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:195`](../AggregateOutcomeBridgeFacts.v#L195)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem count_star_observation_outcome_permutation_exact :
+  forall left_observations right_observations,
+    Permutation left_observations right_observations ->
+    aggregate_observation_outcome AggregateCountStar left_observations =
+    aggregate_observation_outcome AggregateCountStar right_observations.
+```
+
+## `exact_sum_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:214`](../AggregateOutcomeBridgeFacts.v#L214)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem exact_sum_observation_outcome_permutation :
+  forall call left_observations right_observations,
+    In call
+      [Aggregate AggregateSumInt32;
+       DistinctAggregate AggregateSumInt32;
+       Aggregate AggregateSumInt64Numeric;
+       DistinctAggregate AggregateSumInt64Numeric;
+       Aggregate AggregateSumNumeric;
+       DistinctAggregate AggregateSumNumeric] ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome call left_observations =
+      aggregate_observation_outcome call right_observations.
+```
+
+## `fixed_numeric_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:239`](../AggregateOutcomeBridgeFacts.v#L239)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem fixed_numeric_observation_outcome_permutation :
+  forall precision scale call left_observations right_observations,
+    In call
+      [Aggregate (AggregateStddevSampleNumericFixed precision scale);
+       DistinctAggregate
+         (AggregateStddevSampleNumericFixed precision scale);
+       Aggregate (AggregateAverageNumericFixed precision scale);
+       DistinctAggregate (AggregateAverageNumericFixed precision scale)] ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome call left_observations =
+      aggregate_observation_outcome call right_observations.
+```
+
+## `numeric_average_at_scale_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:263`](../AggregateOutcomeBridgeFacts.v#L263)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; retain every typmod/precision/scale and representability condition; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`, `typmod`, `precision/scale`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem numeric_average_at_scale_observation_outcome_permutation :
+  forall scale call left_observations right_observations,
+    In call
+      [Aggregate (AggregateAverageNumericAtScale scale);
+       DistinctAggregate (AggregateAverageNumericAtScale scale)] ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome call left_observations =
+      aggregate_observation_outcome call right_observations.
+```
+
+## `integral_numeric_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:287`](../AggregateOutcomeBridgeFacts.v#L287)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `NUMERIC`, `DECIMAL`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem integral_numeric_observation_outcome_permutation :
+  forall call left_observations right_observations,
+    In call
+      [Aggregate AggregateAverageInt32Numeric;
+       DistinctAggregate AggregateAverageInt32Numeric;
+       Aggregate (AggregateNumericDisplayScale NumericAverageInt32);
+       Aggregate (AggregateNumericDisplayScale NumericStddevSampleInt32);
+       Aggregate AggregateAverageInt64Numeric;
+       DistinctAggregate AggregateAverageInt64Numeric;
+       Aggregate AggregateVariancePopulationInt32;
+       DistinctAggregate AggregateVariancePopulationInt32;
+       Aggregate AggregateVarianceSampleInt32;
+       DistinctAggregate AggregateVarianceSampleInt32;
+       Aggregate AggregateStddevPopulationInt32;
+       DistinctAggregate AggregateStddevPopulationInt32;
+       Aggregate AggregateStddevSampleInt32;
+       DistinctAggregate AggregateStddevSampleInt32] ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome call left_observations =
+      aggregate_observation_outcome call right_observations.
+```
+
+## `exact_extrema_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:321`](../AggregateOutcomeBridgeFacts.v#L321)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem exact_extrema_observation_outcome_permutation :
+  forall function quantifier left_observations right_observations,
+    (function = AggregateMinZ \/ function = AggregateMaxZ \/
+     function = AggregateMinInt32 \/ function = AggregateMaxInt32 \/
+     function = AggregateMinInt64 \/ function = AggregateMaxInt64 \/
+     function = AggregateMinNumeric \/ function = AggregateMaxNumeric \/
+     function = AggregateMaxString) ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome
+      (AggregateCall function quantifier) left_observations =
+    aggregate_observation_outcome
+      (AggregateCall function quantifier) right_observations.
+```
+
+## `exact_bitwise_aggregate_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:347`](../AggregateOutcomeBridgeFacts.v#L347)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `bitwise`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma exact_bitwise_aggregate_permutation :
+  forall function quantifier left right,
+    In function
+      [AggregateBitAndInt32; AggregateBitOrInt32;
+       AggregateBitAndInt64; AggregateBitOrInt64] ->
+    Permutation left right ->
+    interp_aggregate (AggregateCall function quantifier) left =
+      interp_aggregate (AggregateCall function quantifier) right.
+```
+
+## `exact_bitwise_observation_outcome_permutation`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:384`](../AggregateOutcomeBridgeFacts.v#L384)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate evaluation result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`, `scalar`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `bitwise`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem exact_bitwise_observation_outcome_permutation :
+  forall function quantifier left_observations right_observations,
+    In function
+      [AggregateBitAndInt32; AggregateBitOrInt32;
+       AggregateBitAndInt64; AggregateBitOrInt64] ->
+    Permutation left_observations right_observations ->
+    first_observation_error left_observations = None ->
+    aggregate_observation_outcome
+      (AggregateCall function quantifier) left_observations =
+    aggregate_observation_outcome
+      (AggregateCall function quantifier) right_observations.
+```
+
+## `aggregate_distinct_all_observation_outcome_exact_of_selected_input`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:409`](../AggregateOutcomeBridgeFacts.v#L409)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the aggregate distinct all observation outcome exact of selected input law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `outcome`, `grouping`, `runtime`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem aggregate_distinct_all_observation_outcome_exact_of_selected_input :
+  forall function observations,
+    aggregate_input_values AggregateDistinct
+      (observation_values observations) =
+      aggregate_input_values AggregateAll
+        (observation_values observations) ->
+    aggregate_observation_outcome
+      (AggregateCall function AggregateDistinct) observations =
+    aggregate_observation_outcome
+      (AggregateCall function AggregateAll) observations.
+```
+
+## `aggregate_distinct_all_observation_outcome_exact_of_nodup`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:428`](../AggregateOutcomeBridgeFacts.v#L428)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Establishes the displayed duplicate-freedom property for aggregate evaluation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate evaluation.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`, `DISTINCT`, `duplicate elimination`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`
+
+```rocq
+Corollary aggregate_distinct_all_observation_outcome_exact_of_nodup :
+  forall function observations,
+    NoDup (observation_values observations) ->
+    aggregate_observation_outcome
+      (AggregateCall function AggregateDistinct) observations =
+    aggregate_observation_outcome
+      (AggregateCall function AggregateAll) observations.
+```
+
+## `closed_group_direct_column_aggregate_outcome_permutation_rows`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:445`](../AggregateOutcomeBridgeFacts.v#L445)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate grouping result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem closed_group_direct_column_aggregate_outcome_permutation_rows :
+  forall group_terms group call attribute,
+    aggregate_value_local_permutation_stable call ->
+    group <> nil ->
+    Forall (fun row => attribute inS Tuple.labels TNull row) group ->
+    aggregate_observation_outcome call
+      (@closed_group_direct_column_argument_observations
+        TNull NullValues.interp_scalar_operator_runtime_error
+        group_terms group call attribute) =
+    aggregate_observation_outcome call
+      (map (fun row => (None, Tuple.dot TNull row attribute)) group).
+```
+
+## `closed_group_direct_column_exact_sum_outcome_permutation_rows`
+
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:475`](../AggregateOutcomeBridgeFacts.v#L475)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows that the declared aggregate grouping result is invariant under input permutation.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Corollary closed_group_direct_column_exact_sum_outcome_permutation_rows :
+  forall group_terms group call attribute,
+    In call
+      [Aggregate AggregateSumInt32;
+       DistinctAggregate AggregateSumInt32;
+       Aggregate AggregateSumInt64Numeric;
+       DistinctAggregate AggregateSumInt64Numeric;
+       Aggregate AggregateSumNumeric;
+       DistinctAggregate AggregateSumNumeric] ->
+    group <> nil ->
+    Forall (fun row => attribute inS Tuple.labels TNull row) group ->
+    aggregate_observation_outcome call
+      (@closed_group_direct_column_argument_observations
+        TNull NullValues.interp_scalar_operator_runtime_error
+        group_terms group call attribute) =
+    aggregate_observation_outcome call
+      (map (fun row => (None, Tuple.dot TNull row attribute)) group).
+```
 
 ## `tnull_group_count_star_value_runtime_exact`
 
-Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:23`](../AggregateOutcomeBridgeFacts.v#L23)
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:505`](../AggregateOutcomeBridgeFacts.v#L505)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -43,7 +605,7 @@ Lemma tnull_group_count_star_value_runtime_exact :
 
 ## `count_star_value_local_error_exact_of_equal_length`
 
-Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:87`](../AggregateOutcomeBridgeFacts.v#L87)
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:569`](../AggregateOutcomeBridgeFacts.v#L569)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -69,7 +631,7 @@ Theorem count_star_value_local_error_exact_of_equal_length :
 
 ## `count_star_value_runtime_error_exact_of_equal_observation_length`
 
-Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:108`](../AggregateOutcomeBridgeFacts.v#L108)
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:590`](../AggregateOutcomeBridgeFacts.v#L590)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -95,7 +657,7 @@ Theorem count_star_value_runtime_error_exact_of_equal_observation_length :
 
 ## `count_star_count_all_nonnull_value_local_error_exact`
 
-Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:134`](../AggregateOutcomeBridgeFacts.v#L134)
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:616`](../AggregateOutcomeBridgeFacts.v#L616)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -126,7 +688,7 @@ Theorem count_star_count_all_nonnull_value_local_error_exact :
 
 ## `count_star_count_all_nonnull_value_runtime_error_exact`
 
-Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:166`](../AggregateOutcomeBridgeFacts.v#L166)
+Source: [`theories/FormalSQL/AggregateOutcomeBridgeFacts.v:648`](../AggregateOutcomeBridgeFacts.v#L648)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3362,9 +3924,80 @@ Theorem query_make_groups_heterogeneous_projected_bag_eq :
         (map right_emit (@query_make_groups T env rows right_terms))).
 ```
 
+## `query_make_groups_projected_distinct_bag_eq`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:391`](../GroupedFilterOutcomeFacts.v#L391)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the query make groups projected distinct bag equality law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Theorem query_make_groups_projected_distinct_bag_eq :
+  forall env rows group_terms
+      (project : tuple T -> tuple T)
+      (emit : list (tuple T) -> tuple T),
+    group_terms <> nil ->
+    (forall group row,
+      In group (@query_make_groups T env rows group_terms) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env group_terms left =
+      query_grouping_key env group_terms right) ->
+    bag_eq T
+      (rows_bag T
+        (map emit (@query_make_groups T env rows group_terms)))
+      (query_distinct_bag (rows_bag T (map project rows))).
+```
+
+## `query_make_groups_single_key_projected_distinct_bag_eq`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:505`](../GroupedFilterOutcomeFacts.v#L505)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the query make groups single key projected distinct bag equality law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `grouping`, `bag`
+
+Search aliases: `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `DISTINCT`, `duplicate elimination`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Corollary query_make_groups_single_key_projected_distinct_bag_eq :
+  forall env rows group_term
+      (project : tuple T -> tuple T)
+      (emit : list (tuple T) -> tuple T),
+    (forall group row,
+      In group (@query_make_groups T env rows [group_term]) ->
+      In row group ->
+      Oeset.compare (OTuple T) (project row) (emit group) = Eq) ->
+    (forall left right,
+      Oeset.compare (OTuple T) (project left) (project right) = Eq ->
+      query_grouping_key env [group_term] left =
+      query_grouping_key env [group_term] right) ->
+    bag_eq T
+      (rows_bag T
+        (map emit (@query_make_groups T env rows [group_term])))
+      (query_distinct_bag (rows_bag T (map project rows))).
+```
+
 ## `oeset_permut_support_rel`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:390`](../GroupedFilterOutcomeFacts.v#L390)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:532`](../GroupedFilterOutcomeFacts.v#L532)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3389,7 +4022,7 @@ Lemma oeset_permut_support_rel :
 
 ## `rows_bag_eq_implies_permut`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:427`](../GroupedFilterOutcomeFacts.v#L427)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:569`](../GroupedFilterOutcomeFacts.v#L569)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3412,7 +4045,7 @@ Lemma rows_bag_eq_implies_permut :
 
 ## `rows_permut_implies_bag_eq`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:445`](../GroupedFilterOutcomeFacts.v#L445)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:587`](../GroupedFilterOutcomeFacts.v#L587)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3435,7 +4068,7 @@ Lemma rows_permut_implies_bag_eq :
 
 ## `rows_reverse_permut_congr`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:460`](../GroupedFilterOutcomeFacts.v#L460)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:602`](../GroupedFilterOutcomeFacts.v#L602)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3458,7 +4091,7 @@ Lemma rows_reverse_permut_congr :
 
 ## `query_same_rows_as_bag_permut_between`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:480`](../GroupedFilterOutcomeFacts.v#L480)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:622`](../GroupedFilterOutcomeFacts.v#L622)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3480,9 +4113,106 @@ Lemma query_same_rows_as_bag_permut_between :
     Oeset.permut (OTuple T) first second.
 ```
 
+## `scalar_value_list_exact_nil`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:724`](../GroupedFilterOutcomeFacts.v#L724)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar value list exact nil law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `scalar_value_list_exact_nil` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: No premises beyond the quantified variables and typeclass/context assumptions shown in the exact declaration.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma scalar_value_list_exact_nil :
+  forall env, scalar_value_list_exact_at env nil nil.
+```
+
+## `scalar_value_list_exact_cons`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:736`](../GroupedFilterOutcomeFacts.v#L736)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar value list exact cons law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `scalar_value_list_exact_cons` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma scalar_value_list_exact_cons :
+  forall env expression expressions value values,
+    scalar_value_expr_exact_at env expression value ->
+    scalar_value_list_exact_at env expressions values ->
+    scalar_value_list_exact_at env
+      (expression :: expressions) (value :: values).
+```
+
+## `scalar_value_expr_leaf_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:795`](../GroupedFilterOutcomeFacts.v#L795)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar value expr leaf exact law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `scalar_value_expr_leaf_exact` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma scalar_value_expr_leaf_exact :
+  forall env result_type term expected,
+    @scalar_leaf_value_outcome T symbol_runtime_error
+      aggregate_runtime_error env term = SqlSuccess expected ->
+    scalar_value_expr_exact_at env
+      (SExpr_Leaf result_type term) expected.
+```
+
+## `scalar_value_expr_call_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:818`](../GroupedFilterOutcomeFacts.v#L818)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: States the scalar value expr call exact law for aggregate evaluation, in the exact direction displayed by the declaration.
+
+Applicability: Use when the goal or a hypothesis matches the `scalar_value_expr_call_exact` direction for aggregate evaluation; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required.
+
+Cross-index: `grouping`
+
+Search aliases: `aggregate/grouping runtime semantics`, `aggregate`
+
+```rocq
+Lemma scalar_value_expr_call_exact :
+  forall env result_type operator arguments values expected,
+    scalar_value_list_exact_at env arguments values ->
+    @scalar_call_value_outcome T symbol_runtime_error
+      operator values = SqlSuccess expected ->
+    scalar_value_expr_exact_at env
+      (SExpr_Call result_type operator arguments) expected.
+```
+
 ## `scalar_expr_acceptance_exact_total_success`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:561`](../GroupedFilterOutcomeFacts.v#L561)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:910`](../GroupedFilterOutcomeFacts.v#L910)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3505,7 +4235,7 @@ Lemma scalar_expr_acceptance_exact_total_success :
 
 ## `scalar_expr_true_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:571`](../GroupedFilterOutcomeFacts.v#L571)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:920`](../GroupedFilterOutcomeFacts.v#L920)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3527,7 +4257,7 @@ Lemma scalar_expr_true_acceptance_exact :
 
 ## `scalar_acceptance_interp_conj`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:640`](../GroupedFilterOutcomeFacts.v#L640)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:989`](../GroupedFilterOutcomeFacts.v#L989)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3551,7 +4281,7 @@ Lemma scalar_acceptance_interp_conj :
 
 ## `eval_scalar_boolean_operands_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:695`](../GroupedFilterOutcomeFacts.v#L695)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1044`](../GroupedFilterOutcomeFacts.v#L1044)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3578,7 +4308,7 @@ Lemma eval_scalar_boolean_operands_acceptance_exact :
 
 ## `scalar_expr_conj_list_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:863`](../GroupedFilterOutcomeFacts.v#L863)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1212`](../GroupedFilterOutcomeFacts.v#L1212)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3605,7 +4335,7 @@ Theorem scalar_expr_conj_list_acceptance_exact :
 
 ## `scalar_expr_conj_list_redundant_operand_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:921`](../GroupedFilterOutcomeFacts.v#L921)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1270`](../GroupedFilterOutcomeFacts.v#L1270)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3635,7 +4365,7 @@ Theorem scalar_expr_conj_list_redundant_operand_acceptance_exact :
 
 ## `filter_scalar_observation_equiv_at_of_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1121`](../GroupedFilterOutcomeFacts.v#L1121)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1474`](../GroupedFilterOutcomeFacts.v#L1474)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -3664,7 +4394,7 @@ Lemma filter_scalar_observation_equiv_at_of_acceptance_exact :
 
 ## `eval_groups_global_success_length_le_one`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1552`](../GroupedFilterOutcomeFacts.v#L1552)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1905`](../GroupedFilterOutcomeFacts.v#L1905)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3688,7 +4418,7 @@ Theorem eval_groups_global_success_length_le_one :
 
 ## `eval_groups_global_success_NoDupA`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1571`](../GroupedFilterOutcomeFacts.v#L1571)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1924`](../GroupedFilterOutcomeFacts.v#L1924)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -3713,7 +4443,7 @@ Theorem eval_groups_global_success_NoDupA :
 
 ## `eval_group_bag_exact_rows_permut_equiv`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1627`](../GroupedFilterOutcomeFacts.v#L1627)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1980`](../GroupedFilterOutcomeFacts.v#L1980)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -3775,7 +4505,7 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
 
 ## `query_expr_group_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1819`](../GroupedFilterOutcomeFacts.v#L1819)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2172`](../GroupedFilterOutcomeFacts.v#L2172)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes` for the public result.
 
@@ -4933,9 +5663,385 @@ Lemma query_expr_group_outcome_equiv_congr :
       (QExpr_Group select_list group_terms having right).
 ```
 
+## `query_expr_group_runtime_safe_of_reachable_local_safe`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3819`](../OrderedQueryFacts.v#L3819)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Establishes the explicit runtime-safety direction for aggregate grouping.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `grouping`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem query_expr_group_runtime_safe_of_reachable_local_safe :
+  forall env select_list group_terms having input,
+    query_safe env input ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      query_group_rows_runtime_safe_at
+        env select_list group_terms having input_rows) ->
+    query_safe env (QExpr_Group select_list group_terms having input).
+```
+
+## `eval_groups_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5045`](../OrderedQueryFacts.v#L5045)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval groups has outcome law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma eval_groups_has_outcome :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group) having outcome) ->
+    (forall group truth,
+      In group groups ->
+      @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule
+        (env_g T env (@Group_By T group_terms) group) having
+        (SqlSuccess truth) ->
+      Bool.is_true (B T) truth = true ->
+      exists outcome,
+        @eval_scalar_values_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group)
+          (map fst select_list) outcome) ->
+    exists outcome,
+      @eval_groups_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome.
+```
+
+## `eval_group_bag_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5124`](../OrderedQueryFacts.v#L5124)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval group bag has outcome law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma eval_group_bag_has_outcome :
+  forall env select_list group_keys group_terms having input_bag,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (forall representative,
+      query_same_rows_as_bag representative input_bag ->
+      @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
+        env group_terms representative = None ->
+      exists outcome,
+        @eval_groups_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_terms having
+          (query_make_groups env representative group_terms) outcome) ->
+    exists outcome,
+      @eval_group_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_keys having input_bag outcome.
+```
+
+## `eval_groups_cardinality_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5163`](../OrderedQueryFacts.v#L5163)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_groups_cardinality_has_outcome :
+  forall env select_list group_terms having groups,
+    (forall group,
+      In group groups ->
+      exists outcome,
+        @eval_scalar_boolean_expr_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule
+          (env_g T env (@Group_By T group_terms) group) having outcome) ->
+    exists outcome,
+      @eval_groups_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having groups outcome.
+```
+
+## `eval_group_cardinality_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5216`](../OrderedQueryFacts.v#L5216)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_group_cardinality_has_outcome :
+  forall env select_list group_terms having input_bag,
+    (forall representative,
+      query_same_rows_as_bag representative input_bag ->
+      @group_keys_runtime_error T symbol_runtime_error aggregate_runtime_error
+        env group_terms representative = None ->
+      exists outcome,
+        @eval_groups_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env select_list group_terms having
+          (query_make_groups env representative group_terms) outcome) ->
+    exists outcome,
+      @eval_group_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list group_terms having input_bag outcome.
+```
+
+## `eval_grouping_sets_bag_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5248`](../OrderedQueryFacts.v#L5248)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the eval grouping sets bag has outcome law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success; respect the exact list-versus-bag and multiplicity boundary.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `bag`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `multiplicity`, `bag semantics`, `list/bag bridge`
+
+```rocq
+Lemma eval_grouping_sets_bag_has_outcome :
+  forall env grouping_sets input_bag,
+    (forall select_list group_keys,
+      In (select_list, group_keys) grouping_sets ->
+      exists outcome,
+        @eval_group_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_keys SExpr_True
+          input_bag outcome) ->
+    exists outcome,
+      @eval_grouping_sets_bag_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env grouping_sets input_bag outcome.
+```
+
+## `eval_grouping_sets_cardinality_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5278`](../OrderedQueryFacts.v#L5278)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_grouping_sets_cardinality_has_outcome :
+  forall env grouping_sets input_bag,
+    (forall select_list group_keys,
+      In (select_list, group_keys) grouping_sets ->
+      exists group_terms,
+        scalar_group_key_terms group_keys = Some group_terms /\
+        exists outcome,
+          @eval_group_cardinality_outcome T relname
+            basesort instance unknown symbol_runtime_error
+            aggregate_runtime_error value_is_null boolean_schedule
+            env select_list group_terms SExpr_True input_bag outcome) ->
+    exists outcome,
+      @eval_grouping_sets_cardinality_outcome T relname
+        basesort instance unknown symbol_runtime_error
+        aggregate_runtime_error value_is_null boolean_schedule
+        env grouping_sets input_bag outcome.
+```
+
+## `query_expr_group_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5472`](../OrderedQueryFacts.v#L5472)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr group has outcome law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_group_has_outcome :
+  forall env select_list group_keys group_terms having input,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_group_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env select_list group_keys having
+          (query_rows_bag input_rows) outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env
+        (QExpr_Group select_list group_keys having input) outcome.
+```
+
+## `query_expr_grouping_sets_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5499`](../OrderedQueryFacts.v#L5499)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: States the query expr grouping sets has outcome law for aggregate grouping, in the exact direction displayed by the declaration.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma query_expr_grouping_sets_has_outcome :
+  forall env grouping_sets input,
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_grouping_sets_bag_outcome T relname basesort instance unknown
+          symbol_runtime_error aggregate_runtime_error value_is_null
+          boolean_schedule env grouping_sets
+          (query_rows_bag input_rows) outcome) ->
+    (exists outcome, eval_query env input outcome) ->
+    exists outcome,
+      eval_query env (QExpr_GroupingSets grouping_sets input) outcome.
+```
+
+## `eval_query_cardinality_group_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5692`](../OrderedQueryFacts.v#L5692)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_group_has_outcome :
+  forall env select_list group_keys group_terms having input,
+    scalar_group_key_terms group_keys = Some group_terms ->
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_group_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env select_list group_terms having
+          (query_rows_bag input_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_Group select_list group_keys having input) outcome.
+```
+
+## `eval_query_cardinality_grouping_sets_has_outcome`
+
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5718`](../OrderedQueryFacts.v#L5718)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Relates aggregate grouping to the exact list length or bag cardinality shown below.
+
+Applicability: Use when moving from the modeled operator result to a bound, length, or occurrence fact about aggregate grouping.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `grouping`, `runtime`, `cardinality`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `aggregate/grouping runtime semantics`, `grouping sets`, `GROUP BY`, `aggregate`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`, `cardinality`
+
+```rocq
+Lemma eval_query_cardinality_grouping_sets_has_outcome :
+  forall env grouping_sets input,
+    (exists outcome, eval_query env input outcome) ->
+    (forall input_rows,
+      eval_query env input (SqlSuccess input_rows) ->
+      exists outcome,
+        @eval_grouping_sets_cardinality_outcome T relname
+          basesort instance unknown symbol_runtime_error
+          aggregate_runtime_error value_is_null boolean_schedule
+          env grouping_sets (query_rows_bag input_rows) outcome) ->
+    exists outcome,
+      @eval_query_cardinality_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env
+        (QExpr_GroupingSets grouping_sets input) outcome.
+```
+
 ## `tnull_query_groups_matching_one_key`
 
-Source: [`theories/FormalSQL/ProofAgentFacade.v:708`](../ProofAgentFacade.v#L708)
+Source: [`theories/FormalSQL/ProofAgentFacade.v:709`](../ProofAgentFacade.v#L709)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -5033,7 +6139,7 @@ Lemma query_expr_grouping_sets_global_typed_congr :
 
 ## `eval_groups_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2042`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2042)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2056`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2056)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5073,7 +6179,7 @@ Lemma eval_groups_scalar_global_congr :
 
 ## `eval_group_bag_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2170`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2170)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2184`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2184)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5102,7 +6208,7 @@ Lemma eval_group_bag_scalar_global_congr :
 
 ## `eval_group_bag_group_keys_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2264`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2264)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2278`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2278)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5125,7 +6231,7 @@ Lemma eval_group_bag_group_keys_none :
 
 ## `query_group_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5399`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5399)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5413`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5413)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5162,7 +6268,7 @@ Definition query_group_rows_bag_outcomes
 
 ## `query_grouping_sets_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5418`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5418)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5432`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5432)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5197,7 +6303,7 @@ Definition query_grouping_sets_rows_bag_outcomes
 
 ## `query_group_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5650`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5650)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5664`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5664)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5227,7 +6333,7 @@ Theorem query_group_scheduled_bag_outcomes_characterization :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5694`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5694)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5708`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5708)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5257,7 +6363,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_characterization :
 
 ## `query_group_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5921`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5921)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5935`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5935)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5305,7 +6411,7 @@ Theorem query_group_scheduled_bag_outcomes_congr :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5960`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5960)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5974`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5974)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5349,7 +6455,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_congr :
 
 ## `query_expr_group_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6274`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6274)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6288`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6288)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5398,7 +6504,7 @@ Theorem query_expr_group_possible_bag_schedule_transport :
 
 ## `query_expr_group_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6317`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6317)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6331`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6331)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5447,7 +6553,7 @@ Corollary query_expr_group_possible_bag_outcome_equiv :
 
 ## `query_expr_grouping_sets_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6355`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6355)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6369`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6369)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5497,7 +6603,7 @@ Theorem query_expr_grouping_sets_possible_bag_schedule_transport :
 
 ## `query_expr_grouping_sets_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6397`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6397)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6411`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6411)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

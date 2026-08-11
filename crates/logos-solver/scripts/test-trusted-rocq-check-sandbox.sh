@@ -93,6 +93,12 @@ cat >"$WORKDIR/Witness.v" <<'EOF'
 From LogosGenerated Require Import Schema.
 Definition sandbox_witness_marker : Prop := sandbox_schema_marker.
 EOF
+cat >"$WORKDIR/WitnessData.v" <<'EOF'
+From LogosGenerated Require Import Schema.
+Definition sandbox_witness_data_marker : Prop := sandbox_schema_marker.
+EOF
+mkdir -m 700 "$WORKDIR/WitnessModules"
+: >"$WORKDIR/WitnessModules/ORDER"
 cat >"$WORKDIR/Problem.v" <<'EOF'
 From LogosGenerated Require Import Schema Queries Witness.
 Theorem sandbox_problem_marker : sandbox_query_marker.

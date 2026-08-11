@@ -6940,9 +6940,12 @@ fn lowers_typed_table_constraints_and_emits_every_table_in_schema_order() {
 
     let constraints_module = formal
         .rocq_module
+        .split_once("Definition generated_table_constraint_0")
+        .expect("generated named table constraints")
+        .1
         .split_once("Definition generated_schema_constraints")
-        .expect("generated constraints definition")
-        .1;
+        .expect("generated constraints inventory")
+        .0;
     assert_eq!(constraints_module.matches("TableConstraint").count(), 2);
     assert!(
         constraints_module.find("(Rel \"orders\")") < constraints_module.find("(Rel \"audit\")"),
@@ -6963,6 +6966,19 @@ fn lowers_typed_table_constraints_and_emits_every_table_in_schema_order() {
     assert!(formal.rocq_module.contains(
         "database_conforms_schema\n    generated_schema generated_schema_constraints db"
     ));
+    for projection in [
+        "primary_key",
+        "unique_keys",
+        "foreign_keys",
+        "checks",
+        "unique_indexes",
+    ] {
+        assert!(
+            formal
+                .rocq_module
+                .contains(&format!("Lemma generated_table_constraint_0_{projection}"))
+        );
+    }
 }
 
 #[test]
@@ -7025,6 +7041,10 @@ fn constraint_formula_emission_uses_the_generic_empty_query_formula_syntax() {
     assert!(!module.contains("TrueFormula"));
     assert!(!module.contains("Some (Pred "));
     assert!(!module.contains("CheckConstraint (Pred "));
+    assert!(
+        module.contains("Value_int32 (Some (Int32 (1)%Z ltac:(unfold int32_min, int32_max; lia)))")
+    );
+    assert!(!module.contains("CstInt32 (1)"));
 }
 
 #[test]

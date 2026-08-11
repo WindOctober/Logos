@@ -297,13 +297,40 @@ case "$TRUSTED_CACHE" in
     ;;
 esac
 
-for name in Schema.v Queries.v Witness.v Problem.v Goal.v; do
+for name in Schema.v Queries.v WitnessData.v Witness.v Problem.v Goal.v; do
   path="$WORKDIR/$name"
   if [[ ! -f "$path" || -L "$path" ]]; then
     echo "missing trusted-check input or input is not a regular non-symlink file: $path" >&2
     trusted_environment_failure "proof-workspace" 2
   fi
 done
+
+declare -a WITNESS_MODULE_ORDER=()
+declare -A WITNESS_MODULE_EXPECTED=()
+if [[ ! -d "$WORKDIR/WitnessModules" || -L "$WORKDIR/WitnessModules" ||
+      ! -f "$WORKDIR/WitnessModules/ORDER" || -L "$WORKDIR/WitnessModules/ORDER" ]]; then
+  echo "missing safe generated WitnessModules order manifest" >&2
+  trusted_environment_failure "witness-module-workspace" 2
+fi
+while IFS= read -r file || [[ -n "$file" ]]; do
+  [[ -n "$file" ]] || continue
+  if [[ ! "$file" =~ ^[A-Z][A-Za-z0-9_]*\.v$ ||
+        -n "${WITNESS_MODULE_EXPECTED[$file]+set}" ||
+        ! -s "$WORKDIR/WitnessModules/$file" ||
+        -L "$WORKDIR/WitnessModules/$file" ]]; then
+    echo "invalid, duplicate, missing, or symlinked generated witness module: $file" >&2
+    trusted_environment_failure "witness-module-workspace" 2
+  fi
+  WITNESS_MODULE_EXPECTED["$file"]=1
+  WITNESS_MODULE_ORDER+=("$file")
+done <"$WORKDIR/WitnessModules/ORDER"
+while IFS= read -r -d '' entry; do
+  file="${entry#"$WORKDIR/WitnessModules/"}"
+  if [[ "$file" != ORDER && -z "${WITNESS_MODULE_EXPECTED[$file]+set}" ]]; then
+    echo "unordered generated witness module entry: $file" >&2
+    trusted_environment_failure "witness-module-workspace" 2
+  fi
+done < <(find "$WORKDIR/WitnessModules" -mindepth 1 -maxdepth 1 -print0)
 
 HOST_TMP_ROOT="$CACHE_PARENT/host-tmp"
 if [[ -e "$HOST_TMP_ROOT" || -L "$HOST_TMP_ROOT" ]]; then
@@ -397,11 +424,12 @@ HOSTXDGDATAHOME="$CHECKDIR/host-xdg-data-home"
 HOSTXDGDATADIRS="$CHECKDIR/host-xdg-data-dirs"
 mkdir -p \
   "$TRUSTEDDIR" \
-  "$PROBLEMDIR/tmp" "$PROBLEMDIR/ProofModules" \
-  "$PROBLEMOUTDIR/tmp" "$PROBLEMOUTDIR/ProofModules" \
+  "$TRUSTEDDIR/WitnessModules" \
+  "$PROBLEMDIR/tmp" "$PROBLEMDIR/ProofModules" "$PROBLEMDIR/WitnessModules" \
+  "$PROBLEMOUTDIR/tmp" "$PROBLEMOUTDIR/ProofModules" "$PROBLEMOUTDIR/WitnessModules" \
   "$HOSTHOMEDIR" \
   "$HOSTXDGDATAHOME" "$HOSTXDGDATADIRS" \
-  "$GOALDIR/tmp" "$GOALDIR/ProofModules" \
+  "$GOALDIR/tmp" "$GOALDIR/ProofModules" "$GOALDIR/WitnessModules" \
   "$OSLIBDIR" \
   "$ROCQBINDIR"
 chmod 700 "$HOSTHOMEDIR"
@@ -967,20 +995,90 @@ done
 
 declare -a PROOF_MODULE_ORDER=()
 
+copy_workspace_witness_sources() {
+  local destination="$1" file
+  mkdir -p "$destination/WitnessModules"
+  install -m 600 "$WORKDIR/WitnessData.v" "$destination/WitnessData.v"
+  install -m 600 "$WORKDIR/WitnessModules/ORDER" "$destination/WitnessModules/ORDER"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    install -m 600 "$WORKDIR/WitnessModules/$file" "$destination/WitnessModules/$file"
+  done
+}
+
+compile_witness_support_modules() {
+  local root="$1" file
+  "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+    -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+    -Q "$LOGOS_REPO_ROOT/theories" Logos \
+    -Q "$root" LogosGenerated \
+    "$root/WitnessData.v" || trusted_environment_failure "witness-data" "$?"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
+      -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
+      -Q "$LOGOS_REPO_ROOT/theories" Logos \
+      -Q "$root" LogosGenerated \
+      "$root/WitnessModules/$file" || trusted_environment_failure "witness-constraint" "$?"
+  done
+}
+
 validate_trusted_cache() {
   local expected_manifest entry file stem
+  local -a cache_witness_module_order=()
+  local -A cache_witness_expected=()
   local -A ordered=()
 
   if [[ -L "$TRUSTED_CACHE" || ! -d "$TRUSTED_CACHE" ]]; then
     echo "trusted diagnostic cache is missing or symlinked: $TRUSTED_CACHE" >&2
     trusted_environment_failure "diagnostic-cache" 2
   fi
-  for entry in Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo SHA256SUMS; do
+  for entry in Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo SHA256SUMS; do
     if [[ ! -s "$TRUSTED_CACHE/$entry" || -L "$TRUSTED_CACHE/$entry" ]]; then
       echo "trusted diagnostic cache entry is missing, empty, or symlinked: $entry" >&2
       trusted_environment_failure "diagnostic-cache" 2
     fi
   done
+  if [[ ! -d "$TRUSTED_CACHE/WitnessModules" || -L "$TRUSTED_CACHE/WitnessModules" ||
+        ! -f "$TRUSTED_CACHE/WitnessModules/ORDER" || -L "$TRUSTED_CACHE/WitnessModules/ORDER" ]]; then
+    echo "trusted diagnostic cache has no safe WitnessModules order manifest" >&2
+    trusted_environment_failure "witness-module-cache" 2
+  fi
+  if ! cmp -s "$WORKDIR/WitnessModules/ORDER" "$TRUSTED_CACHE/WitnessModules/ORDER"; then
+    [[ "$mode" == witness-preflight ]] || {
+      echo "trusted diagnostic cache witness-module order drifted" >&2
+      trusted_environment_failure "witness-module-cache" 2
+    }
+  fi
+  while IFS= read -r file || [[ -n "$file" ]]; do
+    [[ -n "$file" ]] || continue
+    if [[ ! "$file" =~ ^[A-Z][A-Za-z0-9_]*\.v$ ||
+          -n "${cache_witness_expected[$file]+set}" ]]; then
+      echo "trusted witness module order contains an invalid or duplicate entry: $file" >&2
+      trusted_environment_failure "witness-module-cache" 2
+    fi
+    stem="${file%.v}"
+    for entry in "$file" "$stem.vo"; do
+      if [[ ! -s "$TRUSTED_CACHE/WitnessModules/$entry" ||
+            -L "$TRUSTED_CACHE/WitnessModules/$entry" ]]; then
+        echo "trusted witness module cache entry is missing, empty, or symlinked: $entry" >&2
+        trusted_environment_failure "witness-module-cache" 2
+      fi
+    done
+    if [[ "$mode" != witness-preflight ]] &&
+       ! cmp -s "$WORKDIR/WitnessModules/$file" "$TRUSTED_CACHE/WitnessModules/$file"; then
+      echo "trusted witness module cache source binding drifted: $file" >&2
+      trusted_environment_failure "witness-module-cache" 2
+    fi
+    cache_witness_expected["$file"]=1
+    cache_witness_expected["$stem.vo"]=1
+    cache_witness_module_order+=("$file")
+  done <"$TRUSTED_CACHE/WitnessModules/ORDER"
+  while IFS= read -r -d '' entry; do
+    file="${entry#"$TRUSTED_CACHE/WitnessModules/"}"
+    if [[ "$file" != ORDER && -z "${cache_witness_expected[$file]+set}" ]]; then
+      echo "trusted witness module cache contains an unordered entry: $file" >&2
+      trusted_environment_failure "witness-module-cache" 2
+    fi
+  done < <(find "$TRUSTED_CACHE/WitnessModules" -mindepth 1 -maxdepth 1 -print0)
   if [[ ! -d "$TRUSTED_CACHE/ProofModules" || -L "$TRUSTED_CACHE/ProofModules" ||
         ! -f "$TRUSTED_CACHE/ProofModules/ORDER" || -L "$TRUSTED_CACHE/ProofModules/ORDER" ]]; then
     echo "trusted diagnostic cache has no safe ProofModules order manifest" >&2
@@ -1016,8 +1114,9 @@ validate_trusted_cache() {
   done < <(find "$TRUSTED_CACHE/ProofModules" -mindepth 1 -maxdepth 1 -print0)
   if [[ -n "$(find "$TRUSTED_CACHE" -mindepth 1 -maxdepth 1 \
       ! -name Schema.v ! -name Schema.vo ! -name Queries.v ! -name Queries.vo \
+      ! -name WitnessData.v ! -name WitnessData.vo \
       ! -name Witness.v ! -name Witness.vo ! -name SHA256SUMS \
-      ! -name ProofModules -print -quit)" ]]; then
+      ! -name WitnessModules ! -name ProofModules -print -quit)" ]]; then
     echo "trusted diagnostic cache contains an unexpected root entry" >&2
     trusted_environment_failure "diagnostic-cache" 2
   fi
@@ -1025,7 +1124,11 @@ validate_trusted_cache() {
   expected_manifest="$(
     cd "$TRUSTED_CACHE"
     {
-      sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo ProofModules/ORDER
+      sha256sum Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo WitnessModules/ORDER ProofModules/ORDER
+      for file in "${cache_witness_module_order[@]}"; do
+        stem="${file%.v}"
+        sha256sum "WitnessModules/$file" "WitnessModules/$stem.vo"
+      done
       for file in "${PROOF_MODULE_ORDER[@]}"; do
         stem="${file%.v}"
         sha256sum "ProofModules/$file" "ProofModules/$stem.vo"
@@ -1039,7 +1142,8 @@ validate_trusted_cache() {
   if ! cmp -s "$WORKDIR/Schema.v" "$TRUSTED_CACHE/Schema.v" ||
      ! cmp -s "$WORKDIR/Queries.v" "$TRUSTED_CACHE/Queries.v" ||
      { [[ "$mode" != witness-preflight ]] &&
-       ! cmp -s "$WORKDIR/Witness.v" "$TRUSTED_CACHE/Witness.v"; }; then
+       { ! cmp -s "$WORKDIR/WitnessData.v" "$TRUSTED_CACHE/WitnessData.v" ||
+         ! cmp -s "$WORKDIR/Witness.v" "$TRUSTED_CACHE/Witness.v"; }; }; then
     echo "trusted diagnostic cache source binding drifted" >&2
     trusted_environment_failure "diagnostic-cache-source" 2
   fi
@@ -1047,13 +1151,20 @@ validate_trusted_cache() {
 
 copy_trusted_cache() {
   local destination="$1" file stem
-  mkdir -p "$destination/ProofModules"
+  mkdir -p "$destination/ProofModules" "$destination/WitnessModules"
   chmod 700 "$destination/ProofModules"
   install -m 600 \
     "$TRUSTED_CACHE/Schema.v" "$TRUSTED_CACHE/Schema.vo" \
     "$TRUSTED_CACHE/Queries.v" "$TRUSTED_CACHE/Queries.vo" \
+    "$TRUSTED_CACHE/WitnessData.v" "$TRUSTED_CACHE/WitnessData.vo" \
     "$TRUSTED_CACHE/Witness.v" "$TRUSTED_CACHE/Witness.vo" \
     "$destination/"
+  install -m 600 "$TRUSTED_CACHE/WitnessModules/ORDER" "$destination/WitnessModules/ORDER"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    install -m 600 "$TRUSTED_CACHE/WitnessModules/$file" \
+      "$TRUSTED_CACHE/WitnessModules/$stem.vo" "$destination/WitnessModules/"
+  done
   install -m 600 "$TRUSTED_CACHE/ProofModules/ORDER" "$destination/ProofModules/ORDER"
   for file in "${PROOF_MODULE_ORDER[@]}"; do
     stem="${file%.v}"
@@ -1066,13 +1177,19 @@ copy_trusted_cache() {
 
 copy_trusted_cache_objects() {
   local destination="$1" file stem
-  mkdir -p "$destination/ProofModules"
+  mkdir -p "$destination/ProofModules" "$destination/WitnessModules"
   chmod 700 "$destination/ProofModules"
   install -m 600 \
     "$TRUSTED_CACHE/Schema.vo" \
     "$TRUSTED_CACHE/Queries.vo" \
+    "$TRUSTED_CACHE/WitnessData.vo" \
     "$TRUSTED_CACHE/Witness.vo" \
     "$destination/"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    install -m 600 "$TRUSTED_CACHE/WitnessModules/$stem.vo" \
+      "$destination/WitnessModules/"
+  done
   for file in "${PROOF_MODULE_ORDER[@]}"; do
     stem="${file%.v}"
     install -m 600 \
@@ -1137,7 +1254,12 @@ write_cache_manifest() {
   (
     cd "$cache"
     {
-      sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo ProofModules/ORDER
+      sha256sum Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo WitnessModules/ORDER ProofModules/ORDER
+      while IFS= read -r file || [[ -n "$file" ]]; do
+        [[ -n "$file" ]] || continue
+        stem="${file%.v}"
+        sha256sum "WitnessModules/$file" "WitnessModules/$stem.vo"
+      done <WitnessModules/ORDER
       while IFS= read -r file || [[ -n "$file" ]]; do
         [[ -n "$file" ]] || continue
         stem="${file%.v}"
@@ -1151,7 +1273,12 @@ write_cache_manifest() {
 shared_prefix_key() {
   {
     printf '%s\n' "$SHARED_AUTHORITY_SHA256"
-    sha256sum "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" "$WORKDIR/Witness.v"
+    sha256sum "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" \
+      "$WORKDIR/WitnessData.v" "$WORKDIR/Witness.v" \
+      "$WORKDIR/WitnessModules/ORDER"
+    for file in "${WITNESS_MODULE_ORDER[@]}"; do
+      sha256sum "$WORKDIR/WitnessModules/$file"
+    done
   } | sha256sum | awk '{print $1}'
 }
 
@@ -1161,17 +1288,41 @@ validate_shared_prefix_bundle() {
         "$(stat -c '%a' "$bundle")" != 555 ]]; then
     return 1
   fi
-  for entry in Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo SHA256SUMS; do
+  for entry in Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo SHA256SUMS; do
     if [[ ! -s "$bundle/$entry" || -L "$bundle/$entry" ||
           "$(stat -c '%a' "$bundle/$entry")" != 444 ]]; then
       echo "shared generated-prefix cache entry is unsafe: $bundle/$entry" >&2
       trusted_environment_failure "shared-prefix-cache" 2
     fi
   done
-  expected="$(cd "$bundle" && sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo)"
+  if [[ ! -d "$bundle/WitnessModules" || -L "$bundle/WitnessModules" ||
+        ! -f "$bundle/WitnessModules/ORDER" || -L "$bundle/WitnessModules/ORDER" ||
+        "$(stat -c '%a' "$bundle/WitnessModules")" != 555 ||
+        "$(stat -c '%a' "$bundle/WitnessModules/ORDER")" != 444 ]]; then
+    return 1
+  fi
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    for entry in "$file" "$stem.vo"; do
+      if [[ ! -s "$bundle/WitnessModules/$entry" ||
+            -L "$bundle/WitnessModules/$entry" ||
+            "$(stat -c '%a' "$bundle/WitnessModules/$entry")" != 444 ]]; then
+        return 1
+      fi
+    done
+  done
+  expected="$(cd "$bundle" && {
+    sha256sum Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo WitnessModules/ORDER
+    for file in "${WITNESS_MODULE_ORDER[@]}"; do
+      stem="${file%.v}"
+      sha256sum "WitnessModules/$file" "WitnessModules/$stem.vo"
+    done
+  })"
   if [[ "$(cat "$bundle/SHA256SUMS")" != "$expected" ]] ||
      ! cmp -s "$WORKDIR/Schema.v" "$bundle/Schema.v" ||
      ! cmp -s "$WORKDIR/Queries.v" "$bundle/Queries.v" ||
+     ! cmp -s "$WORKDIR/WitnessData.v" "$bundle/WitnessData.v" ||
+     ! cmp -s "$WORKDIR/WitnessModules/ORDER" "$bundle/WitnessModules/ORDER" ||
      ! cmp -s "$WORKDIR/Witness.v" "$bundle/Witness.v"; then
     echo "shared generated-prefix cache digest/source binding drifted" >&2
     trusted_environment_failure "shared-prefix-cache" 2
@@ -1187,8 +1338,16 @@ try_shared_prefix_cache() {
   install -m 600 \
     "$bundle/Schema.v" "$bundle/Schema.vo" \
     "$bundle/Queries.v" "$bundle/Queries.vo" \
+    "$bundle/WitnessData.v" "$bundle/WitnessData.vo" \
     "$bundle/Witness.v" "$bundle/Witness.vo" \
     "$TRUSTEDDIR/"
+  mkdir -p "$TRUSTEDDIR/WitnessModules"
+  install -m 600 "$bundle/WitnessModules/ORDER" "$TRUSTEDDIR/WitnessModules/ORDER"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    install -m 600 "$bundle/WitnessModules/$file" \
+      "$bundle/WitnessModules/$stem.vo" "$TRUSTEDDIR/WitnessModules/"
+  done
   SHARED_PREFIX_HIT=true
   echo "LOGOS_TRUSTED_ROCQ_PREFIX_CACHE hit=true key=$SHARED_PREFIX_KEY" >&2
   return 0
@@ -1204,13 +1363,28 @@ publish_shared_prefix_cache() {
     return 0
   fi
   stage="$(mktemp -d "$SHARED_PREFIX_CACHE_ROOT/.${SHARED_PREFIX_KEY}.XXXXXX")"
+  mkdir -m 755 "$stage/WitnessModules"
   install -m 444 \
     "$TRUSTEDDIR/Schema.v" "$TRUSTEDDIR/Schema.vo" \
     "$TRUSTEDDIR/Queries.v" "$TRUSTEDDIR/Queries.vo" \
+    "$TRUSTEDDIR/WitnessData.v" "$TRUSTEDDIR/WitnessData.vo" \
     "$TRUSTEDDIR/Witness.v" "$TRUSTEDDIR/Witness.vo" \
     "$stage/"
-  (cd "$stage" && sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo >SHA256SUMS)
+  install -m 444 "$TRUSTEDDIR/WitnessModules/ORDER" "$stage/WitnessModules/ORDER"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    install -m 444 "$TRUSTEDDIR/WitnessModules/$file" \
+      "$TRUSTEDDIR/WitnessModules/$stem.vo" "$stage/WitnessModules/"
+  done
+  (cd "$stage" && {
+    sha256sum Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo Witness.v Witness.vo WitnessModules/ORDER
+    for file in "${WITNESS_MODULE_ORDER[@]}"; do
+      stem="${file%.v}"
+      sha256sum "WitnessModules/$file" "WitnessModules/$stem.vo"
+    done
+  } >SHA256SUMS)
   chmod 444 "$stage/SHA256SUMS"
+  chmod 555 "$stage/WitnessModules"
   chmod 555 "$stage"
   if ! mv -T "$stage" "$bundle" 2>/dev/null; then
     chmod 700 "$stage" 2>/dev/null || true
@@ -1262,7 +1436,9 @@ if [[ "$mode" != preflight ]]; then
     if ! try_shared_prefix_cache; then
       cp "$TRUSTED_CACHE/Schema.v" "$TRUSTED_CACHE/Schema.vo" \
         "$TRUSTED_CACHE/Queries.v" "$TRUSTED_CACHE/Queries.vo" "$TRUSTEDDIR/"
+      copy_workspace_witness_sources "$TRUSTEDDIR"
       cp "$WORKDIR/Witness.v" "$TRUSTEDDIR/"
+      compile_witness_support_modules "$TRUSTEDDIR"
       "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
         -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
         -Q "$LOGOS_REPO_ROOT/theories" Logos \
@@ -1270,12 +1446,7 @@ if [[ "$mode" != preflight ]]; then
         "$TRUSTEDDIR/Witness.v" || trusted_environment_failure "witness" "$?"
     fi
   elif [[ "$mode" == problem-diagnostic ]]; then
-    cp "$TRUSTED_CACHE/Schema.vo" "$TRUSTED_CACHE/Queries.vo" \
-      "$TRUSTED_CACHE/Witness.vo" "$PROBLEMOUTDIR/"
-    for file in "${PROOF_MODULE_ORDER[@]}"; do
-      stem="${file%.v}"
-      cp "$TRUSTED_CACHE/ProofModules/$stem.vo" "$PROBLEMOUTDIR/ProofModules/"
-    done
+    copy_trusted_cache_objects "$PROBLEMOUTDIR"
   elif [[ "$mode" == module-diagnostic ]]; then
     candidate_name="${module_candidate#ProofModules/}"
     candidate_stem="${candidate_name%.v}"
@@ -1300,14 +1471,13 @@ if [[ "$mode" != preflight ]]; then
     # The cache is host-created only after preflight kernel-checks these exact
     # generated sources and objects, is digest-bound, and is never mounted into
     # the agent. Reuse the checked prefix for final proof assembly.
-    cp "$TRUSTED_CACHE/Schema.v" "$TRUSTED_CACHE/Schema.vo" \
-      "$TRUSTED_CACHE/Queries.v" "$TRUSTED_CACHE/Queries.vo" \
-      "$TRUSTED_CACHE/Witness.v" "$TRUSTED_CACHE/Witness.vo" "$TRUSTEDDIR/"
+    copy_trusted_cache "$TRUSTEDDIR"
     validate_final_workspace_modules
   fi
 else
   if ! try_shared_prefix_cache; then
     cp "$WORKDIR/Schema.v" "$WORKDIR/Queries.v" "$WORKDIR/Witness.v" "$TRUSTEDDIR/"
+    copy_workspace_witness_sources "$TRUSTEDDIR"
 
     "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
       -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
@@ -1320,6 +1490,8 @@ else
       -Q "$LOGOS_REPO_ROOT/theories" Logos \
       -Q "$TRUSTEDDIR" LogosGenerated \
       "$TRUSTEDDIR/Queries.v" || trusted_environment_failure "queries" "$?"
+
+    compile_witness_support_modules "$TRUSTEDDIR"
 
     "$ROCQ_BIN" compile -q -coqlib "$ROCQ_STDLIB_DIR" \
       -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
@@ -1335,12 +1507,18 @@ if [[ "$mode" == preflight || "$mode" == witness-preflight ]]; then
   # explicitly; checking only the final/root module with [-norec] would admit
   # these generated dependencies and would be unsound.
   PREFLIGHT_CONTEXT="$CHECKDIR/rocq-check-generated-preflight-context.txt"
+  witness_module_check_arguments=( -norec LogosGenerated.WitnessData )
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    witness_module_check_arguments+=( -norec "LogosGenerated.WitnessModules.$stem" )
+  done
   "$ROCQ_BIN" check -silent -o -coqlib "$ROCQ_STDLIB_DIR" \
     -Q "$LOGOS_REPO_ROOT/vendor/FormalSQL/src" SQLFS \
     -Q "$LOGOS_REPO_ROOT/theories" Logos \
     -Q "$TRUSTEDDIR" LogosGenerated \
     -norec LogosGenerated.Schema \
     -norec LogosGenerated.Queries \
+    "${witness_module_check_arguments[@]}" \
     -norec LogosGenerated.Witness >"$PREFLIGHT_CONTEXT" 2>&1 \
     || {
       status="$?"
@@ -1381,12 +1559,19 @@ if [[ "$mode" == preflight || "$mode" == witness-preflight ]]; then
   # every case without adding an independent trust boundary.
   CACHE_STAGE="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache.XXXXXX")"
   chmod 700 "$CACHE_STAGE"
-  mkdir -m 700 "$CACHE_STAGE/ProofModules"
+  mkdir -m 700 "$CACHE_STAGE/ProofModules" "$CACHE_STAGE/WitnessModules"
   install -m 600 \
     "$TRUSTEDDIR/Schema.v" "$TRUSTEDDIR/Schema.vo" \
     "$TRUSTEDDIR/Queries.v" "$TRUSTEDDIR/Queries.vo" \
+    "$TRUSTEDDIR/WitnessData.v" "$TRUSTEDDIR/WitnessData.vo" \
     "$TRUSTEDDIR/Witness.v" "$TRUSTEDDIR/Witness.vo" \
     "$CACHE_STAGE/"
+  install -m 600 "$TRUSTEDDIR/WitnessModules/ORDER" "$CACHE_STAGE/WitnessModules/ORDER"
+  for file in "${WITNESS_MODULE_ORDER[@]}"; do
+    stem="${file%.v}"
+    install -m 600 "$TRUSTEDDIR/WitnessModules/$file" \
+      "$TRUSTEDDIR/WitnessModules/$stem.vo" "$CACHE_STAGE/WitnessModules/"
+  done
   install -m 600 /dev/null "$CACHE_STAGE/ProofModules/ORDER"
   write_cache_manifest "$CACHE_STAGE"
   if [[ "$mode" == witness-preflight ]]; then
@@ -1540,8 +1725,13 @@ fi
 # Goal.v enters a fresh host-created directory only after untrusted compilation
 # exits, so Problem.v cannot replace the trusted goal or its dependencies.
 cp "$WORKDIR/Goal.v" "$GOALDIR/"
-cp "$TRUSTEDDIR/Schema.vo" "$TRUSTEDDIR/Queries.vo" "$TRUSTEDDIR/Witness.vo" \
+cp "$TRUSTEDDIR/Schema.vo" "$TRUSTEDDIR/Queries.vo" \
+  "$TRUSTEDDIR/WitnessData.vo" "$TRUSTEDDIR/Witness.vo" \
   "$PROBLEMOUTDIR/Problem.vo" "$GOALDIR/"
+for file in "${WITNESS_MODULE_ORDER[@]}"; do
+  stem="${file%.v}"
+  cp "$TRUSTEDDIR/WitnessModules/$stem.vo" "$GOALDIR/WitnessModules/"
+done
 for file in "${PROOF_MODULE_ORDER[@]}"; do
   stem="${file%.v}"
   cp "$PROBLEMOUTDIR/ProofModules/$stem.vo" "$GOALDIR/ProofModules/"

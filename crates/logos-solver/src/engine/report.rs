@@ -766,6 +766,16 @@ mod tests {
                 .expect("serialize solver outcome"),
             serde_json::json!("outcome_unconditional")
         );
+        assert_eq!(
+            serde_json::to_value(SolverOutcome::NeedsManualReview)
+                .expect("serialize manual-review outcome"),
+            serde_json::json!("needs_manual_review")
+        );
+        assert_eq!(
+            serde_json::to_value(super::BackendStatus::NeedsManualReview)
+                .expect("serialize manual-review proof status"),
+            serde_json::json!("needs_manual_review")
+        );
     }
 }
 
@@ -782,6 +792,7 @@ pub enum BackendStatus {
     WorkspaceGenerated,
     ProofAgentRunCompleted,
     ProofSearchTimedOut,
+    NeedsManualReview,
     ProofComplete,
     ProofAgentFailed,
 }
