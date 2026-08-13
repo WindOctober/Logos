@@ -6359,6 +6359,53 @@ fn trusted_diagnostic_cache_directory(trusted_checker_path: &Path) -> PathBuf {
         .join("trusted-diagnostic-cache")
 }
 
+fn collect_trusted_cache_regular_files(
+    root: &Path,
+    directory: &Path,
+    files: &mut BTreeSet<PathBuf>,
+) -> Result<()> {
+    for entry in std::fs::read_dir(directory).map_err(|source| Error::Read {
+        path: directory.to_owned(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| Error::Read {
+            path: directory.to_owned(),
+            source,
+        })?;
+        let path = entry.path();
+        let metadata = std::fs::symlink_metadata(&path).map_err(|source| Error::Read {
+            path: path.clone(),
+            source,
+        })?;
+        if metadata.file_type().is_symlink() {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache contains a symlink: {}",
+                path.display()
+            )));
+        }
+        if metadata.is_dir() {
+            collect_trusted_cache_regular_files(root, &path, files)?;
+            continue;
+        }
+        if !metadata.file_type().is_file() {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache contains a non-regular entry: {}",
+                path.display()
+            )));
+        }
+        let relative = path.strip_prefix(root).map_err(|_| {
+            Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache entry escaped its root: {}",
+                path.display()
+            ))
+        })?;
+        if relative != Path::new("SHA256SUMS") {
+            files.insert(relative.to_owned());
+        }
+    }
+    Ok(())
+}
+
 fn archive_trusted_diagnostic_cache(
     artifacts: &ArtifactWriter,
     workspace_generation: usize,
@@ -6400,27 +6447,6 @@ fn archive_trusted_diagnostic_cache(
         }
         std::fs::read(&path).map_err(|source| Error::Read { path, source })
     };
-    let directory_names = |path: &Path| -> Result<BTreeSet<String>> {
-        std::fs::read_dir(path)
-            .map_err(|source| Error::Read {
-                path: path.to_owned(),
-                source,
-            })?
-            .map(|entry| {
-                let entry = entry.map_err(|source| Error::Read {
-                    path: path.to_owned(),
-                    source,
-                })?;
-                entry.file_name().into_string().map_err(|_| {
-                    Error::TrustedRocqEnvironment(format!(
-                        "trusted diagnostic cache contains a non-UTF-8 entry under {}",
-                        path.display()
-                    ))
-                })
-            })
-            .collect()
-    };
-
     let module_root = source_root.join(PROOF_MODULE_DIRECTORY);
     let module_metadata =
         std::fs::symlink_metadata(&module_root).map_err(|source| Error::Read {
@@ -6505,97 +6531,137 @@ fn archive_trusted_diagnostic_cache(
         }
     }
 
-    let mut expected_relative = [
-        "Schema.v",
-        "Schema.vo",
-        "Queries.v",
-        "Queries.vo",
-        "WitnessData.v",
-        "WitnessData.vo",
-        "Witness.v",
-        "Witness.vo",
-        "WitnessModules/ORDER",
-        "ProofModules/ORDER",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .collect::<Vec<_>>();
-    let mut expected_module_names = BTreeSet::from(["ORDER".to_owned()]);
-    let mut expected_witness_module_names = BTreeSet::from(["ORDER".to_owned()]);
-    for name in &witness_module_names {
-        let stem = name
-            .strip_suffix(".v")
-            .expect("validated witness module has .v suffix");
-        expected_relative.push(PathBuf::from(format!("WitnessModules/{name}")));
-        expected_relative.push(PathBuf::from(format!("WitnessModules/{stem}.vo")));
-        expected_witness_module_names.insert(name.clone());
-        expected_witness_module_names.insert(format!("{stem}.vo"));
+    let manifest_relative = PathBuf::from("SHA256SUMS");
+    let manifest_bytes = read_regular(&manifest_relative, false)?;
+    let manifest_text = std::str::from_utf8(&manifest_bytes).map_err(|source| {
+        Error::TrustedRocqEnvironment(format!(
+            "trusted diagnostic cache manifest is not UTF-8: {source}"
+        ))
+    })?;
+    let mut manifest_entries = BTreeMap::new();
+    let mut manifest_order = Vec::new();
+    for line in manifest_text.lines() {
+        let Some((digest, relative)) = line.split_once("  ") else {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache manifest contains a malformed line: {line:?}"
+            )));
+        };
+        let relative_path = PathBuf::from(relative);
+        let components = relative_path
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        let filename = components.last().map(String::as_str).unwrap_or_default();
+        let allowed_module = filename.ends_with(".v") || filename.ends_with(".vo");
+        let allowed_order = components.len() >= 2 && filename == "ORDER";
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || relative.is_empty()
+            || relative_path.is_absolute()
+            || components
+                .iter()
+                .any(|part| matches!(part.as_str(), "" | "." | ".."))
+            || (!allowed_module && !allowed_order)
+            || manifest_entries
+                .insert(relative_path.clone(), digest.to_owned())
+                .is_some()
+        {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache manifest contains an unsafe or duplicate entry: {line:?}"
+            )));
+        }
+        manifest_order.push(relative_path);
     }
-    for name in &module_names {
-        let stem = name
-            .strip_suffix(".v")
-            .expect("validated proof module has .v suffix");
-        expected_relative.push(PathBuf::from(format!("ProofModules/{name}")));
-        expected_relative.push(PathBuf::from(format!("ProofModules/{stem}.vo")));
-        expected_module_names.insert(name.clone());
-        expected_module_names.insert(format!("{stem}.vo"));
-    }
-    let expected_root_names = BTreeSet::from([
-        "Schema.v".to_owned(),
-        "Schema.vo".to_owned(),
-        "Queries.v".to_owned(),
-        "Queries.vo".to_owned(),
-        "WitnessData.v".to_owned(),
-        "WitnessData.vo".to_owned(),
-        "Witness.v".to_owned(),
-        "Witness.vo".to_owned(),
-        "WitnessModules".to_owned(),
-        "ProofModules".to_owned(),
-        "SHA256SUMS".to_owned(),
-    ]);
-    if directory_names(&source_root)? != expected_root_names
-        || directory_names(&module_root)? != expected_module_names
-        || directory_names(&witness_module_root)? != expected_witness_module_names
-    {
+
+    let mut actual_entries = BTreeSet::new();
+    collect_trusted_cache_regular_files(&source_root, &source_root, &mut actual_entries)?;
+    if actual_entries != manifest_entries.keys().cloned().collect() {
         return Err(Error::TrustedRocqEnvironment(
-            "trusted diagnostic cache contains unexpected or missing entries".to_owned(),
+            "trusted diagnostic cache manifest does not cover exactly the regular cache files"
+                .to_owned(),
+        ));
+    }
+
+    let expected_nested_entries = |directory: &str, names: &[String]| {
+        let mut expected = BTreeSet::from([PathBuf::from(directory).join("ORDER")]);
+        for name in names {
+            let stem = name
+                .strip_suffix(".v")
+                .expect("validated ordered module has a .v suffix");
+            expected.insert(PathBuf::from(directory).join(name));
+            expected.insert(PathBuf::from(directory).join(format!("{stem}.vo")));
+        }
+        expected
+    };
+    for (directory, names) in [
+        (PROOF_MODULE_DIRECTORY, module_names.as_slice()),
+        (WITNESS_MODULE_DIRECTORY, witness_module_names.as_slice()),
+    ] {
+        let observed = manifest_entries
+            .keys()
+            .filter(|path| path.starts_with(directory))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if observed != expected_nested_entries(directory, names) {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache {directory} entries do not match its ORDER registry"
+            )));
+        }
+    }
+    let sources = manifest_entries
+        .keys()
+        .filter_map(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "v")
+                .then(|| path.with_extension(""))
+        })
+        .collect::<BTreeSet<_>>();
+    let objects = manifest_entries
+        .keys()
+        .filter_map(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "vo")
+                .then(|| path.with_extension(""))
+        })
+        .collect::<BTreeSet<_>>();
+    if sources.is_empty() || sources != objects {
+        return Err(Error::TrustedRocqEnvironment(
+            "trusted diagnostic cache modules are not nonempty source/object pairs".to_owned(),
         ));
     }
 
     let mut files = Vec::new();
-    let mut expected_manifest = String::new();
-    for relative in &expected_relative {
+    for relative in &manifest_order {
         let bytes = read_regular(
             relative,
             relative == &order_relative || relative == &witness_order_relative,
         )?;
-        let relative_text = relative.to_str().ok_or_else(|| {
-            Error::TrustedRocqEnvironment(
-                "trusted diagnostic cache relative path is not UTF-8".to_owned(),
-            )
-        })?;
-        expected_manifest.push_str(&format!("{}  {relative_text}\n", sha256_hex(&bytes)));
+        let observed_digest = sha256_hex(&bytes);
+        if manifest_entries.get(relative).map(String::as_str) != Some(observed_digest.as_str()) {
+            return Err(Error::TrustedRocqEnvironment(format!(
+                "trusted diagnostic cache digest binding is invalid for {}",
+                relative.display()
+            )));
+        }
         files.push((relative.clone(), bytes));
     }
-    let manifest_relative = PathBuf::from("SHA256SUMS");
-    let manifest_bytes = read_regular(&manifest_relative, false)?;
-    if manifest_bytes != expected_manifest.as_bytes() {
-        return Err(Error::TrustedRocqEnvironment(
-            "trusted diagnostic cache manifest is not the exact ordered cache digest set"
-                .to_owned(),
-        ));
-    }
-    for name in ["Schema.v", "Queries.v", "WitnessData.v", "Witness.v"] {
-        let live = artifacts.root().join("proof-stage/formal-sql").join(name);
+    for (relative, cached_bytes) in files.iter().filter(|(relative, _)| {
+        relative
+            .extension()
+            .is_some_and(|extension| extension == "v")
+    }) {
+        let live = artifacts
+            .root()
+            .join("proof-stage/formal-sql")
+            .join(relative);
         let live_bytes =
             std::fs::read(&live).map_err(|source| Error::Read { path: live, source })?;
-        let cached = files
-            .iter()
-            .find(|(relative, _)| relative == Path::new(name))
-            .expect("base trusted cache source is in expected entries");
-        if cached.1 != live_bytes {
+        if *cached_bytes != live_bytes {
             return Err(Error::TrustedRocqEnvironment(format!(
-                "trusted diagnostic cache source binding drifted before archive: {name}"
+                "trusted diagnostic cache source binding drifted before archive: {}",
+                relative.display()
             )));
         }
     }
@@ -6617,18 +6683,14 @@ fn archive_trusted_diagnostic_cache(
             destination_root.display()
         ))
     })?;
-    let destination_modules = destination_root.join(PROOF_MODULE_DIRECTORY);
-    std::fs::create_dir(&destination_modules).map_err(|source| Error::CreateDir {
-        path: destination_modules,
-        source,
-    })?;
-    let destination_witness_modules = destination_root.join(WITNESS_MODULE_DIRECTORY);
-    std::fs::create_dir(&destination_witness_modules).map_err(|source| Error::CreateDir {
-        path: destination_witness_modules,
-        source,
-    })?;
     for (relative, bytes) in files {
         let path = destination_root.join(relative);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|source| Error::CreateDir {
+                path: parent.to_owned(),
+                source,
+            })?;
+        }
         std::fs::write(&path, bytes).map_err(|source| Error::Write { path, source })?;
     }
     let manifest_path = format!(
@@ -15877,6 +15939,10 @@ Definition generated_precondition_source :\n\
                 b"Definition witness_data := True.\n".as_slice(),
             ),
             ("Witness.v", b"Definition witness := True.\n".as_slice()),
+            (
+                "RuntimeBridge.v",
+                b"Definition runtime_bridge := True.\n".as_slice(),
+            ),
         ] {
             std::fs::write(formal_root.join(name), bytes).expect("write live trusted source");
             std::fs::write(cache_root.join(name), bytes).expect("write cached trusted source");
@@ -15886,6 +15952,7 @@ Definition generated_precondition_source :\n\
             ("Queries.vo", b"queries object".as_slice()),
             ("WitnessData.vo", b"witness data object".as_slice()),
             ("Witness.vo", b"witness object".as_slice()),
+            ("RuntimeBridge.vo", b"runtime bridge object".as_slice()),
         ] {
             std::fs::write(cache_root.join(name), bytes).expect("write cached object");
         }
@@ -15914,6 +15981,8 @@ Definition generated_precondition_source :\n\
             "WitnessData.vo",
             "Witness.v",
             "Witness.vo",
+            "RuntimeBridge.v",
+            "RuntimeBridge.vo",
             "WitnessModules/ORDER",
             "ProofModules/ORDER",
             "ProofModules/CheckedFacts.v",

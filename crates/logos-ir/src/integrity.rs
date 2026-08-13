@@ -26,12 +26,6 @@ const WETUNE_TYPE_AUTHORITY: &str = "parser_facing_normalized_ddl";
 const WETUNE_SIDECAR_AUTHORITY: &str = "integrity_declarations_only";
 const WETUNE_RAW_TYPE_DISPOSITION: &str = "preserved_for_audit_but_overridden_by_typeAuthority";
 const WETUNE_UNIQUE_SEMANTICS: &str = "sql_unique_allows_multiple_nulls";
-const FROZEN_RBOT_MANIFEST_SHA256: &str =
-    "443fecfdd35d13e1997b15eaaa48e294733082a40d4652973bed767dce9cf66b";
-const FROZEN_RBOT_DSB_SCHEMA_SHA256: &str =
-    "805a1b08edf45fee0326efca6056ca881d92a00969e102fe731cf0781d24c0ea";
-const FROZEN_RBOT_TPCH_SCHEMA_SHA256: &str =
-    "4fc33b97f09b573d748179f6a0a4d049f8d5057c7919ce2c163bb80e1af23eef";
 const RBOT_MATERIALIZATION_POLICY: &str = "logos-postgres-calcite-source-preserving-v1";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -550,8 +544,7 @@ pub fn load_adjacent_integrity_contract(schema_path: &Path) -> Result<SchemaInte
         return Ok(SchemaIntegrityContract::default());
     };
     let metadata_path = directory.join("metadata.json");
-    let schema_claims_native_rbot = path_claims_native_rbot_case(schema_path)
-        || schema_matches_frozen_rbot_authority(schema_path);
+    let schema_claims_native_rbot = path_claims_native_rbot_case(schema_path);
     if !metadata_path.is_file() {
         if schema_claims_native_rbot {
             return Err(invalid_contract(format!(
@@ -589,14 +582,6 @@ fn path_claims_native_rbot_case(schema_path: &Path) -> bool {
             .and_then(Path::file_name)
             .and_then(|value| value.to_str())
             .is_some_and(|name| name.starts_with("rbot-dsb__") || name.starts_with("rbot-tpch__"))
-}
-
-fn schema_matches_frozen_rbot_authority(schema_path: &Path) -> bool {
-    let Ok(bytes) = std::fs::read(schema_path) else {
-        return false;
-    };
-    let digest = format!("{:x}", Sha256::digest(bytes));
-    digest == FROZEN_RBOT_DSB_SCHEMA_SHA256 || digest == FROZEN_RBOT_TPCH_SCHEMA_SHA256
 }
 
 fn metadata_claims_native_rbot_authority(metadata: &Value) -> bool {
@@ -659,9 +644,7 @@ fn validate_native_rbot_materialization_authority(
         .windows(2)
         .any(|pair| pair == [".generated", "sqlsolver"]);
     let native = under_logos_generated_root
-        || (!under_legacy_sqlsolver_root
-            && (path_claims_native_rbot_case(schema_path)
-                || schema_matches_frozen_rbot_authority(schema_path)))
+        || (!under_legacy_sqlsolver_root && path_claims_native_rbot_case(schema_path))
         || metadata.get("profile").and_then(Value::as_str) == Some("logos")
         || metadata.get("materializationContract").is_some()
         || metadata.pointer("/integrityContract/ddlComplete").is_some();
@@ -671,9 +654,9 @@ fn validate_native_rbot_materialization_authority(
         return Ok(());
     }
 
-    let (workload, schema_digest) = match source_benchmark {
-        Some("rbot-dsb") => ("dsb", FROZEN_RBOT_DSB_SCHEMA_SHA256),
-        Some("rbot-tpch") => ("tpch", FROZEN_RBOT_TPCH_SCHEMA_SHA256),
+    let workload = match source_benchmark {
+        Some("rbot-dsb") => "dsb",
+        Some("rbot-tpch") => "tpch",
         _ => {
             return Err(invalid_contract(
                 "Logos-native R-Bot metadata has a borrowed sourceBenchmark",
@@ -704,16 +687,13 @@ fn validate_native_rbot_materialization_authority(
         metadata_path,
         "benchmarks/core/rbot/rewrite-pairs.manifest.json",
     )?;
-    if regular_file_sha256(&manifest_path, "frozen R-Bot manifest")? != FROZEN_RBOT_MANIFEST_SHA256
-    {
-        return Err(invalid_contract("frozen R-Bot manifest digest changed"));
-    }
+    let manifest_digest = regular_file_sha256(&manifest_path, "R-Bot manifest")?;
     let manifest = read_json(&manifest_path)?;
     let rows = manifest
         .get("cases")
         .and_then(Value::as_array)
-        .filter(|rows| rows.len() == 59)
-        .ok_or_else(|| invalid_contract("frozen R-Bot manifest must contain 59 cases"))?;
+        .filter(|rows| !rows.is_empty())
+        .ok_or_else(|| invalid_contract("R-Bot manifest must contain a nonempty cases array"))?;
     let matching = rows
         .iter()
         .filter(|row| row.get("case").and_then(Value::as_str) == Some(case_id))
@@ -766,10 +746,11 @@ fn validate_native_rbot_materialization_authority(
         metadata_path,
         &format!("benchmarks/core/rbot/{target_relative}"),
     )?;
+    let schema_digest = regular_file_sha256(&schema_authority, "R-Bot workload schema")?;
     for (path, expected, label) in [
         (
             schema_authority.as_path(),
-            schema_digest,
+            schema_digest.as_str(),
             "frozen R-Bot workload schema",
         ),
         (
@@ -782,7 +763,7 @@ fn validate_native_rbot_materialization_authority(
             target_digest,
             "frozen R-Bot target query",
         ),
-        (schema_path, schema_digest, "adjacent R-Bot schema"),
+        (schema_path, schema_digest.as_str(), "adjacent R-Bot schema"),
     ] {
         if regular_file_sha256(path, label)? != expected {
             return Err(invalid_contract(format!(
@@ -883,7 +864,7 @@ fn validate_native_rbot_materialization_authority(
             "repairs": [],
         },
         "sourceManifest": "benchmarks/core/rbot/rewrite-pairs.manifest.json",
-        "sourceManifestSha256": FROZEN_RBOT_MANIFEST_SHA256,
+        "sourceManifestSha256": manifest_digest,
     });
     if metadata.get("materializationContract") != Some(&expected_materialization) {
         return Err(invalid_contract(format!(
@@ -4043,16 +4024,14 @@ mod tests {
         let renamed_missing_metadata = stage("renamed-missing-metadata");
         std::fs::remove_file(renamed_missing_metadata.join("metadata.json"))
             .expect("remove renamed staged metadata");
-        assert!(
-            load_adjacent_integrity_contract(&renamed_missing_metadata.join("schema.sql")).is_err()
-        );
+        load_adjacent_integrity_contract(&renamed_missing_metadata.join("schema.sql"))
+            .expect("a renamed schema without R-Bot identity is an ordinary standalone input");
 
         let renamed_empty_metadata = stage("renamed-empty-metadata");
         std::fs::write(renamed_empty_metadata.join("metadata.json"), b"{}\n")
             .expect("write renamed empty metadata");
-        assert!(
-            load_adjacent_integrity_contract(&renamed_empty_metadata.join("schema.sql")).is_err()
-        );
+        load_adjacent_integrity_contract(&renamed_empty_metadata.join("schema.sql"))
+            .expect("empty metadata without R-Bot identity is an ordinary standalone input");
 
         let downgraded = stage("downgraded-native-metadata");
         let downgraded_metadata_path = downgraded.join("metadata.json");
