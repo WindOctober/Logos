@@ -112,12 +112,7 @@ load_logos_env(LOGOS_ROOT)
 
 RUNNER_PATH = LOGOS_ROOT / "benchmarks/scripts/run-logos"
 _RUNNER_VALIDATORS: dict[str, Any] | None = None
-DEFAULT_OUTPUT = configured_path(
-    LOGOS_ROOT,
-    "LOGOS_FINAL_EXPERIMENT_DIR",
-    default=LOGOS_ROOT / "var/final-experiment/Logos",
-)
-assert DEFAULT_OUTPUT is not None
+DEFAULT_OUTPUT = LOGOS_ROOT / "var/final-experiment/Logos"
 COHORT_AUTHORITY = LOGOS_ROOT / "benchmarks/core/authority/cohort-389.json"
 COHORT_AUTHORITY_SHA256 = (
     "b8fd9d4136b247782df4dae4671ef61323f587261f1aef11f7d4f53c9a1809f2"

@@ -20,35 +20,14 @@ authority/                                      versioned cohort, proof-gate, an
 
 The WeTune schema subset is restricted to the applications referenced by `wetune/issues/issues.tsv`: `diaspora`, `discourse`, `gitlab`, `lobsters`, `redmine`, `solidus`, and `spree`.
 
-## Baseline Run Configuration
+## Repository Scope
 
-Paper-tool baseline runs should use the shared resource budget recorded at the
-workflow root in:
-
-```text
-PaperTools/config/default.json
-```
-
-The current default configuration is:
-
-```text
-timeoutSeconds  14400  # 4 hours per case
-maxParallel     6      # maximum concurrent cases
-cpuCores        4      # CPU quota exposed per case when supported
-memoryGb        16     # memory budget per case
-SQLSolver Xmx   16g
-Cosette image   shumo/cosette-frontend:latest
-```
-
-From the workflow root, the unified runner consumes this config by default:
-
-```bash
-PaperTools/scripts/run-benchmark-tools --tool all
-```
-
-Individual tools can be selected with `--tool sqlsolver`, `--tool qed`, or
-`--tool cosette`. Use `--tool qed-cosette` to run the two external paper
-baselines without executing SQLSolver.
+The checked-in corpus, authority metadata, and Logos materializers are
+self-contained within this repository. Optional QED, SQLSolver, and Cosette
+executables are not vendored and are not required to build or run Logos. Their
+input profiles can be generated locally under `benchmarks/core/.generated/`;
+external tools must be configured explicitly when those optional profiles are
+used.
 
 ## Cosette Frontend Profile
 
@@ -258,13 +237,12 @@ recover the paper run's stochastic RAG-selected, cost-best outputs. DSB
 the predeclared case-unit policy selects its first statement so all 59 cases
 remain one-query pairs.
 
-Regenerate the corpus from a clean pinned checkout with the local isolated
-`JPype1==1.7.1` environment:
+Regenerate the corpus from a clean pinned R-Bot checkout using an environment
+with `JPype1==1.7.1`:
 
 ```bash
-direnv exec . PaperTools/envs/rbot/bin/python \
-  Logos/benchmarks/scripts/generate-rbot-pairs \
-  --rbot-root PaperTools/R-Bot
+python3 benchmarks/scripts/generate-rbot-pairs \
+  --rbot-root /path/to/R-Bot
 ```
 
 So R-Bot is **workload-level schema**:
@@ -522,7 +500,10 @@ WeTune:
   for SQLSolver, use the generated profile under .generated/sqlsolver/wetune-issues/
 ```
 
-SQLSolver expects separate `schema`, `sql1`, and `sql2` files. QED expects one `.sql` file containing `CREATE TABLE` declarations followed by exactly two `SELECT` statements, which can then be converted to QED JSON by `PaperTools/scripts/qed-parser`.
+SQLSolver expects separate `schema`, `sql1`, and `sql2` files. QED expects one
+`.sql` file containing `CREATE TABLE` declarations followed by exactly two
+`SELECT` statements. Set `LOGOS_QED_PARSER` to an installed parser executable
+when JSON generation is required.
 
 For non-WeTune SQLSolver runs, generate the flat input profile with:
 
@@ -587,12 +568,12 @@ This writes:
 ```text
 benchmarks/core/.generated/qed/wetune-issues/<issue-id>/
   qed.sql
-  qed.json          # present when PaperTools/scripts/qed-parser accepts qed.sql
+  qed.json          # present when the configured QED parser accepts qed.sql
   metadata.json
 
 benchmarks/core/.generated/qed/nonwetune-flat/<benchmark>__<case>/
   qed.sql
-  qed.json          # present when PaperTools/scripts/qed-parser accepts qed.sql
+  qed.json          # present when the configured QED parser accepts qed.sql
   metadata.json
 ```
 

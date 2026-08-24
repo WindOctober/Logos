@@ -8,7 +8,5 @@ particular experiment output directory.
 - `proof-gate-16.json`: fixed 16-case proof gate used before a full campaign.
 - `non-rbot-materialization-baseline.json`: byte digests for the legacy
   non-R-Bot Logos materialization compatibility boundary.
-
-Run artifacts belong under `var/`. Published experiment summaries may live
-outside the repository, but their destination is machine-local configuration
-through `LOGOS_FINAL_EXPERIMENT_DIR`.
+Run artifacts belong under the repository-local `var/` tree and are not part
+of benchmark authority.

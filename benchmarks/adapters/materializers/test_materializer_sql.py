@@ -1381,14 +1381,7 @@ class IntegrityContractMetadataTests(unittest.TestCase):
 
 
 class IntegrityCoverageGeneratorTests(unittest.TestCase):
-    REQUIRED_KINDS = [
-        "not_null",
-        "primary_key",
-        "unique",
-        "foreign_key",
-        "check",
-        "partial_expression_unique_index",
-    ]
+    REQUIRED_KINDS = integrity_coverage.REQUIRED_CONSTRAINT_KINDS
 
     @staticmethod
     def write_json(path: Path, value: object) -> None:
@@ -1396,15 +1389,13 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
         path.write_text(json.dumps(value, indent=2) + "\n")
 
     def make_fixture(self, root: Path) -> tuple[Path, Path, Path, Path]:
-        scope_path = (
-            root / "var/codex-background/logos-integrity-constraints-v1.scope.json"
-        )
+        cohort_path = root / "benchmarks/core/authority/cohort.json"
         self.write_json(
-            scope_path,
+            cohort_path,
             {
-                "scope_revision": integrity_coverage.SCOPE_REVISION,
-                "benchmark_case_count": 2,
-                "required_constraint_kinds": self.REQUIRED_KINDS,
+                "schemaVersion": 1,
+                "caseCount": 2,
+                "cases": ["nonwetune-flat__pair__1", "wetune-issues__7"],
             },
         )
         metadata_root = root / "benchmarks/core/.generated/sqlsolver"
@@ -1530,14 +1521,14 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
         (wetune_dir / "schema.sql").write_text(
             "CREATE TABLE child (id INTEGER NOT NULL, parent_id INTEGER, active BOOLEAN);\n"
         )
-        return scope_path, metadata_root, pair_dir / "metadata.json", sidecar_path
+        return cohort_path, metadata_root, pair_dir / "metadata.json", sidecar_path
 
     def generate(
-        self, root: Path, scope_path: Path, metadata_root: Path, aligned: bool
+        self, root: Path, cohort_path: Path, metadata_root: Path, aligned: bool
     ):
         return integrity_coverage.generate_coverage(
             root=root,
-            scope_path=scope_path,
+            cohort_path=cohort_path,
             metadata_root=metadata_root,
             aligned=aligned,
         )
@@ -1545,10 +1536,10 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
     def test_exact_coverage_requires_explicit_alignment_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            scope_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
+            cohort_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
 
-            draft = self.generate(root, scope_path, metadata_root, aligned=False)
-            aligned = self.generate(root, scope_path, metadata_root, aligned=True)
+            draft = self.generate(root, cohort_path, metadata_root, aligned=False)
+            aligned = self.generate(root, cohort_path, metadata_root, aligned=True)
 
         self.assertEqual(
             [entry["case_id"] for entry in draft["cases"]],
@@ -1571,7 +1562,7 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
     def test_unknown_pair_constraint_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            scope_path, metadata_root, pair_path, _sidecar = self.make_fixture(root)
+            cohort_path, metadata_root, pair_path, _sidecar = self.make_fixture(root)
             pair = json.loads(pair_path.read_text())
             pair["constraints"] = [{"mystery": {"value": "items__id"}}]
             self.write_json(pair_path, pair)
@@ -1579,12 +1570,12 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 integrity_coverage.CoverageError, "unknown pair"
             ):
-                self.generate(root, scope_path, metadata_root, aligned=False)
+                self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_sidecar_unknown_or_unsupported_forms_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            scope_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
+            cohort_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
             sidecar = json.loads(sidecar_path.read_text())
             sidecar["unsupportedSemanticConstraints"] = [{"kind": "exclude"}]
             self.write_json(sidecar_path, sidecar)
@@ -1592,7 +1583,7 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 integrity_coverage.CoverageError, "unsupported forms"
             ):
-                self.generate(root, scope_path, metadata_root, aligned=False)
+                self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_wetune_authority_markers_fail_closed_when_changed(self) -> None:
         mutations = {
@@ -1604,14 +1595,14 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
         for field, invalid_value in mutations.items():
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                scope_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
+                cohort_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
                 metadata_path = metadata_root / "wetune-issues/7/metadata.json"
                 metadata = json.loads(metadata_path.read_text())
                 metadata["integrityContract"][field] = invalid_value
                 self.write_json(metadata_path, metadata)
 
                 with self.assertRaises(integrity_coverage.CoverageError):
-                    self.generate(root, scope_path, metadata_root, aligned=False)
+                    self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_wetune_unique_null_semantics_and_nullable_columns_fail_closed(
         self,
@@ -1623,7 +1614,7 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
         for field, invalid_value in mutations.items():
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                scope_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
+                cohort_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
                 sidecar = json.loads(sidecar_path.read_text())
                 sidecar["uniqueKeys"][0][field] = invalid_value
                 self.write_json(sidecar_path, sidecar)
@@ -1632,7 +1623,7 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
                     integrity_coverage.CoverageError,
                     "semantics|nullableColumns",
                 ):
-                    self.generate(root, scope_path, metadata_root, aligned=False)
+                    self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_wetune_sidecar_type_statement_and_sources_fail_closed(self) -> None:
         mutations = (
@@ -1642,7 +1633,7 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
         for mutation, invalid_value in mutations:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
-                scope_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
+                cohort_path, metadata_root, _pair, sidecar_path = self.make_fixture(root)
                 sidecar = json.loads(sidecar_path.read_text())
                 if mutation == "typeSemantics":
                     sidecar["semanticSchema"]["typeSemantics"] = invalid_value
@@ -1654,12 +1645,12 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
                     integrity_coverage.CoverageError,
                     "typeSemantics|source",
                 ):
-                    self.generate(root, scope_path, metadata_root, aligned=False)
+                    self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_wetune_selected_sidecar_must_be_exact_base_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            scope_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
+            cohort_path, metadata_root, _pair, _sidecar = self.make_fixture(root)
             metadata_path = metadata_root / "wetune-issues/7/metadata.json"
             metadata = json.loads(metadata_path.read_text())
             opt_path = (
@@ -1670,17 +1661,17 @@ class IntegrityCoverageGeneratorTests(unittest.TestCase):
             self.write_json(metadata_path, metadata)
 
             with self.assertRaisesRegex(integrity_coverage.CoverageError, "requires"):
-                self.generate(root, scope_path, metadata_root, aligned=False)
+                self.generate(root, cohort_path, metadata_root, aligned=False)
 
     def test_missing_or_duplicate_flat_ids_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            scope_path, metadata_root, pair_path, _sidecar = self.make_fixture(root)
+            cohort_path, metadata_root, pair_path, _sidecar = self.make_fixture(root)
             pair = json.loads(pair_path.read_text())
             pair.pop("flatCaseId")
             self.write_json(pair_path, pair)
             with self.assertRaisesRegex(integrity_coverage.CoverageError, "flatCaseId"):
-                self.generate(root, scope_path, metadata_root, aligned=False)
+                self.generate(root, cohort_path, metadata_root, aligned=False)
 
 
 class DirectScriptImportTests(unittest.TestCase):

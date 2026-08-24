@@ -1,4 +1,4 @@
 [submodule "vendor/FormalSQL"]
 	path = vendor/FormalSQL
-	url = git@github.com:WindOctober/FormalSQL.git
+	url = https://github.com/WindOctober/FormalSQL.git
 	branch = master

@@ -66,13 +66,14 @@ class LogosMaterializerTests(unittest.TestCase):
             skip_parser=False,
             verify_non_rbot_baseline=False,
         )
-        output = Path("/tmp/logos-materializer-dispatch-test")
-        commands = namespace["build_commands"](args, output)
-        self.assertEqual(len(commands), 1)
-        command = commands[0]
-        self.assertIn(str(HERE / "materialize_logos.py"), command)
-        self.assertIn(str(output / "logos"), command)
-        self.assertNotIn("sqlsolver-preflight", " ".join(command))
+        with tempfile.TemporaryDirectory(prefix="logos-materializer-dispatch-test-") as tmp:
+            output = Path(tmp)
+            commands = namespace["build_commands"](args, output)
+            self.assertEqual(len(commands), 1)
+            command = commands[0]
+            self.assertIn(str(HERE / "materialize_logos.py"), command)
+            self.assertIn(str(output / "logos"), command)
+            self.assertNotIn("sqlsolver-preflight", " ".join(command))
 
     def test_rbot_preserves_quoted_year_and_binds_every_exact_input(self) -> None:
         benchmark = next(

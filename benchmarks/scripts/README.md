@@ -1,14 +1,13 @@
 # Benchmark materialization and runs
 
-Run these commands from the `Logos` repository root after copying
-`.env.example` to `.env` and running `direnv allow`. For non-interactive or
-detached runs, invoke the runner as `direnv exec . benchmarks/scripts/run-logos
-...`; the Python runner does not parse `.env` itself. Complete the environment
-preflight in the root README before starting a multi-hour batch.
+Run these commands with the required environment variables exported. The
+Python runner does not parse `.env` itself. If using the repository example,
+load it into the current shell with `set -a; . ./.env; set +a`. Complete the
+environment preflight in the root README before starting a multi-hour batch.
 
 ## Run the complete Logos pipeline
 
-`Logos/benchmarks/scripts/run-logos` is the canonical full-pipeline benchmark
+`benchmarks/scripts/run-logos` is the canonical full-pipeline benchmark
 runner.  It invokes `logos-solver check` once per case, so every case follows
 the normal counterexample, lowering, proof-agent, and trusted Rocq-check path.
 The frozen 389-case launch is accepted only after an exact 16-case gate made by
@@ -16,8 +15,8 @@ the same framework, executable, trusted stack, model, resource
 policy, SQL environment, and immutable Docker image:
 
 ```bash
-Logos/benchmarks/scripts/run-logos \
-  --input-root Logos/benchmarks/core/.generated/logos \
+benchmarks/scripts/run-logos \
+  --input-root benchmarks/core/.generated/logos \
   --jobs 32 \
   --case-timeout 4h \
   --verification-mode outcome-unconditional \
@@ -27,14 +26,14 @@ Logos/benchmarks/scripts/run-logos \
   --max-counterexample-rounds 3 \
   --proof-check-timeout-seconds 420 \
   --proof-docker-image sha256:bba804128f28ee6948ed601afac7bd158bab3617d784e2479ef588d03a97459b \
-  --proof-rocq-opam-switch Logos/.opam-rocq \
+  --proof-rocq-opam-switch .opam-rocq \
   --postgres-url postgresql://logos@127.0.0.1:55490/postgres \
   --sql-time-zone UTC \
   --sql-default-collation C \
   --sql-character-classification C \
   --sql-locale-provider libc \
   --sql-server-encoding UTF8 \
-  --cohort16-gate-summary Logos/var/logos-solver/<gate-run>/runner-summary.json
+  --cohort16-gate-summary var/logos-solver/<gate-run>/runner-summary.json
 ```
 
 The runner rejects a frozen full launch with any different concurrency,
@@ -50,13 +49,13 @@ not require PostgreSQL or Codex configuration.
 ```bash
 export LOGOS_POSTGRES_URL=postgresql://logos@127.0.0.1:55490/postgres
 
-Logos/benchmarks/scripts/run-logos \
+benchmarks/scripts/run-logos \
   --case nonwetune-flat__verieql-calcite__calcite-148
 
-Logos/benchmarks/scripts/run-logos \
+benchmarks/scripts/run-logos \
   --benchmark verieql-calcite
 
-Logos/benchmarks/scripts/run-logos \
+benchmarks/scripts/run-logos \
   --case-file selected-cases.txt
 ```
 
@@ -77,12 +76,12 @@ worker: every run uses the immutable authority snapshot described below. The
 default remains strict source-digest equality.
 
 The Logos-facing generated input is
-`Logos/benchmarks/core/.generated/logos`. Each case has `schema.sql`,
+`benchmarks/core/.generated/logos`. Each case has `schema.sql`,
 `sql1.sql`, `sql2.sql`, and authoritative integrity metadata. Regenerate it
 independently of the external-tool profiles with:
 
 ```bash
-Logos/benchmarks/scripts/materialize --tool logos --target all --force
+benchmarks/scripts/materialize --tool logos --target all --force
 ```
 
 The legacy `.generated/sqlsolver` root remains the immutable input of the older
@@ -99,7 +98,7 @@ source-derived frozen renderer reproduces the campaign-start bytes. Verify all
 1,320 non-R-Bot files in a fresh scratch root with:
 
 ```bash
-Logos/benchmarks/scripts/materialize \
+benchmarks/scripts/materialize \
   --tool logos \
   --target all \
   --output-root <fresh-scratch-root> \
@@ -119,7 +118,7 @@ without counterexample search or a proof agent. It defaults to the independent
 limit, and list selectors as the full runner. For the complete R-Bot cohort:
 
 ```bash
-Logos/benchmarks/scripts/run-logos-transform \
+benchmarks/scripts/run-logos-transform \
   --benchmark rbot-dsb \
   --benchmark rbot-tpch \
   --jobs 32 \
@@ -165,7 +164,7 @@ diagnostic retains a prefix-bound `Problem.vo` for final certification. Every
 reuse path still performs its independent source/object and kernel checks.
 Capture performs a second live-closure scan and aborts if a build races the
 copy. Results go to a fresh
-timestamped directory under `Logos/var/logos-solver/benchmark-runs/`. Each case has its complete solver
+timestamped directory under `var/logos-solver/benchmark-runs/`. Each case has its complete solver
 artifacts plus `stdout.log`, `stderr.log`, `time.txt`, `status.json`,
 `usage.json`, and `runner-result.json`;
 `runner-summary.json` is atomically refreshed as cases finish.  A timed-out or
@@ -284,7 +283,7 @@ Use the stable core cohort for proof-framework changes before scheduling all
 389 cases:
 
 ```bash
-Logos/benchmarks/scripts/run-logos-regression
+benchmarks/scripts/run-logos-regression
 ```
 
 The wrapper selects `logos-regression-core.txt`, runs 16 cases concurrently,
@@ -293,11 +292,11 @@ pipeline one hour. Normal `run-logos` options override these defaults because
 they are appended after the wrapper defaults, for example:
 
 ```bash
-Logos/benchmarks/scripts/run-logos-regression \
+benchmarks/scripts/run-logos-regression \
   --jobs 4 \
-  --run-dir Logos/var/logos-solver/my-regression
+  --run-dir var/logos-solver/my-regression
 
-Logos/benchmarks/scripts/run-logos-regression --list
+benchmarks/scripts/run-logos-regression --list
 ```
 
 The cohort deliberately spans small, medium, and large queries. It covers
@@ -308,14 +307,12 @@ PK/FK/UNIQUE sidecars, and large DSB/TPC-H/TPC-DS plans. Both proof and validate
 counterexample paths are represented; the cohort is a regression workload, not
 a collection selected only because every case is currently easy to certify.
 
-## Reproduce external baselines
+## Prepare Optional Baseline Inputs
 
-The wrappers use the locally configured QED parser/prover and the pinned
-Cosette container. The recipe regenerates the solver-neutral
-`Logos/benchmarks/core/.generated/sqlsolver` case layout because Cosette uses
-that common `schema.sql`/`sql1.sql`/`sql2.sql` layout as its source. This is
-input preprocessing only: the SQLSolver JAR is not executed and no SQLSolver
-result is produced.
+The materializers can generate input profiles for independently installed QED,
+SQLSolver, and Cosette tools. These integrations are optional and are not part
+of the Logos build or proof pipeline. Generated profiles remain under
+`benchmarks/core/.generated/`; no sibling tools workspace is assumed.
 
 SQLSolver materialization has its own target policy, independent of the Calcite
 ingestion adapter. For enabled corpora it records guarded identifier lowering and
@@ -326,7 +323,7 @@ not prover `UNKNOWN`, while a bounded preflight resource failure remains
 `Timeout`. The parser/planner-only probe is also available directly:
 
 ```bash
-Logos/benchmarks/scripts/sqlsolver-preflight \
+benchmarks/scripts/sqlsolver-preflight \
   --schema <case>/schema.sql \
   --sql1 <case>/sql1.sql \
   --sql2 <case>/sql2.sql
@@ -339,7 +336,7 @@ whole-input lowercasing, which is a target limitation rather than an attested
 source-semantic rewrite:
 
 ```bash
-Logos/benchmarks/scripts/cosette-preflight \
+benchmarks/scripts/cosette-preflight \
   --input-root <generated-cosette-root> \
   --report <new-var-run>/report.json
 ```
@@ -349,10 +346,10 @@ Filtered repair work should materialize into a new `var/` output root. Do not us
 materializers own broader output directories and may remove unrelated cases or
 rewrite shared manifests.
 
-### Reproduce QED and Cosette in one invocation
+### Materialize QED and Cosette Profiles
 
 ```bash
-direnv exec . bash -euo pipefail -c '
+bash -euo pipefail -c '
   IR_LOG="$(mktemp)"
   cleanup_ir_log() {
     rm -f -- "$IR_LOG"
@@ -360,7 +357,7 @@ direnv exec . bash -euo pipefail -c '
   trap cleanup_ir_log EXIT
 
   IR_STATUS=0
-  Logos/scripts/export-benchmark-ir \
+  scripts/export-benchmark-ir \
     --force \
     --continue-on-error 2>"$IR_LOG" || IR_STATUS=$?
   cat "$IR_LOG" >&2
@@ -385,57 +382,39 @@ direnv exec . bash -euo pipefail -c '
   fi
 
   for artifact in before.calcite-ir.json after.calcite-ir.json metadata.json; do
-    test "$(find Logos/benchmarks/core/.generated/calcite-ir \
+    test "$(find benchmarks/core/.generated/calcite-ir \
       -type f -name "$artifact" | wc -l)" -eq "$EXPECTED_IR_CASES"
   done
 
-  Logos/benchmarks/scripts/materialize \
+  benchmarks/scripts/materialize \
     --tool sqlsolver \
     --target all \
     --force
 
-  Logos/benchmarks/scripts/materialize \
+  benchmarks/scripts/materialize \
     --tool qed \
     --target all \
     --force \
     --skip-parser
 
-  Logos/benchmarks/scripts/materialize \
+  benchmarks/scripts/materialize \
     --tool cosette \
     --target all \
     --force
 
-  test "$(find Logos/benchmarks/core/.generated/sqlsolver -name metadata.json -type f | wc -l)" -eq 389
-  test "$(find Logos/benchmarks/core/.generated/qed -name metadata.json -type f | wc -l)" -eq 389
-  test "$(find Logos/benchmarks/core/.generated/qed -name qed.sql -type f | wc -l)" -eq 389
+  test "$(find benchmarks/core/.generated/sqlsolver -name metadata.json -type f | wc -l)" -eq 389
+  test "$(find benchmarks/core/.generated/qed -name metadata.json -type f | wc -l)" -eq 389
+  test "$(find benchmarks/core/.generated/qed -name qed.sql -type f | wc -l)" -eq 389
   jq -e ".discovered == 389 and .emitted == 389 and .failed == 0" \
-    Logos/benchmarks/core/.generated/cosette/manifest.json >/dev/null
+    benchmarks/core/.generated/cosette/manifest.json >/dev/null
 
-  RUN_LABEL="${RUN_LABEL:-final-qed-cosette-$(date +%Y%m%d-%H%M%S)}"
-  PaperTools/scripts/run-benchmark-tools \
-    --tool qed-cosette \
-    --qed-parse-missing \
-    --run-label "$RUN_LABEL" \
-    --jobs 6 \
-    --timeout 14400 \
-    --memory-gb 16 \
-    --cores 4 \
-    --cosette-image \
-      shumo/cosette-frontend@sha256:184fb5eb5217b8cd2d53f513610747e046d927f8fc31602652c9addf23ffdad9
-
-  test "$(wc -l < "var/tool-runs/$RUN_LABEL/qed/results.jsonl")" -eq 389
-  test "$(wc -l < "var/tool-runs/$RUN_LABEL/cosette/results.jsonl")" -eq 389
-  jq -e ".cases == 389" "var/tool-runs/$RUN_LABEL/qed/summary.json" >/dev/null
-  jq -e ".cases == 389" "var/tool-runs/$RUN_LABEL/cosette/summary.json" >/dev/null
-  printf "results: var/tool-runs/%s\n" "$RUN_LABEL"
+  printf "profiles: benchmarks/core/.generated/{qed,cosette}\n"
 '
 ```
 
-QED parsing is deliberately performed by the runner via
-`--qed-parse-missing`; this keeps parser failures in the same 389-case result
-cohort instead of silently omitting cases without `qed.json`. A nonzero or
-unsupported result for an individual case is recorded as experimental output
-and does not stop the other tool from running.
+Pass `--skip-parser` when only `qed.sql` and metadata are needed. Otherwise,
+set `LOGOS_QED_PARSER` to an installed parser executable. Parser failures are
+recorded per case instead of silently omitting profiles without `qed.json`.
 
 The deterministic R-Bot targets are required to round-trip through R-Bot's
 pinned Calcite parser/serializer, but 38 of them do not satisfy Logos's newer,
@@ -493,12 +472,9 @@ canonical JSON digests together with the recorded active policy. Every attempt,
 selected variant, constraint relaxation, output signature, repair, and digest is
 recorded in case metadata or the runner result.
 
-The resource flags are tool-specific in the current local runner. Both tools
-use six concurrent cases and a 14,400-second wall-clock timeout. Cosette runs
-inside Docker with the requested 4-CPU and 16-GiB per-case limits. QED runs as
-a host process: those two Docker limits are not applied to it, so its actual
-CPU and peak RSS are recorded per case instead. Do not interpret the root
-manifest's `cpuCores`/`memoryGb` fields as enforced QED limits.
+Resource limits and execution policies belong to the independently installed
+baseline tools. Logos records only the generated profile and its semantic
+compatibility metadata.
 
 The Cosette adapter emits every case for audit. Its metadata reports syntax
 compatibility and semantic-profile compatibility separately; those labels do
@@ -544,40 +520,5 @@ from parser planning to avoid its key-index bug, then injected by attested colum
 name into the finalized JSON; a key pruned by the parser is reported as a
 conservative relaxation.
 
-Raw runner output is written once under
-`var/tool-runs/<RUN_LABEL>/{qed,cosette}`. Canonical paper artifacts should be
-copied into the destination configured by `LOGOS_FINAL_EXPERIMENT_DIR`; do not create
-parallel `latest/` or `run/` result aliases. Each canonical tool root has one
-`logs/` evidence subtree; it is not a second result cohort.
-
-### Canonical tool revisions
-
-The canonical local run uses QED prover commit
-`31f4b6c271440942ecaca1e1111d4beeabf1f14c` and QED parser commit
-`684daf23e5c2595726d3411ff3dc04b1c38a4409`. The built prover and parser
-artifacts have SHA-256 values
-`365111b7f047743fd827c64439a3efca5f0dfe8ce3cb03e8100d06bb5d8403a9`
-and `d64b9a22fd1bccb359458f547e70f56b0dafbb00af894627ae5ae205c707ec48`,
-respectively. The Cosette image is addressed by digest directly in the command
-above.
-
-The parser runs on Temurin JDK `19.0.2+7`. QED's external solvers are cvc5
-`1.3.1-dev.12.58cda4cdc` (git `58cda4cdc`, SHA-256
-`9404b79e9b599375d0ebe7f0d8df4c13132fc106e939bbc82dc95f7d7867775e`)
-and Z3 `4.16.0` (SHA-256
-`a06c2a851d58c5f5a7c1e5de188fd0e1b1135e778112aee83ffd1a433685516b`).
-On another machine, set `CVC5_BIN` and `Z3_BIN` to those pinned executables.
-
-This one-click command is a workflow-level recipe, not a standalone Logos-only
-checkout command. The canonical local runner wrappers have SHA-256 values:
-
-- `PaperTools/scripts/run-benchmark-tools`:
-  `dcf52153948a455236cf4085b06358dc23e4536f8df784e4e2de047bd0dc3a6f`
-- `PaperTools/scripts/run-qed-benchmark`:
-  `feae5c564cc6ae4ba6349af1fd00d8496dc5b5de42b6e02d89789e3e8321fb35`
-- `PaperTools/scripts/run-cosette-benchmark`:
-  `8381f837adc373c6a839505e43d28e168fae66a88b0171f2d08b5776220afc54`
-- `PaperTools/scripts/qed-parser`:
-  `8585d29b0f60fdbecedbde63b1883736ad3c034893a3ed55b2197481f87691e5`
-- `PaperTools/scripts/qed-prover`:
-  `d268b62383d94dcb5527514abc3b98fdc8c6cb25e99fca8c1698511909498308`
+Any local baseline output should be written under `var/tool-runs/`, which is
+outside benchmark authority and may be deleted without changing the corpus.

@@ -21,8 +21,6 @@ load_logos_env(ROOT)
 
 SOURCE = ROOT / "benchmarks/adapters/materializers/SqlSolverFrontendPreflight.java"
 DEFAULT_JAR = configured_path(ROOT, "LOGOS_SQLSOLVER_JAR")
-if DEFAULT_JAR is None:
-    DEFAULT_JAR = configured_path(ROOT, "SQLSOLVER_JAR")
 POLICY = "sqlsolver-parser-validator-planner-v1"
 
 

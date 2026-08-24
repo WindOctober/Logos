@@ -2203,7 +2203,7 @@ class CanonicalPublisherTest(unittest.TestCase):
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(cls.temporary.name)
         cls.full_run = cls.root / "full-run"
-        cls.output = cls.root / "FinalExperiment/Logos"
+        cls.output = cls.root / "published-output"
         cls.source_root = cls.root / "source-tree"
         cls.full_run.mkdir()
         cls.output.mkdir(parents=True)

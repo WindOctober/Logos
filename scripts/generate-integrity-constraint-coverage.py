@@ -25,10 +25,10 @@ from materializer_sql import (  # noqa: E402
 )
 
 
-SCOPE_REVISION = "logos-integrity-constraints-v1-20260721"
-DEFAULT_SCOPE = "var/codex-background/logos-integrity-constraints-v1.scope.json"
+COVERAGE_SCHEMA_VERSION = 1
+DEFAULT_COHORT = "benchmarks/core/authority/cohort-389.json"
 DEFAULT_METADATA_ROOT = "benchmarks/core/.generated/sqlsolver"
-DEFAULT_OUTPUT = "var/codex-background/logos-integrity-constraints-v1/coverage.json"
+DEFAULT_OUTPUT = "var/integrity-constraint-coverage/coverage.json"
 MAX_METADATA_BYTES = 2 * 1024 * 1024
 MAX_SCHEMA_BYTES = 16 * 1024 * 1024
 MAX_SIDECAR_BYTES = 32 * 1024 * 1024
@@ -67,6 +67,14 @@ SIDECAR_KIND_MAP = {
     "foreignKeys": "foreign_key",
     "checks": "check",
 }
+REQUIRED_CONSTRAINT_KINDS = [
+    "not_null",
+    "primary_key",
+    "unique",
+    "foreign_key",
+    "check",
+    "partial_expression_unique_index",
+]
 SIDECAR_TOP_LEVEL_FIELDS = {
     "checks",
     "foreignKeys",
@@ -591,36 +599,36 @@ def validate_contract_reference(metadata: dict[str, Any], label: str) -> None:
 def generate_coverage(
     *,
     root: Path,
-    scope_path: Path,
+    cohort_path: Path,
     metadata_root: Path,
     aligned: bool,
 ) -> dict[str, Any]:
     root = root.resolve()
-    scope_path = resolve_under_root(root, scope_path, "scope path")
+    cohort_path = resolve_under_root(root, cohort_path, "cohort path")
     metadata_root = resolve_under_root(root, metadata_root, "metadata root")
-    scope = require_object(read_json_bounded(scope_path, MAX_METADATA_BYTES), "scope")
-    if scope.get("scope_revision") != SCOPE_REVISION:
-        raise CoverageError(
-            f"scope revision is {scope.get('scope_revision')!r}, expected {SCOPE_REVISION!r}"
-        )
-    expected_count = scope.get("benchmark_case_count")
-    if not isinstance(expected_count, int) or expected_count <= 0:
-        raise CoverageError("scope benchmark_case_count must be a positive integer")
-    required_order = require_string_list(
-        scope.get("required_constraint_kinds"),
-        "scope.required_constraint_kinds",
+    cohort = require_object(
+        read_json_bounded(cohort_path, MAX_METADATA_BYTES), "cohort"
+    )
+    expected_cases = require_string_list(
+        cohort.get("cases"),
+        "cohort.cases",
         nonempty=True,
     )
-    if len(required_order) != len(set(required_order)):
-        raise CoverageError("scope.required_constraint_kinds contains duplicates")
+    if len(expected_cases) != len(set(expected_cases)):
+        raise CoverageError("cohort.cases contains duplicates")
+    if cohort.get("caseCount") != len(expected_cases):
+        raise CoverageError("cohort.caseCount does not match cohort.cases")
+    expected_case_set = set(expected_cases)
+    required_order = REQUIRED_CONSTRAINT_KINDS
 
     metadata_paths = sorted(metadata_root.glob("**/metadata.json"))
-    if len(metadata_paths) != expected_count:
+    if len(metadata_paths) != len(expected_cases):
         raise CoverageError(
-            f"scope requires {expected_count} metadata rows, found {len(metadata_paths)}"
+            f"cohort requires {len(expected_cases)} metadata rows, "
+            f"found {len(metadata_paths)}"
         )
     cases: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen_authority_cases: set[str] = set()
     allowed_kinds = set(required_order)
     for metadata_path in metadata_paths:
         label = str(metadata_path.relative_to(root))
@@ -631,9 +639,21 @@ def generate_coverage(
         case_id = require_nonempty_string(
             metadata.get("flatCaseId"), f"{label}.flatCaseId"
         )
-        if case_id in seen:
-            raise CoverageError(f"duplicate flatCaseId {case_id!r}")
-        seen.add(case_id)
+        relative_parts = metadata_path.relative_to(metadata_root).parts
+        if len(relative_parts) < 3:
+            raise CoverageError(f"metadata path has no profile/case layout: {label}")
+        profile = relative_parts[0]
+        if profile == "nonwetune-flat":
+            authority_case_id = f"nonwetune-flat__{case_id}"
+        elif profile == "wetune-issues":
+            authority_case_id = case_id
+        else:
+            raise CoverageError(f"unknown metadata profile {profile!r} in {label}")
+        if authority_case_id in seen_authority_cases:
+            raise CoverageError(f"duplicate authority case {authority_case_id!r}")
+        if authority_case_id not in expected_case_set:
+            raise CoverageError(f"case {authority_case_id!r} is absent from the cohort")
+        seen_authority_cases.add(authority_case_id)
         validate_contract_reference(metadata, label)
 
         kinds = derive_pair_kinds(metadata, label)
@@ -660,9 +680,12 @@ def generate_coverage(
                 "agent_context_aligned": aligned,
             }
         )
+    missing_cases = expected_case_set - seen_authority_cases
+    if missing_cases:
+        raise CoverageError(f"cohort cases have no metadata: {sorted(missing_cases)}")
     cases.sort(key=lambda entry: entry["case_id"])
     return {
-        "scope_revision": SCOPE_REVISION,
+        "schemaVersion": COVERAGE_SCHEMA_VERSION,
         "cases": cases,
         "unresolved_benchmark_constraints": [],
         "silent_drops": 0 if aligned else None,
@@ -701,7 +724,7 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--root", default=str(ROOT))
-    parser.add_argument("--scope", default=DEFAULT_SCOPE)
+    parser.add_argument("--cohort", default=DEFAULT_COHORT)
     parser.add_argument("--metadata-root", default=DEFAULT_METADATA_ROOT)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument(
@@ -718,7 +741,7 @@ def main() -> int:
         root = Path(args.root).resolve()
         coverage = generate_coverage(
             root=root,
-            scope_path=Path(args.scope),
+            cohort_path=Path(args.cohort),
             metadata_root=Path(args.metadata_root),
             aligned=args.aligned,
         )
