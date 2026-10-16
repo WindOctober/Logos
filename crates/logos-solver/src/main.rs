@@ -21,8 +21,8 @@ use crate::error::Result;
 use clap::{Parser, Subcommand};
 use colored::{ColoredString, Colorize};
 
-const DEFAULT_CODEX_PROPOSAL_COMMAND: &str = "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --json --model gpt-5.6-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -";
-const DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND: &str = "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --json --model gpt-5.6-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check {session_id} -";
+const DEFAULT_CODEX_PROPOSAL_COMMAND: &str = "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --json --model gpt-6.1-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -";
+const DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND: &str = "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --json --model gpt-6.1-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check {session_id} -";
 
 #[derive(Debug, Parser)]
 #[command(version, about = "Logos SQL equivalence solver")]
@@ -464,17 +464,17 @@ mod tests {
     }
 
     #[test]
-    fn codex_defaults_pin_structured_gpt_5_6_sol_invocations() {
+    fn codex_defaults_pin_structured_gpt_6_1_sol_invocations() {
         assert!(DEFAULT_CODEX_PROPOSAL_COMMAND.contains("--json"));
-        assert!(DEFAULT_CODEX_PROPOSAL_COMMAND.contains("--model gpt-5.6-sol"));
+        assert!(DEFAULT_CODEX_PROPOSAL_COMMAND.contains("--model gpt-6.1-sol"));
         assert!(DEFAULT_CODEX_PROPOSAL_COMMAND.contains("model_reasoning_effort=medium"));
         assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("codex exec resume"));
         assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("{session_id}"));
         assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("--json"));
-        assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("--model gpt-5.6-sol"));
+        assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("--model gpt-6.1-sol"));
         assert!(DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND.contains("model_reasoning_effort=medium"));
         assert!(DEFAULT_PROOF_AGENT_COMMAND.contains("--json"));
-        assert!(DEFAULT_PROOF_AGENT_COMMAND.contains("--model gpt-5.6-sol"));
+        assert!(DEFAULT_PROOF_AGENT_COMMAND.contains("--model gpt-6.1-sol"));
         assert!(DEFAULT_PROOF_AGENT_COMMAND.contains("model_reasoning_effort=medium"));
         for feature in [
             "plugins",
@@ -500,7 +500,7 @@ mod tests {
             );
         }
         assert!(DEFAULT_PROOF_AGENT_RESUME_COMMAND.contains("--json"));
-        assert!(DEFAULT_PROOF_AGENT_RESUME_COMMAND.contains("--model gpt-5.6-sol"));
+        assert!(DEFAULT_PROOF_AGENT_RESUME_COMMAND.contains("--model gpt-6.1-sol"));
         assert!(DEFAULT_PROOF_AGENT_RESUME_COMMAND.contains("model_reasoning_effort=medium"));
     }
 }

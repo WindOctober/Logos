@@ -252,7 +252,7 @@ counterexample rounds, proof repair, and `codex exec resume` remain owned by
 case process group; the proof launcher separately removes any Docker container
 identified by its `cidfile`.
 
-Both Codex stages use `gpt-5.6-sol` at medium reasoning effort and JSONL output.
+Both Codex stages use `gpt-6.1-sol` at medium reasoning effort and JSONL output.
 The first proof invocation receives the complete remaining proof-search budget
 after reserving the configured final-check timeout and bounded process-kill
 cleanup; there is no 1,800-second soft split. Diagnostics are sequential and
@@ -273,9 +273,15 @@ inconsistent usage fails closed. Resumed proof turns are summed once per
 bounded session by retaining its latest componentwise-monotonic cumulative
 snapshot; independent counterexample invocations are each added once. `inputTokens`
 includes cached input and the runner verifies `totalTokens = inputTokens +
-outputTokens`. The API-price equivalent uses the public standard rates current
-on 2026-07-22: USD 5/M input, USD 0.50/M cached input, and USD 30/M output,
-following <https://developers.openai.com/api/docs/pricing>.
+outputTokens`. The API-price equivalent uses GPT-6.1 Sol's standard short-context
+rates current on 2026-10-16: USD 2/M uncached input, USD 0.10/M cached input,
+and USD 10/M output, following
+<https://developers.openai.com/api/docs/models/gpt-6.1-sol>.
+This is a base-rate estimate, not a bill: aggregate Codex usage does not identify
+cache writes, long-context requests, service tiers, or regional surcharges.
+Start a new run directory when changing models; do not resume a frozen
+GPT-5.6 Sol run under the new model. The historical canonical publisher remains
+pinned to the original GPT-5.6 Sol campaign.
 
 ## Run the fixed 16-case Logos regression cohort
 

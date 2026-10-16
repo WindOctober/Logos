@@ -23,26 +23,26 @@ from unittest import mock
 RUNNER = Path(__file__).with_name("run-logos")
 DEFAULT_COUNTEREXAMPLE_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check -"
 )
 DEFAULT_COUNTEREXAMPLE_RESUME_COMMAND = (
     "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check {session_id} -"
 )
 DEFAULT_PROOF_AGENT_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --disable goals --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --disable goals --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check --cd /workspace/problem - < proof-agent-prompt.md"
 )
 DEFAULT_PROOF_AGENT_RESUME_COMMAND = (
     "codex exec resume --disable plugins --disable remote_plugin --disable "
     "plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model "
-    "gpt-5.6-sol -c model_reasoning_effort=medium "
+    "gpt-6.1-sol -c model_reasoning_effort=medium "
     "--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check "
     "{session_id} - < proof-agent-prompt.md"
 )
@@ -118,6 +118,31 @@ PROOF_AGENT_LAUNCHER_ENVIRONMENT_POLICY = {
     "explicitlyExcludedVariables": TRUSTED_LAUNCH_EXCLUDED_VARIABLES,
     "explicitlyExcludedPrefixes": ["BASH_FUNC_"],
 }
+
+
+class ModelDefaultsUnitTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.runner = runpy.run_path(str(RUNNER))
+
+    def test_model_and_standard_base_price_are_consistent(self) -> None:
+        self.assertEqual(self.runner["EXPECTED_MODEL"], "gpt-6.1-sol")
+        self.assertEqual(self.runner["EXPECTED_REASONING_EFFORT"], "medium")
+        usage = {
+            "model": "gpt-6.1-sol",
+            "inputTokens": 100,
+            "cachedInputTokens": 20,
+            "outputTokens": 10,
+            "totalTokens": 110,
+            "estimatedCostUsd": 0.000262,
+        }
+        self.assertEqual(self.runner["validate_llm_usage"](usage), usage)
+        old_model = dict(usage, model="gpt-5.6-sol")
+        with self.assertRaisesRegex(self.runner["RunnerError"], "gpt-6.1-sol"):
+            self.runner["validate_llm_usage"](old_model)
+        old_price = dict(usage, estimatedCostUsd=0.00071)
+        with self.assertRaisesRegex(self.runner["RunnerError"], "declared pricing"):
+            self.runner["validate_llm_usage"](old_price)
 
 
 class RocqAuthoritySnapshotUnitTests(unittest.TestCase):
@@ -4768,7 +4793,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 '{"credential":"fixture"}\n', encoding="utf-8"
             )
             config = root / "config.toml"
-            config.write_text('model = "gpt-5.6-sol"\n', encoding="utf-8")
+            config.write_text('model = "gpt-6.1-sol"\n', encoding="utf-8")
             runtime_parent = root / "runtime-parent"
             runtime_parent.mkdir()
 
@@ -5200,7 +5225,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.fake_codex_home = self.root / "codex-home"
         self.fake_codex_home.mkdir()
         (self.fake_codex_home / "config.toml").write_text(
-            'model = "gpt-5.6-sol"\n'
+            'model = "gpt-6.1-sol"\n'
             'model_reasoning_effort = "medium"\n'
             'preferred_auth_method = "apikey"\n'
             'model_provider = "test-provider"\n\n'
@@ -5427,12 +5452,12 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                     raise SystemExit(7)
                 else:
                     usage = {
-                        "model": "gpt-5.6-sol",
+                        "model": "gpt-6.1-sol",
                         "inputTokens": 100,
                         "cachedInputTokens": 20,
                         "outputTokens": 10,
                         "totalTokens": 110,
-                        "estimatedCostUsd": 0.00071,
+                        "estimatedCostUsd": 0.000262,
                     }
                     if "missingusage" in log_dir.name:
                         usage = None
@@ -6562,15 +6587,15 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
 
     def usage(self, input_tokens: int, cached_tokens: int, output_tokens: int) -> dict:
         return {
-            "model": "gpt-5.6-sol",
+            "model": "gpt-6.1-sol",
             "inputTokens": input_tokens,
             "cachedInputTokens": cached_tokens,
             "outputTokens": output_tokens,
             "totalTokens": input_tokens + output_tokens,
             "estimatedCostUsd": (
-                (input_tokens - cached_tokens) * 5.0
-                + cached_tokens * 0.5
-                + output_tokens * 30.0
+                (input_tokens - cached_tokens) * 2.0
+                + cached_tokens * 0.1
+                + output_tokens * 10.0
             )
             / 1_000_000,
         }
@@ -6604,12 +6629,12 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(
             summary["results"][0]["llmUsage"],
             {
-                "model": "gpt-5.6-sol",
+                "model": "gpt-6.1-sol",
                 "inputTokens": 100,
                 "cachedInputTokens": 20,
                 "outputTokens": 10,
                 "totalTokens": 110,
-                "estimatedCostUsd": 0.00071,
+                "estimatedCostUsd": 0.000262,
             },
         )
         self.assertTrue(summary["usageComplete"])
@@ -6719,7 +6744,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(solver_argv[check_timeout_index + 1], "420")
         image_index = solver_argv.index("--proof-docker-image")
         self.assertEqual(solver_argv[image_index + 1], "sha256:" + "d" * 64)
-        self.assertEqual(summary["model"], "gpt-5.6-sol")
+        self.assertEqual(summary["model"], "gpt-6.1-sol")
         self.assertEqual(summary["reasoningEffort"], "medium")
         self.assertNotIn("proofAgentCatalogGuidanceEnabled", summary)
         self.assertEqual(summary["solverArgs"], [])
@@ -7097,7 +7122,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             "/nonexistent/.m2/settings.xml",
         )
         codex_provider = configuration["codexProvider"]
-        self.assertEqual(codex_provider["model"], "gpt-5.6-sol")
+        self.assertEqual(codex_provider["model"], "gpt-6.1-sol")
         self.assertEqual(codex_provider["reasoningEffort"], "medium")
         self.assertEqual(
             solver_environment["runtimeConfigSha256"],
@@ -8170,7 +8195,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                         "cancelled": 0,
                     },
                     "verificationMode": "outcome-unconditional",
-                    "model": "gpt-5.6-sol",
+                    "model": "gpt-6.1-sol",
                     "reasoningEffort": "medium",
                     "usageComplete": True,
                     "integrityVerification": {"verified": False},

@@ -42,8 +42,8 @@ use crate::error::{Error, Result};
 use crate::usage::{CodexInvocationUsage, LlmUsage, parse_codex_jsonl, parse_codex_thread_id};
 use crate::validation::{FormalWitnessSnapshot, FormalWitnessValue};
 
-pub const DEFAULT_PROOF_AGENT_COMMAND: &str = "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model gpt-5.6-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --cd /workspace/problem - < proof-agent-prompt.md";
-pub const DEFAULT_PROOF_AGENT_RESUME_COMMAND: &str = "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model gpt-5.6-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check {session_id} - < proof-agent-prompt.md";
+pub const DEFAULT_PROOF_AGENT_COMMAND: &str = "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model gpt-6.1-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --cd /workspace/problem - < proof-agent-prompt.md";
+pub const DEFAULT_PROOF_AGENT_RESUME_COMMAND: &str = "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model gpt-6.1-sol -c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check {session_id} - < proof-agent-prompt.md";
 
 const PROOF_AGENT_HOST_KILL_MARGIN_SECONDS: u64 = 10;
 const PROOF_AGENT_SESSION_RESTART_AFTER_FAILED_ROUNDS: usize = 16;
@@ -13934,7 +13934,7 @@ mod tests {
             render_proof_agent_resume_command(DEFAULT_PROOF_AGENT_RESUME_COMMAND, session_id)
                 .expect("valid resume command");
         assert!(command.starts_with("codex exec resume "));
-        assert!(command.contains("--json --model gpt-5.6-sol"));
+        assert!(command.contains("--json --model gpt-6.1-sol"));
         assert!(command.contains("--disable plugins"));
         assert!(command.contains("--disable goals"));
         assert!(DEFAULT_PROOF_AGENT_COMMAND.contains("--disable goals"));

@@ -146,7 +146,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             ]()
         )
         proof_agent = {
-            "model": "gpt-5.6-sol",
+            "model": "gpt-6.1-sol",
             "reasoningEffort": "medium",
             "sessionRestartAfterFailedRounds": 16,
             "sessionHomePolicy": "isolated_per_generation",
@@ -204,7 +204,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             "maxCounterexampleRounds": 3,
             "terminationGraceSeconds": 10.0,
             "verificationMode": "outcome-unconditional",
-            "model": "gpt-5.6-sol",
+            "model": "gpt-6.1-sol",
             "reasoningEffort": "medium",
             "solverArgs": [],
             "effectiveSolverArgs": ["--force-llm-assessment"],
@@ -246,7 +246,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             "caseTimeoutSeconds": 14400.0,
             "terminationGraceSeconds": 10.0,
             "verificationMode": "outcome-unconditional",
-            "model": "gpt-5.6-sol",
+            "model": "gpt-6.1-sol",
             "reasoningEffort": "medium",
             "proofAgentMemoryLimitMiB": 6144,
             "proofAgentStorageLimitMiB": 2048,
@@ -778,7 +778,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             "sha256": hashlib.sha256(metadata_path.read_bytes()).hexdigest(),
         }
         usage = {
-            "model": "gpt-5.6-sol",
+            "model": "gpt-6.1-sol",
             "inputTokens": 0,
             "cachedInputTokens": 0,
             "outputTokens": 0,

@@ -2,10 +2,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-pub const EXPERIMENT_MODEL: &str = "gpt-5.6-sol";
-pub const INPUT_USD_PER_MILLION_TOKENS: f64 = 5.0;
-pub const CACHED_INPUT_USD_PER_MILLION_TOKENS: f64 = 0.5;
-pub const OUTPUT_USD_PER_MILLION_TOKENS: f64 = 30.0;
+pub const EXPERIMENT_MODEL: &str = "gpt-6.1-sol";
+// Standard short-context API-price equivalent as of 2026-10-16:
+// https://developers.openai.com/api/docs/models/gpt-6.1-sol
+// Aggregate Codex usage cannot price cache writes, long context, or service tiers.
+pub const INPUT_USD_PER_MILLION_TOKENS: f64 = 2.0;
+pub const CACHED_INPUT_USD_PER_MILLION_TOKENS: f64 = 0.1;
+pub const OUTPUT_USD_PER_MILLION_TOKENS: f64 = 10.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -287,7 +290,8 @@ mod tests {
         assert_eq!(parsed.usage.cached_input_tokens, 24_448);
         assert_eq!(parsed.usage.output_tokens, 122);
         assert_eq!(parsed.usage.total_tokens, 24_885);
-        let expected = (315.0 * 5.0 + 24_448.0 * 0.5 + 122.0 * 30.0) / 1_000_000.0;
+        assert_eq!(parsed.usage.model, "gpt-6.1-sol");
+        let expected = (315.0 * 2.0 + 24_448.0 * 0.1 + 122.0 * 10.0) / 1_000_000.0;
         assert!((parsed.usage.estimated_cost_usd - expected).abs() < 1e-12);
     }
 

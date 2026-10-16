@@ -173,7 +173,7 @@ PROOF_AGENT_WRITABLE_STORAGE_POLICY = (
 MIN_PROOF_AGENT_MEMORY_LIMIT_MIB = 512
 MAX_PROOF_AGENT_MEMORY_LIMIT_MIB = 65536
 DEFAULT_PROOF_DOCKER_IMAGE = "logos-solver:latest"
-EXPECTED_MODEL = "gpt-5.6-sol"
+EXPECTED_MODEL = "gpt-6.1-sol"
 EXPECTED_REASONING_EFFORT = "medium"
 BENCHMARK_AUTHORITY_ROOT = LOGOS_ROOT / "benchmarks/core/authority"
 FROZEN_COHORT = BENCHMARK_AUTHORITY_ROOT / "cohort-389.json"
@@ -369,26 +369,26 @@ CALCITE_CLASSPATH = CALCITE_ROOT / "target/logos-runtime-classpath.txt"
 EXPECTED_POSTGRES_VERSION_NUM = "170004"
 DEFAULT_COUNTEREXAMPLE_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check -"
 )
 DEFAULT_COUNTEREXAMPLE_RESUME_COMMAND = (
     "codex exec resume --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check {session_id} -"
 )
 DEFAULT_PROOF_AGENT_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
-    "--disable skill_mcp_dependency_install --disable goals --json --model gpt-5.6-sol "
+    "--disable skill_mcp_dependency_install --disable goals --json --model gpt-6.1-sol "
     "-c model_reasoning_effort=medium --dangerously-bypass-approvals-and-sandbox "
     "--skip-git-repo-check --cd /workspace/problem - < proof-agent-prompt.md"
 )
 DEFAULT_PROOF_AGENT_RESUME_COMMAND = (
     "codex exec resume --disable plugins --disable remote_plugin --disable "
     "plugin_hooks --disable skill_mcp_dependency_install --disable goals --json --model "
-    "gpt-5.6-sol -c model_reasoning_effort=medium "
+    "gpt-6.1-sol -c model_reasoning_effort=medium "
     "--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check "
     "{session_id} - < proof-agent-prompt.md"
 )
@@ -536,9 +536,12 @@ def load_launch_runner_record() -> dict[str, Any]:
 
 RUNNER_LAUNCH_RECORD = load_launch_runner_record()
 
-INPUT_USD_PER_MILLION_TOKENS = 5.0
-CACHED_INPUT_USD_PER_MILLION_TOKENS = 0.5
-OUTPUT_USD_PER_MILLION_TOKENS = 30.0
+# Standard short-context API-price equivalent as of 2026-10-16:
+# https://developers.openai.com/api/docs/models/gpt-6.1-sol
+# Aggregate Codex usage cannot price cache writes, long context, or service tiers.
+INPUT_USD_PER_MILLION_TOKENS = 2.0
+CACHED_INPUT_USD_PER_MILLION_TOKENS = 0.1
+OUTPUT_USD_PER_MILLION_TOKENS = 10.0
 TERMINAL_CASE_STATUSES = frozenset(("completed", "timed_out", "failed"))
 FORCED_COUNTEREXAMPLE_ARGUMENT = "--force-llm-assessment"
 RUNNER_OWNED_SOLVER_OPTIONS = frozenset(
