@@ -16,9 +16,9 @@ pub(crate) use observation::{CertificateStatus, StatementObservationFacts};
 pub(crate) use observation::{ObservationCertificateReport, analyze_observation_certificates};
 pub(crate) use syntax::{
     FormalAttribute, FormalAttributeType, FormalProofModule, FormalQueryDefinitionGraph,
-    FormalQueryError, FormalQueryExpr, FormalQueryStatementSymbols, FormalScalarExpr,
-    FormalScalarSelectItem, FormalSchema, LoweredProgram, LoweredQuery, ProofInputBindings,
-    ProofLoweringReport, query_expr_output_signature,
+    FormalQueryError, FormalQueryExpr, FormalQueryShapeKind, FormalQueryStatementSymbols,
+    FormalScalarExpr, FormalScalarSelectItem, FormalSchema, LoweredProgram, LoweredQuery,
+    ProofInputBindings, ProofLoweringReport, query_expr_output_signature,
 };
 #[cfg(test)]
 pub(crate) use syntax::{

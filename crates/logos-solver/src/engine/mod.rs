@@ -19,7 +19,7 @@ use counterexample::{
 };
 pub use proof_stage::{DEFAULT_PROOF_AGENT_COMMAND, DEFAULT_PROOF_AGENT_RESUME_COMMAND};
 use proof_stage::{
-    ProofHandoffResolution, ProofStageResult, prepare_formal_input, run_proof_stage,
+    ProofHandoffResolution, prepare_formal_input, run_proof_stage,
     write_typed_witness_audit_workspace,
 };
 pub use report::{BackendStatus, Evidence, SolverOutcome, SolverReport};
@@ -119,7 +119,7 @@ pub fn solve(
             run_proof_agent: false,
             ..options
         };
-        let verification_report = match run_proof_stage(
+        let verification_report = run_proof_stage(
             &artifacts,
             &input,
             &transform_options,
@@ -127,9 +127,7 @@ pub fn solve(
             None,
             None,
             None,
-        )? {
-            ProofStageResult::Finished(report) => *report,
-        };
+        )?;
         let report = SolverReport::finished(
             SolverOutcome::TransformOnly,
             verification_report.status_reason.clone(),
@@ -218,7 +216,7 @@ pub fn solve(
     };
     artifacts.write_json("counterexample-stage/report.json", &counterexample_report)?;
 
-    let proof_stage_result = if let Some(provider) = provider.as_ref() {
+    let verification_report = if let Some(provider) = provider.as_ref() {
         let mut handle_handoff = |handoff: &report::ProofCounterexampleHandoff| {
             let feedback = handoff.counterexample_feedback().ok_or_else(|| {
                 Error::ProofAgentCommand(
@@ -267,9 +265,6 @@ pub fn solve(
             None,
             None,
         )?
-    };
-    let verification_report = match proof_stage_result {
-        ProofStageResult::Finished(report) => *report,
     };
     if (counterexample_report.outcome == SearchStatus::NeedsManualReview
         || verification_report.backend_status == BackendStatus::NeedsManualReview)
