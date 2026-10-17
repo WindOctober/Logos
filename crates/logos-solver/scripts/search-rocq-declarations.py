@@ -9,11 +9,14 @@ stable lexical order, and every match is reachable through explicit pages.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import stat
 import sys
-from dataclasses import dataclass
+import tempfile
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
 
@@ -43,6 +46,13 @@ class SearchError(RuntimeError):
 class SourceRoot:
     path: Path
     logical_prefix: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SourceFile:
+    path: Path
+    root: SourceRoot
+    content: bytes
 
 
 @dataclass(frozen=True)
@@ -300,9 +310,13 @@ def declarations_from_source(
     authority_root: Path,
     logical_prefix: tuple[str, ...],
     source_root: Path,
+    content: bytes | None = None,
 ) -> list[Declaration]:
     try:
-        text = path.read_text(encoding="utf-8")
+        # Parse the same bytes used for the cache key, not a second read that
+        # could observe a different file. Preserve read_text's universal newlines.
+        raw = path.read_bytes() if content is None else content
+        text = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
     except (OSError, UnicodeError) as error:
         raise SearchError(f"cannot read {path}: {error}") from error
     try:
@@ -401,7 +415,7 @@ def authority_source_roots(authority_root: Path) -> tuple[SourceRoot, ...]:
     return available
 
 
-def scan_authority(authority_root: Path) -> list[Declaration]:
+def authority_sources(authority_root: Path) -> tuple[Path, list[SourceFile]]:
     try:
         root = authority_root.resolve(strict=True)
     except OSError as error:
@@ -411,7 +425,7 @@ def scan_authority(authority_root: Path) -> list[Declaration]:
     if not root.is_dir() or root.is_symlink():
         raise SearchError("authority root must be a real directory")
 
-    declarations: list[Declaration] = []
+    sources: list[SourceFile] = []
     for source_root in authority_source_roots(root):
         paths = sorted(
             (
@@ -422,14 +436,25 @@ def scan_authority(authority_root: Path) -> list[Declaration]:
             key=lambda path: path.relative_to(root).as_posix(),
         )
         for path in paths:
-            declarations.extend(
-                declarations_from_source(
-                    path,
-                    authority_root=root,
-                    logical_prefix=source_root.logical_prefix,
-                    source_root=source_root.path,
-                )
+            try:
+                sources.append(SourceFile(path, source_root, path.read_bytes()))
+            except OSError as error:
+                raise SearchError(f"cannot read {path}: {error}") from error
+    return root, sources
+
+
+def parse_sources(root: Path, sources: list[SourceFile]) -> list[Declaration]:
+    declarations: list[Declaration] = []
+    for source in sources:
+        declarations.extend(
+            declarations_from_source(
+                source.path,
+                authority_root=root,
+                logical_prefix=source.root.logical_prefix,
+                source_root=source.root.path,
+                content=source.content,
             )
+        )
 
     declarations.sort(
         key=lambda declaration: (declaration.fqn, declaration.source, declaration.line)
@@ -442,6 +467,161 @@ def scan_authority(authority_root: Path) -> list[Declaration]:
     return declarations
 
 
+def scan_authority(authority_root: Path) -> list[Declaration]:
+    """Uncached reference implementation (also used by --no-cache)."""
+    return parse_sources(*authority_sources(authority_root))
+
+
+INDEX_SCHEMA = 1
+
+
+def index_key(root: Path, sources: list[SourceFile]) -> str:
+    digest = hashlib.sha256()
+
+    def add(value: bytes) -> None:
+        # Length framing prevents ambiguity between file paths and contents.
+        digest.update(len(value).to_bytes(8, "big"))
+        digest.update(value)
+
+    add(f"logos-rocq-declarations-{INDEX_SCHEMA}".encode())
+    # Any parser/filter implementation change invalidates the derived index.
+    add(Path(__file__).read_bytes())
+    for source in sources:
+        add(source.path.relative_to(root).as_posix().encode())
+        add(source.root.path.relative_to(root).as_posix().encode())
+        add(".".join(source.root.logical_prefix).encode())
+        add(source.content)
+    return digest.hexdigest()
+
+
+def json_bytes(value: object) -> bytes:
+    return json.dumps(
+        value, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def private_cache_directory(path: Path) -> Path:
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) & 0o077
+    ):
+        raise OSError("declaration cache must be an owned private directory")
+    return path
+
+
+def read_index(path: Path, key: str, sources: set[str]) -> list[Declaration]:
+    # Never follow a cache-file symlink, including on platforms where the cache
+    # directory could have been populated before this process started.
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            raise ValueError("invalid index file")
+        document = json.load(stream)
+    if (
+        not isinstance(document, dict)
+        or document.get("schemaVersion") != INDEX_SCHEMA
+        or document.get("key") != key
+    ):
+        raise ValueError("index binding mismatch")
+    records = document.get("declarations")
+    if (
+        not isinstance(records, list)
+        or document.get("recordsSha256")
+        != hashlib.sha256(json_bytes(records)).hexdigest()
+    ):
+        raise ValueError("index checksum mismatch")
+    declarations: list[Declaration] = []
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("invalid declaration record")
+        declaration = Declaration(**record)
+        if (
+            any(
+                not isinstance(record[field], str)
+                for field in ("fqn", "name", "kind", "module", "source", "statement")
+            )
+            or type(declaration.line) is not int
+            or declaration.line < 1
+            or declaration.source not in sources
+            or declaration.kind not in ("Lemma", "Theorem", "Corollary")
+            or declaration.fqn != f"{declaration.module}.{declaration.name}"
+            or (
+                declaration.conclusion_symbol is not None
+                and not isinstance(declaration.conclusion_symbol, str)
+            )
+            or not isinstance(declaration.symbols, list)
+            or any(not isinstance(symbol, str) for symbol in declaration.symbols)
+            or declaration.symbols != sorted(set(declaration.symbols))
+        ):
+            raise ValueError("invalid declaration fields")
+        declarations.append(
+            Declaration(**{**record, "symbols": tuple(declaration.symbols)})
+        )
+    order = [(item.fqn, item.source, item.line) for item in declarations]
+    if order != sorted(order) or len({item.fqn for item in declarations}) != len(order):
+        raise ValueError("invalid declaration ordering or duplicate FQN")
+    return declarations
+
+
+def write_index(path: Path, key: str, declarations: list[Declaration]) -> None:
+    records = [asdict(declaration) for declaration in declarations]
+    document = {
+        "schemaVersion": INDEX_SCHEMA,
+        "key": key,
+        "recordsSha256": hashlib.sha256(json_bytes(records)).hexdigest(),
+        "declarations": records,
+    }
+    # Independent readers see either the previous complete index or the new
+    # complete index. Concurrent cold builders are harmless; no lock can stall
+    # a search after an interrupted writer.
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent, prefix=".index-", delete=False
+    ) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(json_bytes(document))
+            stream.flush()
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def cached_authority(
+    authority_root: Path, cache_dir: Path | None = None
+) -> list[Declaration]:
+    # Never trust mtime/size or a caller-supplied digest: check the complete
+    # current source set and bytes even on a hit. In the proof container this
+    # tree is already immutable, but the standalone CLI also supports edits.
+    root, sources = authority_sources(authority_root)
+    path: Path | None = None
+    try:
+        key = index_key(root, sources)
+        directory = private_cache_directory(
+            cache_dir
+            if cache_dir is not None
+            else Path(tempfile.gettempdir()) / f"logos-rocq-declarations-{os.getuid()}"
+        )
+        path = directory / f"{key}.json"
+        return read_index(
+            path, key, {source.path.relative_to(root).as_posix() for source in sources}
+        )
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        # Derived, disposable data only. Missing/corrupt/unusable caches must
+        # not change results or suppress source/parser errors.
+        pass
+    declarations = parse_sources(root, sources)
+    if path is not None:
+        try:
+            write_index(path, key, declarations)
+        except OSError:
+            pass
+    return declarations
+
+
 def search_authority(
     authority_root: Path,
     *,
@@ -449,15 +629,20 @@ def search_authority(
     page: int,
     page_size: int,
     show_statement: bool,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> dict[str, object]:
     if page < 1:
         raise SearchError("page must be at least 1")
     if page_size < 1:
         raise SearchError("page size must be at least 1")
+    declarations = (
+        cached_authority(authority_root, cache_dir)
+        if use_cache
+        else scan_authority(authority_root)
+    )
     matches = [
-        declaration
-        for declaration in scan_authority(authority_root)
-        if filters.accepts(declaration)
+        declaration for declaration in declarations if filters.accepts(declaration)
     ]
     matched = len(matches)
     page_count = (matched + page_size - 1) // page_size
@@ -506,6 +691,16 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--page-size", type=int, default=50)
     parser.add_argument("--show-statement", action="store_true")
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        help="private disposable index directory (default: $TMPDIR/logos-rocq-declarations-UID)",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="parse sources without reading/writing an index",
+    )
     return parser.parse_args(argv)
 
 
@@ -526,6 +721,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             page=arguments.page,
             page_size=arguments.page_size,
             show_statement=arguments.show_statement,
+            cache_dir=arguments.cache_dir,
+            use_cache=not arguments.no_cache,
         )
     except SearchError as error:
         print(f"Rocq declaration search failed: {error}", file=sys.stderr)

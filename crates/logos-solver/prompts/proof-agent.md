@@ -160,6 +160,10 @@ proof that the theorem is semantically applicable. Direct `rg` remains useful
 for definitions or proof bodies that are not declarations indexed by the
 helper.
 
+The helper automatically reuses a content-addressed full declaration index
+across queries and pages; source bytes are still checked on every invocation.
+Use `--no-cache` only when comparing against a fresh parse.
+
 Choose the abstraction boundary from the SQL, typed query shape, goal, and
 theorem statements. Prefer a public operator or observation contract over
 unfolding recursive evaluators. If the authority snapshot lacks the necessary
