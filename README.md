@@ -251,6 +251,9 @@ make logos-formal-sql-lemmas
 # Complete Rocq regression suite
 make logos-formal-sql-checks
 
+# Python proof-tool regressions
+make proof-tool-tests
+
 # Isolated trusted-checker regression (requires compiled Rocq dependencies)
 make trusted-rocq-sandbox-test
 

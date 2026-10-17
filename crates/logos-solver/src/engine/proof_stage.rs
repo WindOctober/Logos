@@ -2968,7 +2968,7 @@ fn write_proof_agent_round_prompt(
     artifacts.write_text("proof-stage/formal-sql/proof-agent-prompt.md", &prompt)
 }
 
-/// Materialize one generation's sources and bind its context through one entry point.
+/// Materialize one generation's sources and validate its context exactly once.
 /// Both initial setup and fixed-witness restart use this entry point; agent
 /// execution still independently validates the context before and after a round.
 fn write_proof_workspace(

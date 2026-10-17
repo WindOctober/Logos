@@ -1,12 +1,3 @@
-use super::audit::*;
-use super::checker::*;
-use super::context::*;
-use super::diagnostics::*;
-use super::goal::*;
-use super::navigation::*;
-use super::witness::*;
-use super::workspace::*;
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::os::unix::ffi::OsStrExt;
@@ -18,7 +9,44 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use logos_ir::ir::SqlStringType;
 
-use super::*;
+use super::audit::{
+    audit_proof_workspace, audit_rocq_text, classify_precondition_source,
+    classify_verification_claim, extract_precondition_definition, problem_declares_final_theorem,
+    reject_conditional_verification_claim, strip_rocq_comments,
+};
+use super::checker::{
+    CheckMode, is_trusted_rocq_environment_failure, persist_trusted_environment_preflight_evidence,
+    trusted_rocq_check_command,
+};
+use super::context::{validate_proof_agent_context, write_proof_agent_context};
+use super::diagnostics::{CompileCheckpoint, DiagnosticBroker};
+use super::goal::{formal_sql_bound_goal_module, formal_sql_goal_module};
+use super::navigation::{
+    build_ordered_signatures, compact_skeleton_forest, encode_tree_value,
+    expand_compact_skeleton_node, parse_skeleton_tree, validate_compacted_skeleton_forest,
+};
+use super::workspace::archive_trusted_diagnostic_cache;
+use super::{
+    AgentRunArtifact, DEFAULT_PROOF_AGENT_COMMAND, DEFAULT_PROOF_AGENT_RESUME_COMMAND,
+    EXPLICITLY_EXCLUDED_HOST_ENVIRONMENT, EXPLICITLY_EXCLUDED_HOST_ENVIRONMENT_PREFIXES,
+    FIXED_HOST_LOCALE, FORMAL_SQL_DECLARATION_SEARCH_SCRIPT, FORMAL_SQL_DOCKER_AGENT_SCRIPT,
+    FORMAL_SQL_GOAL_MODULE, FORMAL_SQL_PROOF_AGENT_PROMPT, FORMAL_SQL_ROCQ_CHECK_REQUEST_SCRIPT,
+    FORMAL_SQL_SEMANTIC_PRIMER, FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT,
+    PROOF_AGENT_HOST_TMP_DIRECTORY, PROOF_AGENT_LAUNCHER_EXPLICIT_ENVIRONMENT,
+    PROOF_AGENT_LAUNCHER_HOST_ENVIRONMENT_ALLOWLIST, PROOF_AGENT_LAUNCHER_PATH, PROOF_SOURCE_FILES,
+    ProofAgentRoundStage, ProofAgentSessionHome, TRUSTED_CHECKER_EXPLICIT_ENVIRONMENT,
+    TRUSTED_CHECKER_HOME, TRUSTED_CHECKER_PATH, TRUSTED_PROBLEM_IMPORT_LINES,
+    TRUSTED_ROCQ_IMPORT_ROOTS, TRUSTED_ROCQ_IMPORTS, TrustedRocqImport, TrustedRocqRoot,
+    canonical_json_sha256, capture_trusted_proof_sources, is_codex_session_id,
+    load_counterexample_handoff, ordered_direct_trusted_rocq_imports,
+    persist_initial_problem_compile_checkpoint_evidence, proof_agent_host_tmp_directory,
+    proof_agent_instruction_body, proof_agent_launcher_command,
+    proof_agent_launcher_environment_policy, proof_agent_round_budget, proof_backend_status,
+    remove_proof_workspace_for_formal_witness_restart, render_proof_agent_prompt,
+    render_proof_agent_resume_command, restore_problem_compile_checkpoint, sha256_hex,
+    snapshot_proof_workspace, static_prompt_and_primer_bytes, trusted_checker_environment_policy,
+    validate_authority_closure, write_trusted_proof_agent_launcher, write_trusted_rocq_checker,
+};
 use crate::artifacts::ArtifactWriter;
 use crate::core::{
     FormalAttribute, FormalAttributeType, FormalFunctionTerm, FormalQueryExpr, FormalScalarExpr,
@@ -77,11 +105,11 @@ fn proof_test_config(root: &Path) -> Config {
 #[test]
 fn typed_witness_values_render_exact_string_typmods_and_numeric_carriers() {
     assert_eq!(
-        rocq_witness_string_typmod(SqlStringType::Varchar { length: Some(16) }),
+        super::witness::rocq_witness_string_typmod(SqlStringType::Varchar { length: Some(16) }),
         "StringVarcharN 16"
     );
     assert_eq!(
-        rocq_witness_value(
+        super::witness::rocq_witness_value(
             &FormalWitnessValue::NumericFinite {
                 coefficient: "-12345".to_owned(),
                 scale: 2,
@@ -95,7 +123,7 @@ fn typed_witness_values_render_exact_string_typmods_and_numeric_carriers() {
         "Value_numeric (Some (numeric_of_scaled (-12345)%Z (2)%Z))"
     );
     assert_eq!(
-        rocq_witness_value(
+        super::witness::rocq_witness_value(
             &FormalWitnessValue::NumericNaN,
             FormalAttributeType::Numeric,
         )
@@ -103,7 +131,7 @@ fn typed_witness_values_render_exact_string_typmods_and_numeric_carriers() {
         "Value_numeric (Some NumericNaN)"
     );
     assert_eq!(
-        rocq_witness_value(
+        super::witness::rocq_witness_value(
             &FormalWitnessValue::Float64Bits((-0.0_f64).to_bits()),
             FormalAttributeType::Double,
         )
@@ -111,7 +139,7 @@ fn typed_witness_values_render_exact_string_typmods_and_numeric_carriers() {
         "Value_double (Some (Float64OfBits (9223372036854775808)%Z))"
     );
     assert_eq!(
-        rocq_witness_value(
+        super::witness::rocq_witness_value(
             &FormalWitnessValue::Timestamp("946684800000000".to_owned()),
             FormalAttributeType::Timestamp { precision: Some(6) },
         )
@@ -171,7 +199,7 @@ fn witness_codegen_specializes_cardinality_only_for_nonempty_tables() {
         ],
     };
 
-    let modules = formal_sql_witness_modules(&schema, Some(&snapshot)).unwrap();
+    let modules = super::witness::formal_sql_witness_modules(&schema, Some(&snapshot)).unwrap();
     let data = modules.data.as_ref().unwrap();
     assert!(data.contains("Lemma generated_witness_instance_cardinal"));
     assert!(!data.contains("generated_witness_table_0_attributes"));
@@ -976,6 +1004,7 @@ fn diagnostic_broker_accepts_more_than_the_legacy_short_check_quota() {
             .expect("write trusted test input");
     }
     let checker = root.join("fake-trusted-checker.sh");
+    complete_broker_witness_fixture(&proof);
     let passing_pattern = (diagnostic_count..=diagnostic_count)
         .map(|sequence| format!("checkpoint_{sequence}"))
         .collect::<Vec<_>>()
@@ -988,7 +1017,6 @@ fn diagnostic_broker_accepts_more_than_the_legacy_short_check_quota() {
     )
     .expect("write fake trusted checker");
 
-    complete_broker_witness_fixture(&proof);
     let broker = DiagnosticBroker::start(
         &artifacts,
         4,
@@ -1381,6 +1409,7 @@ fn diagnostic_broker_does_not_recompile_or_advance_unchanged_problem_checkpoints
             .expect("write trusted test input");
     }
     let checker = root.join("counting-checker.sh");
+    complete_broker_witness_fixture(&proof);
     let checker_marker = root.join("counting-checker.sh.invoked");
     std::fs::write(
         &checker,
@@ -1389,7 +1418,6 @@ fn diagnostic_broker_does_not_recompile_or_advance_unchanged_problem_checkpoints
     .expect("write counting checker");
     let active = b"Definition active_checkpoint : True := I.\n";
     let active_sha256 = sha256_hex(active);
-    complete_broker_witness_fixture(&proof);
     let broker = DiagnosticBroker::start(
         &artifacts,
         8,
@@ -1503,8 +1531,8 @@ fn empty_scratch_hydration_materializes_launcher_and_persistence_directories() {
     std::fs::create_dir_all(&stage).expect("create empty scratch stage");
     std::fs::create_dir_all(&proof).expect("create empty proof workspace");
 
-    let hydrated =
-        hydrate_round_scratch(&proof, &stage).expect("hydrate an empty scratch workspace");
+    let hydrated = super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate an empty scratch workspace");
     assert_eq!(hydrated.file_count, 0);
     assert_eq!(hydrated.total_bytes, 0);
     let stage_metadata = std::fs::symlink_metadata(stage.join("scratch"))
@@ -1513,8 +1541,8 @@ fn empty_scratch_hydration_materializes_launcher_and_persistence_directories() {
     assert!(!stage_metadata.file_type().is_symlink());
     assert_eq!(stage_metadata.permissions().mode() & 0o777, 0o700);
 
-    let persisted =
-        persist_round_scratch(&stage, &proof).expect("persist an empty scratch workspace");
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
+        .expect("persist an empty scratch workspace");
     assert_eq!(persisted.file_count, 0);
     let proof_metadata = std::fs::symlink_metadata(proof.join("scratch"))
         .expect("inspect materialized persistent scratch directory");
@@ -1522,6 +1550,34 @@ fn empty_scratch_hydration_materializes_launcher_and_persistence_directories() {
     assert!(!proof_metadata.file_type().is_symlink());
     assert_eq!(proof_metadata.permissions().mode() & 0o777, 0o700);
     std::fs::remove_dir_all(root).expect("remove empty scratch test tree");
+}
+
+#[test]
+fn unpublished_module_named_drafts_survive_rounds_without_becoming_dependencies() {
+    let fixture = tempfile::tempdir().unwrap();
+    let stage = fixture.path().join("stage");
+    let proof = fixture.path().join("proof");
+    let resumed = fixture.path().join("resumed");
+    let draft = "scratch/ProofModules/CoreBridge.v";
+    std::fs::create_dir_all(stage.join("scratch/ProofModules")).unwrap();
+    std::fs::create_dir_all(&proof).unwrap();
+    std::fs::create_dir_all(&resumed).unwrap();
+    let unfinished = "Lemma bridge : True. Proof. exact 0.\n";
+    std::fs::write(stage.join(draft), unfinished).unwrap();
+    super::workspace::persist_round_scratch(&stage, &proof).unwrap();
+    super::workspace::hydrate_round_scratch(&proof, &resumed).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(resumed.join(draft)).unwrap(),
+        unfinished
+    );
+    for workspace in [&proof, &resumed] {
+        assert!(!workspace.join("ProofModules/CoreBridge.v").exists());
+        assert!(
+            !workspace
+                .join("scratch/checked/ProofModules/CoreBridge.v")
+                .exists()
+        );
+    }
 }
 
 #[test]
@@ -1547,9 +1603,9 @@ fn scratch_round_drops_unsupported_regular_files_without_failing() {
     std::fs::write(stage.join("scratch/compiler.vo"), [0_u8, 255, 1, 2])
         .expect("write dropped binary compiler artifact");
 
-    let staged = validated_scratch_tree_with_policy(
+    let staged = super::workspace::validated_scratch_tree_with_policy(
         &stage.join("scratch"),
-        UnsupportedScratchFilePolicy::Drop,
+        super::workspace::UnsupportedScratchFilePolicy::Drop,
     )
     .expect("classify structurally safe staged scratch files");
     assert_eq!(staged.files.len(), 1);
@@ -1562,7 +1618,7 @@ fn scratch_round_drops_unsupported_regular_files_without_failing() {
         ]
     );
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("drop unsupported scratch files without failing the round");
     assert_eq!(persisted.file_count, 1);
     assert!(proof.join("scratch/keep.v").is_file());
@@ -1583,8 +1639,8 @@ fn scratch_round_still_rejects_symlinks() {
     symlink(&outside, stage.join("scratch/link.json"))
         .expect("create unsupported-extension scratch symlink");
 
-    let error =
-        persist_round_scratch(&stage, &proof).expect_err("scratch symlinks must remain fatal");
+    let error = super::workspace::persist_round_scratch(&stage, &proof)
+        .expect_err("scratch symlinks must remain fatal");
     assert!(
         error
             .to_string()
@@ -1693,15 +1749,18 @@ fn scratch_checked_promotion_avoids_round_merge_capacity_race() {
     std::fs::write(persistent_scratch.join("core.v"), core)
         .expect("write persistent untrusted core");
 
-    let hydrated =
-        hydrate_round_scratch(&proof, &stage).expect("hydrate the 63-file scratch state");
+    let hydrated = super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate the 63-file scratch state");
     assert_eq!(hydrated.file_count, 63);
     std::fs::write(stage.join("scratch/fresh.v"), fresh)
         .expect("write the round-local fresh candidate");
 
-    let core_state =
-        persist_successful_scratch_candidate(&proof, Path::new("scratch/core.v"), core)
-            .expect("promote the matching persistent core");
+    let core_state = super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/core.v"),
+        core,
+    )
+    .expect("promote the matching persistent core");
     assert_eq!(core_state.file_count, 63);
     assert!(!persistent_scratch.join("core.v").exists());
     assert_eq!(
@@ -1710,9 +1769,12 @@ fn scratch_checked_promotion_avoids_round_merge_capacity_race() {
         core
     );
 
-    let fresh_state =
-        persist_successful_scratch_candidate(&proof, Path::new("scratch/fresh.v"), fresh)
-            .expect("persist the newly checked round-local candidate");
+    let fresh_state = super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/fresh.v"),
+        fresh,
+    )
+    .expect("persist the newly checked round-local candidate");
     assert_eq!(fresh_state.file_count, 64);
     assert_eq!(
         std::fs::read(persistent_scratch.join("checked/fresh.v"))
@@ -1720,7 +1782,7 @@ fn scratch_checked_promotion_avoids_round_merge_capacity_race() {
         fresh
     );
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("suppress exact raw duplicates at the capacity boundary");
     assert_eq!(persisted.file_count, 64);
     assert!(!persistent_scratch.join("core.v").exists());
@@ -1772,21 +1834,28 @@ fn scratch_retains_divergent_wip_without_a_file_count_limit() {
     std::fs::write(persistent_scratch.join("stale.v"), stale)
         .expect("write file-pressure stale work");
 
-    let hydrated =
-        hydrate_round_scratch(&proof, &stage).expect("hydrate the 63-file pressure state");
+    let hydrated = super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate the 63-file pressure state");
     assert_eq!(hydrated.file_count, 63);
     std::fs::write(stage.join("scratch/fresh.v"), fresh)
         .expect("write file-pressure fresh candidate");
-    persist_successful_scratch_candidate(&proof, Path::new("scratch/core.v"), core)
-        .expect("promote the matching file-pressure core");
-    let promoted =
-        persist_successful_scratch_candidate(&proof, Path::new("scratch/fresh.v"), fresh)
-            .expect("persist the file-pressure fresh candidate");
+    super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/core.v"),
+        core,
+    )
+    .expect("promote the matching file-pressure core");
+    let promoted = super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/fresh.v"),
+        fresh,
+    )
+    .expect("persist the file-pressure fresh candidate");
     assert_eq!(promoted.file_count, 64);
     std::fs::write(stage.join("scratch/core.v"), divergent)
         .expect("write divergent file-pressure WIP");
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("retain divergent WIP without a file-count limit");
     assert_eq!(persisted.file_count, 65);
     assert_eq!(
@@ -1840,20 +1909,28 @@ fn scratch_retains_divergent_wip_without_a_byte_limit() {
     let fresh = vec![b'e'; 300 * 1024];
     std::fs::write(persistent_scratch.join("core.v"), &core).expect("write byte-pressure core");
 
-    let hydrated = hydrate_round_scratch(&proof, &stage).expect("hydrate byte-pressure state");
+    let hydrated = super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate byte-pressure state");
     assert_eq!(hydrated.total_bytes, 9 * 400 * 1024);
     std::fs::write(stage.join("scratch/fresh.v"), &fresh)
         .expect("write byte-pressure fresh candidate");
-    persist_successful_scratch_candidate(&proof, Path::new("scratch/core.v"), &core)
-        .expect("promote the matching byte-pressure core");
-    let promoted =
-        persist_successful_scratch_candidate(&proof, Path::new("scratch/fresh.v"), &fresh)
-            .expect("persist the byte-pressure fresh candidate");
+    super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/core.v"),
+        &core,
+    )
+    .expect("promote the matching byte-pressure core");
+    let promoted = super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/fresh.v"),
+        &fresh,
+    )
+    .expect("persist the byte-pressure fresh candidate");
     assert_eq!(promoted.total_bytes, (9 * 400 + 300) * 1024);
     std::fs::write(stage.join("scratch/core.v"), &divergent)
         .expect("write divergent byte-pressure WIP");
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("retain divergent WIP without a scratch byte limit");
     assert_eq!(persisted.total_bytes, (10 * 400 + 300) * 1024);
     assert_eq!(
@@ -1901,8 +1978,8 @@ fn scratch_round_replacement_drops_deleted_wip_and_stale_directories() {
         .expect("write obsolete WIP");
     std::fs::write(persistent_scratch.join("keep.v"), keep).expect("write retained WIP");
 
-    let hydrated =
-        hydrate_round_scratch(&proof, &stage).expect("hydrate the full replacement state");
+    let hydrated = super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate the full replacement state");
     assert_eq!(hydrated.file_count, 64);
     std::fs::remove_file(stage.join("scratch/obsolete/deep/old.v"))
         .expect("delete obsolete staged WIP");
@@ -1911,7 +1988,7 @@ fn scratch_round_replacement_drops_deleted_wip_and_stale_directories() {
     std::fs::write(stage.join("scratch/replacement/current.v"), replacement)
         .expect("write current replacement WIP");
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("replace the staged namespace without a 65-file union");
     assert_eq!(persisted.file_count, 64);
     assert!(!persistent_scratch.join("obsolete/deep/old.v").exists());
@@ -1940,27 +2017,28 @@ fn scratch_transaction_failure_before_exchange_retains_complete_live_tree() {
     std::fs::write(scratch.join("checked/core.v"), old_checked)
         .expect("write live checked snapshot");
     std::fs::write(scratch.join("old.v"), old_wip).expect("write live WIP");
-    let existing = validated_scratch_tree(&scratch).expect("snapshot live scratch");
+    let existing =
+        super::workspace::validated_scratch_tree(&scratch).expect("snapshot live scratch");
     let new_checked = b"Lemma checked_new : True. Proof. exact I. Qed.\n";
     let new_wip = b"Lemma wip_new : True. Proof. exact I. Qed.\n";
     let selected = BTreeMap::from([
         (
             PathBuf::from("checked/core.v"),
-            ScratchFile {
+            super::workspace::ScratchFile {
                 relative_path: PathBuf::from("checked/core.v"),
                 bytes: new_checked.to_vec(),
             },
         ),
         (
             PathBuf::from("new.v"),
-            ScratchFile {
+            super::workspace::ScratchFile {
                 relative_path: PathBuf::from("new.v"),
                 bytes: new_wip.to_vec(),
             },
         ),
     ]);
 
-    let error = replace_scratch_snapshots_with_pre_exchange_hook(
+    let error = super::workspace::replace_scratch_snapshots_with_pre_exchange_hook(
         &scratch,
         existing,
         selected.clone(),
@@ -1992,12 +2070,12 @@ fn scratch_transaction_failure_before_exchange_retains_complete_live_tree() {
                 .expect("read transaction-parent entry")
                 .file_name()
                 .to_string_lossy()
-                .starts_with(SCRATCH_TRANSACTION_PREFIX))
+                .starts_with(super::workspace::SCRATCH_TRANSACTION_PREFIX))
     );
 
-    let existing =
-        validated_scratch_tree(&scratch).expect("snapshot retained scratch before retry");
-    let published = replace_scratch_snapshots(&scratch, existing, selected)
+    let existing = super::workspace::validated_scratch_tree(&scratch)
+        .expect("snapshot retained scratch before retry");
+    let published = super::workspace::replace_scratch_snapshots(&scratch, existing, selected)
         .expect("atomically publish complete replacement");
     assert_eq!(published.file_count, 2);
     assert_eq!(
@@ -2031,7 +2109,8 @@ fn scratch_retains_current_wip_without_a_directory_count_limit() {
     std::fs::write(persistent_scratch.join("checked/core.v"), checked)
         .expect("write checked directory-pressure snapshot");
 
-    hydrate_round_scratch(&proof, &stage).expect("hydrate the checked directory-pressure state");
+    super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate the checked directory-pressure state");
     std::fs::remove_file(stage.join("scratch/checked/core.v"))
         .expect("remove the staged checked snapshot");
     std::fs::remove_dir(stage.join("scratch/checked"))
@@ -2042,11 +2121,11 @@ fn scratch_retains_current_wip_without_a_directory_count_limit() {
         std::fs::write(directory.join("work.v"), format!("(* WIP {index} *)\n"))
             .expect("write staged directory-pressure WIP");
     }
-    let staged_tree = validated_scratch_tree(&stage.join("scratch"))
+    let staged_tree = super::workspace::validated_scratch_tree(&stage.join("scratch"))
         .expect("validate the structurally sound staged directory tree");
     assert_eq!(staged_tree.directories.len(), 64);
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("retain the checked-plus-staged directory union");
     assert_eq!(persisted.file_count, 64);
     assert_eq!(
@@ -2054,14 +2133,16 @@ fn scratch_retains_current_wip_without_a_directory_count_limit() {
             .expect("read preserved checked directory-pressure snapshot"),
         checked
     );
-    let persisted_tree = validated_scratch_tree(&persistent_scratch)
+    let persisted_tree = super::workspace::validated_scratch_tree(&persistent_scratch)
         .expect("validate compacted directory-pressure tree");
     assert_eq!(persisted_tree.directories.len(), 65);
     assert_eq!(
         persisted_tree
             .files
             .iter()
-            .filter(|snapshot| !is_checked_scratch_snapshot(&snapshot.relative_path))
+            .filter(|snapshot| !super::workspace::is_checked_scratch_snapshot(
+                &snapshot.relative_path
+            ))
             .count(),
         63
     );
@@ -2097,13 +2178,16 @@ fn scratch_successful_promotion_retains_untrusted_work() {
         )
         .expect("write promotion-pressure filler");
     }
-    let before = scratch_workspace_state(&persistent_scratch)
+    let before = super::workspace::scratch_workspace_state(&persistent_scratch)
         .expect("inspect promotion-pressure initial state");
     assert_eq!(before.total_bytes, (300 + 400 + 8 * 400) * 1024);
 
-    let promoted =
-        persist_successful_scratch_candidate(&proof, Path::new("scratch/fresh.v"), &fresh)
-            .expect("retain untrusted state while adding the new checked candidate");
+    let promoted = super::workspace::persist_successful_scratch_candidate(
+        &proof,
+        Path::new("scratch/fresh.v"),
+        &fresh,
+    )
+    .expect("retain untrusted state while adding the new checked candidate");
     assert_eq!(promoted.file_count, 11);
     assert_eq!(promoted.total_bytes, (300 + 400 + 300 + 8 * 400) * 1024);
     assert_eq!(
@@ -2146,11 +2230,11 @@ fn scratch_checked_snapshots_have_no_smaller_byte_envelope() {
         )
         .expect("write checked-saturation snapshot");
     }
-    let before =
-        scratch_workspace_state(&persistent_scratch).expect("inspect checked-only saturation");
+    let before = super::workspace::scratch_workspace_state(&persistent_scratch)
+        .expect("inspect checked-only saturation");
     assert_eq!(before.total_bytes, 4 * 1024 * 1024);
 
-    let retained = persist_successful_scratch_candidate(
+    let retained = super::workspace::persist_successful_scratch_candidate(
         &proof,
         Path::new("scratch/new.v"),
         b"Lemma uncached_but_checked : True. Proof. exact I. Qed.\n",
@@ -2188,21 +2272,22 @@ fn scratch_stage_file_count_has_no_smaller_envelope() {
     let checked = b"Lemma stage_overflow_checked : True. Proof. exact I. Qed.\n";
     std::fs::write(persistent_scratch.join("checked/core.v"), checked)
         .expect("write stage-overflow checked snapshot");
-    hydrate_round_scratch(&proof, &stage).expect("hydrate stage-overflow checked snapshot");
+    super::workspace::hydrate_round_scratch(&proof, &stage)
+        .expect("hydrate stage-overflow checked snapshot");
     for index in 0..64 {
         std::fs::write(stage.join(format!("scratch/overflow-{index}.txt")), b"x")
             .expect("write aggregate stage-overflow file");
     }
     assert_eq!(
-        validated_scratch_tree(&stage.join("scratch"))
+        super::workspace::validated_scratch_tree(&stage.join("scratch"))
             .expect("validate all staged files")
             .files
             .len(),
         65
     );
 
-    let persisted =
-        persist_round_scratch(&stage, &proof).expect("retain every structurally valid staged file");
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
+        .expect("retain every structurally valid staged file");
     assert_eq!(persisted.file_count, 65);
     assert_eq!(
         std::fs::read(persistent_scratch.join("checked/core.v"))
@@ -2230,7 +2315,7 @@ fn scratch_file_has_no_smaller_per_file_limit() {
     std::fs::write(stage.join("scratch/oversized.txt"), vec![b'x'; 600 * 1024])
         .expect("write oversized scratch file");
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("retain a file larger than the former per-file limit");
     assert_eq!(persisted.total_bytes, 600 * 1024);
     std::fs::remove_dir_all(root).expect("remove per-file-overflow test tree");
@@ -2261,8 +2346,8 @@ fn scratch_large_tree_retains_every_regular_utf8_file() {
     )
     .expect("write masked oversized scratch file");
 
-    let persisted =
-        persist_round_scratch(&stage, &proof).expect("retain the complete structurally valid tree");
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
+        .expect("retain the complete structurally valid tree");
     assert_eq!(persisted.file_count, 66);
     assert!(proof.join("scratch/unsafe/oversized.txt").is_file());
     std::fs::remove_dir_all(root).expect("remove mixed-overflow test tree");
@@ -2287,7 +2372,7 @@ fn scratch_validation_has_no_smaller_file_scan_ceiling() {
             .expect("write scan-ceiling file");
     }
 
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("retain files beyond the former validation scan ceiling");
     assert_eq!(persisted.file_count, 129);
     std::fs::remove_dir_all(root).expect("remove scan-ceiling test tree");
@@ -2323,12 +2408,12 @@ fn scratch_round_retains_untrusted_v_wip_separately_from_checked_snapshot() {
             .expect("write trusted test input");
     }
     let checker = root.join("fake-scratch-checker.sh");
+    complete_broker_witness_fixture(&proof);
     std::fs::write(
         &checker,
         "#!/usr/bin/env bash\nif grep -q FAIL \"$LOGOS_PROOF_WORKDIR/Problem.v\"; then exit 1; fi\nexit 0\n",
     )
     .expect("write scratch checker");
-    complete_broker_witness_fixture(&proof);
     let broker = DiagnosticBroker::start(
         &artifacts,
         5,
@@ -2402,7 +2487,7 @@ fn scratch_round_retains_untrusted_v_wip_separately_from_checked_snapshot() {
     let never_submitted = b"Lemma unfinished_subproof : True. Proof. exact I. Qed.\n";
     std::fs::write(stage.join("scratch/never-submitted.v"), never_submitted)
         .expect("write never-submitted scratch WIP");
-    let persisted = persist_round_scratch(&stage, &proof)
+    let persisted = super::workspace::persist_round_scratch(&stage, &proof)
         .expect("persist planning files and untrusted Rocq work in progress");
     assert_eq!(persisted.file_count, 4);
     assert!(!proof.join("scratch/checked/agent-note.md").exists());
@@ -2423,7 +2508,7 @@ fn scratch_round_retains_untrusted_v_wip_separately_from_checked_snapshot() {
 
     let next_stage = root.join("next-stage");
     std::fs::create_dir(&next_stage).expect("create next stage");
-    hydrate_round_scratch(&proof, &next_stage).expect("hydrate retained scratch");
+    super::workspace::hydrate_round_scratch(&proof, &next_stage).expect("hydrate retained scratch");
     assert_eq!(
         std::fs::read(next_stage.join("scratch/core.v")).expect("read hydrated WIP"),
         failing
@@ -2585,13 +2670,13 @@ fn diagnostic_broker_audits_each_snapshot_before_starting_the_checker() {
     }
     let checker = root.join("fake-trusted-checker.sh");
     let checker_marker = root.join("fake-trusted-checker.sh.invoked");
+    complete_broker_witness_fixture(&proof);
     std::fs::write(
         &checker,
         "#!/usr/bin/env bash\nprintf invoked >>\"$0.invoked\"\nexit 0\n",
     )
     .expect("write fake trusted checker");
 
-    complete_broker_witness_fixture(&proof);
     let broker = DiagnosticBroker::start(
         &artifacts,
         2,
@@ -2795,8 +2880,8 @@ fn diagnostic_broker_finish_fails_closed_on_rejected_evidence_drift() {
             .expect("write trusted test input");
     }
     let checker = root.join("checker-must-not-run.sh");
-    std::fs::write(&checker, "#!/usr/bin/env bash\nexit 99\n").expect("write checker sentinel");
     complete_broker_witness_fixture(&proof);
+    std::fs::write(&checker, "#!/usr/bin/env bash\nexit 99\n").expect("write checker sentinel");
     let broker = DiagnosticBroker::start(
         &artifacts,
         3,
@@ -3231,11 +3316,12 @@ fn proof_agent_state_directory_publication_is_atomic_across_signals_and_failures
 #[test]
 fn case_process_supervisor_pid_parser_is_strict_and_canonical() {
     assert_eq!(
-        parse_case_process_supervisor_pid(std::ffi::OsStr::new("1")).expect("minimum positive pid"),
+        super::diagnostics::parse_case_process_supervisor_pid(std::ffi::OsStr::new("1"))
+            .expect("minimum positive pid"),
         1
     );
     assert_eq!(
-        parse_case_process_supervisor_pid(std::ffi::OsStr::new("4294967295"))
+        super::diagnostics::parse_case_process_supervisor_pid(std::ffi::OsStr::new("4294967295"))
             .expect("maximum u32 pid"),
         u32::MAX
     );
@@ -3250,7 +3336,10 @@ fn case_process_supervisor_pid_parser_is_strict_and_canonical() {
         b"\xff",
     ] {
         assert!(
-            parse_case_process_supervisor_pid(std::ffi::OsStr::from_bytes(malformed)).is_err(),
+            super::diagnostics::parse_case_process_supervisor_pid(std::ffi::OsStr::from_bytes(
+                malformed
+            ))
+            .is_err(),
             "accepted malformed supervisor pid: {malformed:?}"
         );
     }
@@ -3262,7 +3351,7 @@ fn diagnostic_socket_directory_is_short_private_sidecar_bound_and_raii_cleaned()
     let artifacts =
         ArtifactWriter::new(Some(fixture.path().join("case"))).expect("create artifact writer");
     let host_tmp = proof_agent_host_tmp_directory(&artifacts).expect("create host temp root");
-    let socket_directory = SocketDirectory::create(artifacts.root(), 97)
+    let socket_directory = super::diagnostics::SocketDirectory::create(artifacts.root(), 97)
         .expect("create short diagnostic socket directory");
     let socket_path = socket_directory.socket_path();
     let directory_path = socket_path.parent().expect("socket directory").to_owned();
@@ -6117,7 +6206,7 @@ fn scratch_audit_allows_generalized_sections_but_not_assumptions_or_open_results
         "{}\nModule LocalIsolation.\nSection Generalized.\nVariable P : Prop.\nContext (HP : P).\nLemma generalized_identity : P. Proof. exact HP. Qed.\nEnd Generalized.\nEnd LocalIsolation.\n",
         TRUSTED_PROBLEM_IMPORT_LINES.join("\n")
     );
-    assert!(audit_scratch_rocq_text("scratch/general.v", &source).is_empty());
+    assert!(super::audit::audit_scratch_rocq_text("scratch/general.v", &source).is_empty());
     let final_findings = audit_rocq_text("Problem.v", &source);
     assert!(
         final_findings
@@ -6130,7 +6219,7 @@ fn scratch_audit_allows_generalized_sections_but_not_assumptions_or_open_results
             .any(|finding| finding.token == "Variable")
     );
 
-    let assumption_findings = audit_scratch_rocq_text(
+    let assumption_findings = super::audit::audit_scratch_rocq_text(
         "scratch/assumption.v",
         "Parameter magic : forall P : Prop, P.\nLemma result : True. Proof. exact I. Qed.\n",
     );
@@ -6139,7 +6228,7 @@ fn scratch_audit_allows_generalized_sections_but_not_assumptions_or_open_results
             .iter()
             .any(|finding| finding.token == "Parameter")
     );
-    let missing_qed = audit_scratch_rocq_text(
+    let missing_qed = super::audit::audit_scratch_rocq_text(
         "scratch/no-result.v",
         "Definition only_a_definition : True := I.\n",
     );
@@ -6148,7 +6237,7 @@ fn scratch_audit_allows_generalized_sections_but_not_assumptions_or_open_results
             .iter()
             .any(|finding| finding.token == "missing Qed")
     );
-    let untrusted = audit_scratch_rocq_text(
+    let untrusted = super::audit::audit_scratch_rocq_text(
         "scratch/import.v",
         "Require Import HistoricalProof.\nLemma result : True. Proof. exact I. Qed.\n",
     );
@@ -6163,7 +6252,7 @@ fn scratch_audit_allows_generalized_sections_but_not_assumptions_or_open_results
 fn proof_module_paths_imports_and_immutability_are_fail_closed() {
     for accepted in ["ProofModules/Core.v", "ProofModules/Proof20_GroupLift.v"] {
         assert!(
-            validate_proof_module_candidate_path(accepted).is_ok(),
+            super::workspace::validate_proof_module_candidate_path(accepted).is_ok(),
             "expected valid module path {accepted}"
         );
     }
@@ -6175,7 +6264,7 @@ fn proof_module_paths_imports_and_immutability_are_fail_closed() {
         "ProofModules/../Core.v",
     ] {
         assert!(
-            validate_proof_module_candidate_path(rejected).is_err(),
+            super::workspace::validate_proof_module_candidate_path(rejected).is_err(),
             "expected invalid module path {rejected}"
         );
     }
@@ -6184,9 +6273,11 @@ fn proof_module_paths_imports_and_immutability_are_fail_closed() {
         "{}\nFrom LogosGenerated.ProofModules Require Import Core Proof20_GroupLift.\nLemma exported_fact : True. Proof. exact I. Qed.\n",
         TRUSTED_PROBLEM_IMPORT_LINES.join("\n")
     );
-    assert!(audit_proof_module_rocq_text("ProofModules/Consumer.v", &source).is_empty());
+    assert!(
+        super::audit::audit_proof_module_rocq_text("ProofModules/Consumer.v", &source).is_empty()
+    );
     assert!(audit_rocq_text("Problem.v", &source).is_empty());
-    let malformed = audit_proof_module_rocq_text(
+    let malformed = super::audit::audit_proof_module_rocq_text(
         "ProofModules/Bad.v",
         "From LogosGenerated.ProofModules Require Import ../Escape.\nLemma x : True. Proof. exact I. Qed.\n",
     );
@@ -6202,7 +6293,7 @@ fn proof_module_paths_imports_and_immutability_are_fail_closed() {
         "From LogosGenerated.ProofModules\nRequire Import Core.\nLemma x : True. Proof. exact I. Qed.\n",
     ] {
         assert!(
-            audit_proof_module_rocq_text("ProofModules/BadImport.v", forbidden)
+            super::audit::audit_proof_module_rocq_text("ProofModules/BadImport.v", forbidden)
                 .iter()
                 .any(|finding| finding.token == "untrusted import"),
             "forbidden helper import form passed the source audit: {forbidden:?}"
@@ -6219,11 +6310,19 @@ fn proof_module_paths_imports_and_immutability_are_fail_closed() {
     ));
     std::fs::create_dir_all(&root).expect("create proof module test root");
     let first = b"Lemma first : True. Proof. exact I. Qed.\n";
-    persist_successful_proof_module_candidate(&root, Path::new("ProofModules/Core.v"), first)
-        .expect("persist first checked module");
-    persist_successful_proof_module_candidate(&root, Path::new("ProofModules/Core.v"), first)
-        .expect("accept byte-identical checked module");
-    let replacement = persist_successful_proof_module_candidate(
+    super::workspace::persist_successful_proof_module_candidate(
+        &root,
+        Path::new("ProofModules/Core.v"),
+        first,
+    )
+    .expect("persist first checked module");
+    super::workspace::persist_successful_proof_module_candidate(
+        &root,
+        Path::new("ProofModules/Core.v"),
+        first,
+    )
+    .expect("accept byte-identical checked module");
+    let replacement = super::workspace::persist_successful_proof_module_candidate(
         &root,
         Path::new("ProofModules/Core.v"),
         b"Lemma changed : True. Proof. exact I. Qed.\n",
@@ -6232,7 +6331,7 @@ fn proof_module_paths_imports_and_immutability_are_fail_closed() {
     .to_string();
     assert!(replacement.contains("immutable"));
 
-    let pending = ModulePublication::prepare(
+    let pending = super::workspace::ModulePublication::prepare(
         &root,
         Path::new("ProofModules/Pending.v"),
         b"Lemma pending : True. Proof. exact I. Qed.\n",
@@ -6318,32 +6417,4 @@ fn proof_audit_accepts_generated_trusted_imports() {
          Check int64_bit_or_fold_distinct_invariant.\n",
     );
     assert!(audit_rocq_text("proof-stage/formal-sql/Problem.v", &source).is_empty());
-}
-
-#[test]
-fn unpublished_module_named_drafts_survive_rounds_without_becoming_dependencies() {
-    let fixture = tempfile::tempdir().unwrap();
-    let stage = fixture.path().join("stage");
-    let proof = fixture.path().join("proof");
-    let resumed = fixture.path().join("resumed");
-    let draft = "scratch/ProofModules/CoreBridge.v";
-    std::fs::create_dir_all(stage.join("scratch/ProofModules")).unwrap();
-    std::fs::create_dir_all(&proof).unwrap();
-    std::fs::create_dir_all(&resumed).unwrap();
-    let unfinished = "Lemma bridge : True. Proof. exact 0.\n";
-    std::fs::write(stage.join(draft), unfinished).unwrap();
-    super::workspace::persist_round_scratch(&stage, &proof).unwrap();
-    super::workspace::hydrate_round_scratch(&proof, &resumed).unwrap();
-    assert_eq!(
-        std::fs::read_to_string(resumed.join(draft)).unwrap(),
-        unfinished
-    );
-    for workspace in [&proof, &resumed] {
-        assert!(!workspace.join("ProofModules/CoreBridge.v").exists());
-        assert!(
-            !workspace
-                .join("scratch/checked/ProofModules/CoreBridge.v")
-                .exists()
-        );
-    }
 }
