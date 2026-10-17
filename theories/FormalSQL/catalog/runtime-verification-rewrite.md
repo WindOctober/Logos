@@ -2,7 +2,7 @@
 
 Route here for: success/error outcomes, safe vs error-preserving equivalence, rewrite contracts.
 
-This focused catalog contains 358 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 360 declarations routed at declaration granularity from `AggregateRuntimeFacts.v`, `CountermodelFacts.v`, `OrderedObservationTransportFacts.v`, `OrderedQueryFacts.v`, `PossibleOutcomeFacts.v`, `ProofAgentFacade.v`, `SqlQueryContexts.v`, `VerificationConditions.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `successful_outcome_equiv_implies_outcome_equiv`
 
@@ -5649,9 +5649,66 @@ Lemma query_expr_filter_uniform_global_typed_congr :
       (QExpr_Filter right_predicate input).
 ```
 
+## `query_expr_filter_uniform_global_typed_of_observation`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3077`](../PossibleOutcomeFacts.v#L3077)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Lifts TRUE/non-TRUE/error observation equivalence to typed filters over the same input, for every schedule and environment; child errors are preserved.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_filter_uniform_global_typed_of_observation` direction for SQL verification and runtime outcomes; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `scheduled`, `runtime`, `filter`, `schema`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `schema conformance`, `typing`
+
+```rocq
+Theorem query_expr_filter_uniform_global_typed_of_observation :
+  forall left_formula right_formula input,
+    (forall schedule env,
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_formula env right_formula) ->
+    query_expr_uniform_global_typed_outcome_equiv
+      (QExpr_Filter left_formula input) (QExpr_Filter right_formula input).
+```
+
+## `query_expr_filter_uniform_global_typed_of_acceptance_exact`
+
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3126`](../PossibleOutcomeFacts.v#L3126)
+
+Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
+
+Purpose/direction: Lifts matching exact acceptance decisions to typed filters; predicates are safe but the common input may still fail.
+
+Applicability: Use when the goal or a hypothesis matches the `query_expr_filter_uniform_global_typed_of_acceptance_exact` direction for SQL verification and runtime outcomes; do not reverse or strengthen the displayed conclusion.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; keep schema/integrity conformance premises explicit.
+
+Cross-index: `scheduled`, `runtime`, `filter`, `schema`
+
+Search aliases: `verification and runtime semantics`, `filter`, `WHERE`, `schema conformance`, `typing`
+
+```rocq
+Theorem query_expr_filter_uniform_global_typed_of_acceptance_exact :
+  forall left_formula right_formula input,
+    (forall schedule env, exists accepted,
+      @scalar_expr_acceptance_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_formula accepted /\
+      @scalar_expr_acceptance_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_formula accepted) ->
+    query_expr_uniform_global_typed_outcome_equiv
+      (QExpr_Filter left_formula input) (QExpr_Filter right_formula input).
+```
+
 ## `query_expr_project_uniform_global_typed_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3073`](../PossibleOutcomeFacts.v#L3073)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3146`](../PossibleOutcomeFacts.v#L3146)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -5677,7 +5734,7 @@ Lemma query_expr_project_uniform_global_typed_congr :
 
 ## `query_expr_filter_predicate_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3097`](../PossibleOutcomeFacts.v#L3097)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3170`](../PossibleOutcomeFacts.v#L3170)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5709,7 +5766,7 @@ Theorem query_expr_filter_predicate_possible_outcome_equiv :
 
 ## `query_expr_project_select_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3117`](../PossibleOutcomeFacts.v#L3117)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3190`](../PossibleOutcomeFacts.v#L3190)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5741,7 +5798,7 @@ Theorem query_expr_project_select_possible_outcome_equiv :
 
 ## `eval_groups_outcome_uniform_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3142`](../PossibleOutcomeFacts.v#L3142)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3215`](../PossibleOutcomeFacts.v#L3215)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -5786,7 +5843,7 @@ Lemma eval_groups_outcome_uniform_congr :
 
 ## `query_expr_group_possible_outcome_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3309`](../PossibleOutcomeFacts.v#L3309)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3382`](../PossibleOutcomeFacts.v#L3382)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5854,7 +5911,7 @@ Theorem query_expr_group_possible_outcome_transport :
 
 ## `query_group_rows_outcomes_transport_of_exact_bag_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3432`](../PossibleOutcomeFacts.v#L3432)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3505`](../PossibleOutcomeFacts.v#L3505)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -5892,7 +5949,7 @@ Lemma query_group_rows_outcomes_transport_of_exact_bag_outcomes :
 
 ## `eval_group_bag_outcome_exact_local_congr`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3468`](../PossibleOutcomeFacts.v#L3468)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3541`](../PossibleOutcomeFacts.v#L3541)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -5927,7 +5984,7 @@ Lemma eval_group_bag_outcome_exact_local_congr :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3508`](../PossibleOutcomeFacts.v#L3508)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3581`](../PossibleOutcomeFacts.v#L3581)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -5969,7 +6026,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_group_bag_outcomes :
 
 ## `query_expr_group_possible_outcome_equiv_of_exact_local_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3556`](../PossibleOutcomeFacts.v#L3556)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3629`](../PossibleOutcomeFacts.v#L3629)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6007,7 +6064,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_exact_local_outcomes :
 
 ## `query_expr_group_clauses_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3585`](../PossibleOutcomeFacts.v#L3585)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3658`](../PossibleOutcomeFacts.v#L3658)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6054,7 +6111,7 @@ Theorem query_expr_group_clauses_possible_outcome_equiv :
 
 ## `query_expr_possible_outcome_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3623`](../PossibleOutcomeFacts.v#L3623)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3696`](../PossibleOutcomeFacts.v#L3696)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6082,7 +6139,7 @@ Lemma query_expr_possible_outcome_equiv_refl :
 
 ## `query_expr_possible_outcome_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3640`](../PossibleOutcomeFacts.v#L3640)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3713`](../PossibleOutcomeFacts.v#L3713)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6109,7 +6166,7 @@ Lemma query_expr_possible_outcome_equiv_sym :
 
 ## `query_expr_possible_outcome_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3662`](../PossibleOutcomeFacts.v#L3662)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3735`](../PossibleOutcomeFacts.v#L3735)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6139,7 +6196,7 @@ Lemma query_expr_possible_outcome_equiv_trans :
 
 ## `query_expr_context_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3709`](../PossibleOutcomeFacts.v#L3709)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3782`](../PossibleOutcomeFacts.v#L3782)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6171,7 +6228,7 @@ Theorem query_expr_context_possible_outcome_equiv :
 
 ## `query_expr_filter_possible_outcome_equiv_of_uniform_expression`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3730`](../PossibleOutcomeFacts.v#L3730)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3803`](../PossibleOutcomeFacts.v#L3803)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6203,7 +6260,7 @@ Theorem query_expr_filter_possible_outcome_equiv_of_uniform_expression :
 
 ## `query_expr_group_possible_outcome_equiv_of_uniform_having`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3751`](../PossibleOutcomeFacts.v#L3751)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3824`](../PossibleOutcomeFacts.v#L3824)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6235,7 +6292,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_uniform_having :
 
 ## `query_expr_join_possible_outcome_equiv_of_uniform_predicate`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3775`](../PossibleOutcomeFacts.v#L3775)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3848`](../PossibleOutcomeFacts.v#L3848)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6271,7 +6328,7 @@ Theorem query_expr_join_possible_outcome_equiv_of_uniform_predicate :
 
 ## `query_expr_filter_in_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3804`](../PossibleOutcomeFacts.v#L3804)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3877`](../PossibleOutcomeFacts.v#L3877)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6303,7 +6360,7 @@ Corollary query_expr_filter_in_subquery_possible_outcome_equiv :
 
 ## `query_expr_filter_exists_subquery_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3826`](../PossibleOutcomeFacts.v#L3826)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3899`](../PossibleOutcomeFacts.v#L3899)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6335,7 +6392,7 @@ Corollary query_expr_filter_exists_subquery_possible_outcome_equiv :
 
 ## `query_expr_set_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3850`](../PossibleOutcomeFacts.v#L3850)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3923`](../PossibleOutcomeFacts.v#L3923)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6363,7 +6420,7 @@ Theorem query_expr_set_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_cross_join_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3865`](../PossibleOutcomeFacts.v#L3865)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3938`](../PossibleOutcomeFacts.v#L3938)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6391,7 +6448,7 @@ Theorem query_expr_cross_join_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_group_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3880`](../PossibleOutcomeFacts.v#L3880)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3953`](../PossibleOutcomeFacts.v#L3953)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6422,7 +6479,7 @@ Theorem query_expr_group_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_window_possible_outcome_equiv_congr_uniform`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3928`](../PossibleOutcomeFacts.v#L3928)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4001`](../PossibleOutcomeFacts.v#L4001)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6457,7 +6514,7 @@ Theorem query_expr_window_possible_outcome_equiv_congr_uniform :
 
 ## `query_expr_possible_equiv_refl`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3974`](../PossibleOutcomeFacts.v#L3974)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4047`](../PossibleOutcomeFacts.v#L4047)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6483,7 +6540,7 @@ Lemma query_expr_possible_equiv_refl :
 
 ## `query_expr_possible_equiv_sym`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:3990`](../PossibleOutcomeFacts.v#L3990)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4063`](../PossibleOutcomeFacts.v#L4063)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6510,7 +6567,7 @@ Lemma query_expr_possible_equiv_sym :
 
 ## `query_expr_possible_equiv_trans`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4019`](../PossibleOutcomeFacts.v#L4019)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4092`](../PossibleOutcomeFacts.v#L4092)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6540,7 +6597,7 @@ Lemma query_expr_possible_equiv_trans :
 
 ## `query_expr_possible_equiv_of_possible_outcome_equiv_safe`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4058`](../PossibleOutcomeFacts.v#L4058)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4131`](../PossibleOutcomeFacts.v#L4131)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6570,7 +6627,7 @@ Theorem query_expr_possible_equiv_of_possible_outcome_equiv_safe :
 
 ## `query_expr_possible_outcome_equiv_of_shared_exact_error`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4081`](../PossibleOutcomeFacts.v#L4081)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4154`](../PossibleOutcomeFacts.v#L4154)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6619,7 +6676,7 @@ Theorem query_expr_possible_outcome_equiv_of_shared_exact_error :
 
 ## `query_expr_filter_possible_outcome_equiv_congr_stable_total`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4141`](../PossibleOutcomeFacts.v#L4141)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4214`](../PossibleOutcomeFacts.v#L4214)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6650,7 +6707,7 @@ Theorem query_expr_filter_possible_outcome_equiv_congr_stable_total :
 
 ## `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4270`](../PossibleOutcomeFacts.v#L4270)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4343`](../PossibleOutcomeFacts.v#L4343)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6717,7 +6774,7 @@ Theorem query_expr_group_possible_outcome_equiv_of_supported_child_outcomes :
 
 ## `query_program_possible_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4343`](../PossibleOutcomeFacts.v#L4343)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4416`](../PossibleOutcomeFacts.v#L4416)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6741,7 +6798,7 @@ Lemma query_program_possible_equiv_nil :
 
 ## `query_program_possible_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4352`](../PossibleOutcomeFacts.v#L4352)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4425`](../PossibleOutcomeFacts.v#L4425)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6772,7 +6829,7 @@ Lemma query_program_possible_equiv_cons :
 
 ## `query_program_possible_outcome_equiv_nil`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4368`](../PossibleOutcomeFacts.v#L4368)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4441`](../PossibleOutcomeFacts.v#L4441)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6796,7 +6853,7 @@ Lemma query_program_possible_outcome_equiv_nil :
 
 ## `query_program_possible_outcome_equiv_cons`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4377`](../PossibleOutcomeFacts.v#L4377)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4450`](../PossibleOutcomeFacts.v#L4450)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6827,7 +6884,7 @@ Lemma query_program_possible_outcome_equiv_cons :
 
 ## `query_program_possible_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4393`](../PossibleOutcomeFacts.v#L4393)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4466`](../PossibleOutcomeFacts.v#L4466)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6852,7 +6909,7 @@ Lemma query_program_possible_equiv_length :
 
 ## `query_program_possible_outcome_equiv_length`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4407`](../PossibleOutcomeFacts.v#L4407)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4480`](../PossibleOutcomeFacts.v#L4480)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6877,7 +6934,7 @@ Lemma query_program_possible_outcome_equiv_length :
 
 ## `query_program_possible_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4421`](../PossibleOutcomeFacts.v#L4421)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4494`](../PossibleOutcomeFacts.v#L4494)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6906,7 +6963,7 @@ Theorem query_program_possible_equiv_iff_Forall2 :
 
 ## `query_program_possible_outcome_equiv_iff_Forall2`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4443`](../PossibleOutcomeFacts.v#L4443)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4516`](../PossibleOutcomeFacts.v#L4516)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6935,7 +6992,7 @@ Theorem query_program_possible_outcome_equiv_iff_Forall2 :
 
 ## `query_rename_uniform_transport_implies_mapped_schema_possible_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4504`](../PossibleOutcomeFacts.v#L4504)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4577`](../PossibleOutcomeFacts.v#L4577)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6969,7 +7026,7 @@ Theorem query_rename_uniform_transport_implies_mapped_schema_possible_outcome_eq
 
 ## `query_mapped_schema_possible_outcome_equiv_mapped_schema`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4548`](../PossibleOutcomeFacts.v#L4548)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4621`](../PossibleOutcomeFacts.v#L4621)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6993,7 +7050,7 @@ Lemma query_mapped_schema_possible_outcome_equiv_mapped_schema :
 
 ## `query_expr_possible_bag_outcome_equiv_success_forward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4592`](../PossibleOutcomeFacts.v#L4592)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4665`](../PossibleOutcomeFacts.v#L4665)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7019,7 +7076,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_forward :
 
 ## `query_expr_possible_bag_outcome_equiv_success_backward`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4619`](../PossibleOutcomeFacts.v#L4619)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4692`](../PossibleOutcomeFacts.v#L4692)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7045,7 +7102,7 @@ Lemma query_expr_possible_bag_outcome_equiv_success_backward :
 
 ## `query_expr_possible_bag_outcome_equiv_error_iff`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4645`](../PossibleOutcomeFacts.v#L4645)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4718`](../PossibleOutcomeFacts.v#L4718)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7069,7 +7126,7 @@ Lemma query_expr_possible_bag_outcome_equiv_error_iff :
 
 ## `query_expr_possible_bag_outcome_equiv_inhabited`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4658`](../PossibleOutcomeFacts.v#L4658)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4731`](../PossibleOutcomeFacts.v#L4731)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7093,7 +7150,7 @@ Lemma query_expr_possible_bag_outcome_equiv_inhabited :
 
 ## `query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4690`](../PossibleOutcomeFacts.v#L4690)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4763`](../PossibleOutcomeFacts.v#L4763)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7119,7 +7176,7 @@ Theorem query_expr_distinct_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4760`](../PossibleOutcomeFacts.v#L4760)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4833`](../PossibleOutcomeFacts.v#L4833)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7146,7 +7203,7 @@ Theorem query_expr_rank_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4911`](../PossibleOutcomeFacts.v#L4911)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4984`](../PossibleOutcomeFacts.v#L4984)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7172,7 +7229,7 @@ Theorem query_expr_order_by_possible_outcome_equiv_of_possible_bag_outcome_equiv
 
 ## `query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:4981`](../PossibleOutcomeFacts.v#L4981)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5054`](../PossibleOutcomeFacts.v#L5054)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7202,7 +7259,7 @@ Theorem query_expr_offset_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5001`](../PossibleOutcomeFacts.v#L5001)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5074`](../PossibleOutcomeFacts.v#L5074)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -7232,7 +7289,7 @@ Theorem query_expr_fetch_possible_outcome_equiv_of_possible_bag_outcome_equiv :
 
 ## `query_expr_join_relation_transport_to_left`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5052`](../PossibleOutcomeFacts.v#L5052)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5125`](../PossibleOutcomeFacts.v#L5125)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 
@@ -7283,7 +7340,7 @@ Theorem query_expr_join_relation_transport_to_left :
 
 ## `query_expr_left_join_functional_elimination_transport`
 
-Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5130`](../PossibleOutcomeFacts.v#L5130)
+Source: [`theories/FormalSQL/PossibleOutcomeFacts.v:5203`](../PossibleOutcomeFacts.v#L5203)
 
 Interface layer: Schedule-quantified transport foundation: compose it into a theorem whose conclusion is possible-outcome equivalence.
 

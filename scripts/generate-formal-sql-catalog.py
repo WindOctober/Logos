@@ -52,6 +52,17 @@ GENERAL_QUERY_CONTEXT_DECLARATIONS = frozenset(
     }
 )
 
+EXACT_SCALAR_BRIDGES = frozenset({
+    "scalar_value_expr_case_exact_from_acceptance",
+    "scalar_value_list_exact_map",
+    "scalar_value_leaf_list_exact",
+})
+LEAF_PROJECTION_BRIDGES = frozenset({
+    "eval_project_leaf_rows_exact_map",
+    "leaf_project_row_equal_of_row_equiv",
+    "leaf_project_row_semantic_proper",
+})
+
 # Constructor families are named once and expanded mechanically into the
 # schedule-local and public declaration inventories.  A later unary family can
 # use the same pattern without adding query-shaped search aliases or ranking.
@@ -1660,6 +1671,13 @@ def semantic_features(
     elif tokens & {"equiv", "congr", "proper", "respect", "refl", "sym", "trans"}:
         features.add("equivalence")
 
+    if name in EXACT_SCALAR_BRIDGES | LEAF_PROJECTION_BRIDGES:
+        features.discard("grouping")
+        features.add("scalar")
+        if name in LEAF_PROJECTION_BRIDGES:
+            features.add("projection")
+        if name in EXACT_SCALAR_BRIDGES or name == "eval_project_leaf_rows_exact_map":
+            features.update(("outcome", "runtime"))
     return frozenset(features)
 
 
@@ -1694,6 +1712,10 @@ def declaration_domain(
     The rules depend only on public declaration syntax and remain stable across
     generated benchmark instances.
     """
+    if name in EXACT_SCALAR_BRIDGES:
+        return "null-predicates.md"
+    if name in LEAF_PROJECTION_BRIDGES:
+        return "relational-algebra.md"
     ordered_features = {"order_by", "offset", "fetch", "window", "distinct"}
     relational_features = {"projection", "filter", "join", "bag", "multiplicity"}
 
@@ -1791,6 +1813,8 @@ def declaration_domain(
 
 def interface_layer(module: str, name: str, statement: str) -> str:
     """Classify final possible SQL interfaces separately from proof layers."""
+    if name in EXACT_SCALAR_BRIDGES or name == "eval_project_leaf_rows_exact_map":
+        return "scheduled_foundation"
     lowered_name = name.casefold()
     lowered_statement = statement.casefold()
     if (
@@ -2092,6 +2116,26 @@ def is_non_equivalence_law(name: str) -> bool:
 
 
 def summary_for(name: str, domain_name: str, features: frozenset[str]) -> str:
+    bridge_summaries = {
+        "scalar_value_expr_case_exact_from_acceptance":
+            "Lifts exact TRUE/non-TRUE acceptance and only the selected arm's exact value to lazy CASE exactness; the unselected arm is unrestricted.",
+        "scalar_value_list_exact_map":
+            "Assembles exact scalar values into an exact list, preserving order, duplicates and error exclusion.",
+        "scalar_value_leaf_list_exact":
+            "Evaluates a heterogeneous typed leaf list exactly from membership-scoped aggregate-term safety.",
+        "eval_project_leaf_rows_exact_map":
+            "Lifts safe leaf SELECT lists to exact ordered row projection, requiring safety only on reached rows.",
+        "leaf_project_row_equal_of_row_equiv":
+            "Shows leaf projection produces equal rows from semantically equal input rows; this pure equality is not a runtime-safety proof.",
+        "leaf_project_row_semantic_proper":
+            "Supplies semantic row congruence for the pure leaf projection map without assuming runtime safety.",
+        "query_expr_filter_uniform_global_typed_of_observation":
+            "Lifts TRUE/non-TRUE/error observation equivalence to typed filters over the same input, for every schedule and environment; child errors are preserved.",
+        "query_expr_filter_uniform_global_typed_of_acceptance_exact":
+            "Lifts matching exact acceptance decisions to typed filters; predicates are safe but the common input may still fail.",
+    }
+    if name in bridge_summaries:
+        return bridge_summaries[name]
     subject = semantic_subject(domain_name, features)
     name_tokens = identifier_tokens(name)
     if name == "outcome_equiv_success_iff":
@@ -4960,6 +5004,15 @@ def validate_navigation(
         "relational-algebra.md",
         {"projection"},
     )
+    for name in EXACT_SCALAR_BRIDGES:
+        require_route_contract(name, "null-predicates.md", {"scheduled", "scalar"})
+    for name in LEAF_PROJECTION_BRIDGES:
+        require_route_contract(name, "relational-algebra.md", {"projection"})
+    for name in (
+        "query_expr_filter_uniform_global_typed_of_observation",
+        "query_expr_filter_uniform_global_typed_of_acceptance_exact",
+    ):
+        require_route_contract(name, "runtime-verification-rewrite.md", {"scheduled", "filter"})
     require_route_contract(
         "eval_scalar_values_relation_transport",
         "runtime-verification-rewrite.md",

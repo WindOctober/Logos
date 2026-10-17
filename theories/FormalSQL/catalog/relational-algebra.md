@@ -2,7 +2,7 @@
 
 Route here for: bag/list abstraction, multiplicity, filter/project/join/set operators.
 
-This focused catalog contains 290 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 293 declarations routed at declaration granularity from `FilterFkEliminationFacts.v`, `GroupedFilterOutcomeFacts.v`, `NumericRegroupFacts.v`, `OrderedQueryFacts.v`, `OuterJoinFilterFacts.v`, `ProofAgentFacade.v`, `RelationalAlgebraFacts.v`, `SemijoinCompositionFacts.v`, `SqlQueryContexts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
 
 ## `join_matched_rows_filter_inputs_exact`
 
@@ -513,7 +513,7 @@ Theorem query_expr_outcome_equiv_of_shared_exact_error :
 
 ## `eval_project_rows_exact_map`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:864`](../GroupedFilterOutcomeFacts.v#L864)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:960`](../GroupedFilterOutcomeFacts.v#L960)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -543,9 +543,95 @@ Theorem eval_project_rows_exact_map :
         (map (fun row => project_row select_list (values row)) rows).
 ```
 
+## `eval_project_leaf_rows_exact_map`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1009`](../GroupedFilterOutcomeFacts.v#L1009)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Lifts safe leaf SELECT lists to exact ordered row projection, requiring safety only on reached rows.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for relational algebra.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `projection`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `relational algebra`, `projection`, `SELECT list`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Theorem eval_project_leaf_rows_exact_map :
+  forall env select_list terms rows,
+    Forall2 (fun expression term =>
+      exists result_type, expression = SExpr_Leaf result_type term)
+      (map fst select_list) terms ->
+    (forall row term, In row rows -> In term terms ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) term = None) ->
+    forall outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome <->
+      outcome = SqlSuccess (map (fun row => project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env row)) terms)) rows).
+```
+
+## `leaf_project_row_equal_of_row_equiv`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1033`](../GroupedFilterOutcomeFacts.v#L1033)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Shows leaf projection produces equal rows from semantically equal input rows; this pure equality is not a runtime-safety proof.
+
+Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `projection`
+
+Search aliases: `relational algebra`, `projection`, `SELECT list`, `equivalence`, `congruence`
+
+```rocq
+Lemma leaf_project_row_equal_of_row_equiv :
+  forall env (select_list : query_select_list T relname) terms left right,
+    Oeset.compare (OTuple T) left right = Eq ->
+    project_row select_list
+      (map (Interp.interp_aggterm T (env_t T env left)) terms) =
+    project_row select_list
+      (map (Interp.interp_aggterm T (env_t T env right)) terms).
+```
+
+## `leaf_project_row_semantic_proper`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1047`](../GroupedFilterOutcomeFacts.v#L1047)
+
+Interface layer: General reusable foundation; no SQL interface layer is implied.
+
+Purpose/direction: Supplies semantic row congruence for the pure leaf projection map without assuming runtime safety.
+
+Applicability: Use to orient, transport, or compose a semantic relation about relational algebra.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; supply the declared equivalence/properness relation.
+
+Cross-index: `projection`
+
+Search aliases: `relational algebra`, `projection`, `SELECT list`, `equivalence`, `congruence`
+
+```rocq
+Lemma leaf_project_row_semantic_proper :
+  forall env (select_list : query_select_list T relname) terms left right,
+    Oeset.compare (OTuple T) left right = Eq ->
+    Oeset.compare (OTuple T)
+      (project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env left)) terms))
+      (project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env right)) terms)) = Eq.
+```
+
 ## `scalar_expr_pred_acceptance_exact_safe`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:938`](../GroupedFilterOutcomeFacts.v#L938)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1089`](../GroupedFilterOutcomeFacts.v#L1089)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -569,7 +655,7 @@ Lemma scalar_expr_pred_acceptance_exact_safe :
 
 ## `eval_filter_rows_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1351`](../GroupedFilterOutcomeFacts.v#L1351)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1502`](../GroupedFilterOutcomeFacts.v#L1502)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -599,7 +685,7 @@ Theorem eval_filter_rows_acceptance_exact :
 
 ## `filter_scalar_observation_equiv_at_sym`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1503`](../GroupedFilterOutcomeFacts.v#L1503)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1654`](../GroupedFilterOutcomeFacts.v#L1654)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -624,7 +710,7 @@ Lemma filter_scalar_observation_equiv_at_sym :
 
 ## `eval_filter_rows_ordered_outcome_congr_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1541`](../GroupedFilterOutcomeFacts.v#L1541)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1692`](../GroupedFilterOutcomeFacts.v#L1692)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -657,7 +743,7 @@ Lemma eval_filter_rows_ordered_outcome_congr_forward :
 
 ## `eval_filter_rows_ordered_outcome_congr`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1628`](../GroupedFilterOutcomeFacts.v#L1628)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1779`](../GroupedFilterOutcomeFacts.v#L1779)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -690,7 +776,7 @@ Theorem eval_filter_rows_ordered_outcome_congr :
 
 ## `query_expr_filter_outcome_congr_extensional_forward`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1701`](../GroupedFilterOutcomeFacts.v#L1701)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1852`](../GroupedFilterOutcomeFacts.v#L1852)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -725,7 +811,7 @@ Lemma query_expr_filter_outcome_congr_extensional_forward :
 
 ## `query_expr_filter_outcome_congr_extensional`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1772`](../GroupedFilterOutcomeFacts.v#L1772)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1923`](../GroupedFilterOutcomeFacts.v#L1923)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_filter_possible_outcome_equiv_congr_stable_total` for the public result.
 

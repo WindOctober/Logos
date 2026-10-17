@@ -857,6 +857,102 @@ split.
       rewrite Hcall in *; congruence.
 Qed.
 
+(** Lazy CASE needs exactness only of the selected arm.  Acceptance is the
+    SQL TRUE/non-TRUE decision, not equality of Boolean values: FALSE and
+    UNKNOWN both select ELSE.  The condition and selected arm retain their
+    error-exclusion obligations; the unselected arm is unrestricted. *)
+Lemma scalar_value_expr_case_exact_from_acceptance :
+  forall env result_type condition then_expression else_expression expected accepted,
+    scalar_expr_acceptance_exact_at env condition accepted ->
+    (if accepted
+     then scalar_value_expr_exact_at env then_expression expected
+     else scalar_value_expr_exact_at env else_expression expected) ->
+    scalar_value_expr_exact_at env
+      (SExpr_Case result_type condition then_expression else_expression) expected.
+Proof.
+intros env result_type condition then_expression else_expression expected accepted
+  [[truth [Htruth Hdecision]] [Haccepted Hcondition_safe]] Hbranch.
+destruct accepted; destruct Hbranch as [Hbranch [Hunique Hsafe]];
+  unfold scalar_value_expr_exact_at.
+- split.
+  + eapply EScalar_CaseThen; eassumption.
+  + split.
+    * intros observed Heval; inversion Heval; subst.
+      -- eapply Hunique; eassumption.
+      -- match goal with
+         | H : eval_scalar_boolean_expr_outcome _ _ _ _ _ _ _ _ condition
+             (SqlSuccess ?other) |- _ =>
+             pose proof (Haccepted other H); congruence
+         end.
+    * intros error Heval; inversion Heval; subst.
+      -- eapply Hcondition_safe; eassumption.
+      -- eapply Hsafe; eassumption.
+      -- match goal with
+         | H : eval_scalar_boolean_expr_outcome _ _ _ _ _ _ _ _ condition
+             (SqlSuccess ?other) |- _ =>
+             pose proof (Haccepted other H); congruence
+         end.
+- split.
+  + eapply EScalar_CaseElse; eassumption.
+  + split.
+    * intros observed Heval; inversion Heval; subst.
+      -- match goal with
+         | H : eval_scalar_boolean_expr_outcome _ _ _ _ _ _ _ _ condition
+             (SqlSuccess ?other) |- _ =>
+             pose proof (Haccepted other H); congruence
+         end.
+      -- eapply Hunique; eassumption.
+    * intros error Heval; inversion Heval; subst.
+      -- eapply Hcondition_safe; eassumption.
+      -- match goal with
+         | H : eval_scalar_boolean_expr_outcome _ _ _ _ _ _ _ _ condition
+             (SqlSuccess ?other) |- _ =>
+             pose proof (Haccepted other H); congruence
+         end.
+      -- eapply Hsafe; eassumption.
+Qed.
+
+(** Assemble arbitrary exact scalar expressions without exposing the list
+    evaluator.  Membership-scoped premises preserve order and duplicates. *)
+Lemma scalar_value_list_exact_map :
+  forall env expressions expected,
+    (forall expression, In expression expressions ->
+      scalar_value_expr_exact_at env expression (expected expression)) ->
+    scalar_value_list_exact_at env expressions (map expected expressions).
+Proof.
+intros env expressions expected Hexpressions.
+induction expressions as [|expression expressions IH]; cbn [map].
+- apply scalar_value_list_exact_nil.
+- apply scalar_value_list_exact_cons.
+  + apply Hexpressions; now left.
+  + apply IH; intros other Hin; apply Hexpressions; now right.
+Qed.
+
+(** Types may vary across leaves; columns, constants and
+    aggregate terms are all allowed, with explicit runtime-safety premises. *)
+Lemma scalar_value_leaf_list_exact :
+  forall env expressions terms,
+    Forall2 (fun expression term =>
+      exists result_type, expression = SExpr_Leaf result_type term)
+      expressions terms ->
+    (forall term, In term terms ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error env term = None) ->
+    scalar_value_list_exact_at env expressions
+      (map (Interp.interp_aggterm T env) terms).
+Proof.
+intros env expressions terms Hterms; induction Hterms as
+  [|expression term expressions terms [result_type Hleaf] Hterms IH]; intro Hsafe.
+- apply scalar_value_list_exact_nil.
+- subst expression; cbn [map].
+  apply scalar_value_list_exact_cons.
+  + apply scalar_value_expr_leaf_exact.
+    unfold scalar_leaf_value_outcome.
+    rewrite (Hsafe _ (or_introl eq_refl)); reflexivity.
+  + apply IH.
+    intros other Hin; apply Hsafe; now right.
+Qed.
+
 (** Exact row-list projection from exact scalar-list observations on every
     reached row.  This is the reusable list-level bridge between scalar
     contracts and Project; it preserves order and duplicate occurrences and
@@ -905,6 +1001,61 @@ induction rows as [|row rows IH]; intro outcome.
         (map (fun other => project_row select_list (values other)) rows)).
     * exact Hhead.
     * apply IH; reflexivity.
+Qed.
+
+(** A reusable projection boundary for pure leaf SELECT lists.  Safety is
+    required only for rows actually reached, so schema/row-support facts can
+    discharge it without assuming all environments are safe. *)
+Theorem eval_project_leaf_rows_exact_map :
+  forall env select_list terms rows,
+    Forall2 (fun expression term =>
+      exists result_type, expression = SExpr_Leaf result_type term)
+      (map fst select_list) terms ->
+    (forall row term, In row rows -> In term terms ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error (env_t T env row) term = None) ->
+    forall outcome,
+      @eval_project_rows_outcome T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null
+        boolean_schedule env select_list rows outcome <->
+      outcome = SqlSuccess (map (fun row => project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env row)) terms)) rows).
+Proof.
+intros env select_list terms rows Hterms Hsafe.
+apply eval_project_rows_exact_map.
+intros row Hin; apply scalar_value_leaf_list_exact; [exact Hterms|].
+intros term Hterm; now apply Hsafe.
+Qed.
+
+(** Leaf interpretation respects semantic row equality, even when rows have
+    different representations.  No evaluation-safety assumption is needed
+    for this pure map equality; the preceding theorem supplies safety. *)
+Lemma leaf_project_row_equal_of_row_equiv :
+  forall env (select_list : query_select_list T relname) terms left right,
+    Oeset.compare (OTuple T) left right = Eq ->
+    project_row select_list
+      (map (Interp.interp_aggterm T (env_t T env left)) terms) =
+    project_row select_list
+      (map (Interp.interp_aggterm T (env_t T env right)) terms).
+Proof.
+intros env select_list terms left right Hrows.
+f_equal; apply map_ext; intro term.
+apply Interp.interp_aggterm_eq.
+now apply Env.env_t_eq_2.
+Qed.
+
+Lemma leaf_project_row_semantic_proper :
+  forall env (select_list : query_select_list T relname) terms left right,
+    Oeset.compare (OTuple T) left right = Eq ->
+    Oeset.compare (OTuple T)
+      (project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env left)) terms))
+      (project_row select_list
+        (map (Interp.interp_aggterm T (env_t T env right)) terms)) = Eq.
+Proof.
+intros env select_list terms left right Hrows.
+rewrite (leaf_project_row_equal_of_row_equiv env select_list terms left right Hrows).
+apply Oeset.compare_eq_refl.
 Qed.
 
 Lemma scalar_expr_acceptance_exact_total_success :

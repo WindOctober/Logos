@@ -2,7 +2,87 @@
 
 Route here for: UNKNOWN/TRUE/FALSE, strict predicates, NULL tests, comparisons, CASE.
 
-This focused catalog contains 97 declarations routed at declaration granularity from `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+This focused catalog contains 100 declarations routed at declaration granularity from `GroupedFilterOutcomeFacts.v`, `ScalarPredicateFacts.v`. Source declarations are authoritative; every statement below is verbatim and has no proof body.
+
+## `scalar_value_expr_case_exact_from_acceptance`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:864`](../GroupedFilterOutcomeFacts.v#L864)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Lifts exact TRUE/non-TRUE acceptance and only the selected arm's exact value to lazy CASE exactness; the unselected arm is unrestricted.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `scalar`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `scalar predicate semantics`, `CASE`, `conditional expression`, `predicate`, `Bool3`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_value_expr_case_exact_from_acceptance :
+  forall env result_type condition then_expression else_expression expected accepted,
+    scalar_expr_acceptance_exact_at env condition accepted ->
+    (if accepted
+     then scalar_value_expr_exact_at env then_expression expected
+     else scalar_value_expr_exact_at env else_expression expected) ->
+    scalar_value_expr_exact_at env
+      (SExpr_Case result_type condition then_expression else_expression) expected.
+```
+
+## `scalar_value_list_exact_map`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:917`](../GroupedFilterOutcomeFacts.v#L917)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Assembles exact scalar values into an exact list, preserving order, duplicates and error exclusion.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `scalar`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `scalar predicate semantics`, `predicate`, `Bool3`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_value_list_exact_map :
+  forall env expressions expected,
+    (forall expression, In expression expressions ->
+      scalar_value_expr_exact_at env expression (expected expression)) ->
+    scalar_value_list_exact_at env expressions (map expected expressions).
+```
+
+## `scalar_value_leaf_list_exact`
+
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:933`](../GroupedFilterOutcomeFacts.v#L933)
+
+Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
+
+Purpose/direction: Evaluates a heterogeneous typed leaf list exactly from membership-scoped aggregate-term safety.
+
+Applicability: Use at the successful-outcome/runtime-error boundary for scalar-predicate semantics.
+
+Important premises: every explicit antecedent (`->`) in the declaration is required; do not erase or identify runtime errors with NULL/empty success.
+
+Cross-index: `scheduled`, `outcome`, `runtime`, `scalar`
+
+Search aliases: `fixed Boolean schedule`, `foundation`, `scalar predicate semantics`, `predicate`, `Bool3`, `query outcome`, `error-preserving outcome`, `runtime outcome`, `runtime safety`, `error propagation`
+
+```rocq
+Lemma scalar_value_leaf_list_exact :
+  forall env expressions terms,
+    Forall2 (fun expression term =>
+      exists result_type, expression = SExpr_Leaf result_type term)
+      expressions terms ->
+    (forall term, In term terms ->
+      @eval_aggterm_runtime_error T symbol_runtime_error
+        aggregate_runtime_error env term = None) ->
+    scalar_value_list_exact_at env expressions
+      (map (Interp.interp_aggterm T env) terms).
+```
 
 ## `andb3_unknown_iff`
 

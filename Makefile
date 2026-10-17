@@ -69,6 +69,7 @@ logos-formal-sql-lemmas: formal-sql
 	$(LOGOS_ROCQ_COMPILE) theories/FormalSQL/QueryBindingSemantics.v
 
 logos-formal-sql-checks: logos-formal-sql-lemmas
+	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/ExactCompositionBridgesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleOutcomeInterfacesRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/PossibleBagContextLiftingRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/QueryBindingRegression.v

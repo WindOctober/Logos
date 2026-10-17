@@ -4212,7 +4212,7 @@ Lemma scalar_value_expr_call_exact :
 
 ## `scalar_expr_acceptance_exact_total_success`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:910`](../GroupedFilterOutcomeFacts.v#L910)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1061`](../GroupedFilterOutcomeFacts.v#L1061)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4235,7 +4235,7 @@ Lemma scalar_expr_acceptance_exact_total_success :
 
 ## `scalar_expr_true_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:920`](../GroupedFilterOutcomeFacts.v#L920)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1071`](../GroupedFilterOutcomeFacts.v#L1071)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4257,7 +4257,7 @@ Lemma scalar_expr_true_acceptance_exact :
 
 ## `scalar_acceptance_interp_conj`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:989`](../GroupedFilterOutcomeFacts.v#L989)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1140`](../GroupedFilterOutcomeFacts.v#L1140)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4281,7 +4281,7 @@ Lemma scalar_acceptance_interp_conj :
 
 ## `eval_scalar_boolean_operands_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1044`](../GroupedFilterOutcomeFacts.v#L1044)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1195`](../GroupedFilterOutcomeFacts.v#L1195)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4308,7 +4308,7 @@ Lemma eval_scalar_boolean_operands_acceptance_exact :
 
 ## `scalar_expr_conj_list_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1212`](../GroupedFilterOutcomeFacts.v#L1212)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1363`](../GroupedFilterOutcomeFacts.v#L1363)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4335,7 +4335,7 @@ Theorem scalar_expr_conj_list_acceptance_exact :
 
 ## `scalar_expr_conj_list_redundant_operand_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1270`](../GroupedFilterOutcomeFacts.v#L1270)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1421`](../GroupedFilterOutcomeFacts.v#L1421)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4365,7 +4365,7 @@ Theorem scalar_expr_conj_list_redundant_operand_acceptance_exact :
 
 ## `filter_scalar_observation_equiv_at_of_acceptance_exact`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1474`](../GroupedFilterOutcomeFacts.v#L1474)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1625`](../GroupedFilterOutcomeFacts.v#L1625)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4394,7 +4394,7 @@ Lemma filter_scalar_observation_equiv_at_of_acceptance_exact :
 
 ## `eval_groups_global_success_length_le_one`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1905`](../GroupedFilterOutcomeFacts.v#L1905)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2056`](../GroupedFilterOutcomeFacts.v#L2056)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4418,7 +4418,7 @@ Theorem eval_groups_global_success_length_le_one :
 
 ## `eval_groups_global_success_NoDupA`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1924`](../GroupedFilterOutcomeFacts.v#L1924)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2075`](../GroupedFilterOutcomeFacts.v#L2075)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -4443,7 +4443,7 @@ Theorem eval_groups_global_success_NoDupA :
 
 ## `eval_group_bag_exact_rows_permut_equiv`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:1980`](../GroupedFilterOutcomeFacts.v#L1980)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2131`](../GroupedFilterOutcomeFacts.v#L2131)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4505,7 +4505,7 @@ Theorem eval_group_bag_exact_rows_permut_equiv :
 
 ## `query_expr_group_outcome_equiv_of_supported_child_outcomes`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2172`](../GroupedFilterOutcomeFacts.v#L2172)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2323`](../GroupedFilterOutcomeFacts.v#L2323)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate. Use `query_expr_group_possible_outcome_equiv_of_supported_child_outcomes` for the public result.
 
@@ -4573,7 +4573,7 @@ Theorem query_expr_group_outcome_equiv_of_supported_child_outcomes :
 
 ## `eval_groups_outcome_exact_filter_map`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2337`](../GroupedFilterOutcomeFacts.v#L2337)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2488`](../GroupedFilterOutcomeFacts.v#L2488)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -4605,7 +4605,7 @@ Theorem eval_groups_outcome_exact_filter_map :
 
 ## `group_filter_map_outputs_permut_of_representatives`
 
-Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2423`](../GroupedFilterOutcomeFacts.v#L2423)
+Source: [`theories/FormalSQL/GroupedFilterOutcomeFacts.v:2574`](../GroupedFilterOutcomeFacts.v#L2574)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 

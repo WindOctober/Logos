@@ -193,6 +193,17 @@ See [`vendor/FormalSQL/README.md`](vendor/FormalSQL/README.md) for the formal
 library and [`theories/FormalSQL/catalog/INDEX.md`](theories/FormalSQL/catalog/INDEX.md)
 for the Logos proof-facing theorem catalog.
 
+Reusable exact-composition interfaces live in the existing theory closure:
+`GroupedFilterOutcomeFacts` provides lazy CASE exactness, scalar/leaf-list
+assembly, and safe leaf projection with semantic row congruence;
+`PossibleOutcomeFacts` lifts matching filter acceptance or full filter
+observations to typed equivalence over every schedule and environment.
+These are generic interfaces, not benchmark-specific rewrite templates.
+CASE constrains only the selected arm; projection preserves row order and
+duplicates; filter transport preserves child errors. Their boundary regressions
+are in [`ExactCompositionBridgesRegression.v`](tests/rocq/regressions/ExactCompositionBridgesRegression.v)
+and run with `make logos-formal-sql-checks`.
+
 ## Project Layout
 
 | Path | Purpose |

@@ -3070,6 +3070,79 @@ apply query_expr_filter_expression_global_typed_congr.
 exact (Hpredicate schedule).
 Qed.
 
+(** Filter observes TRUE/non-TRUE and exact error categories, not the full
+    Boolean value.  Unlike scalar congruence this permits FALSE versus UNKNOWN.
+    The shared input may itself fail; no child safety or inhabitation premise
+    is introduced, and every schedule and outer environment is retained. *)
+Theorem query_expr_filter_uniform_global_typed_of_observation :
+  forall left_formula right_formula input,
+    (forall schedule env,
+      @filter_scalar_observation_equiv_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_formula env right_formula) ->
+    query_expr_uniform_global_typed_outcome_equiv
+      (QExpr_Filter left_formula input) (QExpr_Filter right_formula input).
+Proof.
+intros left_formula right_formula input Hpredicate schedule.
+split; [reflexivity|].
+intros env outcome.
+assert (Hrefl : forall rows : list (tuple T), Forall2 eq rows rows).
+{ intro rows; induction rows; constructor; auto. }
+assert (Heq : forall left right : list (tuple T),
+  Forall2 eq left right -> left = right).
+{ intros left right H; induction H; congruence. }
+assert (Hchild : outcome_relation_transport (Forall2 eq)
+  (@eval_query_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null schedule env input)
+  (@eval_query_expr_outcome T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null schedule env input)).
+{
+  split.
+  - intros rows Hrows; exists rows; split; [exact Hrows|apply Hrefl].
+  - split.
+    + intros rows Hrows; exists rows; split; [exact Hrows|apply Hrefl].
+    + intro error; reflexivity.
+}
+assert (Hpoint : forall left right : tuple T, left = right ->
+  @filter_scalar_observation_equiv_at T relname basesort instance unknown
+    symbol_runtime_error aggregate_runtime_error value_is_null schedule
+    (env_t T env left) left_formula (env_t T env right) right_formula).
+{ intros left right H; subst right; apply Hpredicate. }
+destruct (@query_expr_filter_relation_transport schedule env
+  left_formula input right_formula input eq Hchild Hpoint)
+  as [Hforward [Hbackward Herrors]].
+destruct outcome as [rows|error].
+- split; intro Hrows.
+  + destruct (Hforward rows Hrows) as [other [Hother Hrelated]].
+    apply Heq in Hrelated; now subst other.
+  + destruct (Hbackward rows Hrows) as [other [Hother Hrelated]].
+    apply Heq in Hrelated; now subst other.
+- apply Herrors.
+Qed.
+
+(** Convenient safe-predicate specialization.  The accepted decision may
+    depend on both schedule and environment.  Only predicate errors are
+    excluded by exactness: errors from the shared child remain observable. *)
+Theorem query_expr_filter_uniform_global_typed_of_acceptance_exact :
+  forall left_formula right_formula input,
+    (forall schedule env, exists accepted,
+      @scalar_expr_acceptance_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env left_formula accepted /\
+      @scalar_expr_acceptance_exact_at T relname basesort instance unknown
+        symbol_runtime_error aggregate_runtime_error value_is_null schedule
+        env right_formula accepted) ->
+    query_expr_uniform_global_typed_outcome_equiv
+      (QExpr_Filter left_formula input) (QExpr_Filter right_formula input).
+Proof.
+intros left_formula right_formula input Hpredicate.
+apply query_expr_filter_uniform_global_typed_of_observation.
+intros schedule env.
+destruct (Hpredicate schedule env) as [accepted [Hleft Hright]].
+eapply filter_scalar_observation_equiv_at_of_acceptance_exact;
+  [exact Hleft|exact Hright].
+Qed.
+
 Lemma query_expr_project_uniform_global_typed_congr :
   forall left_select right_select input,
     scalar_select_list_uniform_global_outcome_equiv
