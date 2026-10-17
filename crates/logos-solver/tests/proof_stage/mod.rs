@@ -2969,12 +2969,58 @@ fn compact_skeleton_parser_and_validator_fail_closed_on_drift() {
     let mut unreachable = pristine.clone();
     unreachable
         .nodes
-        .push(CompactSkeletonNode("Unused".to_owned(), Vec::new()));
+        .push(super::navigation::CompactSkeletonNode(
+            "Unused".to_owned(),
+            Vec::new(),
+        ));
     assert!(validate_compacted_skeleton_forest(&unreachable, &trees, "test").is_err());
 
-    let mut wrong_digest = pristine;
-    wrong_digest.expanded_trees_sha256 = "0".repeat(64);
-    assert!(validate_compacted_skeleton_forest(&wrong_digest, &trees, "test").is_err());
+    // Serialized provenance remains exact, but the in-memory round-trip
+    // validator checks the tree itself, not a second hash of its input.
+    assert_eq!(
+        pristine.expanded_trees_sha256,
+        super::navigation::compact_skeleton_digest(&trees).unwrap()
+    );
+    let mut changed_content = pristine;
+    changed_content.nodes[0].0 = "DifferentLeaf".to_owned();
+    assert!(validate_compacted_skeleton_forest(&changed_content, &trees, "test").is_err());
+}
+
+#[test]
+fn compact_graph_keeps_provenance_digests_and_checks_contents_directly() {
+    use crate::core::FormalQueryDefinitionGraph;
+    let graph = FormalQueryDefinitionGraph {
+        schema_version: 1,
+        notation: "test graph".to_owned(),
+        opaque_helper_symbols: vec![],
+        definitions: vec![],
+        source_statements: vec![],
+        target_statements: vec![],
+    };
+    let compact = super::navigation::compact_definition_graph(&graph).unwrap();
+    assert_eq!(
+        compact.expanded_graph_sha256,
+        sha256_hex(&serde_json::to_vec(&graph).unwrap())
+    );
+    assert_eq!(
+        compact.expanded_trees_sha256,
+        super::navigation::compact_skeleton_digest(&[]).unwrap()
+    );
+    let mut changed_metadata = compact.clone();
+    changed_metadata
+        .opaque_helper_symbols
+        .push("other".to_owned());
+    assert!(
+        super::navigation::validate_compact_definition_graph(&changed_metadata, &graph).is_err()
+    );
+    let mut changed_tree = compact;
+    changed_tree
+        .skeleton_nodes
+        .push(super::navigation::CompactSkeletonNode(
+            "Unexpected".to_owned(),
+            vec![],
+        ));
+    assert!(super::navigation::validate_compact_definition_graph(&changed_tree, &graph).is_err());
 }
 
 #[test]

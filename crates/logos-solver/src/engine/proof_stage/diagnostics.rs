@@ -1280,7 +1280,10 @@ fn run_diagnostic_broker_request(
         locked.invocations.len() + 1
     };
 
-    let (checked_workspace, diagnostic_problem_path, actual_sha256) =
+    // The upload digest was verified above; snapshotting moves those bytes,
+    // rather than independently computing another digest.
+    let actual_sha256 = uploaded_sha256;
+    let (checked_workspace, diagnostic_problem_path) =
         match snapshot_interactive_diagnostic_candidate(
             artifacts_root,
             proof_workdir,
@@ -1289,18 +1292,10 @@ fn run_diagnostic_broker_request(
             request.mode,
             &candidate_path,
             pending_upload.path(),
-            &uploaded_sha256,
         ) {
             Ok(value) => value,
             Err(error) => return rejected(error.to_string()),
         };
-    if actual_sha256 != request.candidate_sha256 {
-        return rejected(format!(
-            "candidate {} digest changed before the host snapshot: requested {}, observed {actual_sha256}",
-            request.candidate_path, request.candidate_sha256
-        ));
-    }
-
     let effective_timeout_seconds = request
         .requested_timeout_seconds
         .min(deadline.saturating_duration_since(Instant::now()).as_secs());
@@ -1717,8 +1712,7 @@ fn snapshot_interactive_diagnostic_candidate(
     mode: CandidateKind,
     candidate_path: &Path,
     upload_path: &Path,
-    problem_sha256: &str,
-) -> Result<(PathBuf, PathBuf, String)> {
+) -> Result<(PathBuf, PathBuf)> {
     let upload_metadata = std::fs::symlink_metadata(upload_path).map_err(|source| Error::Read {
         path: upload_path.to_owned(),
         source,
@@ -1789,5 +1783,5 @@ fn snapshot_interactive_diagnostic_candidate(
         path: snapshot_candidate.clone(),
         source,
     })?;
-    Ok((snapshot_dir, snapshot_candidate, problem_sha256.to_owned()))
+    Ok((snapshot_dir, snapshot_candidate))
 }

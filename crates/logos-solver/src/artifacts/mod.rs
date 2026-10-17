@@ -7,6 +7,7 @@ use std::{
 };
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::runtime;
@@ -58,8 +59,29 @@ impl ArtifactWriter {
     }
 
     pub fn write_json<T: Serialize>(&self, relative: impl AsRef<Path>, value: &T) -> Result<()> {
-        let text = serde_json::to_string_pretty(value)?;
-        self.write_text(relative, &(text + "\n"))
+        self.write_json_text(relative, value).map(|_| ())
+    }
+
+    /// Bind the exact bytes successfully written, without reopening the file.
+    /// This is not a validation of later on-disk contents: consumers crossing
+    /// a process/recovery boundary must still verify the stored artifact.
+    pub fn write_json_with_sha256<T: Serialize>(
+        &self,
+        relative: impl AsRef<Path>,
+        value: &T,
+    ) -> Result<String> {
+        let text = self.write_json_text(relative, value)?;
+        Ok(format!("{:x}", Sha256::digest(text.as_bytes())))
+    }
+
+    fn write_json_text<T: Serialize>(
+        &self,
+        relative: impl AsRef<Path>,
+        value: &T,
+    ) -> Result<String> {
+        let text = serde_json::to_string_pretty(value)? + "\n";
+        self.write_text(relative, &text)?;
+        Ok(text)
     }
 }
 
@@ -163,6 +185,46 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
+
+    #[test]
+    fn write_time_digest_matches_exact_existing_json_format() {
+        let root = tempfile::tempdir().unwrap();
+        let writer = ArtifactWriter::new(Some(root.path().to_owned())).unwrap();
+        let value = json!({"sql": "SELECT '中文';\n", "items": [null, 1, true]});
+        writer.write_json("ordinary.json", &value).unwrap();
+        let digest = writer.write_json_with_sha256("bound.json", &value).unwrap();
+        let bytes = std::fs::read(root.path().join("bound.json")).unwrap();
+        assert_eq!(
+            bytes,
+            std::fs::read(root.path().join("ordinary.json")).unwrap()
+        );
+        assert_eq!(bytes.last(), Some(&b'\n'));
+        assert_eq!(digest, format!("{:x}", Sha256::digest(&bytes)));
+        // Replacing the file does not mutate the previously returned binding.
+        writer
+            .write_json("bound.json", &json!({"changed": true}))
+            .unwrap();
+        assert_ne!(
+            digest,
+            format!(
+                "{:x}",
+                Sha256::digest(std::fs::read(root.path().join("bound.json")).unwrap())
+            )
+        );
+    }
+
+    #[test]
+    fn failed_write_does_not_return_a_digest() {
+        let root = tempfile::tempdir().unwrap();
+        let writer = ArtifactWriter::new(Some(root.path().to_owned())).unwrap();
+        std::fs::create_dir(root.path().join("destination")).unwrap();
+        assert!(
+            writer
+                .write_json_with_sha256("destination", &json!({"x": 1}))
+                .is_err()
+        );
+        assert!(temporary_artifacts(root.path()).is_empty());
+    }
 
     fn temporary_artifacts(root: &Path) -> Vec<PathBuf> {
         std::fs::read_dir(root)

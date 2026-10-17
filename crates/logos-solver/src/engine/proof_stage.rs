@@ -658,13 +658,13 @@ pub(super) fn prepare_formal_input(
     let ir_input = input.load_ir(&ir_frontend)?;
     let verification_input_path = artifacts.root().join("input/verification-input.json");
     let integrity_contract_path = artifacts.root().join("input/integrity-contract.json");
-    let schema_ir_path = artifacts.root().join("input/schema-ir.json");
-    let source_ir_path = artifacts.root().join("input/source-ir.json");
-    let target_ir_path = artifacts.root().join("input/target-ir.json");
     artifacts.write_json("input/sql-environment.json", &ir_input.sql_environment())?;
-    artifacts.write_json("input/schema-ir.json", ir_input.schema_ir())?;
-    artifacts.write_json("input/source-ir.json", &ir_input.source_program_ir())?;
-    artifacts.write_json("input/target-ir.json", &ir_input.target_program_ir())?;
+    let schema_ir_sha256 =
+        artifacts.write_json_with_sha256("input/schema-ir.json", ir_input.schema_ir())?;
+    let source_ir_sha256 =
+        artifacts.write_json_with_sha256("input/source-ir.json", &ir_input.source_program_ir())?;
+    let target_ir_sha256 =
+        artifacts.write_json_with_sha256("input/target-ir.json", &ir_input.target_program_ir())?;
 
     let lowering_config = LoweringConfig {
         sql_time_zone: options.sql_time_zone.clone(),
@@ -680,9 +680,9 @@ pub(super) fn prepare_formal_input(
         target_sql_sha256: sha256_hex(input.target_sql().as_bytes()),
         verification_input_sha256: sha256_file_hex(&verification_input_path)?,
         integrity_contract_sha256: sha256_file_hex(&integrity_contract_path)?,
-        schema_ir_sha256: sha256_file_hex(&schema_ir_path)?,
-        source_ir_sha256: sha256_file_hex(&source_ir_path)?,
-        target_ir_sha256: sha256_file_hex(&target_ir_path)?,
+        schema_ir_sha256,
+        source_ir_sha256,
+        target_ir_sha256,
     });
     if lowering_report.schema.schema.is_some()
         && lowering_report.query_module.is_some()
@@ -915,7 +915,6 @@ fn restart_proof_workspace_with_formal_witness(
         &goal_module.rocq_module,
         options,
     )?;
-    validate_proof_agent_context(artifacts, &context)?;
     let trusted_sources = capture_trusted_proof_sources(artifacts)?;
     // Reuse the independently checked Schema/Queries prefix, compile and check
     // only the replacement Witness, then atomically publish the new prefix
@@ -999,12 +998,6 @@ pub(super) fn run_proof_stage(
     let mut proof_workspace_generation = 1usize;
     let mut initial_problem_compile_checkpoint = None;
     if trusted_sources.is_some() {
-        validate_proof_agent_context(
-            artifacts,
-            proof_agent_context
-                .as_ref()
-                .expect("a trusted proof workspace always has proof-agent context"),
-        )?;
         let preflight = validate_trusted_rocq_environment(
             artifacts,
             options,

@@ -566,12 +566,9 @@ pub(super) fn validate_compacted_skeleton_forest(
             "query context drift: compact {role} skeleton contains unreachable nodes"
         )));
     }
-    let expected_digest = compact_skeleton_digest(expected_trees)?;
-    if compacted.expanded_trees_sha256 != expected_digest {
-        return Err(Error::ProofAgentCommand(format!(
-            "query context drift: compact {role} skeleton expansion digest disagrees with its input trees"
-        )));
-    }
+    // Both representations are host-owned in-memory values. The exact
+    // round-trip comparison above validates the transformation; the digest is
+    // serialized provenance, not an additional in-memory equality check.
     Ok(())
 }
 
@@ -604,7 +601,6 @@ pub(super) fn validate_compact_definition_graph(
 ) -> Result<()> {
     if compact.schema_version != 2
         || compact.notation != COMPACT_DEFINITION_GRAPH_NOTATION
-        || compact.expanded_graph_sha256 != sha256_hex(&serde_json::to_vec(expanded)?)
         || compact.opaque_helper_symbols != expanded.opaque_helper_symbols
         || compact.source_statements != expanded.source_statements
         || compact.target_statements != expanded.target_statements

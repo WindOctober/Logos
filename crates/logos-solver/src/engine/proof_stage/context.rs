@@ -42,7 +42,7 @@ pub(super) struct ContextManifest {
 
 pub(super) struct PreparedContext {
     pub(super) manifest: ContextManifest,
-    pub(super) manifest_text: String,
+    manifest_text: String,
     pub(super) report: ProofAgentContext,
 }
 
@@ -180,7 +180,6 @@ pub(super) fn write_proof_agent_context(
     validate_proof_agent_context(artifacts, &prepared)?;
     Ok(prepared)
 }
-
 fn validate_context_binding(root: &Path, binding: &FileBinding) -> Result<()> {
     let path = root.join(&binding.path);
     let metadata = std::fs::symlink_metadata(&path).map_err(|source| Error::Read {
