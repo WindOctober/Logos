@@ -2,6 +2,12 @@
 
 This adapter normalizes source SQL dialects into Calcite-friendly frontend SQL before `scripts/calcite-ir` exports Calcite JSON IR.
 
+It is used by the explicit `scripts/calcite-ir-sqlglot` wrapper (including the
+`make calcite-ir` smoke example). The full and transform benchmark runners
+instead bind their own frontend command and pass exact PostgreSQL query bytes
+directly to Calcite; they do not insert this normalization step. See the
+[runner contract](../../benchmarks/scripts/README.md#full-run-runtime-and-evidence-contract).
+
 `scripts/calcite-ir-sqlglot` reads PostgreSQL by default. Other source
 dialects must opt in with `--read`; this prevents an omitted flag from
 silently changing PostgreSQL behavior such as ascending NULL placement.

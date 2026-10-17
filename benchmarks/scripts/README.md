@@ -3,16 +3,36 @@
 Run these commands with the required environment variables exported. The
 Python runner does not parse `.env` itself. If using the repository example,
 load it into the current shell with `set -a; . ./.env; set +a`. Complete the
-environment preflight in the root README before starting a multi-hour batch.
+setup in the [root README](../../README.md#quick-start) before starting a
+multi-hour batch. The full runner performs its own fail-closed launch preflight;
+`--list` is a selection check, not an environment or proof check.
 
 ## Run the complete Logos pipeline
 
 `benchmarks/scripts/run-logos` is the canonical full-pipeline benchmark
-runner.  It invokes `logos-solver check` once per case, so every case follows
-the normal counterexample, lowering, proof-agent, and trusted Rocq-check path.
-The frozen 389-case launch is accepted only after an exact 16-case gate made by
-the same framework, executable, trusted stack, model, resource
-policy, SQL environment, and immutable Docker image:
+runner. It invokes `logos-solver check` once per case. The normal path is static
+output/analysis preflight, lowering, counterexample search and proof search,
+then trusted Rocq acceptance. Static mismatches and unsupported inputs can
+terminate before agents run; not every selected case reaches the proof stage.
+
+Defaults and explicitly selected campaign settings are different:
+
+| Entry point / selection | Concurrent cases | Total timeout per case | Gate |
+| --- | ---: | ---: | --- |
+| `run-logos` on `.generated/logos` (default input root) | 16 | 70m | No legacy frozen-cohort gate is enforced |
+| `run-logos-regression` | 16 | 1h | Selects the regression cohort; not automatically an accepted frozen gate |
+| `run-logos-transform` | 16 | 20m | No agent or EQ/NEQ proof gate |
+| Exact legacy `.generated/sqlsolver` 389-case selection | 32 (required) | 1h (required) | Matching `--cohort16-gate-summary` required |
+| Same legacy selection with `--allow-ungated-full-run` | 32 (required) | 4h (required) | Explicitly recorded bypass, not a passed gate |
+
+`--jobs` is the number of simultaneous cases, not a CPU-core/thread limit.
+Within each proof invocation, host diagnostics are serialized; frontend, solver,
+container, and Rocq processes can still consume resources concurrently.
+The proof-agent memory/storage flags bound the agent container and its writable
+workspace, not the aggregate memory/disk footprint of all host processes or
+retained run artifacts. They are not a whole-machine capacity estimate.
+
+For a new 32-case-concurrent, four-hour run on the current Logos input profile:
 
 ```bash
 benchmarks/scripts/run-logos \
@@ -32,19 +52,25 @@ benchmarks/scripts/run-logos \
   --sql-default-collation C \
   --sql-character-classification C \
   --sql-locale-provider libc \
-  --sql-server-encoding UTF8 \
-  --cohort16-gate-summary var/logos-solver/<gate-run>/runner-summary.json
+  --sql-server-encoding UTF8
 ```
 
-The runner rejects a frozen full launch with any different concurrency,
-timeout, verification mode, missing gate, or pipeline-short-circuiting solver
-argument. Selectors may still be used for controlled cohorts and local diagnostics.
-
-Run one case, one source benchmark, or an explicit case batch with:
+This command is not a legacy gated launch merely because it selects 389 cases.
+Legacy gate enforcement requires the exact resolved `.generated/sqlsolver`
+root and full 389-case membership. For that gated path, use
+`--input-root benchmarks/core/.generated/sqlsolver --jobs 32 --case-timeout 1h`
+and `--cohort16-gate-summary <gate-run>/runner-summary.json`; the gate must match
+the framework, executable, trusted stack, model, resource policy, SQL environment,
+and immutable image. The explicit ungated legacy override instead requires
+`--allow-ungated-full-run --case-timeout 4h` and must not be reported as a passed
+gate. Other legacy full-run constraints still apply. Selecting the current
+`.generated/logos` profile does not waive the full runner's runtime checks below.
 
 Every actual execution, including a selected subset, requires either
 `--postgres-url` or `LOGOS_POSTGRES_URL`. `--list` only inspects inputs and does
 not require PostgreSQL or Codex configuration.
+
+Run one case, one source benchmark, or an explicit case batch with:
 
 ```bash
 export LOGOS_POSTGRES_URL=postgresql://logos@127.0.0.1:55490/postgres
@@ -135,6 +161,19 @@ workspace evidence. A complete summary may still contain explicit failed or
 timed-out cases; a successful all-case lowering therefore additionally requires
 `counts.completed == counts.selected`.
 
+Transform-only does not certify EQ or NEQ. It additionally compiles generated
+`Schema.v` and `Queries.v` to check emitter/admissibility obligations, not the
+final `Problem.v`/`Goal.v` theorem. It requires a prebuilt Rocq/FormalSQL/Logos
+stack, but no PostgreSQL service, Codex credentials, or proof-agent container.
+Unlike the full runner, it uses the configured working-tree solver/authority
+paths and records/checks their evidence; it does not create the full runner's
+immutable runtime/authority snapshots. Outputs default to
+`var/logos-solver/transform-runs/`, not the full-run directory below.
+
+## Full-run runtime and evidence contract
+
+The rest of this section describes `run-logos`, not `run-logos-transform`.
+
 The runner performs an incremental `cargo build -p logos-solver` unless
 `--no-build` is given. Before scheduling any case it resolves an immutable,
 content-addressed Rocq runtime and FormalSQL/Logos authority closure. A cache
@@ -170,9 +209,10 @@ artifacts plus `stdout.log`, `stderr.log`, `time.txt`, `status.json`,
 `runner-summary.json` is atomically refreshed as cases finish.  A timed-out or
 nonzero case is recorded and does not stop the remaining cohort.
 
-The runner always passes `--force-llm-assessment`, so every newly scheduled
-case receives a fresh counterexample assessment even when a debug solver would
-otherwise reuse its assessment cache. The summary records the model, caller
+The runner always passes `--force-llm-assessment`, so a newly scheduled case that
+reaches counterexample search receives a fresh assessment even when a debug
+solver would otherwise reuse its assessment cache. Static preflight exits do
+not invoke that agent. The summary records the model, caller
 `solverArgs`, effective solver arguments, PostgreSQL URL fingerprint, complete
 SQL environment, and exact solver/provider launch policies in its
 `configuration` object. `--max-counterexample-rounds` is an explicit recorded
@@ -209,12 +249,14 @@ plugins, remote plugins, hooks, skill dependency installation, ambient provider
 URLs, and the user's session/history tree are excluded. The manifest binds the
 sanitized configuration, endpoint identity, lexical Codex wrapper,
 `/usr/bin/env` and Node interpreter/runtime closure, package closure, fixed
-solver PATH, counterexample child policy, and all three exact Codex commands.
+solver PATH, counterexample child policy, and all four exact initial/resume
+commands for counterexample and proof stages.
 Credential bytes and their hashes are never written to run or publication
 artifacts.
 
-When PostgreSQL is configured, the runner also records and rechecks its actual
-server profile. Frozen runs require PostgreSQL 17.4, UTC, C collation and
+Every full-run execution records and rechecks the actual PostgreSQL server
+profile, including non-frozen selections. The current runner requires
+PostgreSQL 17.4, UTC, C collation and
 character classification, the libc provider, UTF8, and 96 maximum connections;
 the connection URL itself is represented only by a digest.
 Each result repeats its effective configuration and input bindings and records
@@ -243,8 +285,10 @@ Nonzero solver exits without `report.json` retain a bounded UTF-8 stderr tail
 in `runnerError`/`reason`, including PostgreSQL SQLSTATE diagnostics.
 
 The default verification mode is `outcome-unconditional`.  The internal proof
-budget reserves the last 300 seconds of the selected total case timeout for
-counterexample work, cleanup, and final report materialization. The runner's
+budget is configured as `max(1, case_timeout_seconds - 300)`. The 300-second
+difference is headroom for non-proof work, not a separately scheduled final
+window or a guarantee that counterexample work fits into it. The outer timeout
+still covers the whole case. The runner's
 default 70-minute case timeout covers the complete pipeline. The runner's
 in-place benchmark continuation never creates or resumes Codex agent sessions:
 counterexample rounds, proof repair, and `codex exec resume` remain owned by
@@ -279,7 +323,9 @@ outside the later generation's container. Each invocation must end
 with a structured `turn.completed.usage` record; missing, malformed, or
 inconsistent usage fails closed. Resumed proof turns are summed once per
 bounded session by retaining its latest componentwise-monotonic cumulative
-snapshot; independent counterexample invocations are each added once. `inputTokens`
+snapshot. Counterexample contract-repair turns can also resume a session: their
+recorded usage is the delta from the previous cumulative snapshot, while fresh
+counterexample sessions contribute their full initial usage once. `inputTokens`
 includes cached input and the runner verifies `totalTokens = inputTokens +
 outputTokens`. The API-price equivalent uses GPT-6.1 Sol's standard short-context
 rates current on 2026-10-16: USD 2/M uncached input, USD 0.10/M cached input,
@@ -312,6 +358,11 @@ benchmarks/scripts/run-logos-regression \
 
 benchmarks/scripts/run-logos-regression --list
 ```
+
+This is a development regression workload. A successful invocation on the
+default `.generated/logos` root is not, by itself, the legacy `cohort16` gate:
+the frozen gate validator also checks input authority, recorded outcomes and
+exact treatment identity. See the selection table above before reusing a summary.
 
 The cohort deliberately spans small, medium, and large queries. It covers
 schema/NOT NULL reasoning, output-signature rejection, SQL three-valued logic,

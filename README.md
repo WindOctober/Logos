@@ -2,8 +2,9 @@
 
 Logos is a proof-producing verifier for SQL query rewrites. It lowers a
 PostgreSQL-oriented SQL fragment to FormalSQL, uses LLM agents to search for
-proofs or countermodels, and accepts a result only after an isolated Rocq
-kernel check.
+proofs or countermodels, and accepts semantic EQ or data-dependent NEQ only
+after an isolated Rocq kernel check. Static output/analysis mismatches are a
+separate pre-agent NEQ path, with explicit evidence rather than a Rocq certificate.
 
 Logos is a research prototype. Unsupported or insufficiently justified SQL
 features fail closed instead of being approximated as equivalent.
@@ -25,6 +26,14 @@ features fail closed instead of being approximated as equivalent.
   execution is never a verdict.
 
 ## How It Works
+
+The diagram shows the semantic proof path. Full runs first perform a static
+output/analysis preflight, which can terminate with mismatch evidence before
+lowering or agent execution. After lowering, counterexample search can supply a
+typed witness to proof search; proof search may hand back a request for a new
+witness. These stages are coordinated, not two independent verdict engines.
+The benchmark runners feed the exact PostgreSQL inputs directly to Calcite;
+SQLGlot is an optional frontend-wrapper path, not a mandatory benchmark stage.
 
 ```text
 schema.sql + source.sql + target.sql
@@ -64,7 +73,7 @@ The repository is developed with:
 
 - Rust with Edition 2024 support;
 - JDK 17 and Maven for the Calcite frontend;
-- Python 3 and SQLGlot for dialect normalization;
+- Python 3 for runners/tools, plus SQLGlot for optional dialect normalization;
 - Rocq 9.2, Rocq standard library 9.1, Flocq 4.2.2, and Zarith 1.14.
 
 A complete agent-driven verification run additionally requires:
@@ -73,6 +82,10 @@ A complete agent-driven verification run additionally requires:
 - Docker and Linux `bubblewrap` (`bwrap`);
 - an authenticated Codex configuration under `CODEX_HOME`;
 - the pinned proof-checking image used by the benchmark runner.
+
+The full benchmark runner enforces a narrower environment than the standalone
+solver, even for a selected single case: PostgreSQL 17.4, UTC/C/libc/UTF8 and
+`max_connections=96`. See the [runner contract](benchmarks/scripts/README.md#full-run-runtime-and-evidence-contract).
 
 Do not point witness materialization at a shared production database. A
 rollback cleans up ordinary database changes, but it is not a sandbox for
@@ -210,6 +223,9 @@ and run with `make logos-formal-sql-checks`.
 | --- | --- |
 | `crates/logos-ir` | Structured Calcite IR, provenance, and validation |
 | `crates/logos-solver` | Lowering, proof orchestration, reports, and CLI |
+| `crates/logos-solver/scripts` | Runtime proof-agent and Rocq checker tools |
+| `crates/logos-solver/tests` | Solver unit/integration tests and runtime-tool regressions |
+| `crates/logos-solver/docs` | Proof runtime design, lifecycle, and validation notes |
 | `frontend/calcite-wrapper` | Java/Calcite SQL frontend |
 | `frontend/sqlglot-adapter` | Audited dialect normalization |
 | `vendor/FormalSQL` | Pinned Rocq semantics submodule |
@@ -223,8 +239,8 @@ and run with `make logos-formal-sql-checks`.
 Useful development targets are:
 
 ```bash
-# Rust unit and integration tests
-cargo test --workspace
+# Rust tests that do not opt into external-service integration
+RUST_MIN_STACK=67108864 cargo test --workspace
 
 # Calcite, Rust importer, SQLGlot, and materializer tests
 make frontend-tests
@@ -235,7 +251,7 @@ make logos-formal-sql-lemmas
 # Complete Rocq regression suite
 make logos-formal-sql-checks
 
-# Isolated trusted-checker regression
+# Isolated trusted-checker regression (requires compiled Rocq dependencies)
 make trusted-rocq-sandbox-test
 
 # Reject theorem catalog/source drift
@@ -245,6 +261,50 @@ python3 scripts/generate-formal-sql-catalog.py --check
 `make logos-formal-sql-lemmas` deliberately excludes examples. The larger
 `logos-formal-sql-checks` target compiles Logos-owned regression modules and
 the integration smoke test.
+The Rust command skips tests marked `#[ignore]`; it is not an all-environments
+integration pass. Run ignored tests by subsystem after configuring their
+dependencies (frontend/JDK, PostgreSQL, or Rocq/bubblewrap). Some unit tests also
+need local Unix sockets; a sandbox that forbids sockets cannot run that subset.
+
+Proof runtime details and focused test commands:
+[incremental Rocq diagnostics](crates/logos-solver/docs/incremental-rocq.md),
+[declaration search cache](crates/logos-solver/docs/declaration-search-cache.md),
+and [module drafts](crates/logos-solver/docs/module-drafts.md).
+
+The Rust proof stage keeps case/round orchestration in
+`crates/logos-solver/src/engine/proof_stage.rs`. Its private submodules own
+navigation artifacts (`navigation`), agent context bindings (`context`),
+witness certificates (`witness`), source policy (`audit`), scratch/module-cache
+transactions (`workspace`), the host diagnostic broker (`diagnostics`), trusted
+compiler invocation (`checker`), and goal emission (`goal`).
+Navigation tags are typed internally, but their serialized names and artifact
+versions remain stable. Navigation hints never grant proof authority; positive
+results still require the trusted compiler and final checks. Unit-test sources
+live under `crates/logos-solver/tests/proof_stage/` and are included as private
+test modules so implementation details do not become public APIs.
+
+## Documentation and experiment scope
+
+- This README owns the framework overview and acceptance boundaries.
+- [Runner documentation](benchmarks/scripts/README.md) owns CLI defaults,
+  batch configuration, frozen-cohort gates, and recovery behavior.
+- [Runtime notes](crates/logos-solver/docs/incremental-rocq.md) and their linked
+  companion documents describe implementation lifecycles and local measurements.
+- Files under `crates/logos-solver/prompts/` are agent instructions embedded in
+  the solver binary, not independent specifications. Editing them changes the
+  experimental treatment and requires rebuilding; an existing run-private binary
+  does not pick up those changes.
+- Versioned benchmark authority defines inputs and cohort membership, not
+  current default timeouts or evidence that a new framework revision passed a gate.
+  Retained experiment reports describe their recorded configuration, not today's
+  defaults. Do not rewrite historical results when changing the framework.
+
+The default proof stack includes the Logos helper library and `ProofAgentFacade`.
+Neutral declaration lookup means there is no host-ranked lemma shortlist; it
+does **not** mean the helper library is absent. There is currently no dedicated
+CLI switch for a no-lemma-library ablation. Such a treatment must consistently
+change the trusted import/build closure and agent instructions, preserve the
+semantic definitions and acceptance checks, and use a separate recorded run.
 
 ## Benchmarks
 
