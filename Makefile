@@ -126,7 +126,7 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/Smoke.v
 
 trusted-rocq-sandbox-test: logos-formal-sql-lemmas
-	LOGOS_ROCQ_OPAM_SWITCH=$(OPAM_SWITCH) bash crates/logos-solver/scripts/test-trusted-rocq-check-sandbox.sh
+	LOGOS_ROCQ_OPAM_SWITCH=$(OPAM_SWITCH) bash crates/logos-solver/tests/test-trusted-rocq-check-sandbox.sh
 
 calcite-ir:
 	scripts/calcite-ir-sqlglot --schema frontend/calcite-wrapper/examples/schema.sql --sql frontend/calcite-wrapper/examples/query.sql --read postgres

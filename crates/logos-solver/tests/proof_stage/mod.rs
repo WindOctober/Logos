@@ -309,6 +309,301 @@ fn complete_broker_witness_fixture(proof: &Path) {
     std::fs::write(proof.join("WitnessModules/ORDER"), "").unwrap();
 }
 
+#[test]
+#[ignore = "run via test-trusted-rocq-check-sandbox.sh with LOGOS_ROCQ_BROKER_TEST_BIN"]
+fn real_incremental_sandbox_diagnostics() {
+    fn copy_tree(source: &Path, destination: &Path) {
+        std::fs::create_dir_all(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &destination.join(entry.file_name()));
+            } else {
+                assert!(entry.file_type().unwrap().is_file());
+                std::fs::copy(entry.path(), destination.join(entry.file_name())).unwrap();
+            }
+        }
+    }
+    let env_path =
+        |name: &str| PathBuf::from(std::env::var_os(name).expect("sandbox fixture environment"));
+    let authority = env_path("LOGOS_TEST_ROCQ_AUTHORITY");
+    let switch = env_path("LOGOS_TEST_ROCQ_SWITCH");
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path().join("workspace");
+    let checker = temp.path().join("trusted-launcher/checker.sh");
+    std::fs::create_dir_all(checker.parent().unwrap()).unwrap();
+    std::fs::write(&checker, FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT).unwrap();
+    copy_tree(&env_path("LOGOS_TEST_ROCQ_WORKSPACE"), &workspace);
+    let cache = super::workspace::trusted_diagnostic_cache_directory(&checker);
+    copy_tree(&env_path("LOGOS_TEST_ROCQ_CACHE"), &cache);
+    let prefix = "From Logos.FormalSQL Require Import ProofAgentFacade.\nFrom LogosGenerated Require Import Schema Queries Witness.\nTheorem sandbox_problem_marker : sandbox_query_marker.\nProof.";
+    let run = |source: &str,
+               mode: super::diagnostics::CandidateKind,
+               path: &str,
+               session: Option<&mut crate::engine::rocq_session::IncrementalDiagnostics>,
+               seconds: u64| {
+        let input = if mode == super::diagnostics::CandidateKind::Module {
+            workspace.join(path)
+        } else {
+            workspace.join("Problem.v")
+        };
+        std::fs::write(input, source).unwrap();
+        let (invocation, output) = super::checker::run_host_diagnostic_rocq_check(
+            &checker,
+            &workspace,
+            &authority,
+            Some(&switch),
+            mode,
+            path,
+            seconds,
+            seconds,
+            session.map(|session| (session, source)),
+        );
+        (invocation, output.expect("launch real checker"))
+    };
+    let mut baseline_ms = 0;
+    for index in 0..5 {
+        let (invocation, output) = run(
+            &format!("{prefix} exact {index}. Qed."),
+            super::diagnostics::CandidateKind::Problem,
+            "Problem.v",
+            None,
+            30,
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        baseline_ms += invocation.elapsed_ms;
+    }
+    let mut session = crate::engine::rocq_session::IncrementalDiagnostics::default();
+    let mut incremental_ms = 0;
+    for index in 0..5 {
+        let (invocation, output) = run(
+            &format!("{prefix} exact {index}. Qed."),
+            super::diagnostics::CandidateKind::Problem,
+            "Problem.v",
+            Some(&mut session),
+            30,
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        if index == 0 {
+            assert!(stderr.contains("cold=true"), "{stderr}");
+            incremental_ms += invocation.elapsed_ms;
+            continue;
+        }
+        assert!(stderr.contains("compiler_required=false"), "{stderr}");
+        assert!(stderr.contains("Current goals:"), "{stderr}");
+        assert!(
+            stderr.contains(if index == 1 {
+                "reused_sentences=0"
+            } else {
+                "reused_sentences=4"
+            }),
+            "{stderr}"
+        );
+        incremental_ms += invocation.elapsed_ms;
+    }
+    eprintln!(
+        "five sandboxed failing revisions: baseline={baseline_ms}ms incremental={incremental_ms}ms (includes cold session startup)"
+    );
+
+    let good = format!("{prefix} exact I. Qed.");
+    let (_, output) = run(
+        &good,
+        super::diagnostics::CandidateKind::Problem,
+        "Problem.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        temp.path()
+            .join("problem-compile-cache/Problem.vo")
+            .is_file()
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("problem-compile-cache/Problem.v")).unwrap(),
+        good
+    );
+    let final_check = trusted_rocq_check_command(
+        &checker,
+        &workspace,
+        &authority,
+        Some(&switch),
+        Duration::from_secs(60),
+        CheckMode::Full,
+    )
+    .output()
+    .unwrap();
+    assert!(
+        final_check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&final_check.stderr)
+    );
+
+    let (_, output) = run(
+        "Lemma isolated_scratch : True. Proof. exact I. Qed.",
+        super::diagnostics::CandidateKind::Scratch,
+        "scratch/probe.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("problem-compile-cache/Problem.v")).unwrap(),
+        good
+    );
+
+    // A REPL reaching EOF with an open proof must not count as a pass.
+    let (_, output) = run(
+        &format!("{good}\nLemma unfinished : True. Proof."),
+        super::diagnostics::CandidateKind::Problem,
+        "Problem.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("compiler_required=true"));
+
+    let (_, output) = run(
+        "Lemma incremental_fact : True. Proof. exact I. Qed.",
+        super::diagnostics::CandidateKind::Module,
+        "ProofModules/IncrementalFact.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(cache.join("ProofModules/IncrementalFact.vo").is_file());
+    let (_, output) = run(
+        &good,
+        super::diagnostics::CandidateKind::Problem,
+        "Problem.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cold=true"));
+
+    // Re-arm and warm the session before checking a tactic timeout.
+    for index in 0..2 {
+        let (_, output) = run(
+            &format!("{prefix} exact {index}. Qed."),
+            super::diagnostics::CandidateKind::Problem,
+            "Problem.v",
+            Some(&mut session),
+            30,
+        );
+        assert_eq!(output.status.code(), Some(1));
+    }
+
+    let (invocation, output) = run(
+        &format!("{prefix} repeat (pose proof I). Qed."),
+        super::diagnostics::CandidateKind::Problem,
+        "Problem.v",
+        Some(&mut session),
+        1,
+    );
+    assert!(
+        invocation.timed_out,
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.status.code(), Some(124));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("session_discarded=true"));
+    let (_, output) = run(
+        &good,
+        super::diagnostics::CandidateKind::Problem,
+        "Problem.v",
+        Some(&mut session),
+        30,
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cold=true"));
+    drop(session);
+    // Exercise the real upload/audit/broker path too: its state must retain
+    // the session across connections, but never advance a scratch checkpoint.
+    let stage = temp.path().join("agent-stage");
+    let artifacts = temp.path().join("artifacts");
+    std::fs::create_dir_all(stage.join("scratch")).unwrap();
+    std::fs::create_dir_all(&artifacts).unwrap();
+    let broker = DiagnosticBroker::start(
+        &artifacts,
+        1,
+        1,
+        &checker,
+        &workspace,
+        &authority,
+        Some(&switch),
+        None,
+        2 * 1024 * 1024 * 1024,
+        Instant::now() + Duration::from_secs(90),
+    )
+    .unwrap();
+    for index in 0..4 {
+        let tactic = if index == 3 {
+            "I".to_owned()
+        } else {
+            index.to_string()
+        };
+        let source = format!("Lemma broker_probe : True. Proof. exact {tactic}. Qed.");
+        std::fs::write(stage.join("scratch/probe.v"), &source).unwrap();
+        let response = send_diagnostic_broker_request(
+            broker.socket_path(),
+            &stage,
+            serde_json::json!({
+                "schemaVersion": 2, "nonce": broker.nonce(), "mode": "scratch",
+                "candidatePath": "scratch/probe.v", "purpose": "semantic-equivalence",
+                "candidateSha256": sha256_hex(source.as_bytes()), "requestedTimeoutSeconds": 30,
+            }),
+        );
+        assert_eq!(response["compilePassed"], index == 3, "{response}");
+        assert_eq!(response["compileCheckpointAdvanced"], false, "{response}");
+        if index == 2 {
+            assert!(
+                response["stderr"]
+                    .as_str()
+                    .unwrap()
+                    .contains("reused_sentences=2"),
+                "{response}"
+            );
+        }
+    }
+    let outcome = broker.finish().unwrap();
+    assert_eq!(outcome.invocations.len(), 4);
+    assert!(outcome.latest_checkpoint.is_none());
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("host-tmp"))
+            .unwrap()
+            .count(),
+        0,
+        "dropping/timing out sessions must clean their sandbox scratch trees"
+    );
+}
+
 fn signature_test_attribute(name: &str) -> FormalAttribute {
     FormalAttribute {
         name: name.to_owned(),

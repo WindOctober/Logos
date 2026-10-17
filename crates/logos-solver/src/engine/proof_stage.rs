@@ -2836,6 +2836,7 @@ fn establish_initial_problem_compile_checkpoint(
         "Problem.v",
         options.proof_check_timeout_seconds,
         options.proof_check_timeout_seconds,
+        None,
     );
     let (stdout, stderr) = output
         .as_ref()

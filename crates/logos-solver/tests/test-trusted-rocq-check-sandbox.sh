@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_LOGOS_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-CHECKER="$SCRIPT_DIR/run-trusted-rocq-check.sh"
+CHECKER="$SCRIPT_DIR/../scripts/run-trusted-rocq-check.sh"
 ROCQ_SWITCH="${LOGOS_ROCQ_OPAM_SWITCH:-$SOURCE_LOGOS_ROOT/.opam-rocq}"
 ROCQ_BIN="$ROCQ_SWITCH/_opam/bin/rocq"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/logos-rocq-sandbox-regression.XXXXXX")"
@@ -264,6 +264,58 @@ if [[ ! -s "$CACHE_PARENT/problem-compile-cache/Problem.vo" ]]; then
   echo "successful Problem diagnostic did not publish its compiled-object cache" >&2
   exit 1
 fi
+
+# Optional end-to-end Rust diagnostic/session test using this real, immutable
+# authority and generated prefix. Build the test binary with cargo test --no-run.
+if [[ -n "${LOGOS_ROCQ_BROKER_TEST_BIN:-}" ]]; then
+  LOGOS_TEST_ROCQ_AUTHORITY="$LOGOS_REPO_ROOT" \
+  LOGOS_TEST_ROCQ_WORKSPACE="$WORKDIR" \
+  LOGOS_TEST_ROCQ_CACHE="$CACHE_DIR" \
+  LOGOS_TEST_ROCQ_SWITCH="$ROCQ_SWITCH" \
+    "$LOGOS_ROCQ_BROKER_TEST_BIN" \
+      --exact engine::proof_stage::tests::real_incremental_sandbox_diagnostics \
+      --ignored --nocapture
+fi
+
+# Persistent exploration uses the same isolated runtime but cannot publish a
+# trusted object or replace a main-proof checkpoint, even after a successful Qed.
+problem_cache_before="$(sha256sum "$CACHE_PARENT/problem-compile-cache/SHA256SUMS")"
+dependency_cache_before="$(sha256sum "$CACHE_DIR/SHA256SUMS")"
+timeout 90 "${checker_environment[@]}" \
+  bash "$CHECKER" --interactive-diagnostic --logical-name LogosGenerated.Problem \
+  >"$TEST_ROOT/interactive.stdout" 2>"$TEST_ROOT/interactive.stderr" <<'EOF'
+From LogosGenerated Require Import Schema Queries Witness.
+Lemma interactive_recovered : sandbox_query_marker.
+Proof.
+exact 0.
+exact I.
+Qed.
+Check interactive_recovered.
+Quit.
+EOF
+if ! grep -Fq 'Error:' "$TEST_ROOT/interactive.stderr" ||
+   ! grep -Fq 'interactive_recovered' "$TEST_ROOT/interactive.stdout" ||
+   [[ "$(sha256sum "$CACHE_PARENT/problem-compile-cache/SHA256SUMS")" != "$problem_cache_before" ||
+      "$(sha256sum "$CACHE_DIR/SHA256SUMS")" != "$dependency_cache_before" ]]; then
+  echo "interactive diagnostics failed recovery or changed a trusted cache" >&2
+  exit 1
+fi
+
+# A passing scratch compile must likewise leave the main Problem cache intact.
+cat >"$WORKDIR/Problem.v" <<'EOF'
+From LogosGenerated Require Import Schema Queries Witness.
+Lemma scratch_only : True.
+Proof. exact I. Qed.
+EOF
+timeout 90 "${checker_environment[@]}" \
+  bash "$CHECKER" --scratch-diagnostic --timeout-seconds 30 \
+  >"$TEST_ROOT/scratch.stdout" 2>"$TEST_ROOT/scratch.stderr"
+if [[ "$(sha256sum "$CACHE_PARENT/problem-compile-cache/SHA256SUMS")" != "$problem_cache_before" ||
+      "$(sha256sum "$CACHE_DIR/SHA256SUMS")" != "$dependency_cache_before" ]]; then
+  echo "scratch diagnostic overwrote a trusted main-proof cache" >&2
+  exit 1
+fi
+cp "$TEST_ROOT/Problem.good.v" "$WORKDIR/Problem.v"
 if [[ "$(sha256sum "$CACHE_DIR/ProofModules/CoreFacts.vo" | awk '{print $1}')" != \
       "$core_object_sha256" ]]; then
   echo "Problem.v diagnostic replaced a checked helper object" >&2
@@ -281,6 +333,18 @@ cat >"$OUTSIDE_FILE" <<'EOF'
 Definition HOST_SENTINEL_PAYLOAD_7F8F65C4 : nat := 42.
 Print HOST_SENTINEL_PAYLOAD_7F8F65C4.
 EOF
+timeout 90 "${checker_environment[@]}" \
+  bash "$CHECKER" --interactive-diagnostic --logical-name LogosGenerated.Problem \
+  >"$TEST_ROOT/interactive-isolation.stdout" 2>"$TEST_ROOT/interactive-isolation.stderr" <<EOF
+Load "$OUTSIDE_FILE".
+Quit.
+EOF
+if ! grep -Fq 'Error:' "$TEST_ROOT/interactive-isolation.stderr" ||
+   grep -Fq 'HOST_SENTINEL_PAYLOAD_7F8F65C4' "$TEST_ROOT/interactive-isolation.stdout" ||
+   grep -Fq 'AMBIENT_ROCQRC_SENTINEL_59B667D1' "$TEST_ROOT/interactive.stdout" "$TEST_ROOT/interactive.stderr"; then
+  echo "interactive diagnostic exposed ambient or outside files" >&2
+  exit 1
+fi
 cat >"$WORKDIR/Problem.v" <<EOF
 From LogosGenerated Require Import Schema Queries Witness.
 Load "$OUTSIDE_FILE".
@@ -379,7 +443,13 @@ write_test_cache_manifest() {
   (
     cd "$CACHE_DIR"
     {
-      sha256sum Schema.v Schema.vo Queries.v Queries.vo Witness.v Witness.vo ProofModules/ORDER
+      sha256sum Schema.v Schema.vo Queries.v Queries.vo WitnessData.v WitnessData.vo \
+        Witness.v Witness.vo WitnessModules/ORDER ProofModules/ORDER
+      while IFS= read -r file || [[ -n "$file" ]]; do
+        [[ -n "$file" ]] || continue
+        stem="${file%.v}"
+        sha256sum "WitnessModules/$file" "WitnessModules/$stem.vo"
+      done <WitnessModules/ORDER
       while IFS= read -r file || [[ -n "$file" ]]; do
         [[ -n "$file" ]] || continue
         stem="${file%.v}"

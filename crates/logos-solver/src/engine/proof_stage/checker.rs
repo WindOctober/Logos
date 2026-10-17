@@ -4,7 +4,9 @@ use crate::artifacts::ArtifactWriter;
 use crate::engine::config::Config;
 use crate::engine::now_ms_since_epoch;
 use crate::engine::report::{DiagnosticCheckerInvocation, TrustedCheckInvocation};
+use crate::engine::rocq_session::{IncrementalDiagnostics, SessionKey};
 use crate::error::{Error, Result};
+use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
@@ -24,6 +26,12 @@ pub(super) enum CheckMode {
     WitnessPreflight,
     ProblemDiagnostic {
         timeout_seconds: u64,
+    },
+    ScratchDiagnostic {
+        timeout_seconds: u64,
+    },
+    InteractiveDiagnostic {
+        logical_name: String,
     },
     ModuleDiagnostic {
         timeout_seconds: u64,
@@ -58,6 +66,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
     candidate_path: &str,
     requested_timeout_seconds: u64,
     effective_timeout_seconds: u64,
+    incremental: Option<(&mut IncrementalDiagnostics, &str)>,
 ) -> (DiagnosticCheckerInvocation, Option<Output>) {
     let started_at_unix_ms = now_ms_since_epoch();
     let started = Instant::now();
@@ -66,19 +75,113 @@ pub(super) fn run_host_diagnostic_rocq_check(
             timeout_seconds: effective_timeout_seconds,
             candidate_path: candidate_path.to_owned(),
         },
-        CandidateKind::Problem | CandidateKind::Scratch => CheckMode::ProblemDiagnostic {
+        CandidateKind::Problem => CheckMode::ProblemDiagnostic {
+            timeout_seconds: effective_timeout_seconds,
+        },
+        CandidateKind::Scratch => CheckMode::ScratchDiagnostic {
             timeout_seconds: effective_timeout_seconds,
         },
     };
-    let result = trusted_rocq_check_command(
-        trusted_checker_path,
-        checked_workspace,
-        logos_repo_root,
-        rocq_opam_switch,
-        Duration::from_secs(effective_timeout_seconds),
-        trusted_mode,
-    )
-    .output();
+    let result = (|| -> std::io::Result<Output> {
+        let mut incremental = incremental;
+        let mut compiler_key = None;
+        let deadline = started + Duration::from_secs(effective_timeout_seconds);
+        let mut note = String::new();
+        if let Some((session, source)) = incremental.as_mut() {
+            let manifest =
+                trusted_diagnostic_cache_directory(trusted_checker_path).join("SHA256SUMS");
+            if let Ok(manifest) = std::fs::read(&manifest) {
+                let logical_name = if candidate_mode == CandidateKind::Module {
+                    format!(
+                        "LogosGenerated.{}",
+                        candidate_path.trim_end_matches(".v").replace('/', ".")
+                    )
+                } else {
+                    "LogosGenerated.Problem".to_owned()
+                };
+                // The broker lifetime binds authority, runtime and generated
+                // workspace generation. Publishing a module changes this manifest
+                // and invalidates the entire isolated REPL snapshot.
+                let key = SessionKey::new(manifest, logical_name.clone());
+                compiler_key = Some(key.clone());
+                let mut command = trusted_rocq_check_command(
+                    trusted_checker_path,
+                    checked_workspace,
+                    logos_repo_root,
+                    rocq_opam_switch,
+                    Duration::from_secs(effective_timeout_seconds),
+                    CheckMode::InteractiveDiagnostic { logical_name },
+                );
+                if !session.prepare(&key) {
+                    note = "LOGOS_ROCQ_INCREMENTAL cold=true compiler_required=true\n".to_owned();
+                } else {
+                    match session.check(&key, source, &mut command, deadline) {
+                        Ok(diagnostic) => {
+                            note = format!(
+                                "LOGOS_ROCQ_INCREMENTAL reused_sentences={} executed_sentences={} compiler_required={}\n",
+                                diagnostic.reused,
+                                diagnostic.executed,
+                                diagnostic.rejection.is_none()
+                            );
+                            if let Some(rejection) = diagnostic.rejection {
+                                return Ok(Output {
+                                    status: std::process::ExitStatus::from_raw(1 << 8),
+                                    stdout: Vec::new(),
+                                    stderr: format!(
+                                        "{note}Candidate: {candidate_path}\n{rejection}"
+                                    )
+                                    .into_bytes(),
+                                });
+                            }
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+                            let stderr = format!(
+                                "LOGOS_ROCQ_INCREMENTAL timed_out=true session_discarded=true\n{error}\n"
+                            ).into_bytes();
+                            return Ok(Output {
+                                status: std::process::ExitStatus::from_raw(124 << 8),
+                                stdout: Vec::new(),
+                                stderr,
+                            });
+                        }
+                        Err(error) => {
+                            note = format!("LOGOS_ROCQ_INCREMENTAL fallback=true reason={error}\n");
+                        }
+                    }
+                }
+            } else {
+                // Let the existing checker classify absent/corrupt environments.
+                **session = IncrementalDiagnostics::default();
+            }
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(Output {
+                status: std::process::ExitStatus::from_raw(124 << 8),
+                stdout: Vec::new(),
+                stderr: format!("{note}diagnostic deadline exhausted before compilation\n")
+                    .into_bytes(),
+            });
+        }
+        // Only this path can report success. It publishes exactly the same
+        // checked objects/checkpoints as before the incremental optimization.
+        let mut output = trusted_rocq_check_command(
+            trusted_checker_path,
+            checked_workspace,
+            logos_repo_root,
+            rocq_opam_switch,
+            remaining,
+            trusted_mode,
+        )
+        .output()?;
+        if let (Some((session, _)), Some(key)) = (incremental, compiler_key) {
+            session.observe_compiler(&key, output.status.code());
+        }
+        if !note.is_empty() {
+            output.stderr.splice(..0, note.into_bytes());
+        }
+        Ok(output)
+    })();
     match result {
         Ok(output) => {
             let exit_code = output.status.code();
@@ -164,17 +267,33 @@ pub(super) fn trusted_rocq_check_command(
     mode: CheckMode,
 ) -> Command {
     let trusted_cache_dir = trusted_diagnostic_cache_directory(trusted_checker_path);
-    let mut process = Command::new(TRUSTED_HOST_TIMEOUT);
+    // Interactive sessions live for the broker lifetime, not one request's
+    // timeout. The host transport bounds every request and kills the whole
+    // session group on timeout/drop; the shell still owns scratch cleanup.
+    let interactive = matches!(&mode, CheckMode::InteractiveDiagnostic { .. });
+    let mut process = Command::new(if interactive {
+        TRUSTED_HOST_BASH
+    } else {
+        TRUSTED_HOST_TIMEOUT
+    });
     process
         .env_clear()
         .env("PATH", TRUSTED_CHECKER_PATH)
         .env("HOME", TRUSTED_CHECKER_HOME)
         .env("LC_ALL", FIXED_HOST_LOCALE)
-        .env("LANG", FIXED_HOST_LOCALE)
-        .arg("--signal=TERM")
-        .arg("--kill-after=5s")
-        .arg(format!("{}s", timeout.as_secs().max(1)))
-        .arg(TRUSTED_HOST_BASH)
+        .env("LANG", FIXED_HOST_LOCALE);
+    if !interactive {
+        process
+            .arg("--signal=TERM")
+            .arg("--kill-after=5s")
+            .arg(if timeout.subsec_nanos() == 0 {
+                format!("{}s", timeout.as_secs().max(1))
+            } else {
+                format!("{}s", timeout.as_secs_f64())
+            })
+            .arg(TRUSTED_HOST_BASH);
+    }
+    process
         .arg(trusted_checker_path)
         .env("LOGOS_REPO_ROOT", logos_repo_root)
         .env("LOGOS_PROOF_WORKDIR", checked_workspace)
@@ -192,6 +311,18 @@ pub(super) fn trusted_rocq_check_command(
                 .arg("--problem-diagnostic")
                 .arg("--timeout-seconds")
                 .arg(timeout_seconds.to_string());
+        }
+        CheckMode::ScratchDiagnostic { timeout_seconds } => {
+            process
+                .arg("--scratch-diagnostic")
+                .arg("--timeout-seconds")
+                .arg(timeout_seconds.to_string());
+        }
+        CheckMode::InteractiveDiagnostic { logical_name } => {
+            process
+                .arg("--interactive-diagnostic")
+                .arg("--logical-name")
+                .arg(logical_name);
         }
         CheckMode::ModuleDiagnostic {
             timeout_seconds,

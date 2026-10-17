@@ -6,6 +6,7 @@ use crate::engine::report::{
     AcceptedDiagnosticSourceAudit, AgentAudit, DiagnosticArtifactBinding,
     DiagnosticCheckerInvocation, ProblemCompileCheckpointEvidence, RejectedDiagnosticSourceAudit,
 };
+use crate::engine::rocq_session::IncrementalDiagnostics;
 use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -254,6 +255,7 @@ impl Drop for ReadOnlyMappedFile {
 
 #[derive(Default)]
 pub(super) struct BrokerState {
+    pub(super) incremental_diagnostics: IncrementalDiagnostics,
     pub(super) requests_seen: usize,
     pub(super) timeout_seconds_reserved: u64,
     pub(super) workspace_generation: usize,
@@ -874,7 +876,8 @@ fn validate_diagnostic_broker_outcome(
     Ok(())
 }
 
-/// Immutable round inputs shared by all connections. Mutable counters stay in BrokerState behind the existing single broker.
+/// Immutable round inputs shared by all connections. Mutable counters and the
+/// incremental session stay in BrokerState behind the existing single broker.
 struct RequestContext<'a> {
     expected_nonce: &'a str,
     artifacts_root: &'a Path,
@@ -982,6 +985,12 @@ impl DiagnosticBroker {
                         }
                     }
                 }
+                // Linux parent-death signaling follows the spawning *thread*.
+                // Stop/reap its REPL while this thread is still alive, so the
+                // trusted shell can run its sandbox scratch-cleanup trap.
+                if let Ok(mut locked) = thread_state.lock() {
+                    locked.incremental_diagnostics = IncrementalDiagnostics::default();
+                }
             })
             .map_err(|source| {
                 Error::ProofAgentCommand(format!(
@@ -1047,6 +1056,18 @@ impl DiagnosticBroker {
         };
         validate_diagnostic_broker_outcome(&self.artifacts_root, self.round, &outcome)?;
         Ok(outcome)
+    }
+}
+
+impl Drop for DiagnosticBroker {
+    fn drop(&mut self) {
+        // Also cover early errors before finish(): otherwise the listener thread
+        // (and now its persistent Rocq process) could outlive the proof round.
+        self.stop.store(true, Ordering::Release);
+        let _ = UnixStream::connect(&self.socket_path);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -1500,6 +1521,10 @@ fn run_diagnostic_broker_request(
         None
     };
 
+    let mut incremental = state
+        .lock()
+        .map(|mut locked| std::mem::take(&mut locked.incremental_diagnostics))
+        .unwrap_or_default();
     let (mut invocation, output) = run_host_diagnostic_rocq_check(
         trusted_checker_path,
         &checked_workspace,
@@ -1509,7 +1534,11 @@ fn run_diagnostic_broker_request(
         &request.candidate_path,
         request.requested_timeout_seconds,
         effective_timeout_seconds,
+        Some((&mut incremental, mapped_problem.as_str())),
     );
+    if let Ok(mut locked) = state.lock() {
+        locked.incremental_diagnostics = incremental;
+    }
     let (stdout_bytes, stderr_bytes) = output
         .as_ref()
         .map(|output| (output.stdout.as_slice(), output.stderr.as_slice()))

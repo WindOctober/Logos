@@ -417,8 +417,18 @@ wall-clock deadline. Use that time for iterative feedback, route revision, and
 proof search rather than treating it as the expected duration of one Rocq
 compile.
 
-Because the trusted dependency closure is precompiled and normal checks are
-incremental, explicitly request about 30--90 seconds for an ordinary scratch or
+After a failed compilation, the host may retain an isolated Rocq session between
+revisions and reuse the unchanged sentence prefix. First-try successes use the
+ordinary compiler directly. On failure incremental feedback includes the failing command
+and, when available, current goals. Keep unchanged prefixes stable when repairing
+a local tactic. A changed dependency generation starts a fresh session; timeout
+or protocol failure discards the old session. This is an acceleration of negative
+diagnostics only: a reported pass still requires ordinary file compilation and
+the usual exact-source publication. You do not manage the session or submit
+interactive control commands yourself.
+
+Because the trusted dependency closure is precompiled and repeated failing
+revisions may reuse a sentence prefix, explicitly request about 30--90 seconds for an ordinary scratch or
 checkpoint diagnostic. A coherent final assembly whose component lemmas have
 already passed may reasonably request up to about 120--180 seconds. These are
 strong proof-engineering defaults, not host-enforced limits: use a longer

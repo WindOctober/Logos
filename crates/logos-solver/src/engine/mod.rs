@@ -4,6 +4,7 @@ mod config;
 mod counterexample;
 mod proof_stage;
 mod report;
+mod rocq_session;
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::VerificationInput;

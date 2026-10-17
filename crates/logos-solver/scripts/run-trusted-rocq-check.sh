@@ -21,7 +21,9 @@ usage() {
   cat >&2 <<'EOF'
 usage: bash run-trusted-rocq-check.sh
        bash run-trusted-rocq-check.sh --problem-diagnostic --timeout-seconds <positive>
+       bash run-trusted-rocq-check.sh --scratch-diagnostic --timeout-seconds <positive>
        bash run-trusted-rocq-check.sh --module-diagnostic --candidate ProofModules/Name.v --timeout-seconds <positive>
+       bash run-trusted-rocq-check.sh --interactive-diagnostic --logical-name <LogosGenerated.Name>
        bash run-trusted-rocq-check.sh --preflight
        bash run-trusted-rocq-check.sh --witness-preflight
 EOF
@@ -30,6 +32,7 @@ EOF
 mode=final
 requested_timeout_seconds=
 module_candidate=
+interactive_logical_name=
 case "$#" in
   0)
     ;;
@@ -44,21 +47,30 @@ case "$#" in
     fi
     ;;
   3)
-    if [[ "$1" != "--problem-diagnostic" || "$2" != "--timeout-seconds" ]]; then
-      usage
-      exit 64
-    fi
-    mode="${1#--}"
-    requested_timeout_seconds="$3"
-    case "$requested_timeout_seconds" in
-      ''|*[!0-9]*)
-        echo "diagnostic timeout must be a positive integer number of seconds" >&2
+    if [[ "$1" == "--interactive-diagnostic" && "$2" == "--logical-name" ]]; then
+      mode=interactive-diagnostic
+      interactive_logical_name="$3"
+      if [[ ! "$interactive_logical_name" =~ ^LogosGenerated\.(Problem|ProofModules\.[A-Z][A-Za-z0-9_]*)$ ]]; then
+        echo "invalid interactive logical module name" >&2
         exit 64
-        ;;
-    esac
-    if ((requested_timeout_seconds < 1)); then
-      echo "diagnostic timeout must be positive" >&2
-      exit 64
+      fi
+    else
+      if [[ ( "$1" != "--problem-diagnostic" && "$1" != "--scratch-diagnostic" ) || "$2" != "--timeout-seconds" ]]; then
+        usage
+        exit 64
+      fi
+      mode="${1#--}"
+      requested_timeout_seconds="$3"
+      case "$requested_timeout_seconds" in
+        ''|*[!0-9]*)
+          echo "diagnostic timeout must be a positive integer number of seconds" >&2
+          exit 64
+          ;;
+      esac
+      if ((requested_timeout_seconds < 1)); then
+        echo "diagnostic timeout must be positive" >&2
+        exit 64
+      fi
     fi
     ;;
   5)
@@ -1445,7 +1457,7 @@ if [[ "$mode" != preflight ]]; then
         -Q "$TRUSTEDDIR" LogosGenerated \
         "$TRUSTEDDIR/Witness.v" || trusted_environment_failure "witness" "$?"
     fi
-  elif [[ "$mode" == problem-diagnostic ]]; then
+  elif [[ "$mode" == problem-diagnostic || "$mode" == scratch-diagnostic || "$mode" == interactive-diagnostic ]]; then
     copy_trusted_cache_objects "$PROBLEMOUTDIR"
   elif [[ "$mode" == module-diagnostic ]]; then
     candidate_name="${module_candidate#ProofModules/}"
@@ -1605,6 +1617,14 @@ sandbox_compile() {
   local source_relative="$3"
   local logical_name="$4"
   local output_relative="$5"
+  local -a rocq_action=(compile -q -noglob -top "$logical_name" -o "/out/$output_relative")
+  local -a rocq_input=("/input/$source_relative")
+  if [[ "$mode" == interactive-diagnostic ]]; then
+    # The host owns stdin and deadlines. This process never exports .vo files
+    # or writes a trusted cache; a positive result still requires compilation.
+    rocq_action=(repl -q -emacs -async-proofs off -top "$logical_name")
+    rocq_input=()
+  fi
   mkdir -p \
     "$(dirname "$output_root/$output_relative")" \
     "$output_root/tmp" \
@@ -1656,14 +1676,18 @@ sandbox_compile() {
     --setenv OCAMLFIND_CONF /rocq/lib/findlib.conf \
     --setenv CAML_LD_LIBRARY_PATH /rocq/lib/stublibs:/rocq/lib/ocaml/stublibs \
     --setenv LD_LIBRARY_PATH /rocq/lib/stublibs:/rocq/lib/ocaml/stublibs \
-    /rocq/bin/rocq compile -q -noglob -top "$logical_name" \
-      -o "/out/$output_relative" \
+    /rocq/bin/rocq "${rocq_action[@]}" \
       -coqlib /rocq/lib/coq \
       -Q /authority/vendor/FormalSQL/src SQLFS \
       -Q /authority/theories Logos \
       -Q /out LogosGenerated \
-      "/input/$source_relative"
+      "${rocq_input[@]}"
 }
+
+if [[ "$mode" == interactive-diagnostic ]]; then
+  sandbox_compile "$PROBLEMDIR" "$PROBLEMOUTDIR" "" "$interactive_logical_name" ""
+  exit "$?"
+fi
 
 if [[ "$mode" == module-diagnostic ]]; then
   sandbox_compile \
@@ -1716,9 +1740,11 @@ else
     LogosGenerated.Problem Problem.vo
 fi
 
-if [[ "$mode" == problem-diagnostic ]]; then
-  publish_problem_cache
-  echo "LOGOS_TRUSTED_ROCQ_CHECK mode=problem-diagnostic requested_timeout_seconds=$requested_timeout_seconds" >&2
+if [[ "$mode" == problem-diagnostic || "$mode" == scratch-diagnostic ]]; then
+  if [[ "$mode" == problem-diagnostic ]]; then
+    publish_problem_cache
+  fi
+  echo "LOGOS_TRUSTED_ROCQ_CHECK mode=$mode requested_timeout_seconds=$requested_timeout_seconds" >&2
   exit 0
 fi
 
