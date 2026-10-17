@@ -1,10 +1,11 @@
 //! Disposable, incremental *negative* diagnostics. A REPL can reject a candidate,
 //! but can never publish an object, advance a checkpoint, or certify success.
-//! All apparently successful candidates still go through the ordinary compiler.
+//! Full checks still require the ordinary compiler. Explicit prefix probes
+//! return advisory goals only and never fall through to compilation.
 //!
 //! The launcher supplies the existing empty-root Rocq sandbox. One session is
 //! retained per broker, keyed by logical module and immutable dependency manifest.
-//! Protocol ambiguity falls back to compilation; timeout destroys the session.
+//! Protocol ambiguity falls back only for full checks; timeout destroys the session.
 
 use std::io::{self, Read, Write};
 use std::os::fd::OwnedFd;
@@ -42,6 +43,7 @@ pub(super) struct IncrementalDiagnostics {
 
 pub(super) struct Diagnostic {
     pub rejection: Option<String>,
+    pub goals: Option<String>,
     pub reused: usize,
     pub executed: usize,
 }
@@ -70,6 +72,27 @@ impl IncrementalDiagnostics {
         command: &mut Command,
         deadline: Instant,
     ) -> io::Result<Diagnostic> {
+        self.run(key, source, command, deadline, false)
+    }
+
+    pub fn probe(
+        &mut self,
+        key: &SessionKey,
+        source: &str,
+        command: &mut Command,
+        deadline: Instant,
+    ) -> io::Result<Diagnostic> {
+        self.run(key, source, command, deadline, true)
+    }
+
+    fn run(
+        &mut self,
+        key: &SessionKey,
+        source: &str,
+        command: &mut Command,
+        deadline: Instant,
+        show_goals: bool,
+    ) -> io::Result<Diagnostic> {
         self.retry_key = None;
         let Some(sentences) = sentences(source) else {
             // Unsupported syntax must not become a spurious proof failure.
@@ -78,11 +101,19 @@ impl IncrementalDiagnostics {
                 "source requires ordinary compiler parsing",
             ));
         };
-        if self.session.as_ref().is_none_or(|s| s.key != *key) {
+        if self
+            .session
+            .as_ref()
+            .is_none_or(|s| s.key != *key || s.rewind_crosses_closed_proof(&sentences))
+        {
             self.session = None;
             self.session = Some(Session::start(key, command, deadline)?);
         }
-        let result = self.session.as_mut().unwrap().check(&sentences, deadline);
+        let result = self
+            .session
+            .as_mut()
+            .unwrap()
+            .check(&sentences, deadline, show_goals);
         if result.is_err() {
             self.session = None;
             self.retry_key = None;
@@ -97,8 +128,15 @@ struct Session {
     input: UnixStream,
     output: UnixStream,
     initial: u64,
+    in_proof: bool,
     // Only successfully executed sentences enter the reusable prefix.
-    history: Vec<(String, u64)>,
+    history: Vec<VerifiedSentence>,
+}
+
+struct VerifiedSentence {
+    source: String,
+    state: u64,
+    closes_proof: bool,
 }
 
 struct Reply {
@@ -139,6 +177,23 @@ fn timeout_error(error: io::Error) -> io::Error {
 }
 
 impl Session {
+    fn common_prefix(&self, sentences: &[&str]) -> usize {
+        self.history
+            .iter()
+            .zip(sentences)
+            .take_while(|(previous, current)| previous.source == **current)
+            .count()
+    }
+
+    fn rewind_crosses_closed_proof(&self, sentences: &[&str]) -> bool {
+        // Rocq can acknowledge BackTo into a closed proof with its old prompt
+        // while Show still reports "requires an open proof". Rebuild instead
+        // of trusting that state number across a proof-closing transition.
+        self.history[self.common_prefix(sentences)..]
+            .iter()
+            .any(|s| s.closes_proof)
+    }
+
     fn start(key: &SessionKey, command: &mut Command, deadline: Instant) -> io::Result<Self> {
         let (input, child_input) = UnixStream::pair()?;
         let (output, child_output) = UnixStream::pair()?;
@@ -174,6 +229,7 @@ impl Session {
             input,
             output,
             initial: 0,
+            in_proof: false,
             history: Vec::new(),
         };
         let reply = session.read_reply(deadline)?;
@@ -211,21 +267,23 @@ impl Session {
             .write_all(sentence.as_bytes())
             .map_err(timeout_error)?;
         self.input.write_all(b"\n").map_err(timeout_error)?;
-        self.read_reply(deadline)
+        let reply = self.read_reply(deadline)?;
+        self.in_proof = reply.in_proof;
+        Ok(reply)
     }
 
-    fn check(&mut self, sentences: &[&str], deadline: Instant) -> io::Result<Diagnostic> {
-        let common = self
-            .history
-            .iter()
-            .zip(sentences)
-            .take_while(|((previous, _), current)| previous == *current)
-            .count();
+    fn check(
+        &mut self,
+        sentences: &[&str],
+        deadline: Instant,
+        show_goals: bool,
+    ) -> io::Result<Diagnostic> {
+        let common = self.common_prefix(sentences);
         if common < self.history.len() {
             let target = if common == 0 {
                 self.initial
             } else {
-                self.history[common - 1].1
+                self.history[common - 1].state
             };
             let reply = self.execute(&format!("BackTo {target}."), deadline)?;
             if reply.failed() || reply.state != target {
@@ -236,9 +294,13 @@ impl Session {
             self.history.truncate(common);
         }
         for (index, sentence) in sentences.iter().enumerate().skip(common) {
+            let was_in_proof = self.in_proof;
             let reply = self.execute(sentence, deadline)?;
             if reply.failed() {
-                let previous = self.history.last().map_or(self.initial, |entry| entry.1);
+                let previous = self
+                    .history
+                    .last()
+                    .map_or(self.initial, |entry| entry.state);
                 if reply.state != previous {
                     // For example, `idtac "Error: ..."` is user output, not a
                     // rejected tactic. Never turn ambiguous output into failure.
@@ -265,14 +327,33 @@ impl Session {
                 }
                 return Ok(Diagnostic {
                     rejection: Some(rejection),
+                    goals: None,
                     reused: common,
                     executed: index + 1 - common,
                 });
             }
-            self.history.push(((*sentence).to_owned(), reply.state));
+            self.history.push(VerifiedSentence {
+                source: (*sentence).to_owned(),
+                state: reply.state,
+                closes_proof: was_in_proof && !reply.in_proof,
+            });
         }
+        let goals = if show_goals && self.in_proof {
+            let previous = self
+                .history
+                .last()
+                .map_or(self.initial, |entry| entry.state);
+            let reply = self.execute("Show.", deadline)?;
+            if reply.failed() || reply.state != previous {
+                return Err(io::Error::other("could not inspect the exact prefix goals"));
+            }
+            Some(reply.text)
+        } else {
+            None
+        };
         Ok(Diagnostic {
             rejection: None,
+            goals,
             reused: common,
             executed: sentences.len() - common,
         })
@@ -322,8 +403,21 @@ fn parse_reply(text: &str) -> io::Result<Reply> {
 
 /// Conservative lexical framing, not a second Rocq parser. Respect strings,
 /// nested comments, qualified names, decimals, and standalone proof bullets.
-/// Anything incomplete/unsupported falls back to the ordinary compiler.
+/// Anything incomplete/unsupported returns None; only full checks may fall back.
 fn sentences(source: &str) -> Option<Vec<&str>> {
+    sentences_through(source, None)
+}
+
+/// Stop framing at the requested complete sentence; never inspect the suffix.
+pub(super) fn prefix_through(source: &str, count: usize) -> Option<&str> {
+    if count == 0 {
+        return None;
+    }
+    let prefix = sentences_through(source, Some(count))?;
+    (prefix.len() == count).then(|| &source[..prefix.iter().map(|s| s.len()).sum()])
+}
+
+fn sentences_through(source: &str, limit: Option<usize>) -> Option<Vec<&str>> {
     let bytes = source.as_bytes();
     let mut result = Vec::new();
     let (mut start, mut i, mut depth) = (0, 0, 0_usize);
@@ -426,6 +520,9 @@ fn sentences(source: &str) -> Option<Vec<&str>> {
                 return None;
             }
             result.push(&source[start..i]);
+            if limit == Some(result.len()) {
+                return Some(result);
+            }
             start = i;
             substantive = false;
         }
@@ -439,6 +536,36 @@ fn sentences(source: &str) -> Option<Vec<&str>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefix_framing_does_not_parse_or_include_the_suffix() {
+        let prefix = "Lemma p : True. Proof.";
+        for suffix in [
+            " exact I. Qed.",
+            " all: {",
+            " (* unfinished",
+            " Load evil.",
+            " ..",
+        ] {
+            let source = format!("{prefix}{suffix}");
+            assert_eq!(prefix_through(&source, 2), Some(prefix));
+        }
+        assert_eq!(prefix_through(prefix, 0), None);
+        assert_eq!(prefix_through(prefix, 3), None);
+        assert_eq!(prefix_through("Lemma p : { n : nat | True }.", 1), None);
+        assert_eq!(
+            prefix_through(
+                "Check Nat.add. (* nested (* . *) *) Check \".\". unfinished",
+                2
+            ),
+            Some("Check Nat.add. (* nested (* . *) *) Check \".\".")
+        );
+        assert_eq!(
+            prefix_through("Goal True. Proof. - { exact I. } Qed.", 4),
+            Some("Goal True. Proof. - {")
+        );
+        assert_eq!(prefix_through("Check 1.2. Check 3.", 1), Some("Check 1.2."));
+    }
 
     fn key(manifest: &str) -> SessionKey {
         SessionKey::new(
@@ -569,7 +696,10 @@ mod tests {
             )
             .unwrap();
         assert!(changed.rejection.is_none());
-        assert_eq!(changed.reused, 2);
+        assert_eq!(
+            changed.reused, 0,
+            "rewind across Qed must rebuild the session"
+        );
         let fresh = session
             .check(
                 &key("env2"),
@@ -630,7 +760,12 @@ mod tests {
         let proof =
             "(* \"*)\" *) Lemma x : True /\\ True. Proof. split. - { exact I. } - exact I. Qed.";
         let initial = session
-            .check(&key("env"), proof, &mut command, deadline)
+            .check(
+                &key("env"),
+                proof.trim_end_matches(" Qed."),
+                &mut command,
+                deadline,
+            )
             .unwrap();
         assert!(initial.rejection.is_none());
         let revised = proof.replace("- exact I.", "- apply I.");

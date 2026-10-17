@@ -28,7 +28,7 @@ class ModuleDraftClientTests(unittest.TestCase):
         self.draft.write_bytes(self.source)
         self.socket_path = self.root / "broker.sock"
 
-    def client(self, path="scratch/ProofModules/CoreBridge.v", mode="module"):
+    def client(self, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=()):
         return subprocess.run(
             [
                 "bash",
@@ -41,6 +41,7 @@ class ModuleDraftClientTests(unittest.TestCase):
                 "semantic-equivalence",
                 "--timeout-seconds",
                 "5",
+                *extra,
             ],
             env={
                 **os.environ,
@@ -53,7 +54,7 @@ class ModuleDraftClientTests(unittest.TestCase):
         )
 
     def exchange(
-        self, overrides=None, path="scratch/ProofModules/CoreBridge.v", mode="module"
+        self, overrides=None, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=()
     ):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
             listener.bind(str(self.socket_path))
@@ -84,7 +85,7 @@ class ModuleDraftClientTests(unittest.TestCase):
 
             with ThreadPoolExecutor(max_workers=1) as executor:
                 response = executor.submit(serve)
-                completed = self.client(path, mode)
+                completed = self.client(path, mode, extra)
                 request, uploaded = response.result(timeout=6)
         self.socket_path.unlink()
         return completed, request, uploaded
@@ -103,6 +104,39 @@ class ModuleDraftClientTests(unittest.TestCase):
         self.assertIn("ProofModules/CoreBridge.v", result.stdout)
         self.assertEqual(self.draft.read_bytes(), self.source)
         self.assertFalse((self.root / "ProofModules").exists())
+
+    def test_prefix_probe_is_explicit_and_never_claims_publication(self):
+        extra = ("--operation", "probe", "--stop-after", "2")
+        result, request, uploaded = self.exchange({
+            "compilePassed": False,
+            "probe": {"stopAfter": 2, "prefixBytes": 25, "passed": True},
+            "stdout": "1 goal: True\n",
+        }, extra=extra)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(request["probe"], {"stopAfter": 2})
+        self.assertEqual(uploaded, self.source)
+        self.assertIn("1 goal", result.stdout)
+        self.assertIn("no compilation, publication, or checkpoint", result.stdout)
+        self.assertFalse((self.root / "ProofModules").exists())
+        result, _, _ = self.exchange(extra=extra)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("incorrectly granted", result.stderr)
+        result, _, _ = self.exchange({
+            "compilePassed": False, "candidateSha256": None,
+            "probe": {"stopAfter": 2, "prefixBytes": 25, "passed": True},
+        }, extra=extra)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("response identity mismatch", result.stderr)
+
+    def test_invalid_probe_options_never_connect(self):
+        for extra in [
+            ("--stop-after", "2"), ("--operation", "probe"),
+            ("--operation", "probe", "--stop-after", "0"),
+            ("--operation", "probe", "--stop-after", "-1"),
+            ("--operation", "unknown"),
+        ]:
+            with self.subTest(extra=extra):
+                self.assertEqual(self.client(extra=extra).returncode, 64)
 
     def test_failed_draft_remains_editable_at_the_same_logical_name(self):
         result, first, _ = self.exchange({"compilePassed": False, "exitCode": 1})

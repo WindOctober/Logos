@@ -475,6 +475,19 @@ pub(super) fn audit_proof_module_rocq_text(path: &str, text: &str) -> Vec<AuditF
 }
 
 fn audit_rocq_text_with_mode(path: &str, text: &str, mode: CandidateKind) -> Vec<AuditFinding> {
+    audit_candidate_text(path, text, mode, true)
+}
+
+pub(super) fn audit_probe_text(path: &str, text: &str, mode: CandidateKind) -> Vec<AuditFinding> {
+    audit_candidate_text(path, text, mode, false)
+}
+
+fn audit_candidate_text(
+    path: &str,
+    text: &str,
+    mode: CandidateKind,
+    require_qed: bool,
+) -> Vec<AuditFinding> {
     const ALWAYS_BANNED_TOKENS: &[&str] = &[
         "Axiom",
         "Axioms",
@@ -546,15 +559,16 @@ fn audit_rocq_text_with_mode(path: &str, text: &str, mode: CandidateKind) -> Vec
             });
         }
     }
-    let has_opaque_qed = if matches!(mode, CandidateKind::Module | CandidateKind::Scratch) {
-        let uncommented = strip_rocq_comments(text);
-        rocq_sentences(&uncommented)
-            .into_iter()
-            .any(|sentence| rocq_identifier_tokens(sentence).as_slice() == ["Qed"])
-    } else {
-        true
-    };
-    if !has_opaque_qed {
+    let has_opaque_qed =
+        if require_qed && matches!(mode, CandidateKind::Module | CandidateKind::Scratch) {
+            let uncommented = strip_rocq_comments(text);
+            rocq_sentences(&uncommented)
+                .into_iter()
+                .any(|sentence| rocq_identifier_tokens(sentence).as_slice() == ["Qed"])
+        } else {
+            true
+        };
+    if require_qed && !has_opaque_qed {
         findings.push(AuditFinding {
             path: path.to_owned(),
             line: 1,

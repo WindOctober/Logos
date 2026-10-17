@@ -387,6 +387,7 @@ fn real_incremental_sandbox_diagnostics() {
             seconds,
             session.map(|session| (session, source)),
             None,
+            super::checker::DiagnosticOperation::Check,
         );
         (invocation, output.expect("launch real checker"))
     };
@@ -712,9 +713,106 @@ fn real_incremental_sandbox_diagnostics() {
         }),
     );
     assert_eq!(response["compilePassed"], true, "{response}");
+    let probe = |mode: &str, path: &str, source: &str, stop: usize, timeout: u64| {
+        let file = stage.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, source).unwrap();
+        send_diagnostic_broker_request(
+            broker.socket_path(),
+            &stage,
+            serde_json::json!({
+                "schemaVersion": 2, "nonce": broker.nonce(), "mode": mode,
+                "candidatePath": path, "purpose": "semantic-equivalence",
+                "candidateSha256": sha256_hex(source.as_bytes()), "requestedTimeoutSeconds": timeout,
+                "probe": {"stopAfter": stop},
+            }),
+        )
+    };
+    // The checkpoint dedup guard does not prevent examining its earlier goals.
+    let response = probe("problem", "Problem.v", &assembled, 4, 30);
+    assert_eq!(response["probe"]["passed"], true, "{response}");
+    assert_eq!(response["compilePassed"], false);
+    assert!(
+        response["stdout"].as_str().unwrap().contains("goal"),
+        "{response}"
+    );
+    let probe_source = "Lemma local_fact : True. Proof. exact I. Qed.\nDefinition unfinished := {";
+    let path = "ProofModules/LocalProbe.v";
+    // The suffix cannot be framed, but is never parsed/audited/executed here.
+    // Probe a solved proof as well, then rewind to the open proof state.
+    for stop in [2, 3, 4, 2] {
+        let response = probe("module", path, probe_source, stop, 30);
+        assert_eq!(response["probe"]["passed"], true, "{response}");
+        assert_eq!(response["compilePassed"], false);
+        assert_eq!(response["compileCheckpointAdvanced"], false);
+        assert!(
+            response["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("compiler_required=false")
+        );
+        assert!(!workspace.join(path).exists());
+        assert!(!cache.join("ProofModules/LocalProbe.vo").exists());
+    }
+    let response = probe(
+        "module",
+        path,
+        "Lemma local_fact : True. Proof. exact 0.",
+        3,
+        30,
+    );
+    assert_eq!(response["probe"]["passed"], false, "{response}");
+    assert_eq!(response["exitCode"], 1);
+    let response = probe(
+        "scratch",
+        "scratch/local.v",
+        "Lemma local : True. Proof.",
+        2,
+        30,
+    );
+    assert_eq!(response["probe"]["passed"], true, "{response}");
+    assert!(!workspace.join("scratch/local.v").exists());
+    let response = probe(
+        "scratch",
+        "scratch/local.v",
+        "Lemma local : True. Proof. repeat (pose proof I).",
+        3,
+        1,
+    );
+    assert_eq!(response["timedOut"], true, "{response}");
+    assert_eq!(response["probe"]["passed"], false);
+    // Invalid prefix framing and disallowed commands must not fall back to coqc.
+    let response = probe("module", path, probe_source, 5, 30);
+    assert!(response["sequence"].is_null(), "{response}");
+    let response = probe("module", path, "Axiom bad : True.", 1, 30);
+    assert!(response["sequence"].is_null(), "{response}");
+    assert!(response["error"].as_str().unwrap().contains("audit"));
+    // Full checks still execute the suffix; probe success cannot certify it.
+    for (source, passes) in [
+        (probe_source, false),
+        ("Lemma local_fact : True. Proof. exact I. Qed.", true),
+    ] {
+        std::fs::write(stage.join(path), source).unwrap();
+        let response = send_diagnostic_broker_request(
+            broker.socket_path(),
+            &stage,
+            serde_json::json!({
+                "schemaVersion": 2, "nonce": broker.nonce(), "mode": "module",
+                "candidatePath": path, "purpose": "semantic-equivalence",
+                "candidateSha256": sha256_hex(source.as_bytes()), "requestedTimeoutSeconds": 30,
+            }),
+        );
+        assert_eq!(response["compilePassed"], passes, "{response}");
+        assert_eq!(workspace.join(path).exists(), passes);
+    }
     let outcome = broker.finish().unwrap();
-    assert_eq!(outcome.invocations.len(), 8);
+    assert_eq!(outcome.invocations.len(), 18);
     assert!(outcome.latest_checkpoint.is_some());
+    assert_eq!(outcome.latest_checkpoint.as_ref().unwrap().sequence, 8);
+    for invocation in &outcome.invocations[8..16] {
+        assert!(invocation.probe.is_some());
+        assert_eq!(invocation.compile_passed, Some(false));
+    }
     let shared = artifacts.join("proof-stage/proof-agent/diagnostic-inputs/0001");
     for sequence in 1..=8 {
         let checked = artifacts.join(format!(
@@ -2959,6 +3057,7 @@ fn initial_problem_checkpoints_are_versioned_and_create_once() {
     let first_problem = b"Definition generation_one : True := I.\n";
     std::fs::write(&problem_path, first_problem).expect("write first Problem.v");
     let invocation = DiagnosticCheckerInvocation {
+        probe: None,
         sequence: Some(0),
         mode: Some("problem".to_owned()),
         candidate_sha256: Some(sha256_hex(first_problem)),
@@ -5478,10 +5577,9 @@ fn proof_agent_diagnostic_wrapper_requires_strict_v2_mode_path_and_purpose() {
             "diagnostic wrapper is missing {required:?}"
         );
     }
-    assert!(
-        FORMAL_SQL_ROCQ_CHECK_REQUEST_SCRIPT
-            .contains("result.get(\"compilePassed\") is True or result.get(key) is not None")
-    );
+    assert!(FORMAL_SQL_ROCQ_CHECK_REQUEST_SCRIPT.contains(
+        "result.get(\"compilePassed\") is True or probe_passed or result.get(key) is not None"
+    ));
     assert!(
         FORMAL_SQL_ROCQ_CHECK_REQUEST_SCRIPT
             .contains("f\"{mode} compile was incorrectly classified as a Problem.v checkpoint\"")

@@ -6,11 +6,50 @@ only an ordinary compiler rejection (exit code 1) enables incremental checking
 on subsequent revisions. Environment failures and timeouts do not warm a session.
 First-try successes therefore do not pay for a second check.
 
+Explicit prefix probes can start a session even without a prior compiler rejection.
+
 The session retains the successfully executed sentence prefix. A changed suffix
 uses `BackTo` to restore the exact common-prefix state, then runs only the new
-sentences. Failures include current goals when available. An apparent REPL success
-**always** goes through ordinary compilation before it can publish a `.vo` or
+sentences. Failures include current goals when available. Full checks with an apparent REPL success
+go through ordinary compilation before they can publish a `.vo` or
 advance a checkpoint. Final independent kernel checking is unchanged.
+
+Rewinding across a proof-closing command rebuilds the REPL and replays the
+requested prefix: Rocq may acknowledge `BackTo` with an old prompt without
+reopening a proof after `Qed.`. Rewinds within an open proof retain prefix reuse.
+
+## Explicit prefix probes versus full checks
+
+The same `run-rocq-check.sh` interface accepts `--operation check` (default) or
+`--operation probe --stop-after N`, for each of problem/module/scratch modes.
+`N` counts complete sentences from the start, including imports, declarations,
+`Proof.`, tactics, `Qed.`, standalone bullets and focus braces; it is not a line
+number. For example, `Lemma p : True. Proof. exact I. Qed.` at N=2 returns the
+open goal, at N=3 stops before Qed, and at N=4 still does not publish anything.
+
+A probe starts a REPL even when cold, reuses/rewinds its validated prefix, and
+returns `Show.` goals (including hypotheses) when a proof is open. Framing stops
+at the selected complete sentence, so an incomplete or unsupported suffix cannot
+block it. Only that prefix is source-audited; all token/import restrictions
+remain, but an open module/scratch proof need not already contain `Qed.`.
+Unsupported framing, protocol errors, or a missing environment produce a probe
+error, **never full-compiler fallback**. Timeouts discard the session as usual.
+
+Probe success grants no compile authority: no module source installation or
+publication, no successful-scratch retention, no checkpoint advancement, and no
+final certification. A later explicit full check audits and compiles the complete
+candidate, including the previously unselected suffix. Existing checks retain
+their original behavior; the agent chooses when it wants only local feedback.
+
+Wire schema v2 adds an optional `probe: {stopAfter: N}` to the existing request;
+absence means full check. The whole uploaded candidate remains digest-bound in
+the diagnostic snapshot. Accepted probe invocations/responses carry
+`probe: {stopAfter, prefixBytes, passed}` identifying the exact audited/executed
+prefix. `compilePassed`, `problemCompilePassed`, and `compileCheckpointAdvanced`
+are always false for probes, including exit code 0. Broker evidence validation
+reconstructs the prefix, and benchmark validation distinguishes advisory success
+from compile/publication success. Probe calls still count as diagnostic requests
+and share the round's time budget.
 
 The request/checkpoint boundary is implemented in
 [`proof_stage/diagnostics.rs`](../src/engine/proof_stage/diagnostics.rs), compiler
@@ -32,7 +71,8 @@ one broker/round, even if the same LLM session is resumed next round.
   reuse old state. At most one session is retained per broker.
 - Every request shares one deadline across REPL execution and any compiler fallback.
   Timeout destroys the session. Protocol errors, unsupported lexical framing and
-  response-size limits fall back to compilation, not a successful check.
+  response-size limits fall back to compilation for full checks; explicit probes
+  return an error without compiling the suffix.
 - The host tokenizer is deliberately conservative (for example, selector/term
   braces inside a sentence use the compiler). It is not a replacement Rocq parser.
 - Session process groups are terminated and reaped on drop. Parent-death signaling
@@ -42,7 +82,8 @@ one broker/round, even if the same LLM session is resumed next round.
   `Problem.v` compiled-object cache.
 
 The upload, source audit and evidence snapshot are still performed per request.
-The optimization targets repeated **failing** revisions; it does not eliminate
+Automatic REPL use targets repeated **failing** revisions; explicit probes also
+avoid full compilation for successful local experiments. Neither eliminates
 successful publication compilation or promise a whole-benchmark speedup.
 
 ## Shared diagnostic inputs

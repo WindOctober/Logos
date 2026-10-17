@@ -2,11 +2,13 @@
 
 use crate::artifacts::ArtifactWriter;
 use crate::engine::now_ms_since_epoch;
+use crate::engine::report::PrefixProbeOutcome;
 use crate::engine::report::{
     AcceptedDiagnosticSourceAudit, AgentAudit, DiagnosticArtifactBinding,
     DiagnosticCheckerInvocation, ProblemCompileCheckpointEvidence, RejectedDiagnosticSourceAudit,
 };
 use crate::engine::rocq_session::IncrementalDiagnostics;
+use crate::engine::rocq_session::prefix_through;
 use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -25,7 +27,10 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use super::audit::{audit_proof_module_rocq_text, audit_rocq_text, audit_scratch_rocq_text};
+use super::audit::{
+    audit_probe_text, audit_proof_module_rocq_text, audit_rocq_text, audit_scratch_rocq_text,
+};
+use super::checker::DiagnosticOperation;
 use super::checker::{
     DiagnosticEnvironment, is_trusted_rocq_environment_failure, run_host_diagnostic_rocq_check,
 };
@@ -80,6 +85,8 @@ impl DiagnosticPurpose {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CheckRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    probe: Option<PrefixProbeRequest>,
     pub(super) schema_version: u32,
     pub(super) nonce: String,
     pub(super) mode: CandidateKind,
@@ -90,9 +97,17 @@ struct CheckRequest {
     pub(super) requested_timeout_seconds: u64,
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PrefixProbeRequest {
+    stop_after: usize,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CheckResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    probe: Option<PrefixProbeOutcome>,
     schema_version: u32,
     sequence: Option<usize>,
     mode: Option<CandidateKind>,
@@ -753,6 +768,33 @@ fn validate_diagnostic_broker_outcome(
                 "accepted candidate digest disagrees at checker sequence {sequence}"
             )));
         }
+        if let Some(probe) = &invocation.probe {
+            let request_path = artifacts_root.join(format!(
+                "proof-stage/proof-agent/rounds/{round:02}/interactive-diagnostics/{sequence:02}/request.json"
+            ));
+            let request: CheckRequest = std::fs::read(&request_path)
+                .map_err(|error| diagnostic_evidence_error(error.to_string()))
+                .and_then(|bytes| {
+                    serde_json::from_slice(&bytes)
+                        .map_err(|error| diagnostic_evidence_error(error.to_string()))
+                })?;
+            let framed_bytes = std::str::from_utf8(&candidate)
+                .ok()
+                .and_then(|source| prefix_through(source, probe.stop_after))
+                .map(str::len);
+            if request.probe.as_ref().map(|p| p.stop_after) != Some(probe.stop_after)
+                || framed_bytes != Some(probe.prefix_bytes)
+                || invocation.compile_passed != Some(false)
+                || probe.passed
+                    != (invocation.exit_code == Some(0)
+                        && !invocation.timed_out
+                        && invocation.error.is_none())
+            {
+                return Err(diagnostic_evidence_error(
+                    "prefix probe scope/status drifted",
+                ));
+            }
+        }
         let expected_audit_path = format!(
             "proof-stage/proof-agent/rounds/{round:02}/interactive-diagnostics/{sequence:02}/audit.json"
         );
@@ -1123,6 +1165,7 @@ fn run_diagnostic_broker_request(
         deadline,
     } = *context;
     let rejected = |error: String| CheckResponse {
+        probe: None,
         schema_version: 2,
         sequence: None,
         mode: None,
@@ -1278,6 +1321,20 @@ fn run_diagnostic_broker_request(
             request.candidate_sha256
         ));
     }
+    // Frame before allocating a sequence/snapshot. Unsupported syntax in the
+    // selected prefix rejects this request; the suffix is deliberately unread.
+    let prefix_bytes = if let Some(probe) = &request.probe {
+        let source = match ReadOnlyMappedFile::open_utf8(pending_upload.path()) {
+            Ok(source) => source,
+            Err(error) => return rejected(error.to_string()),
+        };
+        match prefix_through(source.as_str(), probe.stop_after) {
+            Some(prefix) => Some(prefix.len()),
+            None => return rejected("probe stopAfter must select a positive number of complete, supported sentences; no compiler fallback was attempted".to_owned()),
+        }
+    } else {
+        None
+    };
     if let Some(error) = state
         .lock()
         .ok()
@@ -1323,7 +1380,8 @@ fn run_diagnostic_broker_request(
             Ok(locked) => locked,
             Err(_) => return rejected("diagnostic broker state was poisoned".to_owned()),
         };
-        if request.mode == CandidateKind::Problem
+        if request.probe.is_none()
+            && request.mode == CandidateKind::Problem
             && (locked.active_problem_compile_checkpoint_sha256.as_deref()
                 == Some(request.candidate_sha256.as_str())
                 || locked
@@ -1379,15 +1437,20 @@ fn run_diagnostic_broker_request(
         Ok(mapped) => mapped,
         Err(error) => return rejected(error.to_string()),
     };
-    let problem_text = mapped_problem.as_str();
+    let problem_text =
+        &mapped_problem.as_str()[..prefix_bytes.unwrap_or(mapped_problem.as_bytes().len())];
     let audit_started = Instant::now();
-    let audit_findings = match request.mode {
-        CandidateKind::Problem => audit_rocq_text(&diagnostic_problem_relative, problem_text),
-        CandidateKind::Module => {
-            audit_proof_module_rocq_text(&diagnostic_problem_relative, problem_text)
-        }
-        CandidateKind::Scratch => {
-            audit_scratch_rocq_text(&diagnostic_problem_relative, problem_text)
+    let audit_findings = if request.probe.is_some() {
+        audit_probe_text(&diagnostic_problem_relative, problem_text, request.mode)
+    } else {
+        match request.mode {
+            CandidateKind::Problem => audit_rocq_text(&diagnostic_problem_relative, problem_text),
+            CandidateKind::Module => {
+                audit_proof_module_rocq_text(&diagnostic_problem_relative, problem_text)
+            }
+            CandidateKind::Scratch => {
+                audit_scratch_rocq_text(&diagnostic_problem_relative, problem_text)
+            }
         }
     };
     let candidate_audit = AgentAudit {
@@ -1474,6 +1537,7 @@ fn run_diagnostic_broker_request(
         locked.rejected_source_audits.push(rejected_source_audit);
         drop(locked);
         return CheckResponse {
+            probe: None,
             schema_version: 2,
             sequence: None,
             mode: Some(request.mode),
@@ -1525,20 +1589,21 @@ fn run_diagnostic_broker_request(
     // closes the cache/source publication gap without making it reusable: the
     // current cache still lacks this logical name until the checker succeeds.
     let mut module_was_checked_before = false;
-    let mut pending_module_publication = if request.mode == CandidateKind::Module {
-        module_was_checked_before = checked_module_source.is_some();
-        match ModulePublication::prepare(
-            proof_workdir,
-            &candidate_path,
-            mapped_problem.as_bytes(),
-            module_was_checked_before,
-        ) {
-            Ok(publication) => Some(publication),
-            Err(error) => return rejected(error.to_string()),
-        }
-    } else {
-        None
-    };
+    let mut pending_module_publication =
+        if request.probe.is_none() && request.mode == CandidateKind::Module {
+            module_was_checked_before = checked_module_source.is_some();
+            match ModulePublication::prepare(
+                proof_workdir,
+                &candidate_path,
+                mapped_problem.as_bytes(),
+                module_was_checked_before,
+            ) {
+                Ok(publication) => Some(publication),
+                Err(error) => return rejected(error.to_string()),
+            }
+        } else {
+            None
+        };
 
     let mut incremental = state
         .lock()
@@ -1553,8 +1618,13 @@ fn run_diagnostic_broker_request(
         &request.candidate_path,
         request.requested_timeout_seconds,
         effective_timeout_seconds,
-        Some((&mut incremental, mapped_problem.as_str())),
+        Some((&mut incremental, problem_text)),
         Some(environment),
+        if request.probe.is_some() {
+            DiagnosticOperation::Probe
+        } else {
+            DiagnosticOperation::Check
+        },
     );
     if let Ok(mut locked) = state.lock() {
         locked.incremental_diagnostics = incremental;
@@ -1563,10 +1633,18 @@ fn run_diagnostic_broker_request(
         .as_ref()
         .map(|output| (output.stdout.as_slice(), output.stderr.as_slice()))
         .unwrap_or((&[][..], &[][..]));
-    let mut compile_passed = output
-        .as_ref()
-        .is_some_and(|output| output.status.success());
-    if request.mode == CandidateKind::Module {
+    invocation.probe = request.probe.as_ref().map(|probe| PrefixProbeOutcome {
+        stop_after: probe.stop_after,
+        prefix_bytes: prefix_bytes.expect("probe prefix was framed before snapshotting"),
+        passed: invocation.exit_code == Some(0)
+            && !invocation.timed_out
+            && invocation.error.is_none(),
+    });
+    let mut compile_passed = request.probe.is_none()
+        && output
+            .as_ref()
+            .is_some_and(|output| output.status.success());
+    if request.probe.is_none() && request.mode == CandidateKind::Module {
         let publication = pending_module_publication
             .take()
             .expect("module diagnostics prepare one source publication");
@@ -1704,7 +1782,7 @@ fn run_diagnostic_broker_request(
     let stdout = String::from_utf8_lossy(stdout_bytes).into_owned();
     let stderr = String::from_utf8_lossy(stderr_bytes).into_owned();
     let feedback = format!(
-        "interactive {} compile #{sequence} for {} ({actual_sha256}, purpose {}): exit {:?}, timed out {}, elapsed {} ms, checkpoint advanced {}\n{}",
+        "interactive {} diagnostic #{sequence} for {} ({actual_sha256}, purpose {}): exit {:?}, timed out {}, elapsed {} ms, checkpoint advanced {}\n{}",
         request.mode.as_str(),
         request.candidate_path,
         request.purpose.as_str(),
@@ -1735,6 +1813,7 @@ fn run_diagnostic_broker_request(
     }
 
     CheckResponse {
+        probe: invocation.probe,
         schema_version: 2,
         sequence: Some(sequence),
         mode: Some(request.mode),

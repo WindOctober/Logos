@@ -5037,6 +5037,30 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 requested_timeout_seconds=30,
                 description="fixture request",
             )
+            request = {
+                "schemaVersion": 2, "nonce": "b" * 64, "mode": mode,
+                "candidatePath": path, "purpose": purpose,
+                "candidateSha256": digest, "candidateBytes": 123,
+                "requestedTimeoutSeconds": 30, "probe": {"stopAfter": 2},
+            }
+            validate_request(request, mode=mode, candidate_path=path, purpose=purpose,
+                             candidate_sha256=digest, candidate_bytes=123,
+                             requested_timeout_seconds=30, description="probe")
+            invocation = {
+                "probe": {"stopAfter": 2, "prefixBytes": 42, "passed": True},
+                "exitCode": 0, "timedOut": False,
+                "compilePassed": False, "problemCompilePassed": False,
+                "compileCheckpointAdvanced": False,
+            }
+            runner["validate_prefix_probe"](invocation, request, 123)
+            for field in ("compilePassed", "problemCompilePassed", "compileCheckpointAdvanced"):
+                with self.subTest(field=field), self.assertRaises(runner_error):
+                    runner["validate_prefix_probe"]({**invocation, field: True}, request, 123)
+            for invalid in (None, {}, {"stopAfter": 0}, {"stopAfter": True}, {"stopAfter": 1, "extra": 2}):
+                with self.subTest(invalid=invalid), self.assertRaises(runner_error):
+                    validate_request({**request, "probe": invalid}, mode=mode, candidate_path=path,
+                                     purpose=purpose, candidate_sha256=digest, candidate_bytes=123,
+                                     requested_timeout_seconds=30, description="probe")
         with self.assertRaisesRegex(runner_error, "normalized scratch"):
             validate_identity(
                 "scratch", "scratch/../escape.v", "semantic-equivalence", digest, "fixture"
@@ -5907,6 +5931,12 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                         "exitCode": 0,
                         "timedOut": False,
                     }
+                    if "modulediagnosticprobe" in log_dir.name:
+                        request["probe"] = {"stopAfter": 1}
+                        invocation["probe"] = {
+                            "stopAfter": 1, "prefixBytes": len(module_source), "passed": True,
+                        }
+                        invocation["compilePassed"] = False
                     if (
                         "elapsedwarning" in log_dir.name
                         and "finalelapsedwarning" not in log_dir.name
@@ -7989,6 +8019,21 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                     self.assertEqual(invocation["exitCode"], 143)
                 elif result["caseId"].endswith("modulediagnosticlate2"):
                     self.assertEqual(invocation["exitCode"], 2)
+
+    def test_prefix_probe_diagnostic_never_inherits_later_module_publication(self) -> None:
+        name = "modulediagnosticprobe"
+        self.make_case("cohort", name, "bench-a", name, f"bench-a__{name}")
+        run_dir = self.root / "prefix-probe-diagnostic"
+        completed = self.invoke(*self.common_args(run_dir))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads((run_dir / "runner-summary.json").read_text())["results"][0]
+        self.assertEqual(result["status"], "completed", result)
+        self.assertNotIn("reportCoherenceError", result)
+        report = json.loads((run_dir / "cases" / result["caseId"] / "report.json").read_text())
+        invocation = report["proof"]["proofAgentRounds"][0]["diagnosticCheckerInvocations"][0]
+        self.assertTrue(invocation["probe"]["passed"])
+        self.assertFalse(invocation["compilePassed"])
+        self.assertFalse(invocation["compileCheckpointAdvanced"])
 
     def test_context_goal_manifest_lowering_and_ancestor_drift_fail_closed(
         self,

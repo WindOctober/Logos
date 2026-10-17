@@ -435,7 +435,33 @@ bash run-rocq-check.sh \
   --timeout-seconds 180
 ```
 
-Only a passing problem-mode check of the exact `Problem.v` advances the restart
+For an unfinished proof or a single tactic experiment, explicitly choose a
+prefix-only probe instead of a full check:
+
+```bash
+bash run-rocq-check.sh \
+  --mode module --candidate scratch/ProofModules/CoreFacts.v \
+  --purpose semantic-equivalence \
+  --operation probe --stop-after 4 --timeout-seconds 30
+```
+
+`--stop-after N` is a **1-based count of complete Rocq sentences**, not lines or
+bytes. Imports, declarations, `Proof.`, tactics and `Qed.` each count; standalone
+bullets and focus braces also count. For `Lemma p : True. Proof. exact I. Qed.`,
+N=2 returns the open goal and N=3 returns the solved proof state without running
+`Qed.`. The host executes only that prefix and returns goals/hypotheses when a
+proof is open. The unselected suffix may be unfinished or unsupported. Unsupported
+syntax **inside** the selected prefix rejects the probe; it never silently runs
+the full compiler. Keep the usual source/import restrictions in the prefix.
+
+A successful probe is **not** a successful compilation, even if its prefix ends
+in `Qed.`. It does not publish a module, retain a successful scratch artifact, or
+advance a checkpoint. When ready, explicitly call `--operation check` (the
+backward-compatible default) to compile the entire candidate and publish/checkpoint
+it. Both operations use the same interface and managed REPL prefix state; you do
+not send interactive control commands yourself.
+
+Only a passing problem-mode **full check** of the exact `Problem.v` advances the restart
 checkpoint. A module pass publishes a dependency but does not advance the
 `Problem.v` checkpoint; a scratch pass does neither. There is no framework
 quota on local diagnostics. Diagnostics share the invocation's overall
@@ -443,13 +469,13 @@ wall-clock deadline. Use that time for iterative feedback, route revision, and
 proof search rather than treating it as the expected duration of one Rocq
 compile.
 
-After a failed compilation, the host may retain an isolated Rocq session between
+For full checks, after a failed compilation, the host may retain an isolated Rocq session between
 revisions and reuse the unchanged sentence prefix. First-try successes use the
 ordinary compiler directly. On failure incremental feedback includes the failing command
 and, when available, current goals. Keep unchanged prefixes stable when repairing
 a local tactic. A changed dependency generation starts a fresh session; timeout
 or protocol failure discards the old session. This is an acceleration of negative
-diagnostics only: a reported pass still requires ordinary file compilation and
+diagnostics only: a reported full-check pass still requires ordinary file compilation and
 the usual exact-source publication. You do not manage the session or submit
 interactive control commands yourself.
 

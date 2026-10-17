@@ -5,7 +5,7 @@ set -euo pipefail
 # agent. It is a client for a narrow host Unix-socket broker: the host snapshots
 # the selected Problem.v, ProofModules/<Name>.v, or scratch/*.v candidate,
 # verifies its digest, runs the corresponding diagnostic in bubblewrap, records
-# authoritative telemetry, and returns compiler output. A passing module is
+# authoritative telemetry, and returns diagnostic output. A full-check passing module is
 # published only by the host into its immutable append-only module cache;
 # Ordinary scratch checks never enter the final dependency graph. Module-mode
 # drafts may live at scratch/ProofModules/<Name>.v for WIP persistence, but are
@@ -21,8 +21,9 @@ unset LOGOS_TRUSTED_ROCQ_CHECK_MODE
 unset LOGOS_HOST_DIAGNOSTIC_CHECK
 
 usage() {
+  echo "operation: [--operation check] for full compilation/publication; --operation probe --stop-after N for prefix-only goals (sentences include bullets/braces)" >&2
   echo "usage: bash run-rocq-check.sh --mode <problem|module|scratch> --candidate <Problem.v|ProofModules/Name.v|scratch/*.v> --purpose <static-obligation|semantic-equivalence|assembly> [--timeout-seconds <positive>]" >&2
-  echo "module mode also accepts scratch/ProofModules/Name.v; a successful check publishes ProofModules/Name.v immediately" >&2
+  echo "module mode also accepts scratch/ProofModules/Name.v; a successful full check publishes ProofModules/Name.v immediately; probe never publishes" >&2
 }
 
 requested_timeout="${LOGOS_PROOF_AGENT_TIMEOUT:-}"
@@ -30,12 +31,22 @@ timeout_seen=false
 mode=''
 candidate=''
 purpose=''
+operation=''
+stop_after=''
 while (($#)); do
   [[ "$#" -ge 2 ]] || {
     usage
     exit 64
   }
   case "$1" in
+    --operation)
+      [[ -z "$operation" ]] || { echo "duplicate --operation" >&2; exit 64; }
+      operation="$2"
+      ;;
+    --stop-after)
+      [[ -z "$stop_after" ]] || { echo "duplicate --stop-after" >&2; exit 64; }
+      stop_after="$2"
+      ;;
     --mode)
       [[ -z "$mode" ]] || { echo "--mode may be supplied only once" >&2; exit 64; }
       mode="$2"
@@ -63,6 +74,14 @@ while (($#)); do
   esac
   shift 2
 done
+
+operation="${operation:-check}"
+if [[ "$operation" == probe ]]; then
+  [[ "$stop_after" =~ ^[1-9][0-9]*$ ]] || { echo "probe requires positive --stop-after N" >&2; exit 64; }
+elif [[ "$operation" != check || -n "$stop_after" ]]; then
+  echo "--operation must be check or probe; --stop-after is only valid for probe" >&2
+  exit 64
+fi
 
 case "$mode" in
   problem)
@@ -124,7 +143,7 @@ python3 - \
   "$candidate" \
   "$purpose" \
   "$requested_timeout" \
-  "$workdir" <<'PY'
+  "$workdir" "$operation" "$stop_after" <<'PY'
 import hashlib
 import json
 import os
@@ -132,7 +151,7 @@ import socket
 import stat
 import sys
 
-socket_path, nonce, mode, candidate_path, purpose, raw_timeout, workdir = sys.argv[1:]
+socket_path, nonce, mode, candidate_path, purpose, raw_timeout, workdir, operation, stop_after = sys.argv[1:]
 if os.path.isabs(candidate_path) or os.path.normpath(candidate_path) != candidate_path:
     raise SystemExit("candidate path must be normalized and relative")
 parts = candidate_path.split("/")
@@ -178,7 +197,7 @@ candidate_bytes = candidate_stat.st_size
 # Keep candidate_file pointing at the exact WIP bytes. Only the wire identity
 # changes: the existing host module pipeline owns the snapshot, strict module
 # audit, final logical name, immutable cache and publication transaction. A
-# successful draft check IS publication, never a preliminary scratch check.
+# successful full draft check IS publication; a prefix probe never publishes.
 if mode == "module" and parts[0] == "scratch":
     candidate_path = "/".join(module_parts)
 request = {
@@ -191,6 +210,8 @@ request = {
     "candidateBytes": candidate_bytes,
     "requestedTimeoutSeconds": int(raw_timeout),
 }
+if operation == "probe":
+    request["probe"] = {"stopAfter": int(stop_after)}
 payload = (json.dumps(request, separators=(",", ":")) + "\n").encode("utf-8")
 client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 client.connect(socket_path)
@@ -207,13 +228,15 @@ while not response.endswith(b"\n"):
 result = json.loads(response)
 if result.get("schemaVersion") != 2:
     raise RuntimeError("host diagnostic broker response schema mismatch")
+probe_result = result.get("probe")
+probe_passed = isinstance(probe_result, dict) and probe_result.get("passed") is True
 for key, expected in (
     ("mode", mode),
     ("candidatePath", candidate_path),
     ("purpose", purpose),
     ("candidateSha256", candidate_sha256),
 ):
-    if (result.get("compilePassed") is True or result.get(key) is not None) and result.get(key) != expected:
+    if (result.get("compilePassed") is True or probe_passed or result.get(key) is not None) and result.get(key) != expected:
         raise RuntimeError(f"host diagnostic broker response identity mismatch for {key}")
 if result.get("stdout"):
     sys.stdout.write(result["stdout"])
@@ -221,6 +244,28 @@ if result.get("stderr"):
     sys.stderr.write(result["stderr"])
 if result.get("error"):
     sys.stderr.write("host diagnostic broker: " + result["error"] + "\n")
+if operation == "probe":
+    if any(result.get(key) is not False for key in ("compilePassed", "problemCompilePassed", "compileCheckpointAdvanced")):
+        raise RuntimeError("prefix probe incorrectly granted compilation authority")
+    probe = result.get("probe")
+    if probe is not None:
+        if (
+            not isinstance(probe, dict)
+            or set(probe) != {"stopAfter", "prefixBytes", "passed"}
+            or type(probe["stopAfter"]) is not int
+            or probe["stopAfter"] != int(stop_after)
+            or type(probe["prefixBytes"]) is not int
+            or not 0 < probe["prefixBytes"] <= candidate_bytes
+            or not isinstance(probe["passed"], bool)
+        ):
+            raise RuntimeError("prefix probe response scope mismatch")
+        if probe["passed"]:
+            if result.get("exitCode") != 0 or result.get("timedOut") or result.get("error"):
+                raise RuntimeError("inconsistent prefix probe success")
+            sys.stdout.write("Prefix probe passed only through the selected sentence. Suffix not executed; no compilation, publication, or checkpoint.\n")
+            raise SystemExit(0)
+elif result.get("probe") is not None:
+    raise RuntimeError("full check returned a prefix probe result")
 if result.get("compilePassed") is True:
     checkpoint_advanced = result.get("compileCheckpointAdvanced") is True
     problem_passed = result.get("problemCompilePassed") is True

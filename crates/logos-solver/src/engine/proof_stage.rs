@@ -2796,6 +2796,7 @@ fn establish_initial_problem_compile_checkpoint(
         options.proof_check_timeout_seconds,
         None,
         None,
+        checker::DiagnosticOperation::Check,
     );
     let (stdout, stderr) = output
         .as_ref()

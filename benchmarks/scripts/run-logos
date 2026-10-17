@@ -9636,8 +9636,19 @@ def validate_diagnostic_request_v2(
         "candidateBytes",
         "requestedTimeoutSeconds",
     }
-    if not isinstance(value, dict) or set(value) != expected_keys:
+    if not isinstance(value, dict) or set(value) not in (
+        expected_keys, expected_keys | {"probe"}
+    ):
         raise RunnerError(f"{description} is not strict schemaVersion 2")
+    if "probe" in value:
+        probe = value["probe"]
+        if (
+            not isinstance(probe, dict)
+            or set(probe) != {"stopAfter"}
+            or type(probe["stopAfter"]) is not int
+            or probe["stopAfter"] <= 0
+        ):
+            raise RunnerError(f"{description} has invalid prefix probe scope")
     if value.get("schemaVersion") != 2:
         raise RunnerError(f"{description} is not strict schemaVersion 2")
     nonce = value.get("nonce")
@@ -9655,6 +9666,36 @@ def validate_diagnostic_request_v2(
     validate_diagnostic_identity(
         mode, candidate_path, purpose, candidate_sha256, description
     )
+
+
+def validate_prefix_probe(
+    invocation: dict[str, Any], request: dict[str, Any], candidate_bytes: int
+) -> None:
+    """Prefix success is advisory, even if that module was published later."""
+    if "probe" not in request:
+        if "probe" in invocation:
+            raise RunnerError("unexpected prefix probe outcome")
+        return
+    probe = invocation.get("probe")
+    if (
+        not isinstance(probe, dict)
+        or set(probe) != {"stopAfter", "prefixBytes", "passed"}
+        or type(probe["stopAfter"]) is not int
+        or probe["stopAfter"] != request["probe"]["stopAfter"]
+        or type(probe["prefixBytes"]) is not int
+        or not 0 < probe["prefixBytes"] <= candidate_bytes
+        or type(probe["passed"]) is not bool
+        or probe["passed"] != (
+            invocation.get("exitCode") == 0
+            and invocation.get("timedOut") is False
+            and invocation.get("error") is None
+        )
+        or any(
+            invocation.get(key) is not False
+            for key in ("compilePassed", "problemCompilePassed", "compileCheckpointAdvanced")
+        )
+    ):
+        raise RunnerError("prefix probe scope/status is incoherent or grants compile authority")
 
 
 def validate_round_diagnostic_broker_evidence(
@@ -9776,8 +9817,9 @@ def validate_round_diagnostic_broker_evidence(
         request_path = case_dir / f"{root}/request.json"
         if request_path.is_symlink() or not request_path.is_file():
             raise RunnerError("accepted diagnostic request artifact is missing")
+        request = read_json_object(request_path, "accepted diagnostic request")
         validate_diagnostic_request_v2(
-            read_json_object(request_path, "accepted diagnostic request"),
+            request,
             mode=mode,
             candidate_path=candidate_path,
             purpose=purpose,
@@ -9786,6 +9828,7 @@ def validate_round_diagnostic_broker_evidence(
             requested_timeout_seconds=requested,
             description="accepted diagnostic request",
         )
+        validate_prefix_probe(invocation, request, candidate_file.stat().st_size)
         validate_diagnostic_agent_audit(
             read_json_object(audit_path, "accepted diagnostic audit"),
             expected_passed=True,
@@ -10424,6 +10467,8 @@ def validate_deterministic_tail_recovery(
     ):
         raise RunnerError("deterministic-tail checkpoint was not the retained passing checkpoint")
     request = read_json_object(checkpoint_request, "deterministic-tail checkpoint request")
+    if "probe" in request or "probe" in invocation:
+        raise RunnerError("a prefix probe cannot be a deterministic-tail checkpoint")
     validate_diagnostic_request_v2(
         request,
         mode="problem",
@@ -13453,9 +13498,9 @@ def proof_metrics_from_report(
                 "exitCode",
                 "timedOut",
             }
-            if set(invocation) not in (
-                required_invocation_keys,
-                required_invocation_keys | {"error"},
+            if not (
+                required_invocation_keys <= set(invocation)
+                <= required_invocation_keys | {"error", "probe"}
             ):
                 raise RunnerError("diagnostic invocation schema is not strict")
             candidate_sha256 = invocation.get("candidateSha256")
@@ -13472,9 +13517,10 @@ def proof_metrics_from_report(
             current_checkpoint_sha256 = (
                 latest_passed_checkpoint_sha256 or active_checkpoint_sha256
             )
-            validate_diagnostic_checkpoint_dedup(
-                mode, candidate_sha256, current_checkpoint_sha256
-            )
+            if "probe" not in invocation:
+                validate_diagnostic_checkpoint_dedup(
+                    mode, candidate_sha256, current_checkpoint_sha256
+                )
             if invocation.get("sequence") != sequence:
                 raise RunnerError(
                     "diagnostic invocation sequence is invalid"
@@ -13516,8 +13562,9 @@ def proof_metrics_from_report(
                     raise RunnerError(
                         f"interactive diagnostic evidence is missing: {path}"
                     )
+            request = read_json_object(request_path, "diagnostic broker request")
             validate_diagnostic_request_v2(
-                read_json_object(request_path, "diagnostic broker request"),
+                request,
                 mode=mode,
                 candidate_path=candidate_path,
                 purpose=purpose,
@@ -13526,6 +13573,7 @@ def proof_metrics_from_report(
                 requested_timeout_seconds=requested,
                 description="diagnostic broker request",
             )
+            validate_prefix_probe(invocation, request, diagnostic_candidate_path.stat().st_size)
             if (
                 read_json_object(invocation_path, "diagnostic broker invocation")
                 != invocation
@@ -13590,7 +13638,9 @@ def proof_metrics_from_report(
             ordinary_compile_passed = (
                 exit_code == 0 and timed_out is False and error is None
             )
-            if mode == "module":
+            if "probe" in invocation:
+                expected_compile_passed = False
+            elif mode == "module":
                 exact_durable_publication = (
                     workspace_state["moduleSourcesByGeneration"]
                     .get(workspace_generation, {})

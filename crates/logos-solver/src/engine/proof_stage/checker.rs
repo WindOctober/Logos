@@ -13,6 +13,12 @@ use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
 use super::diagnostics::CandidateKind;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum DiagnosticOperation {
+    Check,
+    Probe,
+}
 use super::workspace::trusted_diagnostic_cache_directory;
 use super::{
     FIXED_HOST_LOCALE, TRUSTED_CHECKER_HOME, TRUSTED_CHECKER_PATH, TRUSTED_HOST_BASH,
@@ -99,7 +105,9 @@ pub(super) fn run_host_diagnostic_rocq_check(
     effective_timeout_seconds: u64,
     incremental: Option<(&mut IncrementalDiagnostics, &str)>,
     environment: Option<&DiagnosticEnvironment>,
+    operation: DiagnosticOperation,
 ) -> (DiagnosticCheckerInvocation, Option<Output>) {
+    let probe = operation == DiagnosticOperation::Probe;
     let started_at_unix_ms = now_ms_since_epoch();
     let started = Instant::now();
     let trusted_mode = match candidate_mode {
@@ -147,16 +155,21 @@ pub(super) fn run_host_diagnostic_rocq_check(
                 if let Some(environment) = environment {
                     environment.configure(&mut command);
                 }
-                if !session.prepare(&key) {
+                if !probe && !session.prepare(&key) {
                     note = "LOGOS_ROCQ_INCREMENTAL cold=true compiler_required=true\n".to_owned();
                 } else {
-                    match session.check(&key, source, &mut command, deadline) {
+                    let result = if probe {
+                        session.probe(&key, source, &mut command, deadline)
+                    } else {
+                        session.check(&key, source, &mut command, deadline)
+                    };
+                    match result {
                         Ok(diagnostic) => {
                             note = format!(
                                 "LOGOS_ROCQ_INCREMENTAL reused_sentences={} executed_sentences={} compiler_required={}\n",
                                 diagnostic.reused,
                                 diagnostic.executed,
-                                diagnostic.rejection.is_none()
+                                !probe && diagnostic.rejection.is_none()
                             );
                             if let Some(rejection) = diagnostic.rejection {
                                 return Ok(Output {
@@ -166,6 +179,18 @@ pub(super) fn run_host_diagnostic_rocq_check(
                                         "{note}Candidate: {candidate_path}\n{rejection}"
                                     )
                                     .into_bytes(),
+                                });
+                            }
+                            if probe {
+                                return Ok(Output {
+                                    status: std::process::ExitStatus::from_raw(0),
+                                    stdout: diagnostic
+                                        .goals
+                                        .unwrap_or_else(|| {
+                                            "No open proof at the selected boundary.\n".to_owned()
+                                        })
+                                        .into_bytes(),
+                                    stderr: note.into_bytes(),
                                 });
                             }
                         }
@@ -180,6 +205,9 @@ pub(super) fn run_host_diagnostic_rocq_check(
                             });
                         }
                         Err(error) => {
+                            if probe {
+                                return Err(error);
+                            }
                             note = format!("LOGOS_ROCQ_INCREMENTAL fallback=true reason={error}\n");
                         }
                     }
@@ -188,6 +216,11 @@ pub(super) fn run_host_diagnostic_rocq_check(
                 // Let the existing checker classify absent/corrupt environments.
                 **session = IncrementalDiagnostics::default();
             }
+        }
+        if probe {
+            return Err(std::io::Error::other(
+                "prefix probe requires an initialized diagnostic environment; no compiler fallback was attempted",
+            ));
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
@@ -198,7 +231,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
                     .into_bytes(),
             });
         }
-        // Only this path can report success. It publishes exactly the same
+        // Only this path can report compilation success. It publishes the same
         // checked objects/checkpoints as before the incremental optimization.
         let mut command = trusted_rocq_check_command(
             trusted_checker_path,
@@ -225,6 +258,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
             let exit_code = output.status.code();
             (
                 DiagnosticCheckerInvocation {
+                    probe: None,
                     sequence: None,
                     mode: None,
                     candidate_sha256: None,
@@ -248,6 +282,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
         }
         Err(source) => (
             DiagnosticCheckerInvocation {
+                probe: None,
                 sequence: None,
                 mode: None,
                 candidate_sha256: None,
@@ -264,9 +299,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
                 elapsed_ms: started.elapsed().as_millis(),
                 exit_code: None,
                 timed_out: source.kind() == std::io::ErrorKind::TimedOut,
-                error: Some(format!(
-                    "failed to start host problem-only Rocq check: {source}"
-                )),
+                error: Some(format!("host Rocq diagnostic failed: {source}")),
             },
             None,
         ),

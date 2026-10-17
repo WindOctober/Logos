@@ -589,6 +589,8 @@ pub enum ProofCheckpointTransition {
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticCheckerInvocation {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub probe: Option<PrefixProbeOutcome>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sequence: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -616,6 +618,15 @@ pub struct DiagnosticCheckerInvocation {
     pub timed_out: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// Advisory prefix execution, never a compile or publication certificate.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrefixProbeOutcome {
+    pub stop_after: usize,
+    pub prefix_bytes: usize,
+    pub passed: bool,
 }
 
 /// Digest-bound host evidence for one file produced by the synchronous

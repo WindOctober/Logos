@@ -21,7 +21,12 @@ source/object pair in its ordered, manifest-bound cache on success. The client
 does not copy a source into the trusted workspace, manufacture objects, or
 publish a directory through the container handoff.
 
-After success, import immediately:
+This is a full check (`--operation check`, the default). For local feedback
+without publication, add `--operation probe --stop-after N`; it executes only
+the selected sentence prefix, permits an open proof, and never publishes even
+if it reaches `Qed.`. See [prefix probes](incremental-rocq.md#explicit-prefix-probes-versus-full-checks).
+
+After a successful full check, import immediately:
 
 ```coq
 From LogosGenerated.ProofModules Require Import CoreBridge.
@@ -44,7 +49,7 @@ object. Source/cache transactions live in
   through the ordinary untrusted scratch mechanism. They are not importable
   dependencies. The existing module-mode audit applies even though the file
   lives beneath `scratch/`; no source-audit rules are weakened.
-- The first successful module check immediately publishes and freezes the name.
+- The first successful full module check immediately publishes and freezes the name.
   Neither a modified draft nor a direct `ProofModules/Name.v` submission can
   replace it. Further work needs a new successor name. Identical resubmissions
   use the existing checked object without recompiling it.
