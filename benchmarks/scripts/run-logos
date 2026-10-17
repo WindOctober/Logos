@@ -9940,7 +9940,6 @@ def round_has_counterexample_handoff(record: dict[str, Any]) -> bool:
     handoff = record.get("counterexampleHandoff")
     return (
         record.get("success") is False
-        and record.get("candidateClaim") is None
         and record.get("proofCheckExitCode") != 0
         and isinstance(handoff, dict)
         and set(handoff) == {"decision", "reason", "guidance"}
@@ -9964,10 +9963,10 @@ def round_has_direct_manual_review_handoff(record: dict[str, Any]) -> bool:
     )
     return (
         record.get("success") is False
-        and record.get("candidateClaim") is None
         and record.get("candidateHasFinalTheorem") is False
         and record.get("proofCheckExitCode") != 0
         and record.get("proofCheckTimedOut") is False
+        and record.get("diagnosticCheckerTelemetryError") is None
         and isinstance(audit, dict)
         and audit.get("passed") is True
         and audit.get("findings") == []
@@ -10061,11 +10060,11 @@ def terminal_round_has_unavailable_counterexample_handoff(
 def report_has_strict_terminal_counterexample_handoff(
     report: dict[str, Any], record: dict[str, Any] | None
 ) -> bool:
-    """Recognize the only proof handoff that terminates the normal full flow.
+    """Recognize a terminal database-counterexample handoff, not manual review.
 
-    In normal verification mode, a manual-review counterexample assessment is
-    returned to the proof loop as navigation.  Only an independently validated
-    database counterexample returns a terminal report.  Keep this predicate
+    Manual review is an uncertified terminal disposition recognized separately
+    by report_has_direct_manual_review/report_has_counterexample_manual_review.
+    This predicate recognizes only a database counterexample. Keep it
     shared by backend-state reconstruction and the narrow session-continuity
     exception so the runner cannot silently give a nonterminal handoff terminal
     authority.

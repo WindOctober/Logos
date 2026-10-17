@@ -296,6 +296,14 @@ and the relevant trusted definitions. Missing lemmas, incomplete exploration,
 timeouts, compiler errors, or general uncertainty are not manual-review
 evidence.
 
+Both proof-agent and counterexample-assessment review requests use the same host
+terminal disposition; neither is an EQ/NEQ certificate. For a direct request,
+leave the exact `Problem.v` compile-clean and source-audit-clean, with no final
+certificate theorem. A claim selector may be absent or retained as metadata;
+it is not a proof and is not required for review. Do not invent a selector just
+to request review. Trusted-source integrity and forbidden-source checks still
+apply. If rejected, address the specific host finding before resubmitting.
+
 ## Proof contract
 
 Follow the verification mode in the invocation header and in

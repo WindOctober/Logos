@@ -22,8 +22,9 @@ Allowed decisions:
 - "counterexample_candidate": you found a candidate database. The host will
   materialize it, then the trusted Rocq selector must prove complete outcome
   separation before Logos can report NEQ.
-- "no_candidate": you did not find a counterexample candidate and the pair should proceed to
-  equivalence verification in the same proof session.
+- "no_candidate": you did not find a counterexample candidate. The host should
+  begin or continue proof search; an existing proof session may resume when this
+  request came from a proof-stage handoff. This decision is not EQ evidence.
 - "needs_review": you believe there is a counterexample, but it cannot be
   expressed as a compact executable PostgreSQL witness for the current
   framework. Unknown observation uniqueness alone is not a reason to discard a

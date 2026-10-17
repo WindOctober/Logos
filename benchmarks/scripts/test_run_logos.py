@@ -1203,6 +1203,12 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                 case_dir,
             )
 
+            for claim in (None, "equivalence", "formal_countermodel"):
+                retained_selector = json.loads(json.dumps(direct_review))
+                retained_selector["proofAgent"]["candidateClaim"] = claim
+                retained_selector["proofAgentRounds"] = [retained_selector["proofAgent"]]
+                validate(report_for(retained_selector, "needs_manual_review"), {}, case_dir)
+
             for label, mutate in (
                 (
                     "wrong decision",
@@ -1237,6 +1243,14 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                     lambda value: value["proofAgent"]["audit"].__setitem__(
                         "passed", False
                     ),
+                ),
+                (
+                    "final theorem present",
+                    lambda value: value["proofAgent"].__setitem__("candidateHasFinalTheorem", True),
+                ),
+                (
+                    "trusted diagnostic failure",
+                    lambda value: value["proofAgent"].__setitem__("diagnosticCheckerTelemetryError", "runtime failure"),
                 ),
             ):
                 with self.subTest(invalid_direct_review=label):
@@ -1309,6 +1323,11 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             stage_report_path.parent.mkdir(parents=True, exist_ok=True)
             stage_report_path.write_text(json.dumps(stage_report))
             validate(counterexample_review_report, {}, case_dir)
+
+            for claim in (None, "equivalence", "formal_countermodel"):
+                counterexample_handoff_round["candidateClaim"] = claim
+                validate(counterexample_review_report, {}, case_dir)
+            counterexample_handoff_round["candidateClaim"] = None
 
             forged_stage_report = dict(stage_report)
             forged_stage_report["rounds"] = []

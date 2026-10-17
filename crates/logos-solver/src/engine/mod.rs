@@ -359,7 +359,9 @@ fn proof_handoff_resolution(report: &SearchReport) -> Result<ProofHandoffResolut
             })
         }
         (SearchStatus::NeedsManualReview, None) => Ok(ProofHandoffResolution::NeedsManualReview(
-            report.reason.clone(),
+            proof_stage::ManualReviewRequest::CounterexampleAssessment {
+                reason: report.reason.clone(),
+            },
         )),
         (SearchStatus::MaybeEquivalent, None) => {
             Ok(ProofHandoffResolution::Continue(report.reason.clone()))
@@ -410,7 +412,9 @@ mod tests {
         report.reason =
             "the suspected counterexample requires an unavailable symbolic witness".to_owned();
         match proof_handoff_resolution(&report).expect("manual-review routing") {
-            ProofHandoffResolution::NeedsManualReview(reason) => assert_eq!(
+            ProofHandoffResolution::NeedsManualReview(
+                super::proof_stage::ManualReviewRequest::CounterexampleAssessment { reason },
+            ) => assert_eq!(
                 reason,
                 "the suspected counterexample requires an unavailable symbolic witness"
             ),

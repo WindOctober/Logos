@@ -3700,11 +3700,11 @@ fn proof_round_records_missing_session_but_resolves_handoff_before_fatal_break()
         .find("if let Some(handoff) = handoff {")
         .expect("host handoff resolution");
     let direct_manual_review_terminal = source[handoff_resolution..]
-        .find("proof_agent_manual_review_reason(")
+        .find("resolve_handoff(")
         .map(|offset| handoff_resolution + offset)
         .expect("direct proof-agent manual-review terminal disposition");
     let manual_review_terminal = source[handoff_resolution..]
-        .find("ProofHandoffResolution::NeedsManualReview(reason)")
+        .find("ProofHandoffResolution::NeedsManualReview(request)")
         .map(|offset| handoff_resolution + offset)
         .expect("manual-review terminal disposition");
     let fatal_resume_break = source[handoff_resolution..]
@@ -3750,10 +3750,9 @@ fn malformed_or_unbound_resume_sessions_are_rejected() {
     );
 }
 
-#[test]
-fn proof_run_artifact_preserves_cumulative_and_incremental_usage() {
-    let incremental = LlmUsage::from_counts(120, 100, 30).unwrap();
-    let cumulative = LlmUsage::from_counts(220, 180, 50).unwrap();
+mod handoff;
+
+fn proof_run_log_fixture() -> AgentRunLog {
     let binding = |path: &str| DiagnosticArtifactBinding {
         path: path.to_owned(),
         sha256: "a".repeat(64),
@@ -3792,7 +3791,7 @@ fn proof_run_artifact_preserves_cumulative_and_incremental_usage() {
             "proof-stage/proof-agent/rounds/02/rejected-diagnostic-source-audits/03/feedback.txt",
         ),
     };
-    let log = AgentRunLog {
+    AgentRunLog {
         round: 2,
         workspace_generation: 1,
         session_generation: 1,
@@ -3840,7 +3839,7 @@ fn proof_run_artifact_preserves_cumulative_and_incremental_usage() {
         stdout_bytes: 4,
         stderr_bytes: 5,
         events_path: "rounds/02/events.jsonl".to_owned(),
-        usage: Some(incremental.clone()),
+        usage: Some(LlmUsage::from_counts(120, 100, 30).unwrap()),
         usage_error: None,
         audit: AgentAudit {
             passed: true,
@@ -3851,7 +3850,14 @@ fn proof_run_artifact_preserves_cumulative_and_incremental_usage() {
         precondition_definition: None,
         counterexample_handoff: None,
         error: Some("repair continues".to_owned()),
-    };
+    }
+}
+
+#[test]
+fn proof_run_artifact_preserves_cumulative_and_incremental_usage() {
+    let log = proof_run_log_fixture();
+    let incremental = log.usage.clone().unwrap();
+    let cumulative = LlmUsage::from_counts(220, 180, 50).unwrap();
 
     let value = serde_json::to_value(AgentRunArtifact {
         log: &log,

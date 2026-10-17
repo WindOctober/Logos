@@ -252,6 +252,14 @@ counterexample rounds, proof repair, and `codex exec resume` remain owned by
 case process group; the proof launcher separately removes any Docker container
 identified by its `cidfile`.
 
+Proof-agent and counterexample-assessment manual-review requests share one
+terminal disposition: `needs_manual_review`, with no EQ/NEQ certification.
+A direct proof-agent request requires source safety and an exact compile-clean
+checkpoint, without a final certificate theorem; claim-selector metadata is
+optional. Counterexample assessment instead supplies its host-bound assessment
+record and need not materialize a witness. Final certificate audits remain
+strict, and rejected review requests report the specific failed requirement.
+
 Both Codex stages use `gpt-6.1-sol` at medium reasoning effort and JSONL output.
 The first proof invocation receives the complete remaining proof-search budget
 after reserving the configured final-check timeout and bounded process-kill
@@ -260,7 +268,7 @@ share the same invocation deadline. A request may choose any positive timeout,
 which the host clips only to the remaining invocation time; there is no
 completed-check or broker-request quota. The host alone
 checks the post-container snapshot and records diagnostic telemetry. The same
-Codex session is resumed after an explicit handoff, process failure, or failed
+Codex session is resumed after a nonterminal handoff, process failure, or failed
 host checkpoint/final check, for at most 16 unsuccessful invocations. The next
 invocation then starts one fresh bounded session from
 the audited `Problem.v` plus the latest host feedback, preventing an unbounded

@@ -13,6 +13,12 @@ use super::{
     validated_proof_module_sources,
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum AuditPurpose {
+    Certificate,
+    ManualReview,
+}
+
 /// Named audit output keeps the claim and its precondition evidence together.
 pub(super) struct WorkspaceAudit {
     pub(super) audit: AgentAudit,
@@ -32,6 +38,7 @@ pub(super) fn audit_proof_workspace(
         proof_dir,
         trusted_sources,
         VerificationMode::SafeUnconditional,
+        AuditPurpose::Certificate,
     )
     .map(|result| result.audit)
 }
@@ -41,6 +48,7 @@ pub(super) fn audit_proof_workspace_for_mode(
     proof_dir: &Path,
     trusted_sources: &TrustedProofSources,
     verification_mode: VerificationMode,
+    purpose: AuditPurpose,
 ) -> Result<WorkspaceAudit> {
     let mut scanned_files = Vec::new();
     let mut findings = Vec::new();
@@ -95,20 +103,28 @@ pub(super) fn audit_proof_workspace_for_mode(
     let problem_text = problem_text
         .as_deref()
         .expect("proof source registry always contains Problem.v");
-    let (candidate_claim, precondition_source, precondition_definition) =
-        if verification_mode == VerificationMode::Conditional {
-            let finding = reject_conditional_verification_claim(problem_path, problem_text);
-            findings.extend(finding);
-            let (source, finding) = classify_precondition_source(problem_path, problem_text);
-            findings.extend(finding);
-            let (definition, finding) = extract_precondition_definition(problem_path, problem_text);
-            findings.extend(finding);
-            (Some(VerificationClaimKind::Equivalence), source, definition)
-        } else {
-            let (claim, finding) = classify_verification_claim(problem_path, problem_text);
-            findings.extend(finding);
-            (claim, None, None)
-        };
+    let (candidate_claim, precondition_source, precondition_definition) = if purpose
+        == AuditPurpose::ManualReview
+        && !problem_declares_final_theorem(problem_text, verification_mode)
+    {
+        // All source safety checks above still apply. A review request is
+        // not a certificate: claim/precondition metadata need not exist.
+        // Never use this relaxation for a candidate declaring a final theorem.
+        let (claim, _) = classify_verification_claim(problem_path, problem_text);
+        (claim, None, None)
+    } else if verification_mode == VerificationMode::Conditional {
+        let finding = reject_conditional_verification_claim(problem_path, problem_text);
+        findings.extend(finding);
+        let (source, finding) = classify_precondition_source(problem_path, problem_text);
+        findings.extend(finding);
+        let (definition, finding) = extract_precondition_definition(problem_path, problem_text);
+        findings.extend(finding);
+        (Some(VerificationClaimKind::Equivalence), source, definition)
+    } else {
+        let (claim, finding) = classify_verification_claim(problem_path, problem_text);
+        findings.extend(finding);
+        (claim, None, None)
+    };
     let audit = AgentAudit {
         passed: findings.is_empty(),
         scanned_files,
