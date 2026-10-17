@@ -104,6 +104,7 @@ const PROOF_AGENT_HOST_TMP_DIRECTORY: &str = "proof-stage/proof-agent/host-tmp";
 const CASE_PROCESS_SUPERVISOR_PID_ENVIRONMENT: &str = "LOGOS_CASE_SUPERVISOR_PID";
 const FIXED_HOST_LOCALE: &str = "C";
 const TRUSTED_CHECKER_EXPLICIT_ENVIRONMENT: &[&str] = &[
+    "LOGOS_ROCQ_VALIDATION_SESSION",
     "LOGOS_REPO_ROOT",
     "LOGOS_PROOF_WORKDIR",
     "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
@@ -2793,6 +2794,7 @@ fn establish_initial_problem_compile_checkpoint(
         "Problem.v",
         options.proof_check_timeout_seconds,
         options.proof_check_timeout_seconds,
+        None,
         None,
     );
     let (stdout, stderr) = output

@@ -167,12 +167,15 @@ fi
 rm -rf "$CACHE_PARENT/cache-before-shared-hit"
 
 mkdir -m 700 "$WORKDIR/ProofModules"
+VALIDATION_SESSION="$CACHE_PARENT/validation-session"
+mkdir -m 700 "$VALIDATION_SESSION"
+validated_checker_environment=("${checker_environment[@]}" "LOGOS_ROCQ_VALIDATION_SESSION=$VALIDATION_SESSION")
 cat >"$WORKDIR/ProofModules/CoreFacts.v" <<'EOF'
 From LogosGenerated Require Import Schema Queries Witness.
 Theorem sandbox_core_marker : sandbox_query_marker.
 Proof. exact I. Qed.
 EOF
-if ! timeout 90 "${checker_environment[@]}" \
+if ! timeout 90 "${validated_checker_environment[@]}" \
   bash "$CHECKER" --module-diagnostic \
     --candidate ProofModules/CoreFacts.v --timeout-seconds 30 \
   >"$TEST_ROOT/module-core.stdout" 2>"$TEST_ROOT/module-core.stderr"; then
@@ -190,7 +193,7 @@ Theorem rejected_fact : False.
 Proof. exact I. Qed.
 EOF
 set +e
-timeout 90 "${checker_environment[@]}" \
+timeout 90 "${validated_checker_environment[@]}" \
   bash -x "$CHECKER" --module-diagnostic \
     --candidate ProofModules/RejectedFacts.v --timeout-seconds 30 \
   >"$TEST_ROOT/module-rejected.stdout" 2>"$TEST_ROOT/module-rejected.stderr"
@@ -205,7 +208,7 @@ if ((module_rejected_status != 1)) ||
   exit 1
 fi
 rm "$WORKDIR/ProofModules/RejectedFacts.v"
-if ! timeout 90 "${checker_environment[@]}" \
+if ! timeout 90 "${validated_checker_environment[@]}" \
   bash "$CHECKER" --module-diagnostic \
     --candidate ProofModules/CoreFacts.v --timeout-seconds 30 \
   >"$TEST_ROOT/module-core-idempotent.stdout" \
@@ -213,9 +216,16 @@ if ! timeout 90 "${checker_environment[@]}" \
   cat "$TEST_ROOT/module-core-idempotent.stderr" >&2
   exit 1
 fi
-if ! grep -Fq 'LOGOS_TRUSTED_ROCQ_CHECKER_RUNTIME_CACHE hit=true' \
-  "$TEST_ROOT/module-core-idempotent.stderr"; then
-  echo "repeated module diagnostic did not reuse the checker runtime closure" >&2
+for component in authority runtime prefix; do
+  if ! grep -Fq "LOGOS_ROCQ_ENVIRONMENT_REUSE component=$component" \
+      "$TEST_ROOT/module-core-idempotent.stderr"; then
+    echo "repeated module diagnostic did not reuse validated $component" >&2
+    exit 1
+  fi
+done
+if grep -Eq '^\++ (validate_source_object_pair|write_checker_runtime_digests|sha256sum) ' \
+    "$TEST_ROOT/module-rejected.stderr"; then
+  echo "warm failing diagnostic repeated environment payload validation" >&2
   exit 1
 fi
 if ! grep -Fq 'already_cached=true' "$TEST_ROOT/module-core-idempotent.stderr" ||
@@ -233,7 +243,7 @@ From LogosGenerated.ProofModules Require Import CoreFacts.
 Theorem sandbox_more_marker : sandbox_query_marker.
 Proof. exact sandbox_core_marker. Qed.
 EOF
-if ! timeout 90 "${checker_environment[@]}" \
+if ! timeout 90 "${validated_checker_environment[@]}" \
   bash "$CHECKER" --module-diagnostic \
     --candidate ProofModules/MoreFacts.v --timeout-seconds 30 \
   >"$TEST_ROOT/module-more.stdout" 2>"$TEST_ROOT/module-more.stderr"; then
@@ -245,6 +255,32 @@ if [[ "$(sha256sum "$CACHE_DIR/ProofModules/CoreFacts.vo" | awk '{print $1}')" !
   echo "a later module diagnostic replaced an earlier checked object" >&2
   exit 1
 fi
+
+# The incremental manifest must be byte-identical to full validation's format.
+# A new session performs full validation even when all persistent caches hit.
+cmp "$VALIDATION_SESSION/prefix.valid" "$CACHE_DIR/SHA256SUMS"
+mkdir -m 700 "$CACHE_PARENT/new-validation-session"
+timeout 90 "${checker_environment[@]}" \
+  "LOGOS_ROCQ_VALIDATION_SESSION=$CACHE_PARENT/new-validation-session" \
+  bash "$CHECKER" --module-diagnostic \
+    --candidate ProofModules/MoreFacts.v --timeout-seconds 30 \
+  >"$TEST_ROOT/module-new-session.stdout" 2>"$TEST_ROOT/module-new-session.stderr"
+if grep -Fq 'LOGOS_ROCQ_ENVIRONMENT_REUSE' "$TEST_ROOT/module-new-session.stderr"; then
+  echo "a new broker reused validation from an earlier lifecycle" >&2
+  exit 1
+fi
+# An unrecognized manifest transition must also force a full check, not trust
+# the existence of a prior receipt. Full validation refreshes the receipt.
+printf 'stale receipt\n' >"$VALIDATION_SESSION/prefix.valid"
+timeout 90 "${validated_checker_environment[@]}" \
+  bash "$CHECKER" --module-diagnostic \
+    --candidate ProofModules/MoreFacts.v --timeout-seconds 30 \
+  >"$TEST_ROOT/module-stale-receipt.stdout" 2>"$TEST_ROOT/module-stale-receipt.stderr"
+if grep -Fq 'LOGOS_ROCQ_ENVIRONMENT_REUSE component=prefix' "$TEST_ROOT/module-stale-receipt.stderr"; then
+  echo "unknown prefix transition reused stale validation" >&2
+  exit 1
+fi
+cmp "$VALIDATION_SESSION/prefix.valid" "$CACHE_DIR/SHA256SUMS"
 
 # A checked module name is immutable even when replacement bytes also compile.
 cp "$WORKDIR/ProofModules/CoreFacts.v" "$TEST_ROOT/CoreFacts.good.v"
@@ -296,6 +332,7 @@ if [[ -n "${LOGOS_ROCQ_BROKER_TEST_BIN:-}" ]]; then
   LOGOS_TEST_ROCQ_WORKSPACE="$WORKDIR" \
   LOGOS_TEST_ROCQ_CACHE="$CACHE_DIR" \
   LOGOS_TEST_ROCQ_SWITCH="$ROCQ_SWITCH" \
+  LOGOS_SHARED_ROCQ_CHECKER_RUNTIME_CACHE_DIR="$SHARED_CHECKER_RUNTIME_CACHE" \
     "$LOGOS_ROCQ_BROKER_TEST_BIN" \
       --exact engine::proof_stage::tests::real_incremental_sandbox_diagnostics \
       --ignored --nocapture
@@ -430,12 +467,16 @@ cp "$TEST_ROOT/Problem.good.v" "$WORKDIR/Problem.v"
 expect_final_module_rejection() {
   local label="$1" status
   set +e
-  timeout 90 "${checker_environment[@]}" bash "$CHECKER" \
+  timeout 90 "${validated_checker_environment[@]}" bash "$CHECKER" \
     >"$TEST_ROOT/$label.stdout" 2>"$TEST_ROOT/$label.stderr"
   status="$?"
   set -e
   if ((status == 0 || status == 124 || status == 137)); then
     echo "unsafe final module source state was not rejected normally: $label (status $status)" >&2
+    exit 1
+  fi
+  if grep -Fq 'LOGOS_ROCQ_ENVIRONMENT_REUSE' "$TEST_ROOT/$label.stderr"; then
+    echo "final validation incorrectly reused a diagnostic receipt" >&2
     exit 1
   fi
 }

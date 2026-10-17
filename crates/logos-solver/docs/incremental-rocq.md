@@ -73,6 +73,45 @@ not the REPL success boundary, compiled-object cache, or final kernel checking.
 
 ## Evidence and tests
 
+### Broker-scoped environment validation
+
+The host creates a fresh, private `DiagnosticEnvironment` for each broker and
+passes its temporary receipt directory explicitly as
+`LOGOS_ROCQ_VALIDATION_SESSION`. It is not inherited from ambient environment,
+mounted into the agent, or reused on a later broker/process startup. Normal
+shutdown removes it; a stale directory after a crash is never selected again.
+
+Within this serialized lifetime, the first checker validates the authority,
+runtime bundle and generated/module prefix. Later checks reuse:
+
+- the authority closure validation, without scanning every source/object pair;
+- the shared runtime's host-generated launch bindings, without repeating driver
+  comparisons, ELF hashing, file scans or the shared runtime lock;
+- the prefix validation while its exact manifest bytes match the receipt.
+
+Runtime bindings are retained only when a persistent shared runtime cache is
+configured. Without it, invocation-private runtime staging still runs normally;
+no receipt can point into a previously deleted checker scratch directory.
+
+Successful module publication carries forward existing validated digests and
+hashes only the new `.v`, `.vo`, and `ProofModules/ORDER`, preserving the full
+manifest format. It refreshes the prefix receipt only after atomic publication.
+An unknown manifest transition or an interrupted publication without a matching
+receipt takes the full validation path. A new broker or witness generation starts
+without receipts. Standalone checks default to full validation; preflight and final
+certification ignore receipts even if the variable is supplied explicitly.
+
+This is an experiment-runtime ownership contract, not protection against arbitrary
+external modification of host files: the host exclusively manages these inputs
+and serialized publications during the broker lifetime. Shared source snapshots
+fix the workspace generation. Candidate source audits, isolated compilation,
+module immutability, crash recovery and final independent kernel checks remain
+unchanged. `LOGOS_ROCQ_ENVIRONMENT_REUSE component=authority|runtime|prefix`
+records actual reuse in checker stderr (REPL startup output remains internal to
+the session transport).
+
+### Running checks
+
 Diagnostic stderr records `LOGOS_ROCQ_INCREMENTAL` with `cold`, `fallback`,
 `reused_sentences`, `executed_sentences`, `compiler_required`, or `timed_out` fields
 as applicable. Existing per-invocation elapsed time includes the incremental path

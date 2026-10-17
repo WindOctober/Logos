@@ -6,6 +6,7 @@ use crate::engine::now_ms_since_epoch;
 use crate::engine::report::{DiagnosticCheckerInvocation, TrustedCheckInvocation};
 use crate::engine::rocq_session::{IncrementalDiagnostics, SessionKey};
 use crate::error::{Error, Result};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -18,6 +19,36 @@ use super::{
     TRUSTED_HOST_TIMEOUT, TRUSTED_ROCQ_ENVIRONMENT_FAILURE_EXIT_CODE, write_pretty_json_file,
     write_trusted_rocq_checker,
 };
+
+/// Disposable validation receipts shared only by serialized checks in one
+/// broker. A new broker always gets an empty directory; this is not a durable
+/// cache-validity assertion and is never inherited from the caller environment.
+pub(super) struct DiagnosticEnvironment(tempfile::TempDir);
+
+#[cfg(test)]
+#[path = "../../../tests/checker_environment/mod.rs"]
+mod environment_tests;
+
+impl DiagnosticEnvironment {
+    pub(super) fn new(artifacts_root: &Path) -> Result<Self> {
+        let parent = artifacts_root.join(super::PROOF_AGENT_HOST_TMP_DIRECTORY);
+        let create = || -> std::io::Result<Self> {
+            std::fs::create_dir_all(&parent)?;
+            let directory = tempfile::Builder::new()
+                .prefix("validation-")
+                .tempdir_in(&parent)?;
+            std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))?;
+            Ok(Self(directory))
+        };
+        create().map_err(|error| {
+            Error::TrustedRocqEnvironment(format!("diagnostic environment: {error}"))
+        })
+    }
+
+    fn configure(&self, command: &mut Command) {
+        command.env("LOGOS_ROCQ_VALIDATION_SESSION", self.0.path());
+    }
+}
 
 #[derive(Clone)]
 pub(super) enum CheckMode {
@@ -67,6 +98,7 @@ pub(super) fn run_host_diagnostic_rocq_check(
     requested_timeout_seconds: u64,
     effective_timeout_seconds: u64,
     incremental: Option<(&mut IncrementalDiagnostics, &str)>,
+    environment: Option<&DiagnosticEnvironment>,
 ) -> (DiagnosticCheckerInvocation, Option<Output>) {
     let started_at_unix_ms = now_ms_since_epoch();
     let started = Instant::now();
@@ -112,6 +144,9 @@ pub(super) fn run_host_diagnostic_rocq_check(
                     Duration::from_secs(effective_timeout_seconds),
                     CheckMode::InteractiveDiagnostic { logical_name },
                 );
+                if let Some(environment) = environment {
+                    environment.configure(&mut command);
+                }
                 if !session.prepare(&key) {
                     note = "LOGOS_ROCQ_INCREMENTAL cold=true compiler_required=true\n".to_owned();
                 } else {
@@ -165,15 +200,18 @@ pub(super) fn run_host_diagnostic_rocq_check(
         }
         // Only this path can report success. It publishes exactly the same
         // checked objects/checkpoints as before the incremental optimization.
-        let mut output = trusted_rocq_check_command(
+        let mut command = trusted_rocq_check_command(
             trusted_checker_path,
             checked_workspace,
             logos_repo_root,
             rocq_opam_switch,
             remaining,
             trusted_mode,
-        )
-        .output()?;
+        );
+        if let Some(environment) = environment {
+            environment.configure(&mut command);
+        }
+        let mut output = command.output()?;
         if let (Some((session, _)), Some(key)) = (incremental, compiler_key) {
             session.observe_compiler(&key, output.status.code());
         }

@@ -26,7 +26,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use super::audit::{audit_proof_module_rocq_text, audit_rocq_text, audit_scratch_rocq_text};
-use super::checker::{is_trusted_rocq_environment_failure, run_host_diagnostic_rocq_check};
+use super::checker::{
+    DiagnosticEnvironment, is_trusted_rocq_environment_failure, run_host_diagnostic_rocq_check,
+};
 use super::diagnostic_inputs::SharedInputs;
 use super::workspace::{
     ModulePublication, checked_proof_module_cache_source, persist_successful_scratch_candidate,
@@ -885,6 +887,7 @@ struct RequestContext<'a> {
     trusted_checker_path: &'a Path,
     proof_workdir: &'a Path,
     shared_inputs: &'a SharedInputs,
+    environment: &'a DiagnosticEnvironment,
     logos_repo_root: &'a Path,
     rocq_opam_switch: Option<&'a Path>,
     writable_storage_limit_bytes: u64,
@@ -906,6 +909,7 @@ impl DiagnosticBroker {
     ) -> Result<Self> {
         let shared_inputs =
             SharedInputs::prepare(artifacts_root, proof_workdir, workspace_generation)?;
+        let environment = DiagnosticEnvironment::new(artifacts_root)?;
         let socket_directory = SocketDirectory::create(artifacts_root, round)?;
         let socket_path = socket_directory.socket_path();
         let listener = UnixListener::bind(&socket_path).map_err(|source| {
@@ -963,6 +967,7 @@ impl DiagnosticBroker {
                     trusted_checker_path: &trusted_checker_path,
                     proof_workdir: &proof_workdir,
                     shared_inputs: &shared_inputs,
+                    environment: &environment,
                     logos_repo_root: &logos_repo_root,
                     rocq_opam_switch: rocq_opam_switch.as_deref(),
                     writable_storage_limit_bytes,
@@ -1111,6 +1116,7 @@ fn run_diagnostic_broker_request(
         trusted_checker_path,
         proof_workdir,
         shared_inputs,
+        environment,
         logos_repo_root,
         rocq_opam_switch,
         writable_storage_limit_bytes,
@@ -1548,6 +1554,7 @@ fn run_diagnostic_broker_request(
         request.requested_timeout_seconds,
         effective_timeout_seconds,
         Some((&mut incremental, mapped_problem.as_str())),
+        Some(environment),
     );
     if let Ok(mut locked) = state.lock() {
         locked.incremental_diagnostics = incremental;

@@ -523,10 +523,41 @@ done
 # immutable prefix directly and is immediately followed by a problem-diagnostic
 # checkpoint in the proof workflow; copying this  source/object closure during
 # preflight was therefore pure duplicate I/O.
+VALIDATION_SESSION=
+case "$mode" in
+  problem-diagnostic|scratch-diagnostic|module-diagnostic|interactive-diagnostic)
+    VALIDATION_SESSION="${LOGOS_ROCQ_VALIDATION_SESSION:-}"
+    ;;
+esac
+if [[ -n "$VALIDATION_SESSION" ]]; then
+  # Created afresh and retained by the host broker, never an agent input or a
+  # persistent marker trusted across restarts. Final/preflight ignore it.
+  assert_safe_absolute_directory "$VALIDATION_SESSION" validation-session
+  case "$VALIDATION_SESSION" in
+    "$CACHE_PARENT"/*) ;;
+    *) trusted_environment_failure validation-session-location 2 ;;
+  esac
+  [[ -O "$VALIDATION_SESSION" && "$(stat -c '%a' "$VALIDATION_SESSION")" == 700 ]] \
+    || trusted_environment_failure validation-session-permissions 2
+  validation_identity="$(printf '%s\n' "$CHECKER_PATH" "$LOGOS_REPO_ROOT" \
+    "$ROCQ_BIN" "$BWRAP_BIN" "$TRUSTED_CACHE" \
+    "$SHARED_AUTHORITY_SHA256" "$SHARED_CHECKER_RUNTIME_CACHE_ROOT")"
+  if [[ -f "$VALIDATION_SESSION/identity" ]]; then
+    [[ "$(cat "$VALIDATION_SESSION/identity")" == "$validation_identity" ]] \
+      || trusted_environment_failure validation-session-identity 2
+  else
+    printf '%s\n' "$validation_identity" >"$VALIDATION_SESSION/identity.pending"
+    mv -T "$VALIDATION_SESSION/identity.pending" "$VALIDATION_SESSION/identity"
+  fi
+fi
+
 if [[ "$mode" != preflight && "$mode" != witness-preflight ]]; then
 # The runner already supplies a content-bound, read-only authority snapshot,
 # not the mutable repository. Validate its complete source/object closure and
 # mount it directly instead of copying the same closure for every diagnostic.
+if [[ -n "$VALIDATION_SESSION" && -f "$VALIDATION_SESSION/authority.valid" ]]; then
+  echo "LOGOS_ROCQ_ENVIRONMENT_REUSE component=authority" >&2
+else
 is_excluded_authority_source() {
   local relative="${1,,}"
   case "/$relative/" in
@@ -591,6 +622,10 @@ if ((authority_source_count == 0)); then
   echo "trusted Rocq authority closure is empty" >&2
   trusted_environment_failure "authority-closure" 2
 fi
+if [[ -n "$VALIDATION_SESSION" ]]; then
+  : >"$VALIDATION_SESSION/authority.valid"
+fi
+fi
 
 # Stage only the ELF dependencies needed by the Rocq driver, worker, native
 # helper, and OCaml stubs.  Each staged file is mounted at the absolute path
@@ -599,6 +634,12 @@ fi
 # interpreter likewise retains its compiled absolute path.  The resulting
 # closure is content-addressed and immutable, so later diagnostics do not
 # repeat ldd/readelf or copy the same runtime payload again.
+if [[ -n "$VALIDATION_SESSION" && -s "$VALIDATION_SESSION/runtime.sh" ]]; then
+  # Only host-emitted declare statements over the validated runtime bindings.
+  # All paths refer to the persistent shared runtime, never an old CHECKDIR.
+  source "$VALIDATION_SESSION/runtime.sh"
+  echo "LOGOS_ROCQ_ENVIRONMENT_REUSE component=runtime" >&2
+else
 declare -A BWRAP_RUNTIME_DIRS=()
 declare -A BWRAP_RUNTIME_BIND_SOURCES=()
 BWRAP_RUNTIME_DIR_ARGS=()
@@ -934,6 +975,13 @@ if [[ -n "$SHARED_CHECKER_RUNTIME_CACHE_ROOT" ]]; then
 else
   stage_checker_runtime
 fi
+if [[ -n "$VALIDATION_SESSION" && "$CHECKER_RUNTIME_CACHE_HIT" == true ]]; then
+  declare -p OSLIBDIR ROCQBINDIR ROCQ_ELF_INTERPRETER ROCQ_ELF_INTERPRETER_DIR \
+    STAGED_ELF_INTERPRETER BWRAP_RUNTIME_DIR_ARGS BWRAP_RUNTIME_BIND_ARGS \
+    >"$VALIDATION_SESSION/runtime.pending"
+  mv -T "$VALIDATION_SESSION/runtime.pending" "$VALIDATION_SESSION/runtime.sh"
+fi
+fi
 
 BWRAP_LAUNCH=(
   "$STAGED_ELF_INTERPRETER"
@@ -1033,11 +1081,31 @@ compile_witness_support_modules() {
   done
 }
 
+remember_trusted_cache() {
+  [[ -n "$VALIDATION_SESSION" ]] || return 0
+  cp "$TRUSTED_CACHE/SHA256SUMS" "$VALIDATION_SESSION/prefix.pending"
+  mv -T "$VALIDATION_SESSION/prefix.pending" "$VALIDATION_SESSION/prefix.valid"
+}
+
 validate_trusted_cache() {
   local expected_manifest entry file stem
   local -a cache_witness_module_order=()
   local -A cache_witness_expected=()
   local -A ordered=()
+
+  # SharedInputs fixes the generated sources for this broker generation. The
+  # host alone publishes modules, and each publication updates this receipt.
+  # Unknown manifest transitions (including interrupted publication) take the
+  # full validation path. No object payload is reread on an unchanged prefix.
+  if [[ -n "$VALIDATION_SESSION" ]] && \
+     cmp -s "$VALIDATION_SESSION/prefix.valid" "$TRUSTED_CACHE/SHA256SUMS"; then
+    PROOF_MODULE_ORDER=()
+    while IFS= read -r file || [[ -n "$file" ]]; do
+      [[ -n "$file" ]] && PROOF_MODULE_ORDER+=("$file")
+    done <"$TRUSTED_CACHE/ProofModules/ORDER"
+    echo "LOGOS_ROCQ_ENVIRONMENT_REUSE component=prefix" >&2
+    return 0
+  fi
 
   if [[ -L "$TRUSTED_CACHE" || ! -d "$TRUSTED_CACHE" ]]; then
     echo "trusted diagnostic cache is missing or symlinked: $TRUSTED_CACHE" >&2
@@ -1159,6 +1227,7 @@ validate_trusted_cache() {
     echo "trusted diagnostic cache source binding drifted" >&2
     trusted_environment_failure "diagnostic-cache-source" 2
   fi
+  remember_trusted_cache
 }
 
 copy_trusted_cache() {
@@ -1277,6 +1346,22 @@ write_cache_manifest() {
         stem="${file%.v}"
         sha256sum "ProofModules/$file" "ProofModules/$stem.vo"
       done <ProofModules/ORDER
+    } >SHA256SUMS
+    chmod 600 SHA256SUMS
+  )
+}
+
+# Existing entries were validated before compilation and copied by the host.
+# Preserve their digests; only ORDER and the new source/object pair changed.
+write_module_cache_manifest() {
+  local cache="$1" candidate="$2" stem="${2%.v}"
+  (
+    cd "$cache"
+    {
+      awk -v order="$(sha256sum ProofModules/ORDER)" \
+        '$2 == "ProofModules/ORDER" { print order; next } { print }' \
+        "$TRUSTED_CACHE/SHA256SUMS"
+      sha256sum "ProofModules/$candidate" "ProofModules/$stem.vo"
     } >SHA256SUMS
     chmod 600 SHA256SUMS
   )
@@ -1704,7 +1789,7 @@ if [[ "$mode" == module-diagnostic ]]; then
     "$PROBLEMOUTDIR/ProofModules/$candidate_stem.vo" \
     "$CACHE_STAGE/ProofModules/$candidate_stem.vo"
   printf '%s\n' "$candidate_name" >>"$CACHE_STAGE/ProofModules/ORDER"
-  write_cache_manifest "$CACHE_STAGE"
+  write_module_cache_manifest "$CACHE_STAGE" "$candidate_name"
   discard_problem_cache
 
   CACHE_OLD="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache-old.XXXXXX")"
@@ -1720,6 +1805,7 @@ if [[ "$mode" == module-diagnostic ]]; then
   CACHE_STAGE=
   rm -rf -- "$CACHE_OLD"
   CACHE_OLD=
+  remember_trusted_cache
   echo "LOGOS_TRUSTED_ROCQ_CHECK mode=module-diagnostic candidate=$module_candidate requested_timeout_seconds=$requested_timeout_seconds" >&2
   exit 0
 fi

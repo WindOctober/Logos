@@ -386,6 +386,7 @@ fn real_incremental_sandbox_diagnostics() {
             seconds,
             seconds,
             session.map(|session| (session, source)),
+            None,
         );
         (invocation, output.expect("launch real checker"))
     };
