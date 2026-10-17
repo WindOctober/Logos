@@ -181,6 +181,30 @@ if ! timeout 90 "${checker_environment[@]}" \
 fi
 core_object_sha256="$(sha256sum "$CACHE_DIR/ProofModules/CoreFacts.vo" | awk '{print $1}')"
 core_manifest_sha256="$(sha256sum "$CACHE_DIR/SHA256SUMS" | awk '{print $1}')"
+# A compiler rejection must leave the checked prefix intact and must not even
+# prepare a replacement cache (checking for leftovers alone would miss copying
+# followed by cleanup). Trace only this synthetic fixture, never agent data.
+cat >"$WORKDIR/ProofModules/RejectedFacts.v" <<'EOF'
+From LogosGenerated.ProofModules Require Import CoreFacts.
+Theorem rejected_fact : False.
+Proof. exact I. Qed.
+EOF
+set +e
+timeout 90 "${checker_environment[@]}" \
+  bash -x "$CHECKER" --module-diagnostic \
+    --candidate ProofModules/RejectedFacts.v --timeout-seconds 30 \
+  >"$TEST_ROOT/module-rejected.stdout" 2>"$TEST_ROOT/module-rejected.stderr"
+module_rejected_status="$?"
+set -e
+if ((module_rejected_status != 1)) ||
+   ! grep -Fq '+ sandbox_compile ' "$TEST_ROOT/module-rejected.stderr" ||
+   grep -Fq '+ copy_trusted_cache ' "$TEST_ROOT/module-rejected.stderr" ||
+   [[ "$(sha256sum "$CACHE_DIR/SHA256SUMS" | awk '{print $1}')" != "$core_manifest_sha256" ]] ||
+   [[ -e "$CACHE_DIR/ProofModules/RejectedFacts.v" || -e "$CACHE_DIR/ProofModules/RejectedFacts.vo" ]]; then
+  echo "rejected module staged or changed the checked cache (status $module_rejected_status)" >&2
+  exit 1
+fi
+rm "$WORKDIR/ProofModules/RejectedFacts.v"
 if ! timeout 90 "${checker_environment[@]}" \
   bash "$CHECKER" --module-diagnostic \
     --candidate ProofModules/CoreFacts.v --timeout-seconds 30 \

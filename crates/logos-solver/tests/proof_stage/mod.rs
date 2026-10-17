@@ -5121,6 +5121,74 @@ fn proof_agent_container_does_not_run_the_final_trusted_check() {
 }
 
 #[test]
+fn module_cache_staging_requires_successful_compilation() {
+    let preparation = FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
+        .split("elif [[ \"$mode\" == module-diagnostic ]]; then")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  else\n").next())
+        .expect("module diagnostic preparation");
+    assert!(preparation.contains("copy_trusted_cache_objects \"$PROBLEMOUTDIR\""));
+    assert!(!preparation.contains("CACHE_STAGE"));
+    assert!(!preparation.contains("copy_trusted_cache \""));
+
+    let publication = FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
+        .split_once("\nif [[ \"$mode\" == module-diagnostic ]]; then\n")
+        .map(|(_, tail)| tail.split("\nfi\n").next().unwrap())
+        .expect("module compile and publication block");
+    // Execute the actual branch under errexit. Stop at the copy boundary on
+    // success; the real sandbox regression covers the subsequent publication.
+    let harness = format!(
+        r#"set -euo pipefail
+sandbox_compile() {{ printf 'compile\n'; return "$COMPILE_STATUS"; }}
+copy_trusted_cache() {{ printf 'stage\n'; return 73; }}
+if [[ "$mode" == module-diagnostic ]]; then
+{publication}
+fi
+"#
+    );
+    for compile_status in [1, 124, 143, 0] {
+        let root = tempfile::tempdir().expect("create module staging fixture");
+        let output = Command::new("/usr/bin/bash")
+            .arg("-c")
+            .arg(&harness)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("mode", "module-diagnostic")
+            .env("COMPILE_STATUS", compile_status.to_string())
+            .env("CACHE_PARENT", root.path())
+            .env("PROBLEMDIR", root.path().join("input"))
+            .env("PROBLEMOUTDIR", root.path().join("output"))
+            .env("module_candidate", "ProofModules/Facts.v")
+            .env("candidate_stem", "Facts")
+            .output()
+            .expect("run module staging branch");
+        assert_eq!(
+            output.status.code(),
+            Some(if compile_status == 0 {
+                73
+            } else {
+                compile_status
+            }),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            output.stdout,
+            if compile_status == 0 {
+                b"compile\nstage\n".as_slice()
+            } else {
+                b"compile\n".as_slice()
+            }
+        );
+        assert_eq!(
+            std::fs::read_dir(root.path()).unwrap().count(),
+            usize::from(compile_status == 0),
+            "unsuccessful compilation must not allocate a publication directory"
+        );
+    }
+}
+
+#[test]
 fn interrupted_module_cache_swap_restores_the_last_valid_cache_first() {
     let function_tail = FORMAL_SQL_TRUSTED_ROCQ_CHECK_SCRIPT
         .split("cleanup_trusted_checker() {")

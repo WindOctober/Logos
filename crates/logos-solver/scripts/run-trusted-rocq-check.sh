@@ -1474,9 +1474,6 @@ if [[ "$mode" != preflight ]]; then
       echo "LOGOS_TRUSTED_ROCQ_CHECK mode=module-diagnostic candidate=$module_candidate already_cached=true" >&2
       exit 0
     fi
-    CACHE_STAGE="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache.XXXXXX")"
-    chmod 700 "$CACHE_STAGE"
-    copy_trusted_cache "$CACHE_STAGE"
     copy_trusted_cache_objects "$PROBLEMOUTDIR"
     install -m 600 "$WORKDIR/$module_candidate" "$PROBLEMDIR/ProofModules/$candidate_name"
   else
@@ -1694,6 +1691,12 @@ if [[ "$mode" == module-diagnostic ]]; then
     "$PROBLEMDIR" "$PROBLEMOUTDIR" "$module_candidate" \
     "LogosGenerated.ProofModules.$candidate_stem" \
     "ProofModules/$candidate_stem.vo"
+  # The broker serializes checks against this host-only cache. Prepare the
+  # publication copy only after compilation succeeds; failed/timed-out attempts
+  # need the sandbox dependency objects, but never a replacement cache.
+  CACHE_STAGE="$(mktemp -d "$CACHE_PARENT/.logos-trusted-diagnostic-cache.XXXXXX")"
+  chmod 700 "$CACHE_STAGE"
+  copy_trusted_cache "$CACHE_STAGE"
   install -m 600 \
     "$PROBLEMDIR/ProofModules/$candidate_name" \
     "$CACHE_STAGE/ProofModules/$candidate_name"
