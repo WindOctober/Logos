@@ -22,7 +22,9 @@ use crate::validation::observation::{ObservationMode, classify_observation};
 use crate::validation::postgres_session::{
     fresh_schema_name, setup_output_schema_probe, setup_witness_schema,
 };
-use crate::validation::schema::{describe_statement_output, output_program_mismatch};
+use crate::validation::schema::{
+    describe_statement_output, has_mixed_analysis_outcomes, output_program_mismatch,
+};
 use crate::validation::types::{
     CheckResult, FormalWitnessColumn, FormalWitnessRow, FormalWitnessSnapshot, FormalWitnessTable,
     FormalWitnessValue, OutputSchemaPreflight, OutputSchemaPreflightResult, StatementOutput,
@@ -190,14 +192,18 @@ impl PostgresValidator {
         let result = if let Some(mismatch) = output_program_mismatch(&source, &target) {
             OutputSchemaPreflightResult::Mismatch { mismatch }
         } else {
-            reject_volatile_successful_pairs(
+            reject_volatile_analyzed_statements(
                 &mut transaction,
                 &source_program,
                 &target_program,
                 &source,
                 &target,
             )?;
-            OutputSchemaPreflightResult::Compatible { source, target }
+            if has_mixed_analysis_outcomes(&source, &target) {
+                OutputSchemaPreflightResult::Inconclusive { source, target }
+            } else {
+                OutputSchemaPreflightResult::Compatible { source, target }
+            }
         };
         transaction.rollback()?;
         Ok(result)
@@ -277,13 +283,22 @@ impl PostgresValidator {
                 snapshot: None,
             });
         }
-        reject_volatile_successful_pairs(
+        reject_volatile_analyzed_statements(
             &mut transaction,
             &source_program,
             &target_program,
             &source_outputs,
             &target_outputs,
         )?;
+
+        // This test-only execution comparator handles successful rows, not
+        // mixed analysis/execution errors. Do not let an inconclusive preflight
+        // reach its successful-schema assumptions or masquerade as equality.
+        if has_mixed_analysis_outcomes(&source_outputs, &target_outputs) {
+            return Err(Error::PostgresQueryInspection(
+                "mixed analysis outcomes require FormalSQL proof, not row comparison".to_owned(),
+            ));
+        }
 
         for (index, (((source_query, target_query), observation_mode), outputs)) in source_program
             .iter()
@@ -304,8 +319,8 @@ impl PostgresValidator {
             debug_assert!(matches!(
                 outputs,
                 (
-                    StatementOutput::Success { .. },
-                    StatementOutput::Success { .. }
+                    StatementOutput::AnalysisAccepted { .. },
+                    StatementOutput::AnalysisAccepted { .. }
                 )
             ));
             if observation_mode == ObservationMode::ExecutableSequence {
@@ -320,9 +335,10 @@ impl PostgresValidator {
                 let source_rows = executable_rows(&mut transaction, source_query)?;
                 let target_rows = executable_rows(&mut transaction, target_query)?;
                 let output_schema = match outputs {
-                    (StatementOutput::Success { schema }, StatementOutput::Success { .. }) => {
-                        schema
-                    }
+                    (
+                        StatementOutput::AnalysisAccepted { schema },
+                        StatementOutput::AnalysisAccepted { .. },
+                    ) => schema,
                     _ => unreachable!("analysis-error pairs were handled above"),
                 };
                 if let Some(first_differing_row) = first_semantically_differing_row(
@@ -1805,6 +1821,106 @@ mod sequence_tests {
 
     #[test]
     #[ignore = "requires LOGOS_POSTGRES_URL or DATABASE_URL for a disposable PostgreSQL database"]
+    fn analysis_preflight_defers_mixed_phases_and_preserves_static_checks() {
+        let url = std::env::var("LOGOS_POSTGRES_URL")
+            .or_else(|_| std::env::var("DATABASE_URL"))
+            .expect("set LOGOS_POSTGRES_URL or DATABASE_URL");
+        let validator = PostgresValidator::new(
+            Some(url.clone()),
+            10_000,
+            SqlTimeZone::utc(),
+            SqlEnvironment::postgres_utf8_c(),
+        )
+        .expect("create validator");
+        let analysis_error = "SELECT CAST('bad' AS INTEGER)";
+        let execution_error = "SELECT CAST(v AS INTEGER) FROM (VALUES ('bad')) AS t(v)";
+
+        // Both expose 22P02, although only the first fails PREPARE.
+        let mut client = Client::connect(&url, NoTls).expect("connect to PostgreSQL");
+        for sql in [analysis_error, execution_error] {
+            let mut transaction = client.transaction().unwrap();
+            let error = transaction
+                .simple_query(sql)
+                .expect_err("both queries raise 22P02");
+            assert_eq!(error.as_db_error().unwrap().code().code(), "22P02");
+            transaction.rollback().unwrap();
+        }
+        for (source, target) in [
+            (analysis_error, execution_error),
+            (execution_error, analysis_error),
+            // Deferral must not assume the accepted side will actually fail.
+            (analysis_error, "SELECT 1"),
+            ("SELECT 1", analysis_error),
+        ] {
+            let input = ordered_input(
+                "analysis-phases",
+                "CREATE TABLE t(x integer);",
+                source,
+                target,
+            );
+            let result = validator.preflight_output_schema(&input).result;
+            assert!(
+                matches!(result, OutputSchemaPreflightResult::Inconclusive { .. }),
+                "{result:?}"
+            );
+            // The old test-only row comparator must also fail closed, not panic
+            // at an assumed successful schema or report a false counterexample.
+            assert!(matches!(
+                validator.validate(&input, "").result,
+                CheckResult::ValidationError { .. }
+            ));
+        }
+        for (source, target) in [
+            (analysis_error, "SELECT random()"),
+            ("SELECT random()", analysis_error),
+        ] {
+            let input = ordered_input(
+                "mixed-volatile",
+                "CREATE TABLE t(x integer);",
+                source,
+                target,
+            );
+            let result = validator.preflight_output_schema(&input).result;
+            assert!(
+                matches!(result, OutputSchemaPreflightResult::ValidationError { .. }),
+                "{result:?}"
+            );
+        }
+        for (source, target) in [
+            ("SELECT 1", "SELECT 1::bigint"),
+            ("SELECT missing FROM t", "SELECT x + TRUE FROM t"),
+            // An inconclusive first statement cannot hide a later mismatch.
+            (
+                "SELECT CAST('bad' AS INTEGER); SELECT 1",
+                "SELECT 1; SELECT 1::bigint",
+            ),
+        ] {
+            let input = ordered_input(
+                "static-mismatch",
+                "CREATE TABLE t(x integer);",
+                source,
+                target,
+            );
+            let result = validator.preflight_output_schema(&input).result;
+            assert!(
+                matches!(result, OutputSchemaPreflightResult::Mismatch { .. }),
+                "{result:?}"
+            );
+        }
+        let input = ordered_input(
+            "same-analysis-error",
+            "CREATE TABLE t(x integer);",
+            analysis_error,
+            analysis_error,
+        );
+        assert!(matches!(
+            validator.preflight_output_schema(&input).result,
+            OutputSchemaPreflightResult::Compatible { .. }
+        ));
+    }
+
+    #[test]
+    #[ignore = "requires LOGOS_POSTGRES_URL or DATABASE_URL for a disposable PostgreSQL database"]
     fn ordered_value_comparison_uses_sql_equality_not_rendered_text() {
         let url = std::env::var("LOGOS_POSTGRES_URL")
             .or_else(|_| std::env::var("DATABASE_URL"))
@@ -1919,7 +2035,7 @@ fn validate_integrity_contract(
     Ok(())
 }
 
-fn reject_volatile_successful_pairs(
+fn reject_volatile_analyzed_statements(
     transaction: &mut Transaction<'_>,
     source_program: &[&str],
     target_program: &[&str],
@@ -1933,35 +2049,19 @@ fn reject_volatile_successful_pairs(
         .zip(target_outputs)
         .enumerate()
     {
-        match (source_output, target_output) {
-            (
-                StatementOutput::Success {
-                    schema: source_schema,
-                },
-                StatementOutput::Success {
-                    schema: target_schema,
-                },
-            ) => {
-                let statement = index + 1;
+        // Inspect each accepted side, even when its counterpart failed analysis.
+        // An inconclusive preflight must not bypass the volatility boundary.
+        for (side, query, output) in [
+            ("source", source, source_output),
+            ("target", target, target_output),
+        ] {
+            if let StatementOutput::AnalysisAccepted { schema } = output {
                 reject_volatile_program(
                     transaction,
-                    &format!("source_{statement}"),
-                    &[*source],
-                    std::slice::from_ref(source_schema),
+                    &format!("{side}_{}", index + 1),
+                    &[*query],
+                    std::slice::from_ref(schema),
                 )?;
-                reject_volatile_program(
-                    transaction,
-                    &format!("target_{statement}"),
-                    &[*target],
-                    std::slice::from_ref(target_schema),
-                )?;
-            }
-            (StatementOutput::AnalysisError { .. }, StatementOutput::AnalysisError { .. }) => {}
-            _ => {
-                return Err(Error::PostgresQueryInspection(format!(
-                    "statement {} reached determinism validation with mismatched analysis outcomes",
-                    index + 1
-                )));
             }
         }
     }

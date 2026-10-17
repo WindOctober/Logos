@@ -12,7 +12,14 @@ pub struct OutputSchemaPreflight {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum OutputSchemaPreflightResult {
+    /// No static mismatch; this is not an execution or equivalence certificate.
     Compatible {
+        source: Vec<StatementOutput>,
+        target: Vec<StatementOutput>,
+    },
+    /// One side analyzed while the other failed analysis. Execution may still
+    /// expose the same error category, so only later proof can decide EQ/NEQ.
+    Inconclusive {
         source: Vec<StatementOutput>,
         target: Vec<StatementOutput>,
     },
@@ -220,9 +227,8 @@ impl SchemaMismatch {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum StatementOutput {
-    Success {
-        schema: OutputSchema,
-    },
+    /// PREPARE resolved an output schema; the statement has not been executed.
+    AnalysisAccepted { schema: OutputSchema },
     AnalysisError {
         error: FormalQueryError,
         sql_state: String,

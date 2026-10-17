@@ -563,7 +563,8 @@ fn output_schema_preflight_evidence(
     verification_mode: VerificationMode,
 ) -> Result<Option<(String, Evidence)>> {
     match &preflight.result {
-        OutputSchemaPreflightResult::Compatible { .. } => Ok(None),
+        OutputSchemaPreflightResult::Compatible { .. }
+        | OutputSchemaPreflightResult::Inconclusive { .. } => Ok(None),
         OutputSchemaPreflightResult::Mismatch { mismatch } => {
             let reason = match verification_mode {
                 VerificationMode::SafeUnconditional
@@ -1773,6 +1774,28 @@ mod tests {
                 .expect("compatible preflight")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn inconclusive_analysis_preflight_never_decides_eq_or_neq() {
+        let preflight = OutputSchemaPreflight {
+            schema_name: "logos_preflight".to_owned(),
+            result: OutputSchemaPreflightResult::Inconclusive {
+                source: Vec::new(),
+                target: Vec::new(),
+            },
+        };
+        for mode in [
+            VerificationMode::SafeUnconditional,
+            VerificationMode::OutcomeUnconditional,
+            VerificationMode::Conditional,
+        ] {
+            assert!(
+                output_schema_preflight_evidence(&preflight, mode)
+                    .unwrap()
+                    .is_none()
+            );
+        }
     }
 
     #[test]

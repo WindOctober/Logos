@@ -14,7 +14,7 @@ pub(super) fn describe_statement_output(
     match describe_output_shape(transaction, query) {
         Ok(schema) => {
             transaction.batch_execute(&format!("RELEASE SAVEPOINT {OUTPUT_PROBE_SAVEPOINT}"))?;
-            Ok(StatementOutput::Success { schema })
+            Ok(StatementOutput::AnalysisAccepted { schema })
         }
         Err(Error::Postgres(source)) => {
             transaction.batch_execute(&format!(
@@ -104,10 +104,10 @@ pub(super) fn output_program_mismatch(
             let statement = index + 1;
             match (&source, &target) {
                 (
-                    StatementOutput::Success {
+                    StatementOutput::AnalysisAccepted {
                         schema: source_schema,
                     },
-                    StatementOutput::Success {
+                    StatementOutput::AnalysisAccepted {
                         schema: target_schema,
                     },
                 ) => output_mismatch_at(statement, source_schema.clone(), target_schema.clone()),
@@ -120,8 +120,7 @@ pub(super) fn output_program_mismatch(
                         error: target_error,
                         ..
                     },
-                ) if source_error == target_error => None,
-                _ => Some(SchemaMismatch::StatementOutcome {
+                ) if source_error != target_error => Some(SchemaMismatch::StatementOutcome {
                     reason: format!(
                         "statement {statement} PostgreSQL analysis outcomes differ: source {}, target {}",
                         statement_output_label(&source),
@@ -131,15 +130,33 @@ pub(super) fn output_program_mismatch(
                     source,
                     target,
                 }),
+                // Analysis acceptance is not execution success. In particular,
+                // an accepted statement can raise the other side's 22P02 at
+                // execution time. Keep checking later statements for definite
+                // mismatches, but do not turn this phase difference into NEQ.
+                _ => None,
             }
         },
     )
 }
 
+pub(super) fn has_mixed_analysis_outcomes(
+    source: &[StatementOutput],
+    target: &[StatementOutput],
+) -> bool {
+    source.iter().zip(target).any(|(source, target)| {
+        matches!(source, StatementOutput::AnalysisAccepted { .. })
+            != matches!(target, StatementOutput::AnalysisAccepted { .. })
+    })
+}
+
 fn statement_output_label(output: &StatementOutput) -> String {
     match output {
-        StatementOutput::Success { schema } => {
-            format!("succeeds with {} output columns", schema.columns.len())
+        StatementOutput::AnalysisAccepted { schema } => {
+            format!(
+                "analyzes with {} output columns (not executed)",
+                schema.columns.len()
+            )
         }
         StatementOutput::AnalysisError {
             error, sql_state, ..
@@ -301,7 +318,7 @@ mod tests {
         let schema = OutputSchema {
             columns: Vec::new(),
         };
-        let success = StatementOutput::Success { schema };
+        let success = StatementOutput::AnalysisAccepted { schema };
         let mismatch = output_program_mismatch(&[success.clone(), success.clone()], &[success])
             .expect("program lengths differ");
 
@@ -309,6 +326,60 @@ mod tests {
             mismatch.reason(),
             "query program length differs: source has 2 statements, target has 1"
         );
+    }
+
+    #[test]
+    fn mixed_analysis_outcomes_are_not_non_equivalence_evidence() {
+        let error = StatementOutput::AnalysisError {
+            error: FormalQueryError::InvalidTextRepresentation,
+            sql_state: "22P02".to_owned(),
+            message: "invalid input syntax for type integer".to_owned(),
+        };
+        let accepted = StatementOutput::AnalysisAccepted {
+            schema: OutputSchema { columns: vec![] },
+        };
+        for (source, target) in [(&error, &accepted), (&accepted, &error)] {
+            let source = std::slice::from_ref(source);
+            let target = std::slice::from_ref(target);
+            assert!(output_program_mismatch(source, target).is_none());
+            assert!(has_mixed_analysis_outcomes(source, target));
+        }
+        assert!(!has_mixed_analysis_outcomes(
+            std::slice::from_ref(&error),
+            std::slice::from_ref(&error),
+        ));
+        assert!(!has_mixed_analysis_outcomes(
+            std::slice::from_ref(&accepted),
+            std::slice::from_ref(&accepted),
+        ));
+        assert_eq!(
+            serde_json::to_value(&accepted).unwrap()["kind"],
+            "analysisAccepted"
+        );
+        assert!(statement_output_label(&accepted).contains("not executed"));
+    }
+
+    #[test]
+    fn mixed_analysis_outcome_does_not_hide_a_later_definite_mismatch() {
+        let error = StatementOutput::AnalysisError {
+            error: FormalQueryError::InvalidTextRepresentation,
+            sql_state: "22P02".to_owned(),
+            message: "invalid integer".to_owned(),
+        };
+        let accepted = StatementOutput::AnalysisAccepted {
+            schema: OutputSchema { columns: vec![] },
+        };
+        let different = StatementOutput::AnalysisError {
+            error: FormalQueryError::UndefinedColumn,
+            sql_state: "42703".to_owned(),
+            message: "missing column".to_owned(),
+        };
+        let mismatch = output_program_mismatch(&[error.clone(), error], &[accepted, different])
+            .expect("second statement has different definite errors");
+        assert!(matches!(
+            mismatch,
+            SchemaMismatch::StatementOutcome { statement: 2, .. }
+        ));
     }
 
     #[test]

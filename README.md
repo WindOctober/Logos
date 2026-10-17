@@ -171,9 +171,13 @@ Conditional results are reported separately as `CONDITIONAL-DERIVED` when the
 condition follows from the input contract and `CONDITIONAL-EXTERNAL` when it is
 an additional satisfiable assumption. The interface is implemented, but the
 conditional mode is not yet considered feature-complete or as mature as the
-two unconditional modes. Static output-type or modeled
-parse-analysis mismatches may terminate before proof search; all
-data-dependent `EQ` and `NEQ` results use the Rocq acceptance path.
+two unconditional modes. Static output-type mismatches or different modeled
+error categories reported by analysis on both sides may terminate before proof
+search. Analysis acceptance is not execution success: when only one side fails
+analysis, preflight is inconclusive and defers to lowering/proof, without
+certifying either EQ or NEQ. Preflight JSON records accepted statements as
+`analysisAccepted` (formerly `success`) and these mixed pairs as `inconclusive`.
+All data-dependent `EQ` and `NEQ` results use the Rocq acceptance path.
 
 ## Semantic Model
 
