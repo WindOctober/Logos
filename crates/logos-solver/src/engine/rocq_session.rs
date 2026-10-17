@@ -3,10 +3,11 @@
 //! Full checks still require the ordinary compiler. Explicit prefix probes
 //! return advisory goals only and never fall through to compilation.
 //!
-//! The launcher supplies the existing empty-root Rocq sandbox. One session is
-//! retained per broker, keyed by logical module and immutable dependency manifest.
+//! The launcher supplies the existing empty-root Rocq sandbox. A bounded LRU
+//! pool per broker separates candidates under the immutable dependency manifest.
 //! Protocol ambiguity falls back only for full checks; timeout destroys the session.
 
+use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;
@@ -24,21 +25,52 @@ const MAX_SENTENCE_BYTES: usize = 64 * 1024;
 pub(super) struct SessionKey {
     manifest: Arc<[u8]>,
     logical_name: String,
+    candidate_path: String,
 }
 
 impl SessionKey {
     pub fn new(manifest: Vec<u8>, logical_name: String) -> Self {
         Self {
             manifest: manifest.into(),
+            candidate_path: logical_name.clone(),
             logical_name,
+        }
+    }
+
+    pub fn for_candidate(mut self, path: &str) -> Self {
+        self.candidate_path = path.to_owned();
+        self
+    }
+}
+
+/// Per-broker retention limits, independent of benchmark worker count. The RSS
+/// limit is enforced between requests, not a hard limit on an executing tactic.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SessionLimits {
+    pub max_sessions: usize,
+    pub retained_rss_mib: u64,
+}
+
+impl Default for SessionLimits {
+    fn default() -> Self {
+        Self {
+            max_sessions: 0,
+            retained_rss_mib: 1024,
         }
     }
 }
 
-#[derive(Default)]
 pub(super) struct IncrementalDiagnostics {
-    session: Option<Session>,
+    // Least recently used first; requests still execute strictly sequentially.
+    sessions: VecDeque<Session>,
     retry_key: Option<SessionKey>,
+    limits: SessionLimits,
+}
+
+impl Default for IncrementalDiagnostics {
+    fn default() -> Self {
+        Self::new(SessionLimits::default())
+    }
 }
 
 pub(super) struct Diagnostic {
@@ -49,19 +81,88 @@ pub(super) struct Diagnostic {
 }
 
 impl IncrementalDiagnostics {
+    pub fn new(limits: SessionLimits) -> Self {
+        Self {
+            sessions: VecDeque::new(),
+            retry_key: None,
+            limits,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.sessions.clear();
+        self.retry_key = None;
+    }
+
+    fn synchronize(&mut self, key: &SessionKey) {
+        // Do not guess a smaller dependency closure. Every cached process saw
+        // a snapshot of the entire manifest; any change invalidates that view.
+        self.sessions.retain(|s| s.key.manifest == key.manifest);
+        if self
+            .retry_key
+            .as_ref()
+            .is_some_and(|k| k.manifest != key.manifest)
+        {
+            self.retry_key = None;
+        }
+        self.enforce_retention();
+    }
+
+    fn discard(&mut self, key: &SessionKey) {
+        self.sessions.retain(|s| s.key != *key);
+        if self.retry_key.as_ref() == Some(key) {
+            self.retry_key = None;
+        }
+    }
+
+    fn enforce_retention(&mut self) {
+        let budget = self.limits.retained_rss_mib.saturating_mul(1024 * 1024);
+        // A dead/unmeasurable process is not useful reusable state. Count the
+        // shell/bwrap/Rocq tree, not just the tiny launcher process.
+        let mut sizes = VecDeque::new();
+        self.sessions.retain_mut(|s| {
+            if matches!(s.child.try_wait(), Ok(None))
+                && let Some(bytes) = process_tree_rss(s.child.id())
+            {
+                sizes.push_back(bytes);
+                true
+            } else {
+                false
+            }
+        });
+        let mut total: u64 = sizes.iter().sum();
+        while self.sessions.len() > self.limits.max_sessions || total > budget {
+            self.sessions.pop_front();
+            total = total.saturating_sub(sizes.pop_front().unwrap_or(0));
+        }
+    }
+
     /// First-try successes need only one ordinary compilation. Start a REPL
     /// only after a failed compilation in this exact dependency/module context.
     pub fn prepare(&mut self, key: &SessionKey) -> bool {
-        if self.session.as_ref().is_some_and(|s| s.key != *key) {
-            self.session = None;
-        }
-        self.session.is_some() || self.retry_key.as_ref() == Some(key)
+        self.synchronize(key);
+        self.sessions.iter().any(|s| s.key == *key) || self.retry_key.as_ref() == Some(key)
     }
 
     pub fn observe_compiler(&mut self, key: &SessionKey, exit_code: Option<i32>) {
-        self.retry_key = (exit_code == Some(1)).then(|| key.to_owned());
+        self.synchronize(key);
+        // Retaining *live* sessions pays off; retaining old cold-failure hints
+        // across other compiler calls speculatively adds a REPL before success.
+        self.retry_key =
+            (exit_code == Some(1) && self.limits.max_sessions > 0).then(|| key.to_owned());
         if !matches!(exit_code, Some(0 | 1)) {
-            self.session = None;
+            self.discard(key);
+        }
+        self.enforce_retention();
+    }
+
+    /// Ordinary compilation needs its own Rocq process. Do not keep a duplicate
+    /// full-candidate REPL, and reserve one slot instead of growing to N+1
+    /// heavyweight processes per worker while the compiler is running.
+    pub fn reserve_compiler_slot(&mut self, key: &SessionKey) {
+        self.sessions.retain(|s| s.key != *key);
+        while !self.sessions.is_empty() && self.sessions.len() >= self.limits.max_sessions {
+            self.sessions.pop_front();
         }
     }
 
@@ -93,33 +194,62 @@ impl IncrementalDiagnostics {
         deadline: Instant,
         show_goals: bool,
     ) -> io::Result<Diagnostic> {
+        self.synchronize(key);
         self.retry_key = None;
         let Some(sentences) = sentences(source) else {
             // Unsupported syntax must not become a spurious proof failure.
-            self.session = None;
+            self.discard(key);
             return Err(io::Error::other(
                 "source requires ordinary compiler parsing",
             ));
         };
-        if self
-            .session
+        let mut saved = self
+            .sessions
+            .iter()
+            .position(|s| s.key == *key)
+            .and_then(|index| self.sessions.remove(index));
+        if saved
             .as_ref()
-            .is_none_or(|s| s.key != *key || s.rewind_crosses_closed_proof(&sentences))
+            .is_some_and(|s| s.rewind_crosses_closed_proof(&sentences))
         {
-            self.session = None;
-            self.session = Some(Session::start(key, command, deadline)?);
+            saved = None;
         }
-        let result = self
-            .session
-            .as_mut()
-            .unwrap()
-            .check(&sentences, deadline, show_goals);
-        if result.is_err() {
-            self.session = None;
-            self.retry_key = None;
+        // Evict before launching, so the count bound also holds during startup.
+        if saved.is_none() {
+            while !self.sessions.is_empty() && self.sessions.len() >= self.limits.max_sessions {
+                self.sessions.pop_front();
+            }
         }
+        let mut session = match saved {
+            Some(session) => session,
+            None => Session::start(key, command, deadline)?,
+        };
+        let result = session.check(&sentences, deadline, show_goals);
+        if result.is_ok() {
+            self.sessions.push_back(session);
+        }
+        self.enforce_retention();
         result
     }
+}
+
+fn process_tree_rss(pid: u32) -> Option<u64> {
+    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    if page_size <= 0 {
+        return None;
+    }
+    let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
+    let mut bytes = statm
+        .split_whitespace()
+        .nth(1)?
+        .parse::<u64>()
+        .ok()?
+        .checked_mul(page_size as u64)?;
+    let children = std::fs::read_to_string(format!("/proc/{pid}/task/{pid}/children")).ok()?;
+    for child in children.split_whitespace() {
+        bytes = bytes.checked_add(process_tree_rss(child.parse().ok()?)?)?;
+    }
+    Some(bytes)
 }
 
 struct Session {
@@ -537,6 +667,170 @@ fn sentences_through(source: &str, limit: Option<usize>) -> Option<Vec<&str>> {
 mod tests {
     use super::*;
 
+    fn enabled_pool() -> IncrementalDiagnostics {
+        IncrementalDiagnostics::new(SessionLimits {
+            max_sessions: 2,
+            ..SessionLimits::default()
+        })
+    }
+
+    #[test]
+    fn default_disables_retention_and_automatic_repl_retries() {
+        let mut pool = IncrementalDiagnostics::default();
+        assert_eq!(pool.limits.max_sessions, 0);
+        pool.observe_compiler(&key("env"), Some(1));
+        assert!(!pool.prepare(&key("env")));
+        assert!(pool.sessions.is_empty());
+    }
+
+    #[test]
+    #[ignore = "requires a local Rocq installation"]
+    fn real_default_probes_work_without_retaining_sessions() {
+        let mut pool = IncrementalDiagnostics::default();
+        for _ in 0..2 {
+            let diagnostic = pool
+                .probe(
+                    &key("env"),
+                    "Lemma x : True. Proof.",
+                    &mut real_command(),
+                    Instant::now() + Duration::from_secs(10),
+                )
+                .unwrap();
+            assert_eq!(diagnostic.reused, 0);
+            assert_eq!(diagnostic.executed, 2);
+            assert!(diagnostic.goals.unwrap().contains("True"));
+            assert!(pool.sessions.is_empty());
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a local Rocq installation"]
+    fn real_pool_reuses_candidates_evicts_lru_and_invalidates_dependencies() {
+        let mut pool = IncrementalDiagnostics::new(SessionLimits {
+            max_sessions: 2,
+            retained_rss_mib: 512,
+        });
+        let source = "Lemma x : True. Proof.";
+        let a = key("env").for_candidate("scratch/a.v");
+        let b = key("env").for_candidate("scratch/b.v");
+        let c = key("env").for_candidate("scratch/c.v");
+        let probe = |pool: &mut IncrementalDiagnostics, key: &SessionKey| {
+            pool.probe(
+                key,
+                source,
+                &mut real_command(),
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap()
+        };
+        assert_eq!(probe(&mut pool, &a).reused, 0);
+        assert_eq!(probe(&mut pool, &b).reused, 0);
+        assert_eq!(probe(&mut pool, &a).reused, 2);
+        assert_eq!(pool.sessions.len(), 2);
+        assert_eq!(probe(&mut pool, &c).reused, 0);
+        assert_eq!(probe(&mut pool, &a).reused, 2);
+        assert_eq!(probe(&mut pool, &b).reused, 0, "B was least recently used");
+        assert_eq!(
+            probe(&mut pool, &key("new-env").for_candidate("scratch/b.v")).reused,
+            0
+        );
+        assert_eq!(
+            pool.sessions.len(),
+            1,
+            "dependency change invalidates every old snapshot"
+        );
+        pool.limits.retained_rss_mib = 0;
+        pool.enforce_retention();
+        assert!(pool.sessions.is_empty());
+        assert_eq!(probe(&mut pool, &a).reused, 0);
+        assert!(
+            pool.sessions.is_empty(),
+            "over-budget state must not be retained"
+        );
+        pool.limits = SessionLimits {
+            max_sessions: 0,
+            retained_rss_mib: 512,
+        };
+        assert_eq!(probe(&mut pool, &a).reused, 0);
+        assert!(
+            pool.sessions.is_empty(),
+            "zero capacity still permits transient probes"
+        );
+        pool.limits = enabled_pool().limits;
+        probe(&mut pool, &a);
+        probe(&mut pool, &b);
+        pool.reserve_compiler_slot(&a);
+        assert_eq!(pool.sessions.len(), 1);
+        assert_eq!(
+            pool.sessions[0].key, b,
+            "compiler releases its duplicate session"
+        );
+        probe(&mut pool, &a);
+        pool.reserve_compiler_slot(&c);
+        assert_eq!(pool.sessions.len(), 1, "cold compiler also reserves a slot");
+        assert_eq!(
+            pool.sessions[0].key, a,
+            "cold compiler evicts the LRU entry"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a local Rocq installation"]
+    fn real_pool_timeout_discards_only_the_failed_candidate() {
+        let mut pool = enabled_pool();
+        let a = key("env").for_candidate("scratch/a.v");
+        let b = key("env").for_candidate("scratch/b.v");
+        let prefix = "Lemma x : True. Proof.";
+        for key in [&a, &b] {
+            pool.probe(
+                key,
+                prefix,
+                &mut real_command(),
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap();
+        }
+        assert!(
+            pool.probe(
+                &a,
+                &format!("{prefix} repeat (pose proof I)."),
+                &mut real_command(),
+                Instant::now() + Duration::from_millis(100)
+            )
+            .is_err()
+        );
+        let good = pool
+            .probe(
+                &b,
+                prefix,
+                &mut real_command(),
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap();
+        assert_eq!(good.reused, 2);
+        assert!(good.goals.unwrap().contains("True"));
+        assert_eq!(pool.sessions.len(), 1);
+    }
+
+    #[test]
+    fn pool_does_not_speculatively_warm_old_cold_failures() {
+        let mut pool = enabled_pool();
+        let a = key("env").for_candidate("scratch/a.v");
+        let b = key("env").for_candidate("scratch/b.v");
+        pool.observe_compiler(&a, Some(1));
+        pool.observe_compiler(&b, Some(0));
+        assert!(!pool.prepare(&a));
+        assert!(!pool.prepare(&b));
+        assert!(!pool.prepare(&key("changed")));
+        assert!(!pool.prepare(&a));
+        pool.limits.max_sessions = 0;
+        pool.clear();
+        assert_eq!(
+            pool.limits.max_sessions, 0,
+            "failure cleanup preserves configured limits"
+        );
+    }
+
     #[test]
     fn prefix_framing_does_not_parse_or_include_the_suffix() {
         let prefix = "Lemma p : True. Proof.";
@@ -576,7 +870,7 @@ mod tests {
 
     #[test]
     fn session_identity_compares_exact_manifest_bytes_and_module() {
-        let mut session = IncrementalDiagnostics::default();
+        let mut session = enabled_pool();
         let original = key("manifest-a");
         session.observe_compiler(&original, Some(1));
         // Equal bytes from a separate allocation are the same environment.
@@ -587,7 +881,10 @@ mod tests {
             "LogosGenerated.ProofModules.Helper".to_owned(),
         );
         assert!(!session.prepare(&other_module));
-        assert!(session.prepare(&original.clone()));
+        assert!(
+            !session.prepare(&original.clone()),
+            "manifest changes invalidate retry eligibility too"
+        );
     }
 
     #[test]
@@ -631,7 +928,7 @@ mod tests {
 
     #[test]
     fn cold_successes_do_not_start_a_session() {
-        let mut session = IncrementalDiagnostics::default();
+        let mut session = enabled_pool();
         assert!(!session.prepare(&key("a")));
         session.observe_compiler(&key("a"), Some(0));
         assert!(!session.prepare(&key("a")));
@@ -665,7 +962,7 @@ mod tests {
     #[test]
     #[ignore = "requires a local Rocq installation"]
     fn real_rocq_reuses_failed_prefix_rolls_back_and_invalidates() {
-        let mut session = IncrementalDiagnostics::default();
+        let mut session = enabled_pool();
         let mut command = real_command();
         let deadline = Instant::now() + Duration::from_secs(20);
         let first = session
@@ -715,7 +1012,7 @@ mod tests {
     #[test]
     #[ignore = "requires a local Rocq installation"]
     fn real_rocq_timeout_discards_state() {
-        let mut session = IncrementalDiagnostics::default();
+        let mut session = enabled_pool();
         let mut command = real_command();
         let error = session
             .check(
@@ -727,7 +1024,7 @@ mod tests {
             .err()
             .unwrap();
         assert_eq!(error.kind(), io::ErrorKind::TimedOut);
-        assert!(session.session.is_none());
+        assert!(session.sessions.is_empty());
         let repaired = session
             .check(
                 &key("env"),
@@ -743,7 +1040,7 @@ mod tests {
     #[test]
     #[ignore = "requires a local Rocq installation"]
     fn real_rocq_ambiguous_output_falls_back_and_complex_proofs_replay() {
-        let mut session = IncrementalDiagnostics::default();
+        let mut session = enabled_pool();
         let mut command = real_command();
         let deadline = Instant::now() + Duration::from_secs(20);
         let ambiguous = session.check(

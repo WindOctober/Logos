@@ -224,6 +224,17 @@ variables, shell startup state, exported functions, and loader/language paths
 therefore cannot silently change the pinned treatment; runner-owned solver
 options cannot be passed again through `--solver-arg`.
 
+REPL retention is disabled by default (pool size 0) and independently configurable;
+it does not assume 32 or 64 workers. To enable it, for example, pass
+`--solver-arg=--rocq-session-pool-size=2` and optionally
+`--solver-arg=--rocq-session-pool-rss-mib=1024` (the default RSS budget).
+Explicit prefix probes still work without retention.
+The RSS value is a per-case idle-session retention budget,
+not a hard cap on an executing tactic or the whole worker. Use explicit solver
+arguments here: the runner's cleared child environment does not forward ambient
+`LOGOS_ROCQ_SESSION_POOL_*` overrides. See the
+[session lifecycle and limits](../../crates/logos-solver/docs/incremental-rocq.md#bounded-session-retention).
+
 Every run also freezes canonical full and selected input manifests containing
 the exact `schema.sql`, `sql1.sql`, and `sql2.sql` digests; the dirty source-tree
 manifest; the solver executable digest; the configured Rocq and bubblewrap

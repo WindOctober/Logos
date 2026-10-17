@@ -1064,6 +1064,22 @@ impl DiagnosticBroker {
         &self.nonce
     }
 
+    /// Configure before exposing the socket to the agent. The broker remains
+    /// serialized; this only changes how many idle REPLs survive a request.
+    pub(super) fn with_session_limits(
+        self,
+        limits: crate::engine::rocq_session::SessionLimits,
+    ) -> Result<Self> {
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| diagnostic_evidence_error("broker state poisoned"))?;
+            state.incremental_diagnostics = IncrementalDiagnostics::new(limits);
+        }
+        Ok(self)
+    }
+
     pub(super) fn socket_path(&self) -> &Path {
         &self.socket_path
     }

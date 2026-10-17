@@ -25,6 +25,7 @@ pub struct Config {
     pub proof_agent_resume_command: String,
     pub proof_agent_memory_limit_mib: u64,
     pub proof_agent_storage_limit_mib: u64,
+    pub rocq_session_limits: super::rocq_session::SessionLimits,
     pub proof_agent_timeout_seconds: u64,
     pub proof_check_timeout_seconds: u64,
     pub proof_docker_image: String,

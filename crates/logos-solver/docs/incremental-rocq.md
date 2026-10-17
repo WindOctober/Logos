@@ -1,12 +1,15 @@
 # Incremental Rocq diagnostics
 
-The host diagnostic broker lazily retains one sandboxed `rocq repl -emacs`
-session per agent round. A cold candidate goes directly to the existing compiler;
-only an ordinary compiler rejection (exit code 1) enables incremental checking
-on subsequent revisions. Environment failures and timeouts do not warm a session.
-First-try successes therefore do not pay for a second check.
+Session retention is **disabled by default**. Explicit prefix probes still use
+transient sandboxed `rocq repl -emacs` sessions; full checks go directly to the
+ordinary compiler, including retries after a rejection.
 
-Explicit prefix probes can start a session even without a prior compiler rejection.
+When retention is explicitly enabled, the host diagnostic broker lazily retains
+a bounded pool of sessions per agent round. A full check without an existing session goes directly
+to the compiler; an ordinary compiler rejection (exit code 1) enables automatic
+REPL startup on subsequent revisions. Explicit probes can also start a session.
+Environment failures and timeouts do not warm one. Cold first-try full-check
+successes therefore do not pay for a second check.
 
 The session retains the successfully executed sentence prefix. A changed suffix
 uses `BackTo` to restore the exact common-prefix state, then runs only the new
@@ -27,7 +30,7 @@ The same `run-rocq-check.sh` interface accepts `--operation check` (default) or
 number. For example, `Lemma p : True. Proof. exact I. Qed.` at N=2 returns the
 open goal, at N=3 stops before Qed, and at N=4 still does not publish anything.
 
-A probe starts a REPL even when cold, reuses/rewinds its validated prefix, and
+A probe starts a REPL even when cold, reuses/rewinds its validated prefix when retention is enabled, and
 returns `Show.` goals (including hypotheses) when a proof is open. Framing stops
 at the selected complete sentence, so an incomplete or unsupported suffix cannot
 block it. Only that prefix is source-audited; all token/import restrictions
@@ -59,16 +62,52 @@ An LLM session restart, a proof-agent invocation/round, and a fixed-witness
 workspace generation are distinct lifetimes: the Rocq session lasts only for
 one broker/round, even if the same LLM session is resumed next round.
 
+## Bounded session retention
+
+The default is **zero retained sessions (disabled)**. The process-tree RSS budget
+defaults to **1024 MiB per broker** and applies when retention is enabled, with
+least-recently-used eviction. Configure the solver with
+`--rocq-session-pool-size N` (0 disables retention, maximum 16) and
+`--rocq-session-pool-rss-mib M`. The corresponding solver environment variables
+are `LOGOS_ROCQ_SESSION_POOL_SIZE` and `LOGOS_ROCQ_SESSION_POOL_RSS_MIB`.
+For example, `--rocq-session-pool-size 2` enables a two-session pool.
+The effective values are recorded in `proofAgentConfiguration`. Neither option
+depends on the benchmark worker count. These limits do not make requests parallel:
+one broker still executes one diagnostic at a time.
+
+Identity includes the candidate path, logical module and full dependency manifest.
+Thus two scratch files (both compiled as `LogosGenerated.Problem`) no longer evict
+each other's prefixes merely because they share a logical compilation name.
+Cold-start eligibility still follows only the most recent ordinary compiler
+failure; old failure hints are not pooled. Pooling those hints caused redundant
+REPL-plus-compiler work for later successes in historical replay.
+A timeout/protocol failure discards that candidate's session, not unrelated sessions.
+Unknown/dead process state is discarded, not reused.
+
+The RSS budget counts descendants (launcher, bubblewrap and Rocq), using `/proc`
+without spawning metadata tools. It is enforced at request boundaries, including
+after a tactic changes the process size. It is a **retention budget**, not a hard
+memory limit during an active tactic; active compiler and agent limits are separate.
+Before ordinary compilation, the matching REPL is released and an additional
+LRU slot is freed if necessary, avoiding N idle REPLs plus an extra compiler.
+With retention disabled, explicit probes still work in a transient session.
+
+Any dependency-manifest change still invalidates all prior snapshot sessions;
+no approximate import analysis is used. Sessions also remain round-scoped:
+the broker thread owns their parent-death handling and isolated temporary files.
+They are reaped before that thread exits. Cross-round reuse would require a
+generation-owned long-lived service, not moving child handles to a new thread.
+
 ## Isolation and invalidation
 
 - The existing empty-root bubblewrap sandbox holds an isolated dependency snapshot.
   Agent-controlled code never executes in an unsandboxed REPL.
 - The process-local session key compares the exact trusted dependency manifest
-  bytes and logical module name, without rehashing the manifest. The manifest is
+  bytes, logical module name and candidate path, without rehashing the manifest. The manifest is
   reread on each request; a changed manifest cannot reuse the old session.
   The enclosing broker binds the authority, runtime and workspace generation.
-  Module publication, a new generation/round, or a different logical module cannot
-  reuse old state. At most one session is retained per broker.
+  Module publication or a new generation/round cannot reuse old state. A different
+  candidate selects its own LRU entry if its dependency manifest is unchanged.
 - Every request shares one deadline across REPL execution and any compiler fallback.
   Timeout destroys the session. Protocol errors, unsupported lexical framing and
   response-size limits fall back to compilation for full checks; explicit probes

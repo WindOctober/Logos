@@ -142,7 +142,8 @@ pub(super) fn run_host_diagnostic_rocq_check(
                 // The broker lifetime binds authority, runtime and generated
                 // workspace generation. Publishing a module changes this manifest
                 // and invalidates the entire isolated REPL snapshot.
-                let key = SessionKey::new(manifest, logical_name.clone());
+                let key =
+                    SessionKey::new(manifest, logical_name.clone()).for_candidate(candidate_path);
                 compiler_key = Some(key.clone());
                 let mut command = trusted_rocq_check_command(
                     trusted_checker_path,
@@ -214,13 +215,16 @@ pub(super) fn run_host_diagnostic_rocq_check(
                 }
             } else {
                 // Let the existing checker classify absent/corrupt environments.
-                **session = IncrementalDiagnostics::default();
+                session.clear();
             }
         }
         if probe {
             return Err(std::io::Error::other(
                 "prefix probe requires an initialized diagnostic environment; no compiler fallback was attempted",
             ));
+        }
+        if let (Some((session, _)), Some(key)) = (incremental.as_mut(), compiler_key.as_ref()) {
+            session.reserve_compiler_slot(key);
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {

@@ -1545,6 +1545,7 @@ mod tests {
             proof_agent_resume_command: String::new(),
             proof_agent_memory_limit_mib: 512,
             proof_agent_storage_limit_mib: 512,
+            rocq_session_limits: Default::default(),
             proof_agent_timeout_seconds: 1,
             proof_check_timeout_seconds: 1,
             proof_docker_image: String::new(),

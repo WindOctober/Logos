@@ -365,6 +365,8 @@ pub struct ProofWorkspace {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProofAgentConfiguration {
+    pub rocq_session_pool_size: usize,
+    pub rocq_session_pool_rss_mib: u64,
     pub enabled: bool,
     pub command: String,
     pub resume_command: String,

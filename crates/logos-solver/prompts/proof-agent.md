@@ -469,7 +469,8 @@ wall-clock deadline. Use that time for iterative feedback, route revision, and
 proof search rather than treating it as the expected duration of one Rocq
 compile.
 
-For full checks, after a failed compilation, the host may retain an isolated Rocq session between
+Session retention is disabled by default; explicit probes still work using transient
+sessions. When retention is enabled, after a failed full compilation, the host may retain an isolated Rocq session between
 revisions and reuse the unchanged sentence prefix. First-try successes use the
 ordinary compiler directly. On failure incremental feedback includes the failing command
 and, when available, current goals. Keep unchanged prefixes stable when repairing

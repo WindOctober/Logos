@@ -94,6 +94,7 @@ fn proof_test_config(root: &Path) -> Config {
         proof_agent_resume_command: String::new(),
         proof_agent_memory_limit_mib: 512,
         proof_agent_storage_limit_mib: 512,
+        rocq_session_limits: Default::default(),
         proof_agent_timeout_seconds: 60,
         proof_check_timeout_seconds: 60,
         proof_docker_image: "test-image".to_owned(),
@@ -408,7 +409,12 @@ fn real_incremental_sandbox_diagnostics() {
         );
         baseline_ms += invocation.elapsed_ms;
     }
-    let mut session = crate::engine::rocq_session::IncrementalDiagnostics::default();
+    let mut session = crate::engine::rocq_session::IncrementalDiagnostics::new(
+        crate::engine::rocq_session::SessionLimits {
+            max_sessions: 2,
+            ..Default::default()
+        },
+    );
     let mut incremental_ms = 0;
     for index in 0..5 {
         let (invocation, output) = run(

@@ -596,6 +596,8 @@ fn base_proof_agent_configuration(
 ) -> Result<ProofAgentConfiguration> {
     let writable_storage_limit_bytes = proof_agent_storage_limit_bytes(options)?;
     Ok(ProofAgentConfiguration {
+        rocq_session_pool_size: options.rocq_session_limits.max_sessions,
+        rocq_session_pool_rss_mib: options.rocq_session_limits.retained_rss_mib,
         enabled: options.run_proof_agent,
         command: options.proof_agent_command.clone(),
         resume_command: options.proof_agent_resume_command.clone(),
@@ -1742,7 +1744,8 @@ fn execute_proof_agent_round(
         Instant::now()
             .checked_add(round_budget)
             .unwrap_or_else(Instant::now),
-    )?;
+    )?
+    .with_session_limits(options.rocq_session_limits)?;
     let mut process = proof_agent_launcher_command(
         &script_path,
         &logos_repo_root,

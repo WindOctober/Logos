@@ -137,6 +137,13 @@ enum Command {
             default_value_t = 2_048
         )]
         proof_agent_storage_limit_mib: u64,
+        /// Maximum retained REPLs per proof broker (default 0: retention disabled).
+        #[arg(long, env = "LOGOS_ROCQ_SESSION_POOL_SIZE", default_value_t = engine::SessionLimits::default().max_sessions as u64,
+            value_parser = clap::value_parser!(u64).range(0..=16))]
+        rocq_session_pool_size: u64,
+        /// Retained REPL process-tree RSS budget; not an active-tactic hard limit.
+        #[arg(long, env = "LOGOS_ROCQ_SESSION_POOL_RSS_MIB", default_value_t = engine::SessionLimits::default().retained_rss_mib)]
+        rocq_session_pool_rss_mib: u64,
         #[arg(
             long,
             env = "LOGOS_PROOF_AGENT_TIMEOUT",
@@ -212,6 +219,8 @@ fn run() -> Result<()> {
             proof_agent_resume_command,
             proof_agent_memory_limit_mib,
             proof_agent_storage_limit_mib,
+            rocq_session_pool_size,
+            rocq_session_pool_rss_mib,
             proof_agent_timeout_seconds,
             proof_check_timeout_seconds,
             proof_docker_image,
@@ -262,6 +271,10 @@ fn run() -> Result<()> {
                     proof_agent_resume_command,
                     proof_agent_memory_limit_mib,
                     proof_agent_storage_limit_mib,
+                    rocq_session_limits: engine::SessionLimits {
+                        max_sessions: rocq_session_pool_size as usize,
+                        retained_rss_mib: rocq_session_pool_rss_mib,
+                    },
                     proof_agent_timeout_seconds,
                     proof_check_timeout_seconds,
                     proof_docker_image,

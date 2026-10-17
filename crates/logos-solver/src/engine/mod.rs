@@ -5,6 +5,7 @@ mod counterexample;
 mod proof_stage;
 mod report;
 mod rocq_session;
+pub(crate) use rocq_session::SessionLimits;
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::VerificationInput;
