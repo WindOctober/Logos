@@ -27,6 +27,7 @@ use std::time::{Duration, Instant};
 
 use super::audit::{audit_proof_module_rocq_text, audit_rocq_text, audit_scratch_rocq_text};
 use super::checker::{is_trusted_rocq_environment_failure, run_host_diagnostic_rocq_check};
+use super::diagnostic_inputs::SharedInputs;
 use super::workspace::{
     ModulePublication, checked_proof_module_cache_source, persist_successful_scratch_candidate,
     recover_interrupted_trusted_cache_swap, validate_diagnostic_candidate_path,
@@ -35,8 +36,7 @@ use super::workspace::{
 use super::{
     CASE_PROCESS_SUPERVISOR_PID_ENVIRONMENT, DIAGNOSTIC_BROKER_HEADER_MAX_BYTES,
     DIAGNOSTIC_SOCKET_FILE, DIAGNOSTIC_SOCKET_TEMP_ROOT, PROOF_AGENT_HOST_TMP_DIRECTORY,
-    PROOF_AGENT_SESSION_HOME_COUNTER, copy_witness_support_sources, sha256_hex,
-    write_pretty_json_file,
+    PROOF_AGENT_SESSION_HOME_COUNTER, sha256_hex, write_pretty_json_file,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -884,6 +884,7 @@ struct RequestContext<'a> {
     round: usize,
     trusted_checker_path: &'a Path,
     proof_workdir: &'a Path,
+    shared_inputs: &'a SharedInputs,
     logos_repo_root: &'a Path,
     rocq_opam_switch: Option<&'a Path>,
     writable_storage_limit_bytes: u64,
@@ -903,6 +904,8 @@ impl DiagnosticBroker {
         writable_storage_limit_bytes: u64,
         deadline: Instant,
     ) -> Result<Self> {
+        let shared_inputs =
+            SharedInputs::prepare(artifacts_root, proof_workdir, workspace_generation)?;
         let socket_directory = SocketDirectory::create(artifacts_root, round)?;
         let socket_path = socket_directory.socket_path();
         let listener = UnixListener::bind(&socket_path).map_err(|source| {
@@ -959,6 +962,7 @@ impl DiagnosticBroker {
                     round,
                     trusted_checker_path: &trusted_checker_path,
                     proof_workdir: &proof_workdir,
+                    shared_inputs: &shared_inputs,
                     logos_repo_root: &logos_repo_root,
                     rocq_opam_switch: rocq_opam_switch.as_deref(),
                     writable_storage_limit_bytes,
@@ -1106,6 +1110,7 @@ fn run_diagnostic_broker_request(
         round,
         trusted_checker_path,
         proof_workdir,
+        shared_inputs,
         logos_repo_root,
         rocq_opam_switch,
         writable_storage_limit_bytes,
@@ -1338,6 +1343,7 @@ fn run_diagnostic_broker_request(
         match snapshot_interactive_diagnostic_candidate(
             artifacts_root,
             proof_workdir,
+            shared_inputs,
             round,
             sequence,
             request.mode,
@@ -1743,6 +1749,7 @@ fn run_diagnostic_broker_request(
 fn snapshot_interactive_diagnostic_candidate(
     artifacts_root: &Path,
     proof_workdir: &Path,
+    shared_inputs: &SharedInputs,
     round: usize,
     sequence: usize,
     mode: CandidateKind,
@@ -1763,42 +1770,30 @@ fn snapshot_interactive_diagnostic_candidate(
     let snapshot_dir = artifacts_root.join(format!(
         "proof-stage/proof-agent/rounds/{round:02}/interactive-diagnostics/{sequence:02}/checked-workspace"
     ));
-    std::fs::create_dir_all(&snapshot_dir).map_err(|source| Error::CreateDir {
-        path: snapshot_dir.clone(),
+    let parent = snapshot_dir.parent().expect("diagnostic snapshot parent");
+    std::fs::create_dir_all(parent).map_err(|source| Error::CreateDir {
+        path: parent.to_owned(),
         source,
     })?;
-    for name in [
-        "Schema.v",
-        "Queries.v",
-        "WitnessData.v",
-        "Witness.v",
-        "Goal.v",
-    ] {
-        let source_path = proof_workdir.join(name);
-        let source_metadata =
-            std::fs::symlink_metadata(&source_path).map_err(|source| Error::Read {
-                path: source_path.clone(),
-                source,
-            })?;
-        if !source_metadata.file_type().is_file() {
-            return Err(Error::ProofAgentCommand(format!(
-                "interactive diagnostic trusted input is not a regular file: {}",
-                source_path.display()
-            )));
-        }
-        let destination = snapshot_dir.join(name);
-        std::fs::copy(&source_path, &destination)
-            .map(|_| ())
-            .map_err(|source| Error::Write {
-                path: destination,
-                source,
-            })?;
-    }
-    copy_witness_support_sources(proof_workdir, &snapshot_dir)?;
-    let snapshot_candidate = match mode {
-        CandidateKind::Problem | CandidateKind::Scratch => snapshot_dir.join("Problem.v"),
-        CandidateKind::Module => snapshot_dir.join(candidate_path),
+    let stage = tempfile::Builder::new()
+        .prefix(".snapshot-")
+        .tempdir_in(parent)
+        .map_err(|source| Error::CreateDir {
+            path: parent.to_owned(),
+            source,
+        })?;
+    std::fs::set_permissions(stage.path(), std::fs::Permissions::from_mode(0o700)).map_err(
+        |source| Error::Write {
+            path: stage.path().to_owned(),
+            source,
+        },
+    )?;
+    shared_inputs.link_into(stage.path())?;
+    let candidate_relative = match mode {
+        CandidateKind::Problem | CandidateKind::Scratch => Path::new("Problem.v"),
+        CandidateKind::Module => candidate_path,
     };
+    let snapshot_candidate = stage.path().join(candidate_relative);
     if let Some(parent) = snapshot_candidate.parent() {
         std::fs::create_dir_all(parent).map_err(|source| Error::CreateDir {
             path: parent.to_owned(),
@@ -1807,7 +1802,7 @@ fn snapshot_interactive_diagnostic_candidate(
     }
     if mode == CandidateKind::Module {
         let source_problem = proof_workdir.join("Problem.v");
-        let destination_problem = snapshot_dir.join("Problem.v");
+        let destination_problem = stage.path().join("Problem.v");
         std::fs::copy(&source_problem, &destination_problem)
             .map(|_| ())
             .map_err(|source| Error::Write {
@@ -1819,5 +1814,10 @@ fn snapshot_interactive_diagnostic_candidate(
         path: snapshot_candidate.clone(),
         source,
     })?;
-    Ok((snapshot_dir, snapshot_candidate))
+    std::fs::rename(stage.path(), &snapshot_dir).map_err(|source| Error::Write {
+        path: snapshot_dir.clone(),
+        source,
+    })?;
+    let candidate = snapshot_dir.join(candidate_relative);
+    Ok((snapshot_dir, candidate))
 }

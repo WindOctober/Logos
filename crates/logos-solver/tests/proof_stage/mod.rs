@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -714,6 +714,28 @@ fn real_incremental_sandbox_diagnostics() {
     let outcome = broker.finish().unwrap();
     assert_eq!(outcome.invocations.len(), 8);
     assert!(outcome.latest_checkpoint.is_some());
+    let shared = artifacts.join("proof-stage/proof-agent/diagnostic-inputs/0001");
+    for sequence in 1..=8 {
+        let checked = artifacts.join(format!(
+            "proof-stage/proof-agent/rounds/01/interactive-diagnostics/{sequence:02}/checked-workspace"
+        ));
+        for name in [
+            "Schema.v",
+            "Queries.v",
+            "WitnessData.v",
+            "Witness.v",
+            "Goal.v",
+            "WitnessModules/ORDER",
+        ] {
+            let original = std::fs::metadata(workspace.join(name)).unwrap();
+            let saved = std::fs::metadata(shared.join(name)).unwrap();
+            let linked = std::fs::symlink_metadata(checked.join(name)).unwrap();
+            assert!(linked.is_file());
+            assert_ne!(saved.ino(), original.ino());
+            assert_eq!((saved.dev(), saved.ino()), (linked.dev(), linked.ino()));
+        }
+        assert!(checked.join("shared-inputs.json").is_file());
+    }
     for invocation in &outcome.invocations[4..7] {
         assert_eq!(invocation.mode.as_deref(), Some("module"));
         assert_eq!(
@@ -2562,6 +2584,7 @@ fn scratch_request_rejects_stale_schema_mode_path_and_checked_namespace() {
             .expect("write trusted test input");
     }
     let checker = root.join("checker-must-not-run.sh");
+    complete_broker_witness_fixture(&proof);
     std::fs::write(&checker, "#!/usr/bin/env bash\nexit 99\n").expect("write checker");
     let broker = DiagnosticBroker::start(
         &artifacts,

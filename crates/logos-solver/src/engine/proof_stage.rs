@@ -37,6 +37,7 @@ use crate::validation::FormalWitnessSnapshot;
 mod audit;
 mod checker;
 mod context;
+mod diagnostic_inputs;
 mod diagnostics;
 mod goal;
 mod handoff;

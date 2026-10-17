@@ -45,6 +45,32 @@ The upload, source audit and evidence snapshot are still performed per request.
 The optimization targets repeated **failing** revisions; it does not eliminate
 successful publication compilation or promise a whole-benchmark speedup.
 
+## Shared diagnostic inputs
+
+`Schema.v`, `Queries.v`, `WitnessData.v`, `Witness.v`, `Goal.v`, and the
+`WitnessModules` sources/order are copied once per workspace generation into
+`proof-stage/proof-agent/diagnostic-inputs/<generation>/`. The host creates this
+private snapshot before launching the agent, marks its files read-only, and
+atomically publishes it with a digest-bound `manifest.json`. Reopening a broker
+in the same generation compares the snapshot against the trusted workspace;
+drift fails closed rather than rewriting earlier evidence. A witness-generation
+change gets a separate snapshot.
+
+Each diagnostic's `checked-workspace` retains the existing regular-file layout
+using hard links **only to that host-owned snapshot**, never to the live workspace.
+`shared-inputs.json` binds the shared manifest by case-relative path, size and
+SHA-256. Candidate uploads remain independent files. Module diagnostics also
+retain a separate copy of the current mutable `Problem.v`; it is not shared.
+An incomplete diagnostic workspace is discarded before it can become evidence.
+
+Neither the agent nor the Rocq sandbox can write these shared inodes: they are
+outside the agent's writable mounts, and the checker mounts source inputs
+read-only while using separate writable compiler outputs. Deleting one diagnostic
+does not remove the shared contents or affect other diagnostics. The layout uses
+same-filesystem hard links under the case artifact root; failure to create a link
+is an error, not a fallback to a live-workspace link. This changes source storage,
+not the REPL success boundary, compiled-object cache, or final kernel checking.
+
 ## Evidence and tests
 
 Diagnostic stderr records `LOGOS_ROCQ_INCREMENTAL` with `cold`, `fallback`,
