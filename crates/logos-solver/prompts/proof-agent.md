@@ -192,9 +192,12 @@ or extensionality premise.
 ## Writable and trusted files
 
 `Problem.v` is the live proof route from the beginning, but it need not contain
-every helper. Place route-required opaque `Qed` lemmas in flat modules named
-`ProofModules/<UppercaseRocqIdentifier>.v`. Submit each module through module
-mode before importing it. The file `ProofModules/<Name>.v` has logical name
+every helper. Choose a fresh module name before developing a reusable helper.
+Prefer drafts at `scratch/ProofModules/<UppercaseRocqIdentifier>.v` so unfinished
+work survives a round boundary, and submit them directly through **module mode**
+from the first attempt. `ProofModules/<UppercaseRocqIdentifier>.v` is also accepted,
+but unpublished files there do not survive a round boundary. Both source locations
+are checked and published as `ProofModules/<Name>.v`, with logical name
 `LogosGenerated.ProofModules.<Name>`. A successful module check atomically publishes those
 exact source bytes and their `.vo` into the host's ordered module cache. It then
 becomes immutable: do not edit or replace it. Put later work in a newly named
@@ -210,28 +213,37 @@ proved, the required final selector and theorem. A compile-clean development
 checkpoint may intentionally omit that final theorem; an intentionally broken
 placeholder theorem is not a checkpoint. Do not remove or rewrite its
 generated base `Require` commands; adding these `LogosGenerated.ProofModules`
-imports is allowed. The host independently recompiles every published module
-in cache order before compiling `Problem.v` and `Goal.v` during the final
-trusted verification.
+imports is allowed. Final trusted verification validates the exact published
+source/object bindings, reuses checked objects where available, and kernel-checks
+the proof dependency closure after assembling `Problem.v` and `Goal.v`.
 
 Regular UTF-8 `.v`, `.md`, and `.txt` work files are retained below `scratch/`.
 Other regular-file extensions are dropped with a host warning at the round
 boundary and are unavailable after resume; they do not fail the proof round.
 Unsafe paths, symlinks, and non-regular entries remain fatal.
 `scratch/checked/` is a host-owned cache of passing digests. Copy checked work
-out before editing. Scratch is untrusted: never import or submit it as a final
-input, checkpoint, or certificate. In contrast, `ProofModules/` is part of the
+out before editing. Scratch is untrusted: a scratch-mode pass is never a final
+input, checkpoint, or certificate, and scratch paths must not be imported.
+Submitting a draft under `scratch/ProofModules/` through module mode is allowed:
+only the host-published, checked copy under its final logical name becomes a
+dependency. In contrast, `ProofModules/` is part of the
 final checked dependency graph, but only exact module-mode successes survive a
-round. The container handoff never publishes that directory.
+round there. The container handoff never publishes that directory. A draft in
+`scratch/ProofModules/` persists as untrusted WIP, not as a dependency; its location
+does not weaken module-mode auditing. Failed attempts may revise the same name
+until it is published. Once published, neither editing the draft nor moving it
+to another source location permits replacing that logical module.
 
-Scratch `.v` files may isolate work in local `Module` or `Section`; any
+Scratch and helper-module `.v` files may isolate work in local `Module` or `Section`; any
 `Variable` or `Context` must be generalized into an opaque `Qed` lemma, never
 used as an assumption. Scratch forbids assumptions, admits, aborts, `Defined`,
 unsafe commands, and untrusted imports. Every checked scratch subgoal must end
 in an opaque `Qed` result, and scratch files must not import one another.
 
-After a checked scratch theorem closes the active DAG node, move its opaque
-statement into a new proof module and check that module. Then import and
+Use scratch mode only for disposable experiments whose module boundary is not
+yet known. Do not first scratch-check a reusable helper and then copy it into a
+module for another check: module mode already supports failed iterations and
+publishes the first successful version under its final logical name. Then import and
 instantiate the immutable module in the current assembly application of its
 direct parent, and continue rechecking the path through the root composition.
 Do not rewrite a published parent; create a successor assembly module if the
@@ -364,31 +376,37 @@ bash run-rocq-check.sh \
 
 The first exploratory diagnostic may fail while exposing the direct contracts,
 but replace that probe with a compile-clean root composition before deep local
-work. Once the route is established, check the active leaf in isolation:
-
-```bash
-bash run-rocq-check.sh \
-  --mode scratch \
-  --candidate scratch/core-bridge.v \
-  --purpose semantic-equivalence \
-  --timeout-seconds 60
-```
-
-Use purpose `static-obligation`, `semantic-equivalence`, or `assembly`. A
-scratch pass proves only that exact digest compiled; it never advances the
-restart checkpoint or final-theorem eligibility.
-
-Once a helper boundary is coherent, give it a fresh module name and publish it:
+work. Once the route is established, choose the active leaf's final module name
+and develop it in isolation. Create `scratch/ProofModules/` as needed:
 
 ```bash
 bash run-rocq-check.sh \
   --mode module \
-  --candidate ProofModules/CoreBridge.v \
+  --candidate scratch/ProofModules/CoreBridge.v \
   --purpose semantic-equivalence \
   --timeout-seconds 60
 ```
 
-A successful response means that exact module is now an immutable dependency.
+Use purpose `static-obligation`, `semantic-equivalence`, or `assembly`.
+On failure, revise this draft and repeat the same module-mode command. On success,
+the host has already compiled it as `LogosGenerated.ProofModules.CoreBridge` and
+published the exact source/object pair. Import it immediately; no copy to
+`ProofModules/`, scratch precheck, or second module check is needed.
+
+For a disposable probe with no decided reusable module boundary, scratch mode
+remains available (its objects cannot later be renamed into module objects):
+
+```bash
+bash run-rocq-check.sh \
+  --mode scratch \
+  --candidate scratch/probe.v \
+  --purpose semantic-equivalence \
+  --timeout-seconds 60
+```
+
+A scratch pass retains only the exact passing source; it does not publish a
+module or advance the root checkpoint. A successful **module-mode** response
+means that exact module is now an immutable dependency.
 Do not modify it or resubmit the same name with different bytes. Create, check,
 and import a new successor such as `CoreBridge2.v` when extending or correcting
 the proof. This append-only discipline lets later diagnostics reuse earlier
@@ -511,7 +529,7 @@ host-generated lemma shortlist is provided.
 
 In `Problem.v`, never introduce assumptions with `Axiom`, `Parameter`,
 `Hypothesis`, `Conjecture`, `Variable`, or `Context`, and do not add modules or
-sections. The narrowly described scratch Section/Module exception only permits
+sections. The narrowly described helper/scratch Section/Module exception only permits
 kernel-generalized binders inside a `Qed` result. In every file, never use
 `Admitted`, `admit`, `Abort`, `Fail`, `Unshelve`, or `Coercion`; never disable
 kernel checks; and do not add notation, tactics, file-output commands, or

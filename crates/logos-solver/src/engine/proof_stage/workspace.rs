@@ -1550,10 +1550,17 @@ pub(super) fn recover_interrupted_trusted_cache_swap(trusted_checker_path: &Path
 /// module registry says the name is checked and its source/object pair is safe.
 /// Absence from ORDER means a same-named workspace file is merely an orphaned
 /// pre-publication source and must not acquire append-only status.
+/// These bytes and their digest were validated together against the on-disk
+/// manifest. Reuse that digest within this request, never across checker calls.
+pub(super) struct CheckedProofModuleSource {
+    pub(super) bytes: Vec<u8>,
+    pub(super) sha256: String,
+}
+
 pub(super) fn checked_proof_module_cache_source(
     trusted_checker_path: &Path,
     candidate_path: &Path,
-) -> Result<Option<Vec<u8>>> {
+) -> Result<Option<CheckedProofModuleSource>> {
     let candidate = candidate_path.to_str().ok_or_else(|| {
         Error::TrustedRocqEnvironment("proof module candidate path is not UTF-8".to_owned())
     })?;
@@ -1712,5 +1719,8 @@ pub(super) fn checked_proof_module_cache_source(
             "trusted cache source/object digest binding is invalid for {file_name}"
         )));
     }
-    Ok(Some(source))
+    Ok(Some(CheckedProofModuleSource {
+        bytes: source,
+        sha256: source_digest,
+    }))
 }

@@ -592,9 +592,132 @@ fn real_incremental_sandbox_diagnostics() {
             );
         }
     }
+    // A persisted scratch draft is submitted in MODULE mode from its first
+    // revision. The real wrapper maps only its wire path; the existing
+    // broker must audit/publish it under the final logical module name.
+    let wrapper = stage.join("run-rocq-check.sh");
+    std::fs::write(&wrapper, FORMAL_SQL_ROCQ_CHECK_REQUEST_SCRIPT).unwrap();
+    std::fs::create_dir_all(stage.join("scratch/ProofModules")).unwrap();
+    let draft = stage.join("scratch/ProofModules/DraftBridge.v");
+    let check_draft = || {
+        Command::new("bash")
+            .arg(&wrapper)
+            .args([
+                "--mode",
+                "module",
+                "--candidate",
+                "scratch/ProofModules/DraftBridge.v",
+                "--purpose",
+                "semantic-equivalence",
+                "--timeout-seconds",
+                "30",
+            ])
+            .env("LOGOS_PROOF_DIAGNOSTIC_SOCKET", broker.socket_path())
+            .env("LOGOS_PROOF_DIAGNOSTIC_NONCE", broker.nonce())
+            .output()
+            .unwrap()
+    };
+    std::fs::write(&draft, "Lemma draft_fact : True. Proof. exact 0. Qed.\n").unwrap();
+    assert!(!check_draft().status.success());
+    assert!(!workspace.join("ProofModules/DraftBridge.v").exists());
+    assert!(!cache.join("ProofModules/DraftBridge.vo").exists());
+    assert!(draft.is_file(), "failed draft remains editable");
+
+    let draft_source = "Lemma draft_fact : True. Proof. exact I. Qed.\n";
+    std::fs::write(&draft, draft_source).unwrap();
+    let published = check_draft();
+    assert!(
+        published.status.success(),
+        "{}",
+        String::from_utf8_lossy(&published.stderr)
+    );
+    assert!(String::from_utf8_lossy(&published.stdout).contains("No copy or second module check"));
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("ProofModules/DraftBridge.v")).unwrap(),
+        draft_source
+    );
+    assert!(
+        !stage.join("ProofModules/DraftBridge.v").exists(),
+        "no client-side source copy is required"
+    );
+    let object = std::fs::read(cache.join("ProofModules/DraftBridge.vo")).unwrap();
+    assert!(!object.is_empty());
+    let repeated = check_draft();
+    assert!(
+        repeated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&repeated.stderr)
+    );
+    assert!(String::from_utf8_lossy(&repeated.stderr).contains("already_cached=true"));
+    assert_eq!(
+        std::fs::read(cache.join("ProofModules/DraftBridge.vo")).unwrap(),
+        object
+    );
+
+    std::fs::write(
+        &draft,
+        format!("{draft_source}(* changed after publication *)\n"),
+    )
+    .unwrap();
+    let changed = check_draft();
+    assert!(!changed.status.success());
+    assert!(String::from_utf8_lossy(&changed.stderr).contains("immutable"));
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("ProofModules/DraftBridge.v")).unwrap(),
+        draft_source
+    );
+    assert_eq!(
+        std::fs::read(cache.join("ProofModules/DraftBridge.vo")).unwrap(),
+        object
+    );
+
+    let assembled = "From LogosGenerated Require Import Schema Queries Witness.\nFrom LogosGenerated.ProofModules Require Import DraftBridge.\nTheorem sandbox_problem_marker : sandbox_query_marker.\nProof. exact draft_fact. Qed.".to_owned();
+    std::fs::write(stage.join("Problem.v"), &assembled).unwrap();
+    let response = send_diagnostic_broker_request(
+        broker.socket_path(),
+        &stage,
+        serde_json::json!({
+            "schemaVersion": 2, "nonce": broker.nonce(), "mode": "problem",
+            "candidatePath": "Problem.v", "purpose": "assembly",
+            "candidateSha256": sha256_hex(assembled.as_bytes()), "requestedTimeoutSeconds": 30,
+        }),
+    );
+    assert_eq!(response["compilePassed"], true, "{response}");
     let outcome = broker.finish().unwrap();
-    assert_eq!(outcome.invocations.len(), 4);
-    assert!(outcome.latest_checkpoint.is_none());
+    assert_eq!(outcome.invocations.len(), 8);
+    assert!(outcome.latest_checkpoint.is_some());
+    for invocation in &outcome.invocations[4..7] {
+        assert_eq!(invocation.mode.as_deref(), Some("module"));
+        assert_eq!(
+            invocation.candidate_path.as_deref(),
+            Some("ProofModules/DraftBridge.v")
+        );
+        assert_eq!(invocation.compile_checkpoint_advanced, Some(false));
+    }
+    assert_eq!(outcome.invocations[4].compile_passed, Some(false));
+    assert_eq!(outcome.invocations[5].compile_passed, Some(true));
+    // Final assembly imports the original object at its original logical
+    // name and still passes the unchanged kernel-check closure.
+    std::fs::write(workspace.join("Problem.v"), assembled).unwrap();
+    let final_check = trusted_rocq_check_command(
+        &checker,
+        &workspace,
+        &authority,
+        Some(&switch),
+        Duration::from_secs(60),
+        CheckMode::Full,
+    )
+    .output()
+    .unwrap();
+    assert!(
+        final_check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&final_check.stderr)
+    );
+    assert_eq!(
+        std::fs::read(cache.join("ProofModules/DraftBridge.vo")).unwrap(),
+        object
+    );
     assert_eq!(
         std::fs::read_dir(temp.path().join("host-tmp"))
             .unwrap()
@@ -995,6 +1118,7 @@ fn module_promotion_rolls_back_failure_and_replaces_only_unchecked_orphans() {
             .expect("write trusted module transaction input");
     }
     std::fs::write(cache_modules.join("ORDER"), "").expect("write empty module order");
+    complete_broker_witness_fixture(&proof);
     std::fs::write(
         cache_modules
             .parent()
@@ -1014,7 +1138,6 @@ fn module_promotion_rolls_back_failure_and_replaces_only_unchecked_orphans() {
     )
     .expect("write interrupted unchecked orphan");
 
-    complete_broker_witness_fixture(&proof);
     let broker = DiagnosticBroker::start(
         &artifacts,
         5,
@@ -1050,7 +1173,7 @@ fn module_promotion_rolls_back_failure_and_replaces_only_unchecked_orphans() {
 
     std::fs::write(
         &checker,
-        "#!/usr/bin/env bash\nset -euo pipefail\ncp \"$LOGOS_PROOF_WORKDIR/ProofModules/CoreFacts.v\" \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/CoreFacts.v\"\nprintf 'host compiler object\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/CoreFacts.vo\"\nprintf 'CoreFacts.v\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/ORDER\"\ncd \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\"\nsha256sum ProofModules/ORDER ProofModules/CoreFacts.v ProofModules/CoreFacts.vo >SHA256SUMS\n",
+        "#!/usr/bin/env bash\nset -euo pipefail\nif [[ ${1:-} == --interactive-diagnostic ]]; then exit 64; fi\ncp \"$LOGOS_PROOF_WORKDIR/ProofModules/CoreFacts.v\" \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/CoreFacts.v\"\nprintf 'host compiler object\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/CoreFacts.vo\"\nprintf 'CoreFacts.v\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/ORDER\"\ncd \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\"\nsha256sum ProofModules/ORDER ProofModules/CoreFacts.v ProofModules/CoreFacts.vo >SHA256SUMS\n",
     )
     .expect("write successful module checker");
     let passed = send_diagnostic_broker_request(broker.socket_path(), &stage, request);
@@ -1081,7 +1204,7 @@ fn module_promotion_rolls_back_failure_and_replaces_only_unchecked_orphans() {
     std::fs::write(
         &checker,
         format!(
-            "#!/usr/bin/env bash\nset -euo pipefail\nmv -T \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\" \"{}\"\nmkdir \"{}\"\nexit 137\n",
+            "#!/usr/bin/env bash\nset -euo pipefail\nif [[ ${{1:-}} == --interactive-diagnostic ]]; then exit 64; fi\nmv -T \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\" \"{}\"\nmkdir \"{}\"\nexit 137\n",
             gap_old.display(),
             gap_stage.display()
         ),
@@ -1123,7 +1246,7 @@ fn module_promotion_rolls_back_failure_and_replaces_only_unchecked_orphans() {
         .expect("write late-signal module candidate");
     std::fs::write(
         &checker,
-        "#!/usr/bin/env bash\nset -euo pipefail\ncp \"$LOGOS_PROOF_WORKDIR/ProofModules/LateFacts.v\" \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/LateFacts.v\"\nprintf 'host compiler object\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/LateFacts.vo\"\nprintf 'LateFacts.v\\n' >>\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/ORDER\"\ncd \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\"\nsha256sum ProofModules/ORDER ProofModules/CoreFacts.v ProofModules/CoreFacts.vo ProofModules/LateFacts.v ProofModules/LateFacts.vo >SHA256SUMS\nexit 143\n",
+        "#!/usr/bin/env bash\nset -euo pipefail\nif [[ ${1:-} == --interactive-diagnostic ]]; then exit 64; fi\ncp \"$LOGOS_PROOF_WORKDIR/ProofModules/LateFacts.v\" \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/LateFacts.v\"\nprintf 'host compiler object\\n' >\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/LateFacts.vo\"\nprintf 'LateFacts.v\\n' >>\"$LOGOS_TRUSTED_ROCQ_CACHE_DIR/ProofModules/ORDER\"\ncd \"$LOGOS_TRUSTED_ROCQ_CACHE_DIR\"\nsha256sum ProofModules/ORDER ProofModules/CoreFacts.v ProofModules/CoreFacts.vo ProofModules/LateFacts.v ProofModules/LateFacts.vo >SHA256SUMS\nexit 143\n",
     )
     .expect("write post-publication signal checker");
     let late = send_diagnostic_broker_request(
@@ -5191,7 +5314,10 @@ fn proof_agent_diagnostic_wrapper_requires_strict_v2_mode_path_and_purpose() {
         "## Active node",
         "compile-clean composition theorem",
         "--mode scratch",
-        "--candidate scratch/core-bridge.v",
+        "--candidate scratch/ProofModules/CoreBridge.v",
+        "--candidate scratch/probe.v",
+        "no copy to",
+        "second module check is needed",
         "--purpose semantic-equivalence",
         "--mode problem",
         "--candidate Problem.v",
@@ -6186,4 +6312,32 @@ fn proof_audit_accepts_generated_trusted_imports() {
          Check int64_bit_or_fold_distinct_invariant.\n",
     );
     assert!(audit_rocq_text("proof-stage/formal-sql/Problem.v", &source).is_empty());
+}
+
+#[test]
+fn unpublished_module_named_drafts_survive_rounds_without_becoming_dependencies() {
+    let fixture = tempfile::tempdir().unwrap();
+    let stage = fixture.path().join("stage");
+    let proof = fixture.path().join("proof");
+    let resumed = fixture.path().join("resumed");
+    let draft = "scratch/ProofModules/CoreBridge.v";
+    std::fs::create_dir_all(stage.join("scratch/ProofModules")).unwrap();
+    std::fs::create_dir_all(&proof).unwrap();
+    std::fs::create_dir_all(&resumed).unwrap();
+    let unfinished = "Lemma bridge : True. Proof. exact 0.\n";
+    std::fs::write(stage.join(draft), unfinished).unwrap();
+    super::workspace::persist_round_scratch(&stage, &proof).unwrap();
+    super::workspace::hydrate_round_scratch(&proof, &resumed).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(resumed.join(draft)).unwrap(),
+        unfinished
+    );
+    for workspace in [&proof, &resumed] {
+        assert!(!workspace.join("ProofModules/CoreBridge.v").exists());
+        assert!(
+            !workspace
+                .join("scratch/checked/ProofModules/CoreBridge.v")
+                .exists()
+        );
+    }
 }

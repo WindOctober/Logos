@@ -7,7 +7,10 @@ set -euo pipefail
 # verifies its digest, runs the corresponding diagnostic in bubblewrap, records
 # authoritative telemetry, and returns compiler output. A passing module is
 # published only by the host into its immutable append-only module cache;
-# scratch bytes never enter the final dependency graph.
+# Ordinary scratch checks never enter the final dependency graph. Module-mode
+# drafts may live at scratch/ProofModules/<Name>.v for WIP persistence, but are
+# submitted, audited, compiled and published as ProofModules/<Name>.v from the
+# first attempt. No scratch-mode result or renamed object is reused.
 # The broker has no final-check operation and exposes neither a Rocq switch nor
 # a shell command surface to the container.
 unset LOGOS_UNTRUSTED_AGENT_CHECK
@@ -19,6 +22,7 @@ unset LOGOS_HOST_DIAGNOSTIC_CHECK
 
 usage() {
   echo "usage: bash run-rocq-check.sh --mode <problem|module|scratch> --candidate <Problem.v|ProofModules/Name.v|scratch/*.v> --purpose <static-obligation|semantic-equivalence|assembly> [--timeout-seconds <positive>]" >&2
+  echo "module mode also accepts scratch/ProofModules/Name.v; a successful check publishes ProofModules/Name.v immediately" >&2
 }
 
 requested_timeout="${LOGOS_PROOF_AGENT_TIMEOUT:-}"
@@ -68,8 +72,8 @@ case "$mode" in
     }
     ;;
   module)
-    [[ "$candidate" =~ ^ProofModules/[A-Z][A-Za-z0-9_]*\.v$ ]] || {
-      echo "module mode requires --candidate ProofModules/<UppercaseRocqIdentifier>.v" >&2
+    [[ "$candidate" =~ ^(scratch/)?ProofModules/[A-Z][A-Za-z0-9_]*\.v$ ]] || {
+      echo "module mode requires --candidate [scratch/]ProofModules/<UppercaseRocqIdentifier>.v" >&2
       exit 64
     }
     ;;
@@ -137,15 +141,16 @@ if any(part in ("", ".", "..") for part in parts):
 if mode == "problem" and candidate_path != "Problem.v":
     raise SystemExit("problem mode requires Problem.v")
 if mode == "module":
+    module_parts = parts[1:] if parts[0] == "scratch" else parts
     if (
-        len(parts) != 2
-        or parts[0] != "ProofModules"
-        or not parts[1].endswith(".v")
+        len(module_parts) != 2
+        or module_parts[0] != "ProofModules"
+        or not module_parts[1].endswith(".v")
     ):
         raise SystemExit(
-            "module mode requires ProofModules/<UppercaseRocqIdentifier>.v"
+            "module mode requires [scratch/]ProofModules/<UppercaseRocqIdentifier>.v"
         )
-    stem = parts[1][:-2]
+    stem = module_parts[1][:-2]
     if (
         not stem
         or not stem[0].isascii()
@@ -170,6 +175,12 @@ with open(candidate_file, "rb") as stream:
         candidate_sha256_state.update(block)
 candidate_sha256 = candidate_sha256_state.hexdigest()
 candidate_bytes = candidate_stat.st_size
+# Keep candidate_file pointing at the exact WIP bytes. Only the wire identity
+# changes: the existing host module pipeline owns the snapshot, strict module
+# audit, final logical name, immutable cache and publication transaction. A
+# successful draft check IS publication, never a preliminary scratch check.
+if mode == "module" and parts[0] == "scratch":
+    candidate_path = "/".join(module_parts)
 request = {
     "schemaVersion": 2,
     "nonce": nonce,
@@ -224,9 +235,9 @@ if result.get("compilePassed") is True:
         )
     elif mode == "module":
         sys.stdout.write(
-            "Host module compile passed and published this exact source into the "
+            f"Host module compile passed for {candidate_path} and published this exact source into the "
             "immutable ordered ProofModules cache. Do not modify this module; create "
-            "a new successor module for further lemmas.\n"
+            "a new successor module for further lemmas. No copy or second module check is needed.\n"
         )
     else:
         sys.stdout.write(

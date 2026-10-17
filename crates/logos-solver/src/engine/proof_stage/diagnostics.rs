@@ -1277,6 +1277,36 @@ fn run_diagnostic_broker_request(
         ));
     }
 
+    // Reject edits to published names before allocating a diagnostic snapshot.
+    // Such requests do not consume an invocation sequence. Rejecting after
+    // snapshot creation left that sequence's WitnessModules directory behind,
+    // poisoning the next otherwise-valid request in this same broker session.
+    // The serialized broker binds the checked cache throughout this request.
+    let checked_module_source = if request.mode == CandidateKind::Module {
+        let source = match recover_interrupted_trusted_cache_swap(trusted_checker_path)
+            .and_then(|()| checked_proof_module_cache_source(trusted_checker_path, &candidate_path))
+        {
+            Ok(source) => source,
+            Err(error) => {
+                let message = error.to_string();
+                record_diagnostic_environment_error(state, message.clone());
+                return rejected(message);
+            }
+        };
+        if source
+            .as_ref()
+            .is_some_and(|source| source.sha256 != uploaded_sha256)
+        {
+            return rejected(format!(
+                "checked proof module {} is immutable; create a new module name for revised source",
+                request.candidate_path
+            ));
+        }
+        source
+    } else {
+        None
+    };
+
     let sequence = {
         let mut locked = match state.lock() {
             Ok(locked) => locked,
@@ -1484,35 +1514,12 @@ fn run_diagnostic_broker_request(
     // current cache still lacks this logical name until the checker succeeds.
     let mut module_was_checked_before = false;
     let mut pending_module_publication = if request.mode == CandidateKind::Module {
-        if let Err(error) = recover_interrupted_trusted_cache_swap(trusted_checker_path) {
-            let message = error.to_string();
-            record_diagnostic_environment_error(state, message.clone());
-            return rejected(message);
-        }
-        let checked_source =
-            match checked_proof_module_cache_source(trusted_checker_path, &candidate_path) {
-                Ok(source) => source,
-                Err(error) => {
-                    let message = error.to_string();
-                    record_diagnostic_environment_error(state, message.clone());
-                    return rejected(message);
-                }
-            };
-        if checked_source
-            .as_ref()
-            .is_some_and(|source| source.as_slice() != mapped_problem.as_bytes())
-        {
-            return rejected(format!(
-                "checked proof module {} is immutable; create a new module name for revised source",
-                request.candidate_path
-            ));
-        }
-        module_was_checked_before = checked_source.is_some();
+        module_was_checked_before = checked_module_source.is_some();
         match ModulePublication::prepare(
             proof_workdir,
             &candidate_path,
             mapped_problem.as_bytes(),
-            checked_source.is_some(),
+            module_was_checked_before,
         ) {
             Ok(publication) => Some(publication),
             Err(error) => return rejected(error.to_string()),
@@ -1556,7 +1563,7 @@ fn run_diagnostic_broker_request(
             });
         if compile_passed {
             match recovered_cache_source {
-                Ok(Some(source)) if source.as_slice() == mapped_problem.as_bytes() => {
+                Ok(Some(source)) if source.bytes.as_slice() == mapped_problem.as_bytes() => {
                     publication.commit();
                 }
                 Ok(_) => {
@@ -1590,7 +1597,7 @@ fn run_diagnostic_broker_request(
             }
         } else {
             match recovered_cache_source {
-                Ok(Some(source)) if source.as_slice() == mapped_problem.as_bytes() => {
+                Ok(Some(source)) if source.bytes.as_slice() == mapped_problem.as_bytes() => {
                     // A late signal/timeout may make the wrapper report failure
                     // after the trusted checker atomically published its cache.
                     // Retain the already-installed exact source so no outcome
