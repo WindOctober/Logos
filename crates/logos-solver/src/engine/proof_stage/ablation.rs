@@ -6,8 +6,8 @@ use std::process::Stdio;
 
 const DIRECTORY: &str = "proof-stage/proof-agent/trusted-launcher";
 const SCRIPT: &str = include_str!("../../../scripts/lemma-ablation.py");
-const INSTRUCTIONS: &str = include_str!("../../../prompts/lemma-ablation.md");
-const PRIMER: &str = include_str!("../../../prompts/semantic-primer-ablation.md");
+const INSTRUCTIONS: &str = include_str!("../../../prompts/ablation/proof-agent.md");
+const PRIMER: &str = include_str!("../../../prompts/ablation/semantic-primer.md");
 
 pub(super) fn primer(selection: LemmaAvailability) -> &'static str {
     if selection.is_full() {

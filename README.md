@@ -312,10 +312,10 @@ test modules so implementation details do not become public APIs.
 
 The default proof stack includes the Logos helper library and `ProofAgentFacade`.
 Neutral declaration lookup means there is no host-ranked lemma shortlist; it
-does **not** mean the helper library is absent. There is currently no dedicated
-CLI switch for a no-lemma-library ablation. Such a treatment must consistently
-change the trusted import/build closure and agent instructions, preserve the
-semantic definitions and acceptance checks, and use a separate recorded run.
+does **not** mean the helper library is absent. Optional lemma-library ablations
+have a [dedicated guide](crates/logos-solver/docs/ablation/README.md) and prompts
+under `crates/logos-solver/prompts/ablation/`. The default remains the full library;
+ablation selects available proof resources without changing SQL semantics.
 
 ## Benchmarks
 

@@ -14,21 +14,9 @@ Runner tests live in `tests/scripts/`, separate from executable scripts and
 
 ### Lemma-library ablation
 
-The solver defaults to both lemma groups enabled. Append these options to a
-normal full-pipeline runner command (use a distinct run directory for each row):
-
-| Treatment | Runner options |
-| --- | --- |
-| Full library | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=on` |
-| Without bag facts/lifting | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=on` |
-| Bag facts/lifting only | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=off` |
-| Neither group | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=off` |
-
-Bag includes bag-level composition/permutation and bag-dependent wrappers, not
-only the final bag-to-list bridge. SQL semantics, constructors, Stdlib and exact
-generated scaffolding remain fixed; agents can prove their own helpers.
-Source/search visibility and prompts follow the selection, and compilation
-checks disabled lemma usage. See the [ablation boundary and provenance](../../crates/logos-solver/docs/lemma-ablation.md).
+Normal runs enable the full lemma library. Experimental configurations,
+runner options, prompt selection and enforcement boundaries are documented
+separately in the [ablation guide](../../crates/logos-solver/docs/ablation/README.md).
 
 ### Standard run
 

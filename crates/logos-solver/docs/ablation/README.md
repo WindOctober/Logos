@@ -15,6 +15,30 @@ invocation. With the benchmark runner, use
 Always use a fresh run directory for a different selection. Do not reuse agent
 sessions, published modules, or proof checkpoints across treatments.
 
+## Benchmark runner options
+
+Append these options to a normal full-pipeline runner command. Use a distinct
+run directory for each treatment; see the [standard runner instructions](../../../../benchmarks/scripts/README.md#standard-run)
+for the common configuration.
+
+| Treatment | Runner options |
+| --- | --- |
+| Full library | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=on` |
+| Without bag facts/lifting | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=on` |
+| Bag facts/lifting only | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=off` |
+| Neither group | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=off` |
+
+## Prompt selection
+
+Normal full-library runs use the standard prompt and semantic primer in
+`prompts/`. When either lemma group is disabled, the host instead selects
+[`prompts/ablation/proof-agent.md`](../../prompts/ablation/proof-agent.md) and
+[`prompts/ablation/semantic-primer.md`](../../prompts/ablation/semantic-primer.md).
+Shared operational instructions are still taken from the standard proof-agent
+prompt; they are not duplicated here. Prompts are embedded in the solver binary,
+so changes require rebuilding it. The selected primer is exported under the
+same runtime name, `semantic-primer.md`; agents do not choose between treatments.
+
 ## What belongs to each group
 
 The host inventories theorem declarations in the pinned `vendor/FormalSQL/src`
