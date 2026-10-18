@@ -18,6 +18,9 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+LOGOS_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(LOGOS_ROOT / "scripts"))
+
 from logos_source_tree_digest import (
     build_manifest as build_source_tree_manifest,
     canonical_bytes as source_tree_manifest_bytes,
@@ -25,7 +28,6 @@ from logos_source_tree_digest import (
 )
 
 
-LOGOS_ROOT = Path(__file__).resolve().parents[1]
 from logos_env import configured_path, load_logos_env  # noqa: E402
 
 load_logos_env(LOGOS_ROOT)

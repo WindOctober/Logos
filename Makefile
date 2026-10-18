@@ -1,4 +1,4 @@
-.PHONY: submodules check-rocq-env formal-sql formal-sql-catalog smoke logos-formal-sql-lemmas logos-formal-sql-checks proof-tool-tests trusted-rocq-sandbox-test calcite-ir calcite-wrapper-tests sqlglot-adapter-tests materializer-tests frontend-tests status
+.PHONY: submodules check-rocq-env formal-sql formal-sql-catalog smoke logos-formal-sql-lemmas logos-formal-sql-checks script-tests proof-tool-tests trusted-rocq-sandbox-test calcite-ir calcite-wrapper-tests sqlglot-adapter-tests materializer-tests frontend-tests status
 
 OPAM ?= opam
 ROCQ_OPAM_SWITCH ?= $(if $(OPAM_SWITCH),$(OPAM_SWITCH),$(CURDIR)/.opam-rocq)
@@ -125,6 +125,9 @@ logos-formal-sql-checks: logos-formal-sql-lemmas
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/MembershipJoinCompositionRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/regressions/FilterFkEliminationRegression.v
 	$(LOGOS_ROCQ_TEST_COMPILE) tests/rocq/Smoke.v
+
+script-tests:
+	python3 -m unittest discover -s tests/scripts -p 'test_*.py' -v
 
 proof-tool-tests:
 	python3 -m unittest discover -s crates/logos-solver/tests -p 'test_*.py' -v

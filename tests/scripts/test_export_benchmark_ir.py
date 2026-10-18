@@ -7,7 +7,7 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).with_name("export-benchmark-ir")
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/export-benchmark-ir"
 loader = SourceFileLoader("export_benchmark_ir", str(SCRIPT))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 if spec is None or spec.loader is None:

@@ -9,6 +9,9 @@ multi-hour batch. The full runner performs its own fail-closed launch preflight;
 
 ## Run the complete Logos pipeline
 
+Runner tests live in `tests/scripts/`, separate from executable scripts and
+`tests/rocq/` proof regressions. Run `make script-tests` from the repository root.
+
 ### Lemma-library ablation
 
 The solver defaults to both lemma groups enabled. Append these options to a

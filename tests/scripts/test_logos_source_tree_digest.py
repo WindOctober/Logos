@@ -9,10 +9,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+LOGOS_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(LOGOS_ROOT / "scripts"))
+
 from logos_source_tree_digest import build_manifest, manifest_sha256, sha256_file
 
 
-CLI = Path(__file__).with_name("logos_source_tree_digest.py")
+CLI = LOGOS_ROOT / "scripts/logos_source_tree_digest.py"
 
 
 def git(repository: Path, *arguments: str) -> None:

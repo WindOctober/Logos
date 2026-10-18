@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 
-RUNNER = Path(__file__).with_name("run-logos")
+RUNNER = Path(__file__).resolve().parents[2] / "benchmarks/scripts/run-logos"
 DEFAULT_COUNTEREXAMPLE_COMMAND = (
     "codex exec --disable plugins --disable remote_plugin --disable plugin_hooks "
     "--disable skill_mcp_dependency_install --json --model gpt-6.1-sol "

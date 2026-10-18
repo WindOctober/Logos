@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = Path(__file__).with_name("recover-logos-proof-tail")
+SCRIPT = Path(__file__).resolve().parents[2] / "benchmarks/scripts/recover-logos-proof-tail"
 
 
 class RecoveryCliTests(unittest.TestCase):

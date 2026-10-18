@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+LOGOS_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(LOGOS_ROOT / "scripts"))
 
 from logos_env import LogosEnvironmentError, configured_path, load_logos_env
 

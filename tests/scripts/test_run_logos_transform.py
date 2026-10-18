@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 
-RUNNER = Path(__file__).with_name("run-logos-transform")
+RUNNER = Path(__file__).resolve().parents[2] / "benchmarks/scripts/run-logos-transform"
 
 
 class TransformRunnerTests(unittest.TestCase):

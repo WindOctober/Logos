@@ -235,6 +235,7 @@ and run with `make logos-formal-sql-checks`.
 | `vendor/FormalSQL` | Pinned Rocq semantics submodule |
 | `theories/FormalSQL` | Logos-owned reusable proof facts and facade |
 | `tests/rocq` | Cross-repository Rocq smoke and regression checks |
+| `tests/scripts` | Python tests for repository scripts and benchmark runners |
 | `benchmarks/core` | Versioned benchmark inputs and authority metadata |
 | `benchmarks/scripts` | Materialization and reproducible batch runners |
 
@@ -257,6 +258,9 @@ make logos-formal-sql-checks
 
 # Python proof-tool regressions
 make proof-tool-tests
+
+# Repository scripts and benchmark runner regressions
+make script-tests
 
 # Isolated trusted-checker regression (requires compiled Rocq dependencies)
 make trusted-rocq-sandbox-test
