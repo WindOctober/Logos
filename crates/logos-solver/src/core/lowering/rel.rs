@@ -466,6 +466,26 @@ impl LoweringContext {
                     return None;
                 }
                 let mut query_expr = self.lower_query_expr(&format!("{path}.input"), input)?;
+                if fetch_count.is_some() && self.limit_bindings_may_raise {
+                    self.error(
+                        path,
+                        "limit_binding_demand_not_supported",
+                        "LIMIT/FETCH with a potentially failing local query definition is unsupported: the current binding semantics materializes definitions eagerly, without tracking which definitions LIMIT demands.",
+                    );
+                    return None;
+                }
+                // FETCH 0 has an explicit no-child-evaluation rule. For a
+                // positive literal, retain materialized list semantics only
+                // when evaluating the skipped suffix cannot raise an error.
+                // This is a conservative admission check, not a lazy executor.
+                if fetch_count.is_some_and(|count| count > 0) && rel_expr_may_raise_runtime(input) {
+                    self.error(
+                        path,
+                        "limit_runtime_demand_not_supported",
+                        "A positive LIMIT/FETCH over a potentially failing child is unsupported: PostgreSQL may skip errors beyond the requested prefix, while FormalSQL retains materialized-list semantics for positive counts.",
+                    );
+                    return None;
+                }
                 if !collation.is_empty() {
                     let input_scope =
                         self.scope_from_query_expr(&format!("{path}.inputScope"), &query_expr)?;

@@ -453,6 +453,11 @@ fn lower_query_with_optional_schema_config(
         };
     }
     let mut context = LoweringContext::new(config.clone(), schema);
+    // Local definitions are still materialized eagerly. Do not let LIMIT
+    // hide a possible definition error without modeling binding demand.
+    context.limit_bindings_may_raise = raw_bindings
+        .iter()
+        .any(|binding| scalar::rel_expr_may_raise_runtime(&binding.rel));
     for (index, binding) in raw_bindings.iter().enumerate() {
         let relation = format!("__logos_{binding_namespace}_cte_{index}");
         if context
@@ -4643,6 +4648,7 @@ struct LoweringContext {
     /// is lowered. References become ordinary FormalSQL table leaves using
     /// these fresh internal relation names.
     query_bindings: BTreeMap<String, LoweredQueryBindingSource>,
+    limit_bindings_may_raise: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -4694,6 +4700,7 @@ impl LoweringContext {
             next_scope_barrier: 0,
             scope_barrier_names: BTreeSet::new(),
             query_bindings: BTreeMap::new(),
+            limit_bindings_may_raise: false,
         }
     }
 

@@ -2148,6 +2148,8 @@ Lemma query_expr_fetch_runtime_safe :
     query_safe env (QExpr_Fetch count input).
 Proof.
 intros env count input Hinput error Herror.
+destruct count as [|count].
+{ apply eval_query_expr_fetch_zero_iff in Herror; discriminate. }
 apply (proj1
   (@eval_query_expr_fetch_error_iff T relname
     basesort instance unknown symbol_runtime_error aggregate_runtime_error
@@ -2161,7 +2163,9 @@ Lemma query_expr_fetch_has_success :
     query_has_success env (QExpr_Fetch count input).
 Proof.
 intros env count input [rows Hrows].
-exists (firstn count rows).
+destruct count as [|count].
+{ exists nil; apply EQuery_FetchZero. }
+exists (firstn (S count) rows).
 now apply EQuery_FetchSuccess.
 Qed.
 
@@ -2170,7 +2174,9 @@ Lemma query_expr_fetch_has_outcome :
     (exists outcome, eval_query env input outcome) ->
     exists outcome, eval_query env (QExpr_Fetch count input) outcome.
 Proof.
-intros env count input [[rows | error] Hinput].
+intros env count input Hinput; destruct count as [|count].
+{ exists (SqlSuccess nil); apply EQuery_FetchZero. }
+destruct Hinput as [[rows | error] Hinput].
 - apply query_expr_has_outcome_of_success.
   apply query_expr_fetch_has_success.
   now exists rows.
@@ -2178,8 +2184,8 @@ intros env count input [[rows | error] Hinput].
   now apply EQuery_FetchChildError.
 Qed.
 
-(** OFFSET and FETCH are exact deterministic list slices.  These laws retain
-    runtime errors and therefore hold before any safety assumption. *)
+(** OFFSET and positive FETCH are materialized list slices. FETCH 0 has no
+    child premise; exchange laws that introduce zero therefore need care. *)
 
 Lemma eval_query_expr_offset_zero_iff :
   forall env input outcome,
@@ -2199,15 +2205,21 @@ Qed.
 Lemma eval_query_expr_fetch_zero_success_iff :
   forall env input output,
     eval_query env (QExpr_Fetch 0 input) (SqlSuccess output) <->
-    output = nil /\ query_has_success env input.
+    output = nil.
 Proof.
-intros env input output; split; intro Heval.
-- apply eval_query_expr_fetch_success_iff in Heval.
-  destruct Heval as [input_rows [Hinput Houtput]].
-  split; [exact Houtput | now exists input_rows].
-- destruct Heval as [-> [input_rows Hinput]].
-  apply eval_query_expr_fetch_success_iff.
-  exists input_rows; split; [exact Hinput | reflexivity].
+intros env input output; rewrite eval_query_expr_fetch_zero_iff.
+split; intro H; [now inversion H|now subst].
+Qed.
+
+Lemma query_expr_fetch_zero_has_success :
+  forall env input, query_has_success env (QExpr_Fetch 0 input).
+Proof. intros; exists nil; apply EQuery_FetchZero. Qed.
+
+Lemma query_expr_fetch_zero_runtime_safe :
+  forall env input, query_safe env (QExpr_Fetch 0 input).
+Proof.
+intros env input error Herror.
+apply eval_query_expr_fetch_zero_iff in Herror; discriminate.
 Qed.
 
 Lemma eval_query_expr_offset_offset_iff :
@@ -2245,7 +2257,20 @@ Lemma eval_query_expr_fetch_fetch_iff :
     eval_query env (QExpr_Fetch outer (QExpr_Fetch inner input)) outcome <->
     eval_query env (QExpr_Fetch (Nat.min outer inner) input) outcome.
 Proof.
-intros env outer inner input [output | error].
+intros env outer inner input outcome.
+destruct outer as [|outer].
+{ cbn [Nat.min]; rewrite !eval_query_expr_fetch_zero_iff; reflexivity. }
+destruct inner as [|inner].
+{ rewrite Nat.min_0_r, eval_query_expr_fetch_zero_iff.
+  destruct outcome as [output|error].
+  - rewrite eval_query_expr_fetch_success_iff.
+    split.
+    + intros [rows [Hrows ->]]; apply eval_query_expr_fetch_zero_iff in Hrows.
+      inversion Hrows; reflexivity.
+    + intro H; inversion H; subst; exists nil; split; [constructor|reflexivity].
+  - rewrite eval_query_expr_fetch_error_iff, eval_query_expr_fetch_zero_iff.
+    reflexivity. }
+destruct outcome as [output|error].
 - split; intro Heval.
   + apply eval_query_expr_fetch_success_iff in Heval.
     destruct Heval as [middle [Hmiddle Houtput]].
@@ -2257,7 +2282,7 @@ intros env outer inner input [output | error].
   + apply eval_query_expr_fetch_success_iff in Heval.
     destruct Heval as [input_rows [Hinput Houtput]].
     apply eval_query_expr_fetch_success_iff.
-    exists (firstn inner input_rows); split.
+    exists (firstn (S inner) input_rows); split.
     * apply eval_query_expr_fetch_success_iff.
       exists input_rows; split; [exact Hinput | reflexivity].
     * subst output; symmetry; apply firstn_firstn.
@@ -2272,12 +2297,16 @@ Qed.
 
 Lemma eval_query_expr_offset_fetch_comm_iff :
   forall env offset count input outcome,
+    offset < count ->
     eval_query env
       (QExpr_Offset offset (QExpr_Fetch count input)) outcome <->
     eval_query env
       (QExpr_Fetch (count - offset) (QExpr_Offset offset input)) outcome.
 Proof.
-intros env offset count input [output | error].
+intros env offset count input outcome Hpositive.
+destruct count as [|count]; [lia|].
+destruct (S count - offset) as [|rest] eqn:Hrest; [lia|].
+destruct outcome as [output|error].
 - split; intro Heval.
   + apply eval_query_expr_offset_success_iff in Heval.
     destruct Heval as [middle [Hmiddle Houtput]].
@@ -2287,16 +2316,16 @@ intros env offset count input [output | error].
     exists (skipn offset input_rows); split.
     * apply eval_query_expr_offset_success_iff.
       exists input_rows; split; [exact Hinput | reflexivity].
-    * subst middle output; apply skipn_firstn_comm.
+    * subst middle output; rewrite <- Hrest; apply skipn_firstn_comm.
   + apply eval_query_expr_fetch_success_iff in Heval.
     destruct Heval as [middle [Hmiddle Houtput]].
     apply eval_query_expr_offset_success_iff in Hmiddle.
     destruct Hmiddle as [input_rows [Hinput Hmiddle]].
     apply eval_query_expr_offset_success_iff.
-    exists (firstn count input_rows); split.
+    exists (firstn (S count) input_rows); split.
     * apply eval_query_expr_fetch_success_iff.
       exists input_rows; split; [exact Hinput | reflexivity].
-    * subst middle output; symmetry; apply skipn_firstn_comm.
+    * subst middle output; rewrite <- Hrest; symmetry; apply skipn_firstn_comm.
 - split; intro Heval.
   + apply eval_query_expr_offset_error_iff in Heval.
     apply eval_query_expr_fetch_error_iff in Heval.
@@ -2310,22 +2339,26 @@ Qed.
 
 Lemma eval_query_expr_fetch_offset_comm_iff :
   forall env count offset input outcome,
+    0 < count ->
     eval_query env
       (QExpr_Fetch count (QExpr_Offset offset input)) outcome <->
     eval_query env
       (QExpr_Offset offset (QExpr_Fetch (offset + count) input)) outcome.
 Proof.
-intros env count offset input [output | error].
+intros env count offset input outcome Hpositive.
+destruct count as [|count]; [lia|].
+replace (offset + S count) with (S (offset + count)) by lia.
+destruct outcome as [output|error].
 - split; intro Heval.
   + apply eval_query_expr_fetch_success_iff in Heval.
     destruct Heval as [middle [Hmiddle Houtput]].
     apply eval_query_expr_offset_success_iff in Hmiddle.
     destruct Hmiddle as [input_rows [Hinput Hmiddle]].
     apply eval_query_expr_offset_success_iff.
-    exists (firstn (offset + count) input_rows); split.
+    exists (firstn (S (offset + count)) input_rows); split.
     * apply eval_query_expr_fetch_success_iff.
       exists input_rows; split; [exact Hinput | reflexivity].
-    * subst middle output; apply firstn_skipn_comm.
+    * subst middle output; rewrite <- Nat.add_succ_r; apply firstn_skipn_comm.
   + apply eval_query_expr_offset_success_iff in Heval.
     destruct Heval as [middle [Hmiddle Houtput]].
     apply eval_query_expr_fetch_success_iff in Hmiddle.
@@ -2334,7 +2367,7 @@ intros env count offset input [output | error].
     exists (skipn offset input_rows); split.
     * apply eval_query_expr_offset_success_iff.
       exists input_rows; split; [exact Hinput | reflexivity].
-    * subst middle output; symmetry; apply firstn_skipn_comm.
+    * subst middle output; rewrite <- Nat.add_succ_r; symmetry; apply firstn_skipn_comm.
 - split; intro Heval.
   + apply eval_query_expr_fetch_error_iff in Heval.
     apply eval_query_expr_offset_error_iff in Heval.
@@ -2362,10 +2395,10 @@ Qed.
 
 Lemma eval_query_expr_fetch_success_length :
   forall env count input output,
-    eval_query env (QExpr_Fetch count input) (SqlSuccess output) ->
+    eval_query env (QExpr_Fetch (S count) input) (SqlSuccess output) ->
     exists input_rows,
       eval_query env input (SqlSuccess input_rows) /\
-      length output = Nat.min count (length input_rows).
+      length output = Nat.min (S count) (length input_rows).
 Proof.
 intros env count input output Heval.
 apply eval_query_expr_fetch_success_iff in Heval.
@@ -2807,11 +2840,17 @@ Corollary query_fetch_success_bags_congr_closed :
       (success_bags env (QExpr_Fetch count right)).
 Proof.
 intros env count left right Hleft_closed Hright_closed Hchildren.
+destruct count as [|count].
+{ unfold rel_equiv, query_success_bags, alpha.
+  intro bag; split; intros [rows [Hrows Hbag]];
+    exists rows; split; [|exact Hbag| |exact Hbag];
+    apply eval_query_expr_fetch_zero_iff in Hrows;
+    inversion Hrows; subst; constructor. }
 eapply query_list_transform_success_bags_congr_closed
-  with (left_parent := QExpr_Fetch count left)
-       (right_parent := QExpr_Fetch count right)
+  with (left_parent := QExpr_Fetch (S count) left)
+       (right_parent := QExpr_Fetch (S count) right)
        (left := left) (right := right)
-       (transform := firstn count); try eassumption.
+       (transform := firstn (S count)); try eassumption.
 - apply eval_query_expr_fetch_success_iff.
 - apply eval_query_expr_fetch_success_iff.
 - intros; now apply ordered_rows_equiv_firstn.
@@ -3079,15 +3118,25 @@ intros env count left right
   [Houtputs
     [Hleft_outcome
       [Hright_outcome [Hforward [Hbackward Herrors]]]]].
+destruct count as [|count].
+{ apply query_expr_outcome_equiv_of_observations.
+  - exact Houtputs.
+  - exists (SqlSuccess nil); constructor.
+  - exists (SqlSuccess nil); constructor.
+  - intros rows Hrows; apply eval_query_expr_fetch_zero_iff in Hrows.
+    inversion Hrows; subst; exists nil; split; [constructor|reflexivity].
+  - intros rows Hrows; apply eval_query_expr_fetch_zero_iff in Hrows.
+    inversion Hrows; subst; exists nil; split; [constructor|reflexivity].
+  - intro error; rewrite !eval_query_expr_fetch_zero_iff; split; discriminate. }
 apply query_expr_outcome_equiv_of_observations.
 - exact Houtputs.
 - destruct Hleft_outcome as [[rows | error] Houtcome].
-  + exists (SqlSuccess (firstn count rows)).
+  + exists (SqlSuccess (firstn (S count) rows)).
     now apply EQuery_FetchSuccess.
   + exists (SqlError error).
     now apply EQuery_FetchChildError.
 - destruct Hright_outcome as [[rows | error] Houtcome].
-  + exists (SqlSuccess (firstn count rows)).
+  + exists (SqlSuccess (firstn (S count) rows)).
     now apply EQuery_FetchSuccess.
   + exists (SqlError error).
     now apply EQuery_FetchChildError.
@@ -3096,7 +3145,7 @@ apply query_expr_outcome_equiv_of_observations.
   destruct Houtput as [left_rows [Hleft ->]].
   destruct (Hforward left_rows Hleft)
     as [right_rows [Hright Hrows]].
-  exists (firstn count right_rows); split.
+  exists (firstn (S count) right_rows); split.
   + now apply EQuery_FetchSuccess.
   + now apply ordered_rows_equiv_firstn.
 - intros output Houtput.
@@ -3104,7 +3153,7 @@ apply query_expr_outcome_equiv_of_observations.
   destruct Houtput as [right_rows [Hright ->]].
   destruct (Hbackward right_rows Hright)
     as [left_rows [Hleft Hrows]].
-  exists (firstn count left_rows); split.
+  exists (firstn (S count) left_rows); split.
   + now apply EQuery_FetchSuccess.
   + now apply ordered_rows_equiv_firstn.
 - intro error.
@@ -5655,7 +5704,9 @@ Lemma eval_query_cardinality_fetch_has_outcome :
         boolean_schedule env (QExpr_Fetch count input) outcome.
 Proof.
 intros env count input [outcome Houtcome].
-exists (query_fetch_cardinality_outcome count outcome).
+destruct count as [|count].
+{ exists (SqlSuccess 0); apply ECardinality_FetchZero. }
+exists (query_fetch_cardinality_outcome (S count) outcome).
 now apply ECardinality_Fetch.
 Qed.
 
@@ -6084,7 +6135,7 @@ Lemma eval_query_expr_fetch_possible_error_iff :
   forall env count input error,
     @eval_query_expr_possible_outcome T relname
       basesort instance unknown symbol_runtime_error aggregate_runtime_error
-      value_is_null env (QExpr_Fetch count input) (SqlError error) <->
+      value_is_null env (QExpr_Fetch (S count) input) (SqlError error) <->
     @eval_query_expr_possible_outcome T relname
       basesort instance unknown symbol_runtime_error aggregate_runtime_error
       value_is_null env input (SqlError error).
@@ -6456,15 +6507,30 @@ Proof.
 intros env count left right
   [Houtputs [Hleft_outcome [Hright_outcome
     [Hforward [Hbackward Herrors]]]]].
+destruct count as [|count].
+{ split; [exact Houtputs|].
+  apply outcome_relation_equiv_intro.
+  - exists (SqlSuccess nil), (fun _ => BooleanLeftFirst); constructor.
+  - exists (SqlSuccess nil), (fun _ => BooleanLeftFirst); constructor.
+  - intros rows [schedule Hrows]; apply eval_query_expr_fetch_zero_iff in Hrows.
+    inversion Hrows; subst; exists nil; split.
+    + exists schedule; constructor.
+    + reflexivity.
+  - intros rows [schedule Hrows]; apply eval_query_expr_fetch_zero_iff in Hrows.
+    inversion Hrows; subst; exists nil; split.
+    + exists schedule; constructor.
+    + reflexivity.
+  - intro error; split; intros [schedule Herror];
+      apply eval_query_expr_fetch_zero_iff in Herror; discriminate. }
 split; [exact Houtputs|].
 apply outcome_relation_equiv_intro.
 - destruct Hleft_outcome as [[rows|error] [schedule Houtcome]].
-  + exists (SqlSuccess (firstn count rows)), schedule.
+  + exists (SqlSuccess (firstn (S count) rows)), schedule.
     now apply EQuery_FetchSuccess.
   + exists (SqlError error), schedule.
     now apply EQuery_FetchChildError.
 - destruct Hright_outcome as [[rows|error] [schedule Houtcome]].
-  + exists (SqlSuccess (firstn count rows)), schedule.
+  + exists (SqlSuccess (firstn (S count) rows)), schedule.
     now apply EQuery_FetchSuccess.
   + exists (SqlError error), schedule.
     now apply EQuery_FetchChildError.
@@ -6473,7 +6539,7 @@ apply outcome_relation_equiv_intro.
   destruct Houtput as [left_rows [Hleft ->]].
   destruct (Hforward left_rows (ex_intro _ schedule Hleft))
     as [right_rows [[right_schedule Hright] Hrows]].
-  exists (firstn count right_rows); split.
+  exists (firstn (S count) right_rows); split.
   + exists right_schedule; now apply EQuery_FetchSuccess.
   + now apply ordered_rows_equiv_firstn.
 - intros output [schedule Houtput].
@@ -6481,7 +6547,7 @@ apply outcome_relation_equiv_intro.
   destruct Houtput as [right_rows [Hright ->]].
   destruct (Hbackward right_rows (ex_intro _ schedule Hright))
     as [left_rows [[left_schedule Hleft] Hrows]].
-  exists (firstn count left_rows); split.
+  exists (firstn (S count) left_rows); split.
   + exists left_schedule; now apply EQuery_FetchSuccess.
   + now apply ordered_rows_equiv_firstn.
 - intro error; split; intros [schedule Herror].

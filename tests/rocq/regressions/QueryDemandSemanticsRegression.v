@@ -88,3 +88,57 @@ now apply EQuery_CrossJoinRightError with (left_rows := nil).
 Qed.
 
 End EmptyCrossJoinDoesNotWitnessNonDemand.
+
+(** Literal-zero row demand is independent of child runtime success/progress.
+    It does not introduce a cursor or alter the query AST. Analysis placement
+    remains a separate mandatory admission condition. *)
+Section LiteralZeroFetch.
+Context {T : Tuple.Rcd} {relation_name : Type}.
+Variable basesort : relation_name -> Fset.set (A T).
+Variable instance : relation_name -> Febag.bag (Fecol.CBag (CTuple T)).
+Variable unknown : Bool.b (B T).
+Variable symbol_error : scalar_operator T ->
+  list (option sql_runtime_error * value T) -> option sql_runtime_error.
+Variable aggregate_error : aggregate T ->
+  list (option sql_runtime_error * value T) -> option sql_runtime_error.
+Variable is_null : value T -> bool.
+Variable schedule : boolean_site -> boolean_evaluation_order.
+Variable env : Env.env T.
+Variable input : query_expr T relation_name.
+Local Abbreviation run := (@eval_query_expr_outcome T relation_name
+  basesort instance unknown symbol_error aggregate_error is_null schedule env).
+
+Example zero_fetch_needs_no_child_success :
+  run (QExpr_Fetch 0 input) (SqlSuccess nil).
+Proof. apply EQuery_FetchZero. Qed.
+
+Example zero_fetch_cannot_propagate_runtime_error :
+  forall error, ~ run (QExpr_Fetch 0 input) (SqlError error).
+Proof. intros error H; inversion H. Qed.
+
+Example zero_fetch_cardinality_needs_no_child_success :
+  @eval_query_cardinality_outcome T relation_name basesort instance unknown
+    symbol_error aggregate_error is_null schedule env
+    (QExpr_Fetch 0 input) (SqlSuccess 0).
+Proof. apply ECardinality_FetchZero. Qed.
+
+Example zero_fetch_does_not_legalize_nested_analysis_errors :
+  forall outputs error,
+    ~ query_expr_analysis_error_well_placed
+      (@QExpr_Fetch T relation_name 0 (QExpr_Error outputs error)).
+Proof. intros outputs error H; discriminate H. Qed.
+
+Example root_analysis_error_is_still_observable :
+  forall outputs error, run (QExpr_Error outputs error) (SqlError error).
+Proof. intros; apply EQuery_Error. Qed.
+
+Example offset_fetch_exchange_cannot_introduce_zero_unconditionally :
+  forall error, run input (SqlError error) ->
+    run (QExpr_Offset 1 (QExpr_Fetch 1 input)) (SqlError error) /\
+    ~ run (QExpr_Fetch 0 (QExpr_Offset 1 input)) (SqlError error).
+Proof.
+intros error Herror; split.
+- apply EQuery_OffsetChildError; now apply EQuery_FetchChildError.
+- intro H; inversion H.
+Qed.
+End LiteralZeroFetch.

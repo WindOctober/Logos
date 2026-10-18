@@ -1729,6 +1729,8 @@ Lemma query_success_length_le_fetch :
       (QExpr_Fetch count input) (Nat.min count bound).
 Proof.
 intros env count input bound Hinput output Houtput.
+destruct count as [|count].
+{ apply eval_query_expr_fetch_zero_iff in Houtput; inversion Houtput; subst; simpl; lia. }
 apply eval_query_expr_fetch_success_iff in Houtput.
 destruct Houtput as [input_rows [Hinput_rows Houtput]].
 subst output.
@@ -1744,6 +1746,8 @@ Lemma query_success_length_le_fetch_count :
     query_success_length_le env (QExpr_Fetch count input) count.
 Proof.
 intros env count input output Houtput.
+destruct count as [|count].
+{ apply eval_query_expr_fetch_zero_iff in Houtput; inversion Houtput; subst; simpl; lia. }
 apply eval_query_expr_fetch_success_iff in Houtput.
 destruct Houtput as [input_rows [Hinput_rows Houtput]].
 subst output.

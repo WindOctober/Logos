@@ -11971,6 +11971,171 @@ fn lowers_sort_offset_fetch_to_ordered_observation() {
     assert_no_physical_plan_constructs(&module);
 }
 
+fn literal_limit_division_query(count: &str, denominator: ScalarAst) -> Query {
+    let output = vec![column("a")];
+    Query {
+        source_sql: None,
+        analysis_errors: vec![],
+        rel: RelExpr::Sort {
+            input: Box::new(RelExpr::Project {
+                input: Box::new(RelExpr::TableScan {
+                    table: vec!["t".to_owned()],
+                    output: vec![column("x")],
+                }),
+                exprs: vec![scalar(ScalarAst::Call {
+                    operator: "/".to_owned(),
+                    op: ScalarOp::Divide,
+                    args: vec![
+                        ScalarAst::Literal {
+                            raw: "1".to_owned(),
+                        },
+                        denominator,
+                    ],
+                })],
+                correlations: vec![],
+                output: output.clone(),
+            }),
+            collation: vec![],
+            fetch: Some(scalar(ScalarAst::Literal {
+                raw: count.to_owned(),
+            })),
+            offset: None,
+            output,
+        },
+    }
+}
+
+#[test]
+fn literal_limit_zero_accepts_runtime_fallible_child_without_new_ast() {
+    let query = literal_limit_division_query("0", ScalarAst::InputRef { index: 0 });
+    let lowered = lower_query(&query);
+    assert_eq!(
+        lowered.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        lowered.diagnostics
+    );
+    assert!(matches!(
+        lowered.query_expr,
+        Some(FormalQueryExpr::Fetch { count: 0, .. })
+    ));
+    let module = emit_rocq_query_module_for_test(&query);
+    assert!(module.rocq_module.contains("QExpr_Fetch (0%nat)"));
+    assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
+}
+
+#[test]
+fn literal_limit_positive_rejects_unmodeled_error_suffix() {
+    for count in ["1", "2", "100"] {
+        let query = literal_limit_division_query(count, ScalarAst::InputRef { index: 0 });
+        let lowered = lower_query(&query);
+        assert_eq!(lowered.status, LoweringStatus::Blocked);
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "limit_runtime_demand_not_supported")
+        );
+    }
+}
+
+#[test]
+fn literal_limit_zero_does_not_hide_planning_or_count_errors() {
+    let query = literal_limit_division_query(
+        "0",
+        ScalarAst::Literal {
+            raw: "0".to_owned(),
+        },
+    );
+    let lowered = lower_query(&query);
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "boolean_planner_constant_error_not_supported")
+    );
+
+    let mut query = literal_limit_division_query("0", ScalarAst::InputRef { index: 0 });
+    let RelExpr::Sort { offset, .. } = &mut query.rel else {
+        unreachable!()
+    };
+    *offset = Some(Box::new(scalar(ScalarAst::Literal {
+        raw: "9223372036854775808".to_owned(),
+    })));
+    let lowered = lower_query(&query);
+    assert_eq!(lowered.status, LoweringStatus::Blocked);
+    assert!(
+        !lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
+    );
+}
+
+#[test]
+fn literal_limit_positive_preserves_provably_total_projection() {
+    let query = literal_limit_division_query(
+        "1",
+        ScalarAst::Literal {
+            raw: "1".to_owned(),
+        },
+    );
+    let lowered = lower_query(&query);
+    assert_eq!(
+        lowered.status,
+        LoweringStatus::Lowered,
+        "{:#?}",
+        lowered.diagnostics
+    );
+}
+
+#[test]
+fn literal_limit_does_not_claim_lazy_cte_support() {
+    for count in ["0", "1"] {
+        let query = literal_limit_division_query(count, ScalarAst::InputRef { index: 0 });
+        let RelExpr::Sort {
+            input,
+            output,
+            fetch,
+            ..
+        } = query.rel
+        else {
+            unreachable!()
+        };
+        let query = Query {
+            source_sql: None,
+            analysis_errors: vec![],
+            rel: RelExpr::Bindings {
+                bindings: vec![IrQueryBinding {
+                    id: "limited_cte".to_owned(),
+                    source_name: "c".to_owned(),
+                    rel: *input,
+                }],
+                body: Box::new(RelExpr::Sort {
+                    input: Box::new(RelExpr::QueryRef {
+                        binding: "limited_cte".to_owned(),
+                        output: output.clone(),
+                    }),
+                    collation: vec![],
+                    fetch,
+                    offset: None,
+                    output: output.clone(),
+                }),
+                output,
+            },
+        };
+        let lowered = lower_query(&query);
+        assert_eq!(lowered.status, LoweringStatus::Blocked);
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "limit_binding_demand_not_supported")
+        );
+    }
+}
+
 #[test]
 fn lowers_boolean_order_by_through_the_sql_order_carrier() {
     for (direction, null_direction, expected) in [
@@ -12541,7 +12706,7 @@ fn calcite_wrapper_project_over_nested_order_offset_fetch_reaches_solver() {
 
 #[test]
 #[ignore = "requires the Java Calcite wrapper and Maven bootstrap"]
-fn calcite_wrapper_fetch_over_division_uses_declarative_list_semantics() {
+fn calcite_wrapper_literal_limit_division_boundary() {
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(std::path::Path::parent)
@@ -12557,67 +12722,66 @@ fn calcite_wrapper_fetch_over_division_uses_declarative_list_semantics() {
     let schema_path = temp.join("schema.sql");
     let query_path = temp.join("query.sql");
     fs::write(&schema_path, "create table t(x integer);\n").expect("write wrapper schema");
-    fs::write(
-        &query_path,
-        "select 10 / x from t fetch first 1 row only;\n",
-    )
-    .expect("write wrapper query");
+    for count in [0, 1] {
+        fs::write(
+            &query_path,
+            format!("select 10 / x from t fetch first {count} row only;\n"),
+        )
+        .expect("write wrapper query");
 
-    let output = Command::new(repo.join("scripts/calcite-ir"))
-        .arg("--schema")
-        .arg(&schema_path)
-        .arg("--sql")
-        .arg(&query_path)
-        .output()
-        .expect("run Calcite wrapper");
-    assert!(
-        output.status.success(),
-        "calcite wrapper failed\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let raw: CalciteFile =
-        serde_json::from_slice(&output.stdout).expect("parse wrapper JSON output");
-    let ir = convert_raw_file(raw).expect("convert wrapper output to Logos IR");
-    let query = &ir.queries[0];
-    let RelExpr::Sort { input, fetch, .. } = &query.rel else {
-        panic!("expected Calcite LogicalSort around the projected division");
-    };
-    assert!(fetch.is_some());
-    assert!(matches!(input.as_ref(), RelExpr::Project { .. }));
-    assert!(rel_expr_may_raise_runtime(input));
+        let output = Command::new(repo.join("scripts/calcite-ir"))
+            .arg("--schema")
+            .arg(&schema_path)
+            .arg("--sql")
+            .arg(&query_path)
+            .output()
+            .expect("run Calcite wrapper");
+        assert!(
+            output.status.success(),
+            "calcite wrapper failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let raw: CalciteFile =
+            serde_json::from_slice(&output.stdout).expect("parse wrapper JSON output");
+        let ir = convert_raw_file(raw).expect("convert wrapper output to Logos IR");
+        let query = &ir.queries[0];
+        let RelExpr::Sort { input, fetch, .. } = &query.rel else {
+            panic!("expected Calcite LogicalSort around the projected division");
+        };
+        assert!(fetch.is_some());
+        assert!(matches!(input.as_ref(), RelExpr::Project { .. }));
+        assert!(rel_expr_may_raise_runtime(input));
 
-    let lowered = lower_query(query);
-    assert_eq!(
-        lowered.status,
-        LoweringStatus::Lowered,
-        "diagnostics: {:#?}",
-        lowered.diagnostics
-    );
-    let Some(FormalQueryExpr::Fetch { count, input }) = lowered.query_expr.as_ref() else {
-        panic!("FETCH must remain a declarative list operator");
-    };
-    assert_eq!(*count, 1);
-    let FormalQueryExpr::Projection { select, .. } = input.as_ref() else {
-        panic!("FETCH must still consume the complete logical division projection");
-    };
-    assert!(matches!(
-        select.as_slice(),
-        [FormalScalarSelectItem {
-            expr: FormalScalarExpr::Call {
-                operator: ScalarOperator::Divide(ScalarNumericKind::Int32),
-                ..
-            },
-            ..
-        }]
-    ));
-    let module = emit_rocq_query_module(
-        lowered.query_expr.as_ref().expect("query expression"),
-        lowered.query_expr.as_ref().expect("query expression"),
-    );
-    assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(module.rocq_module.contains("QExpr_Project"));
-    assert!(module.rocq_module.contains("ScalarDivide ScalarInt32"));
+        let lowered = lower_query(query);
+        if count == 0 {
+            assert_eq!(
+                lowered.status,
+                LoweringStatus::Lowered,
+                "{:#?}",
+                lowered.diagnostics
+            );
+            assert!(matches!(
+                lowered.query_expr,
+                Some(FormalQueryExpr::Fetch { count: 0, .. })
+            ));
+            let module = emit_rocq_query_module_for_test(query);
+            assert!(module.rocq_module.contains("QExpr_Fetch (0%nat)"));
+        } else {
+            assert_eq!(
+                lowered.status,
+                LoweringStatus::Blocked,
+                "{:#?}",
+                lowered.diagnostics
+            );
+            assert!(
+                lowered
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.code == "limit_runtime_demand_not_supported")
+            );
+        }
+    }
 
     fs::remove_dir_all(&temp).expect("remove wrapper test directory");
 }
@@ -19300,7 +19464,8 @@ fn correlated_exact_input_uses_actual_numeric_scope_not_stale_decimal_metadata()
 }
 
 #[test]
-fn declarative_exists_preserves_correlated_narrowing_target_with_stale_metadata() {
+fn declarative_exists_preserves_correlated_narrowing_target_with_stale_metadata_conservatively_blocked()
+ {
     let reported_outer_output = vec![decimal_column("amount", 7, 2)];
     let outer_project = RelExpr::Project {
         input: Box::new(RelExpr::TableScan {
@@ -19377,21 +19542,19 @@ fn declarative_exists_preserves_correlated_narrowing_target_with_stale_metadata(
 
     let lowered = lower_query(&query);
 
+    // A physical full-sort assumption is not an admission certificate.
     assert_eq!(
         lowered.status,
-        LoweringStatus::Lowered,
+        LoweringStatus::Blocked,
         "{:#?}",
         lowered.diagnostics
     );
-    let module = emit_rocq_query_module_for_test(&query);
-    assert!(module.rocq_module.contains("SExpr_Exists"));
-    assert!(module.rocq_module.contains("QExpr_Fetch (1%nat)"));
     assert!(
-        module
-            .rocq_module
-            .contains("ScalarCastToNumericTypmod ScalarSourceNumeric")
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
     );
-    assert!(!module.rocq_module.contains("QExpr_Pg"));
 }
 
 #[test]
@@ -20949,7 +21112,8 @@ fn attested_substring_group_full_sort_query() -> Query {
 }
 
 #[test]
-fn attested_substring_group_key_with_complete_sort_forces_all_aggregate_groups() {
+fn attested_substring_group_key_with_complete_sort_forces_all_aggregate_groups_conservatively_blocked()
+ {
     let query = attested_substring_group_full_sort_query();
     assert!(rel_expr_may_raise_runtime(&query.rel));
     let lowered = lower_query_with_config(
@@ -20959,42 +21123,19 @@ fn attested_substring_group_key_with_complete_sort_forces_all_aggregate_groups()
             ..LoweringConfig::default()
         },
     );
+    // A physical full-sort assumption is not an admission certificate.
     assert_eq!(
         lowered.status,
-        LoweringStatus::Lowered,
-        "diagnostics: {:#?}",
+        LoweringStatus::Blocked,
+        "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::Fetch { count: 100, input }) = lowered.query_expr.as_ref() else {
-        panic!("the source-attested full sort must use eager Fetch")
-    };
-    let FormalQueryExpr::OrderBy { keys, input } = input.as_ref() else {
-        panic!("the source-attested pathkey mismatch must retain a full OrderBy")
-    };
-    assert_eq!(keys.len(), 4);
-    assert_eq!(keys[0].direction, FormalSortDirection::Desc);
-    assert_eq!(keys[0].null_direction, FormalNullDirection::First);
-    assert_eq!(keys[3].direction, FormalSortDirection::Asc);
-    assert_eq!(keys[3].null_direction, FormalNullDirection::First);
-    assert!(matches!(
-        input.as_ref(),
-        FormalQueryExpr::Group { .. } | FormalQueryExpr::Projection { .. }
-    ));
-    let module = emit_rocq_query_module(
-        lowered.query_expr.as_ref().expect("query expression"),
-        lowered.query_expr.as_ref().expect("query expression"),
-    );
-    assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(module.rocq_module.contains("QExpr_OrderBy"));
-    assert!(module.rocq_module.contains("ScalarSubstringNonnegative"));
-    assert!(module.rocq_module.contains("AggregateAverageInt32Numeric"));
     assert!(
-        module
-            .rocq_module
-            .contains("AggregateAverageNumericAtScale")
-            || module.rocq_module.contains("AggregateAverageNumericFixed")
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
     );
-    assert!(!module.rocq_module.contains("QExpr_PgFetch"));
 }
 
 #[test]
@@ -21401,7 +21542,7 @@ fn attested_dsb18_rollup_full_sort_query() -> Query {
 }
 
 #[test]
-fn attested_dsb18_rollup_permutation_forces_complete_grouping_sets_sort() {
+fn attested_dsb18_rollup_permutation_forces_complete_grouping_sets_sort_conservatively_blocked() {
     let query = attested_dsb18_rollup_full_sort_query();
     assert!(rel_expr_may_raise_runtime(&query.rel));
     let lowered = lower_query_with_config(
@@ -21411,31 +21552,19 @@ fn attested_dsb18_rollup_permutation_forces_complete_grouping_sets_sort() {
             ..LoweringConfig::default()
         },
     );
+    // A physical full-sort assumption is not an admission certificate.
     assert_eq!(
         lowered.status,
-        LoweringStatus::Lowered,
-        "diagnostics: {:#?}",
+        LoweringStatus::Blocked,
+        "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::Fetch { count: 100, input }) = lowered.query_expr.as_ref() else {
-        panic!("the exact DSB18 full sort must retain eager Fetch")
-    };
-    let FormalQueryExpr::OrderBy { keys, input } = input.as_ref() else {
-        panic!("the exact DSB18 pathkey permutation must retain OrderBy")
-    };
-    assert_eq!(keys.len(), 4);
-    assert!(matches!(
-        input.as_ref(),
-        FormalQueryExpr::GroupingSets { grouping_sets, .. } if grouping_sets.len() == 5
-    ));
-    let module = emit_rocq_query_module(
-        lowered.query_expr.as_ref().expect("query expression"),
-        lowered.query_expr.as_ref().expect("query expression"),
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
     );
-    assert!(module.rocq_module.contains("QExpr_GroupingSets"));
-    assert!(module.rocq_module.contains("QExpr_OrderBy"));
-    assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(!module.rocq_module.contains("QExpr_PgFetch"));
 }
 
 #[test]
@@ -21559,7 +21688,7 @@ fn calcite_wrapper_exact_dsb_018_uses_source_attested_rollup_full_sort() {
 }
 
 #[test]
-fn positive_fetch_ordered_by_aggregate_result_forces_complete_sort_input() {
+fn positive_fetch_ordered_by_aggregate_result_forces_complete_sort_input_conservatively_blocked() {
     let aggregate_output = vec![
         column("group_key"),
         typed_column("row_count", SqlType::BigInt),
@@ -21605,23 +21734,19 @@ fn positive_fetch_ordered_by_aggregate_result_forces_complete_sort_input() {
     );
 
     let lowered = lower_query(&query);
+    // A physical full-sort assumption is not an admission certificate.
     assert_eq!(
         lowered.status,
-        LoweringStatus::Lowered,
-        "diagnostics: {:#?}",
+        LoweringStatus::Blocked,
+        "{:#?}",
         lowered.diagnostics
     );
-    let Some(FormalQueryExpr::Fetch { count: 1, input }) = lowered.query_expr.as_ref() else {
-        panic!("positive LIMIT over the forced aggregate sort should use eager Fetch");
-    };
-    assert!(matches!(input.as_ref(), FormalQueryExpr::OrderBy { .. }));
-    let module = emit_rocq_query_module(
-        lowered.query_expr.as_ref().expect("query expression"),
-        lowered.query_expr.as_ref().expect("query expression"),
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
     );
-    assert!(module.rocq_module.contains("QExpr_Fetch"));
-    assert!(module.rocq_module.contains("QExpr_OrderBy"));
-    assert!(!module.rocq_module.contains("QExpr_PgFetch"));
 }
 
 fn nulls_first_grouping_sets_fetch_query() -> Query {
@@ -21779,8 +21904,8 @@ fn nulls_first_union_distinct_fetch_query(all: bool) -> Query {
 }
 
 #[test]
-fn nulls_first_over_grouping_sets_or_union_distinct_forces_complete_sort() {
-    for (label, query) in [
+fn nulls_first_over_grouping_sets_or_union_distinct_forces_complete_sort_conservatively_blocked() {
+    for (_label, query) in [
         ("grouping sets", nulls_first_grouping_sets_fetch_query()),
         (
             "union distinct",
@@ -21794,29 +21919,24 @@ fn nulls_first_over_grouping_sets_or_union_distinct_forces_complete_sort() {
                 ..LoweringConfig::default()
             },
         );
+        // A physical full-sort assumption is not an admission certificate.
         assert_eq!(
             lowered.status,
-            LoweringStatus::Lowered,
-            "{label}: {:#?}",
+            LoweringStatus::Blocked,
+            "{:#?}",
             lowered.diagnostics
         );
-        let Some(FormalQueryExpr::Fetch { count: 100, input }) = lowered.query_expr.as_ref() else {
-            panic!("{label}: forced full sort must use eager Fetch")
-        };
-        assert!(matches!(input.as_ref(), FormalQueryExpr::OrderBy { .. }));
-        let module = emit_rocq_query_module(
-            lowered.query_expr.as_ref().unwrap(),
-            lowered.query_expr.as_ref().unwrap(),
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "limit_runtime_demand_not_supported")
         );
-        assert!(module.rocq_module.contains("QExpr_Fetch (100%nat)"));
-        assert!(module.rocq_module.contains("QExpr_OrderBy"));
-        assert!(module.rocq_module.contains("AggregateSumInt32"));
-        assert!(!module.rocq_module.contains("QExpr_PgFetch"));
     }
 }
 
 #[test]
-fn aggregate_result_sort_exhausts_every_union_all_branch() {
+fn aggregate_result_sort_exhausts_every_union_all_branch_conservatively_blocked() {
     let output = vec![
         column("group_key"),
         typed_column("row_count", SqlType::BigInt),
@@ -21857,16 +21977,19 @@ fn aggregate_result_sort_exhausts_every_union_all_branch() {
     );
 
     let lowered = lower_query(&query);
+    // A physical full-sort assumption is not an admission certificate.
     assert_eq!(
         lowered.status,
-        LoweringStatus::Lowered,
-        "diagnostics: {:#?}",
+        LoweringStatus::Blocked,
+        "{:#?}",
         lowered.diagnostics
     );
-    assert!(matches!(
-        lowered.query_expr,
-        Some(FormalQueryExpr::Fetch { .. })
-    ));
+    assert!(
+        lowered
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "limit_runtime_demand_not_supported")
+    );
 }
 
 #[test]

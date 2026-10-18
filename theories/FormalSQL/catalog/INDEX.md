@@ -40,7 +40,7 @@ The catalog is not an admissibility prover: use the generated `Queries.v` admiss
 | integer bit operations, shifts, BIT_AND/BIT_OR aggregate laws | [bitwise.md](bitwise.md) | 47 |
 | CHAR/VARCHAR/TEXT, LIKE, substring, DATE/TIME/TIMESTAMP/TIMESTAMPTZ | [string-temporal.md](string-temporal.md) | 80 |
 | bag/list abstraction, multiplicity, filter/project/join/set operators | [relational-algebra.md](relational-algebra.md) | 293 |
-| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 117 |
+| exact order and multiplicity, ORDER BY, OFFSET/LIMIT/FETCH, DISTINCT | [ordered-observation.md](ordered-observation.md) | 119 |
 | COUNT/SUM/MIN/MAX/AVG, ALL/DISTINCT, empty/all-NULL, grouping, and SINGLE_VALUE scalar-subquery cardinality | [aggregate-grouping.md](aggregate-grouping.md) | 243 |
 | EXISTS, IN, ANY/ALL-style quantified predicates, correlated query/scalar-expression goals; use aggregate/grouping for SINGLE_VALUE scalar cardinality | [subquery-predicates.md](subquery-predicates.md) | 109 |
 | typing/schema conformance, NOT NULL, PK/UNIQUE/FK/CHECK, unique indexes | [schema-integrity.md](schema-integrity.md) | 113 |

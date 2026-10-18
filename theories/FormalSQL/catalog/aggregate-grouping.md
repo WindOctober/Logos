@@ -5729,7 +5729,7 @@ Lemma query_expr_group_outcome_equiv_congr :
 
 ## `query_expr_group_runtime_safe_of_reachable_local_safe`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:3819`](../OrderedQueryFacts.v#L3819)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:3868`](../OrderedQueryFacts.v#L3868)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5756,7 +5756,7 @@ Theorem query_expr_group_runtime_safe_of_reachable_local_safe :
 
 ## `eval_groups_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5045`](../OrderedQueryFacts.v#L5045)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5094`](../OrderedQueryFacts.v#L5094)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5802,7 +5802,7 @@ Lemma eval_groups_has_outcome :
 
 ## `eval_group_bag_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5124`](../OrderedQueryFacts.v#L5124)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5173`](../OrderedQueryFacts.v#L5173)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5837,7 +5837,7 @@ Lemma eval_group_bag_has_outcome :
 
 ## `eval_groups_cardinality_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5163`](../OrderedQueryFacts.v#L5163)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5212`](../OrderedQueryFacts.v#L5212)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5869,7 +5869,7 @@ Lemma eval_groups_cardinality_has_outcome :
 
 ## `eval_group_cardinality_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5216`](../OrderedQueryFacts.v#L5216)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5265`](../OrderedQueryFacts.v#L5265)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5904,7 +5904,7 @@ Lemma eval_group_cardinality_has_outcome :
 
 ## `eval_grouping_sets_bag_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5248`](../OrderedQueryFacts.v#L5248)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5297`](../OrderedQueryFacts.v#L5297)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5936,7 +5936,7 @@ Lemma eval_grouping_sets_bag_has_outcome :
 
 ## `eval_grouping_sets_cardinality_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5278`](../OrderedQueryFacts.v#L5278)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5327`](../OrderedQueryFacts.v#L5327)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -5971,7 +5971,7 @@ Lemma eval_grouping_sets_cardinality_has_outcome :
 
 ## `query_expr_group_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5472`](../OrderedQueryFacts.v#L5472)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5521`](../OrderedQueryFacts.v#L5521)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6004,7 +6004,7 @@ Lemma query_expr_group_has_outcome :
 
 ## `query_expr_grouping_sets_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5499`](../OrderedQueryFacts.v#L5499)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5548`](../OrderedQueryFacts.v#L5548)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6035,7 +6035,7 @@ Lemma query_expr_grouping_sets_has_outcome :
 
 ## `eval_query_cardinality_group_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5692`](../OrderedQueryFacts.v#L5692)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5743`](../OrderedQueryFacts.v#L5743)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6071,7 +6071,7 @@ Lemma eval_query_cardinality_group_has_outcome :
 
 ## `eval_query_cardinality_grouping_sets_has_outcome`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:5718`](../OrderedQueryFacts.v#L5718)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:5769`](../OrderedQueryFacts.v#L5769)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6105,7 +6105,7 @@ Lemma eval_query_cardinality_grouping_sets_has_outcome :
 
 ## `eval_groups_success_rows_realize_outputs`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:6904`](../OrderedQueryFacts.v#L6904)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6970`](../OrderedQueryFacts.v#L6970)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -6132,7 +6132,7 @@ Lemma eval_groups_success_rows_realize_outputs :
 
 ## `query_expr_group_success_rows_realize_outputs`
 
-Source: [`theories/FormalSQL/OrderedQueryFacts.v:6927`](../OrderedQueryFacts.v#L6927)
+Source: [`theories/FormalSQL/OrderedQueryFacts.v:6993`](../OrderedQueryFacts.v#L6993)
 
 Interface layer: General reusable foundation; no SQL interface layer is implied.
 
@@ -6256,7 +6256,7 @@ Lemma query_expr_grouping_sets_global_typed_congr :
 
 ## `eval_groups_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2056`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2056)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2058`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2058)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6296,7 +6296,7 @@ Lemma eval_groups_scalar_global_congr :
 
 ## `eval_group_bag_scalar_global_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2184`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2184)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2186`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2186)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6325,7 +6325,7 @@ Lemma eval_group_bag_scalar_global_congr :
 
 ## `eval_group_bag_group_keys_none`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2278`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2278)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:2280`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L2280)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6348,7 +6348,7 @@ Lemma eval_group_bag_group_keys_none :
 
 ## `query_group_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5413`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5413)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5415`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5415)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6385,7 +6385,7 @@ Definition query_group_rows_bag_outcomes
 
 ## `query_grouping_sets_rows_bag_outcomes`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5432`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5432)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5434`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5434)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6420,7 +6420,7 @@ Definition query_grouping_sets_rows_bag_outcomes
 
 ## `query_group_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5664`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5664)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5666`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5666)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6450,7 +6450,7 @@ Theorem query_group_scheduled_bag_outcomes_characterization :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_characterization`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5708`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5708)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5710`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5710)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6480,7 +6480,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_characterization :
 
 ## `query_group_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5935`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5935)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5937`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5937)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6528,7 +6528,7 @@ Theorem query_group_scheduled_bag_outcomes_congr :
 
 ## `query_grouping_sets_scheduled_bag_outcomes_congr`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5974`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5974)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:5976`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L5976)
 
 Interface layer: Scheduled foundation only: this pointwise theorem is not a final SQL rewrite certificate.
 
@@ -6572,7 +6572,7 @@ Theorem query_grouping_sets_scheduled_bag_outcomes_congr :
 
 ## `query_expr_group_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6288`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6288)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6290`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6290)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6621,7 +6621,7 @@ Theorem query_expr_group_possible_bag_schedule_transport :
 
 ## `query_expr_group_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6331`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6331)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6333`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6333)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6670,7 +6670,7 @@ Corollary query_expr_group_possible_bag_outcome_equiv :
 
 ## `query_expr_grouping_sets_possible_bag_schedule_transport`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6369`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6369)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6371`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6371)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 
@@ -6720,7 +6720,7 @@ Theorem query_expr_grouping_sets_possible_bag_schedule_transport :
 
 ## `query_expr_grouping_sets_possible_bag_outcome_equiv`
 
-Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6411`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6411)
+Source: [`vendor/FormalSQL/src/data/sql/SqlQueryContexts.v:6413`](../../../vendor/FormalSQL/src/data/sql/SqlQueryContexts.v#L6413)
 
 Interface layer: Public possible-outcome SQL interface: its statement uses the complete possible success/error relation, or a property or transport of that relation, over legal Boolean schedules.
 

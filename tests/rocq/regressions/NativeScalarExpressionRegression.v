@@ -685,6 +685,17 @@ Proof.
   reflexivity.
 Qed.
 
+Example rows_fetch_zero_suppresses_runtime_division :
+  native_eval_query nil (QExpr_Fetch 0 native_division_projection)
+    (SqlSuccess nil).
+Proof. apply EQuery_FetchZero. Qed.
+
+Example rows_fetch_zero_has_no_division_error :
+  forall error,
+    ~ native_eval_query nil (QExpr_Fetch 0 native_division_projection)
+      (SqlError error).
+Proof. intros error H; inversion H. Qed.
+
 Definition native_division_window : QueryExpr :=
   WindowExpr [] []
     [WindowAggregateItem native_dead_division_output
@@ -993,7 +1004,7 @@ Proof.
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error NullValues.is_null_value
     native_left_schedule nil
-    1 (QExpr_OrderBy [] native_two_row_values)
+    0 (QExpr_OrderBy [] native_two_row_values)
     [native_scalar_row_one; native_scalar_row_null]).
   eapply EQuery_OrderBySuccess with
     (input_rows := [native_scalar_row_one; native_scalar_row_null]).
@@ -1013,7 +1024,7 @@ Proof.
     NullValues.interp_scalar_operator_runtime_error
     NullValues.interp_aggregate_runtime_error NullValues.is_null_value
     native_left_schedule nil
-    1 (QExpr_OrderBy [] native_two_row_values)
+    0 (QExpr_OrderBy [] native_two_row_values)
     [native_scalar_row_null; native_scalar_row_one]).
   eapply EQuery_OrderBySuccess with
     (input_rows := [native_scalar_row_null; native_scalar_row_one]).
