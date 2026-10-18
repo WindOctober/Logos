@@ -5094,6 +5094,10 @@ def validate_solver_args(values: tuple[str, ...]) -> None:
                 "--solver-arg values must be explicit long options beginning with --"
             )
         option = value.split("=", 1)[0]
+        if option in {"--bag-lemmas", "--other-lemmas"} and value not in {
+            f"{option}=on", f"{option}=off"
+        }:
+            raise RunnerError(f"{option} requires =on or =off in --solver-arg")
         if option in PIPELINE_SHORT_CIRCUIT_SOLVER_OPTIONS:
             raise RunnerError(
                 f"--solver-arg cannot disable or short-circuit the complete pipeline: {option}"
@@ -12238,9 +12242,22 @@ def validate_context_manifest_at_root(
         "staticPromptAndPrimerBytes",
         *PROOF_CONTEXT_BINDINGS,
     }
+    bindings = dict(PROOF_CONTEXT_BINDINGS)
+    expected_lemmas = {"bag": True, "other": True}
+    for argument in getattr(config, "solver_args", ()):
+        for group in expected_lemmas:
+            if argument == f"--{group}-lemmas=off":
+                expected_lemmas[group] = False
+    if manifest.get("schemaVersion") == 9:
+        expected_manifest_keys.update({"lemmaAvailability", "lemmaPolicy"})
+        bindings["lemmaPolicy"] = ("lemma-availability.json", None, None)
+        if manifest.get("lemmaAvailability") != expected_lemmas:
+            raise RunnerError(f"{description} lemma selection differs from runner arguments")
+    elif not all(expected_lemmas.values()):
+        raise RunnerError(f"{description} has no lemma-ablation provenance")
     if (
         set(manifest) != expected_manifest_keys
-        or manifest.get("schemaVersion") != 8
+        or manifest.get("schemaVersion") not in {8, 9}
         or manifest.get("authority") != PROOF_CONTEXT_AUTHORITY
         or manifest.get("verificationMode")
         != config.verification_mode.replace("-", "_")
@@ -12250,7 +12267,7 @@ def validate_context_manifest_at_root(
 
     binding_total_bytes = 0
     for manifest_key, (expected_name, report_sha_key, report_bytes_key) in (
-        PROOF_CONTEXT_BINDINGS.items()
+        bindings.items()
     ):
         binding = manifest.get(manifest_key)
         if (
@@ -12277,6 +12294,7 @@ def validate_context_manifest_at_root(
             or sha256_file(path) != binding["sha256"]
             or (
                 report is not None
+                and report_bytes_key is not None
                 and report.get(report_bytes_key) != binding["bytes"]
             )
             or (
@@ -12517,6 +12535,13 @@ def proof_metrics_from_report(
                 proof_agent_launcher_environment_policy_record()
             ),
         }
+        selection = {
+            group: f"--{group}-lemmas=off" not in config.solver_args
+            for group in ("bag", "other")
+        }
+        # Historical reports predate availability switches and mean full library.
+        if "lemmaAvailability" in agent or not all(selection.values()):
+            expected_agent_values["lemmaAvailability"] = selection
         for key, expected in expected_agent_values.items():
             if agent.get(key) != expected:
                 raise RunnerError(

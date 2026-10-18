@@ -2,15 +2,13 @@
 
 use crate::artifacts::ArtifactWriter;
 use crate::core::{VerificationInput, VerificationMode};
+use crate::engine::config::LemmaAvailability;
 use crate::engine::report::ProofAgentContext;
 use crate::error::{Error, Result};
 use serde::Serialize;
 use std::path::Path;
 
-use super::{
-    FORMAL_SQL_DECLARATION_SEARCH_SCRIPT, FORMAL_SQL_SEMANTIC_PRIMER, proof_agent_instruction_body,
-    sha256_hex, static_prompt_and_primer_bytes,
-};
+use super::{FORMAL_SQL_DECLARATION_SEARCH_SCRIPT, ablation, sha256_hex};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +24,8 @@ pub(super) struct ContextManifest {
     pub(super) schema_version: u32,
     authority: &'static str,
     verification_mode: VerificationMode,
+    lemma_availability: LemmaAvailability,
+    lemma_policy: FileBinding,
     static_prompt_and_primer_bytes: usize,
     source_sql: FileBinding,
     target_sql: FileBinding,
@@ -58,6 +58,7 @@ pub(super) fn write_proof_agent_context(
     artifacts: &ArtifactWriter,
     input: &VerificationInput,
     verification_mode: VerificationMode,
+    lemma_availability: LemmaAvailability,
     query_shape: &str,
     ordered_signatures: &str,
     observation_certificates: &str,
@@ -86,20 +87,35 @@ pub(super) fn write_proof_agent_context(
         format!("{context_root}/observation-certificates.json"),
         observation_certificates,
     )?;
+    let primer = ablation::primer(lemma_availability);
+    let policy_path = artifacts
+        .root()
+        .join("proof-stage/proof-agent/trusted-launcher/lemma-availability.json");
+    let policy_summary = if lemma_availability.is_full() {
+        serde_json::to_string_pretty(&lemma_availability)? + "\n"
+    } else {
+        std::fs::read_to_string(&policy_path).map_err(|source| Error::Read {
+            path: policy_path,
+            source,
+        })?
+    };
     artifacts.write_text(
-        format!("{context_root}/semantic-primer.md"),
-        FORMAL_SQL_SEMANTIC_PRIMER,
+        format!("{context_root}/lemma-availability.json"),
+        &policy_summary,
     )?;
+    artifacts.write_text(format!("{context_root}/semantic-primer.md"), primer)?;
     artifacts.write_text(
         format!("{context_root}/search-rocq-declarations.py"),
         FORMAL_SQL_DECLARATION_SEARCH_SCRIPT,
     )?;
 
-    let static_bytes = static_prompt_and_primer_bytes();
+    let static_bytes = ablation::static_bytes(lemma_availability);
     let manifest = ContextManifest {
-        schema_version: 8,
+        schema_version: 9,
         authority: "navigation context only; exact SQL is pipeline input and generated Rocq plus FormalSQL and the Rocq kernel remain authoritative",
         verification_mode,
+        lemma_availability,
+        lemma_policy: context_binding("lemma-availability.json", policy_summary.as_bytes()),
         static_prompt_and_primer_bytes: static_bytes,
         source_sql: context_binding("source.sql", input.source_sql().as_bytes()),
         target_sql: context_binding("target.sql", input.target_sql().as_bytes()),
@@ -112,10 +128,7 @@ pub(super) fn write_proof_agent_context(
             "observation-certificates.json",
             observation_certificates.as_bytes(),
         ),
-        semantic_primer: context_binding(
-            "semantic-primer.md",
-            FORMAL_SQL_SEMANTIC_PRIMER.as_bytes(),
-        ),
+        semantic_primer: context_binding("semantic-primer.md", primer.as_bytes()),
         declaration_search: context_binding(
             "search-rocq-declarations.py",
             FORMAL_SQL_DECLARATION_SEARCH_SCRIPT.as_bytes(),
@@ -130,7 +143,7 @@ pub(super) fn write_proof_agent_context(
         format!("{context_root}/context-manifest.json"),
         &manifest_text,
     )?;
-    let generated_context_bytes = manifest.source_sql.bytes
+    let generated_context_bytes = manifest.lemma_policy.bytes + manifest.source_sql.bytes
         + manifest.target_sql.bytes
         + manifest.query_shape.bytes
         + manifest.ordered_signatures.bytes
@@ -144,7 +157,7 @@ pub(super) fn write_proof_agent_context(
         + manifest.goal_module.bytes
         + manifest_text.len()
         // The primer is already counted through its context file above.
-        + proof_agent_instruction_body().len();
+        + ablation::instructions(lemma_availability).len();
     let report = ProofAgentContext {
         manifest_path: format!("{context_root}/context-manifest.json"),
         manifest_sha256: sha256_hex(manifest_text.as_bytes()),
@@ -216,6 +229,7 @@ pub(super) fn validate_proof_agent_context(
 ) -> Result<()> {
     let root = artifacts.root().join("proof-stage/formal-sql");
     for binding in [
+        &prepared.manifest.lemma_policy,
         &prepared.manifest.source_sql,
         &prepared.manifest.target_sql,
         &prepared.manifest.query_shape,

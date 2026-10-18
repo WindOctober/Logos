@@ -1209,6 +1209,51 @@ class RecoveryContextAuthorityTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_version_nine_ablation_context_runner_and_recovery(self) -> None:
+        from types import SimpleNamespace
+
+        manifest_path = self.formal / "context-manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        launcher = self.case_dir / "proof-stage/proof-agent/trusted-launcher"
+        launcher.mkdir(parents=True)
+        policy = launcher / "lemma-policy.json"
+        for helper in ("lemma-ablation.py", "search-rocq-declarations.py"):
+            (launcher / helper).write_text("# checked helper fixture\n")
+        policy.write_text(json.dumps({"bagLemmas": False, "otherLemmas": True,
+            "helperSha256": hashlib.sha256((launcher/"lemma-ablation.py").read_bytes()).hexdigest(),
+            "searchHelperSha256": hashlib.sha256((launcher/"search-rocq-declarations.py").read_bytes()).hexdigest()}))
+        selection = {"bag": False, "other": True}
+        summary = self.formal / "lemma-availability.json"
+        summary.write_text(json.dumps({"policySha256": hashlib.sha256(policy.read_bytes()).hexdigest()}))
+        manifest.update(schemaVersion=9, lemmaAvailability=selection, lemmaPolicy={
+            "path": summary.name, "bytes": summary.stat().st_size,
+            "sha256": hashlib.sha256(summary.read_bytes()).hexdigest(),
+        })
+        manifest_path.write_text(json.dumps(manifest))
+        configuration = self.proof["proofAgentConfiguration"]
+        configuration["lemmaAvailability"] = selection
+        configuration["context"].update(
+            manifestBytes=manifest_path.stat().st_size,
+            manifestSha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        )
+        bindings = self.recovery["validate_formal_context"](self.case_dir, self.proof, self.input_files)
+        self.assertIn("lemma-availability.json", bindings)
+        runner = self.recovery["RUNNER"]
+        runner["validate_solver_args"](("--bag-lemmas=off", "--other-lemmas=on"))
+        with self.assertRaises(runner["RunnerError"]):
+            runner["validate_solver_args"](("--bag-lemmas=maybe",))
+        case = SimpleNamespace(case_id="test", source=self.formal/"source.sql", target=self.formal/"target.sql")
+        (self.formal/"Problem.v").write_text("Lemma own : True. Proof. exact I. Qed.\n")
+        config = SimpleNamespace(verification_mode="outcome-unconditional",
+            solver_args=("--bag-lemmas=off",), input_files={"test": self.input_files})
+        runner["validate_context_manifest_at_root"](self.formal, manifest, case, config, 17, "test ablation")
+        config.solver_args=()
+        with self.assertRaisesRegex(runner["RunnerError"], "lemma selection"):
+            runner["validate_context_manifest_at_root"](self.formal, manifest, case, config, 17, "test ablation")
+        policy.write_text("{}")
+        with self.assertRaisesRegex(self.error, "lemma policy differs"):
+            self.recovery["validate_formal_context"](self.case_dir, self.proof, self.input_files)
+
     def test_goal_and_complete_context_are_manifest_bound(self) -> None:
         bindings = self.recovery["validate_formal_context"](
             self.case_dir, self.proof, self.input_files

@@ -9,6 +9,26 @@ multi-hour batch. The full runner performs its own fail-closed launch preflight;
 
 ## Run the complete Logos pipeline
 
+### Lemma-library ablation
+
+The solver defaults to both lemma groups enabled. Append these options to a
+normal full-pipeline runner command (use a distinct run directory for each row):
+
+| Treatment | Runner options |
+| --- | --- |
+| Full library | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=on` |
+| Without bag facts/lifting | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=on` |
+| Bag facts/lifting only | `--solver-arg=--bag-lemmas=on --solver-arg=--other-lemmas=off` |
+| Neither group | `--solver-arg=--bag-lemmas=off --solver-arg=--other-lemmas=off` |
+
+Bag includes bag-level composition/permutation and bag-dependent wrappers, not
+only the final bag-to-list bridge. SQL semantics, constructors, Stdlib and exact
+generated scaffolding remain fixed; agents can prove their own helpers.
+Source/search visibility and prompts follow the selection, and compilation
+checks disabled lemma usage. See the [ablation boundary and provenance](../../crates/logos-solver/docs/lemma-ablation.md).
+
+### Standard run
+
 `benchmarks/scripts/run-logos` is the canonical full-pipeline benchmark
 runner. It invokes `logos-solver check` once per case. The normal path is static
 output/analysis preflight, lowering and proof search, with counterexample

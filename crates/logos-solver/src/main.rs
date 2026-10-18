@@ -118,6 +118,12 @@ enum Command {
             default_value_t = 2_048
         )]
         proof_agent_storage_limit_mib: u64,
+        /// Enable bag-level composition/lifting and bag-to-observation lemmas.
+        #[arg(long, default_value = "on", value_parser = ["on", "off"])]
+        bag_lemmas: String,
+        /// Enable the remaining pre-proved library lemmas.
+        #[arg(long, default_value = "on", value_parser = ["on", "off"])]
+        other_lemmas: String,
         /// Maximum retained REPLs per proof broker (default 0: retention disabled).
         #[arg(long, env = "LOGOS_ROCQ_SESSION_POOL_SIZE", default_value_t = engine::SessionLimits::default().max_sessions as u64,
             value_parser = clap::value_parser!(u64).range(0..=16))]
@@ -230,6 +236,8 @@ fn run() -> Result<()> {
             proof_agent_resume_command,
             proof_agent_memory_limit_mib,
             proof_agent_storage_limit_mib,
+            bag_lemmas,
+            other_lemmas,
             rocq_session_pool_size,
             rocq_session_pool_rss_mib,
             proof_agent_timeout_seconds,
@@ -274,6 +282,10 @@ fn run() -> Result<()> {
                     sql_time_zone,
                     sql_environment,
                     verification_mode,
+                    lemma_availability: engine::LemmaAvailability {
+                        bag: bag_lemmas == "on",
+                        other: other_lemmas == "on",
+                    },
                     proof_agent_command,
                     proof_agent_resume_command,
                     proof_agent_memory_limit_mib,

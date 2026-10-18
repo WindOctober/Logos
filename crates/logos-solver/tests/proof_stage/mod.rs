@@ -86,6 +86,7 @@ fn proof_test_config(root: &Path) -> Config {
         sql_time_zone: SqlTimeZone::utc(),
         sql_environment: SqlEnvironment::default(),
         verification_mode: VerificationMode::OutcomeUnconditional,
+        lemma_availability: Default::default(),
         proof_agent_command: String::new(),
         proof_agent_resume_command: String::new(),
         proof_agent_memory_limit_mib: 512,
@@ -5008,10 +5009,12 @@ fn proof_agent_container_does_not_run_the_final_trusted_check() {
     assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("LOGOS_PROOF_AGENT_COMMAND"));
     assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("LOGOS_PROOF_AGENT_CODEX_HOME"));
     assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("LOGOS_PROOF_WORKDIR"));
-    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$WORKDIR\":/seed/context:ro"));
+    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("AGENT_CONTEXT=\"$WORKDIR\""));
+    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$AGENT_CONTEXT\":/seed/context:ro"));
     assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("search-rocq-declarations.py"));
     assert!(!FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("/workspace/problem/lemma-catalog"));
-    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$LOGOS_REPO_ROOT\":/workspace/logos:ro"));
+    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("AGENT_AUTHORITY=\"$LOGOS_REPO_ROOT\""));
+    assert!(FORMAL_SQL_DOCKER_AGENT_SCRIPT.contains("-v \"$AGENT_AUTHORITY\":/workspace/logos:ro"));
     assert!(
         !FORMAL_SQL_DOCKER_AGENT_SCRIPT
             .contains("\"$LOGOS_REPO_ROOT/vendor/FormalSQL\":/workspace/logos/vendor/FormalSQL:ro")
@@ -5922,6 +5925,7 @@ fn proof_agent_context_excludes_obsolete_routed_catalogs_and_detects_drift() {
         &artifacts,
         &input,
         VerificationMode::OutcomeUnconditional,
+        Default::default(),
         "{}\n",
         "{}\n",
         "{}\n",
@@ -5932,7 +5936,7 @@ fn proof_agent_context_excludes_obsolete_routed_catalogs_and_detects_drift() {
         FORMAL_SQL_GOAL_MODULE.as_str(),
     )
     .expect("write self-search context");
-    assert_eq!(context.manifest.schema_version, 8);
+    assert_eq!(context.manifest.schema_version, 9);
     assert!(!root.join("proof-stage/formal-sql/lemma-catalog").exists());
     assert_eq!(
         std::fs::read_to_string(root.join("proof-stage/formal-sql/search-rocq-declarations.py"))
@@ -5957,6 +5961,7 @@ fn proof_agent_context_excludes_obsolete_routed_catalogs_and_detects_drift() {
         &artifacts,
         &input,
         VerificationMode::OutcomeUnconditional,
+        Default::default(),
         "{}\n",
         "{}\n",
         "{}\n",

@@ -128,7 +128,7 @@ class ExactFilters:
         }
 
 
-def mask_comments_and_strings(text: str) -> str:
+def mask_comments_and_strings(text: str, *, preserve_strings: bool = False) -> str:
     """Replace comment/string contents with spaces while preserving positions."""
     result = list(text)
     comment_depth = 0
@@ -153,13 +153,15 @@ def mask_comments_and_strings(text: str) -> str:
             continue
         if in_string:
             if pair == '""':
-                result[index] = result[index + 1] = " "
+                if not preserve_strings:
+                    result[index] = result[index + 1] = " "
                 index += 2
                 continue
             if text[index] == '"':
-                result[index] = " "
+                if not preserve_strings:
+                    result[index] = " "
                 in_string = False
-            elif text[index] != "\n":
+            elif text[index] != "\n" and not preserve_strings:
                 result[index] = " "
             index += 1
             continue
@@ -169,7 +171,8 @@ def mask_comments_and_strings(text: str) -> str:
             index += 2
             continue
         if text[index] == '"':
-            result[index] = " "
+            if not preserve_strings:
+                result[index] = " "
             in_string = True
         index += 1
     if comment_depth:
@@ -636,11 +639,21 @@ def search_authority(
         raise SearchError("page must be at least 1")
     if page_size < 1:
         raise SearchError("page size must be at least 1")
-    declarations = (
-        cached_authority(authority_root, cache_dir)
-        if use_cache
-        else scan_authority(authority_root)
-    )
+    surface = authority_root / "lemma-surface.json"
+    if surface.is_file():
+        index = json.loads(surface.read_text())
+        if index.get("schemaVersion") != 1:
+            raise SearchError("unsupported lemma surface version")
+        declarations = [
+            Declaration(**{**r, "symbols": tuple(r["symbols"])})
+            for r in index["declarations"]
+        ]
+    else:
+        declarations = (
+            cached_authority(authority_root, cache_dir)
+            if use_cache
+            else scan_authority(authority_root)
+        )
     matches = [
         declaration for declaration in declarations if filters.accepts(declaration)
     ]

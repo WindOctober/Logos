@@ -1456,7 +1456,7 @@ fn run_diagnostic_broker_request(
     let problem_text =
         &mapped_problem.as_str()[..prefix_bytes.unwrap_or(mapped_problem.as_bytes().len())];
     let audit_started = Instant::now();
-    let audit_findings = if request.probe.is_some() {
+    let mut audit_findings = if request.probe.is_some() {
         audit_probe_text(&diagnostic_problem_relative, problem_text, request.mode)
     } else {
         match request.mode {
@@ -1469,6 +1469,11 @@ fn run_diagnostic_broker_request(
             }
         }
     };
+    audit_findings.extend(super::ablation::audit(
+        artifacts_root,
+        &diagnostic_problem_relative,
+        problem_text,
+    ));
     let candidate_audit = AgentAudit {
         passed: audit_findings.is_empty(),
         scanned_files: vec![diagnostic_problem_relative],

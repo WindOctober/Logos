@@ -34,6 +34,7 @@ use crate::error::{Error, Result};
 use crate::usage::{CodexInvocationUsage, LlmUsage, parse_codex_jsonl, parse_codex_thread_id};
 use crate::validation::FormalWitnessSnapshot;
 
+mod ablation;
 mod audit;
 mod checker;
 mod context;
@@ -186,6 +187,7 @@ const PROOF_CONTEXT_FILES: &[&str] = &[
     "semantic-primer.md",
     "search-rocq-declarations.py",
     "context-manifest.json",
+    "lemma-availability.json",
 ];
 const COUNTEREXAMPLE_HANDOFF_FILE: &str = "counterexample-handoff.json";
 const AUTHORITY_CLOSURE_FILE: &str = "authority-closure.txt";
@@ -596,6 +598,7 @@ fn base_proof_agent_configuration(
 ) -> Result<ProofAgentConfiguration> {
     let writable_storage_limit_bytes = proof_agent_storage_limit_bytes(options)?;
     Ok(ProofAgentConfiguration {
+        lemma_availability: options.lemma_availability,
         rocq_session_pool_size: options.rocq_session_limits.max_sessions,
         rocq_session_pool_rss_mib: options.rocq_session_limits.retained_rss_mib,
         enabled: options.execution_mode == ExecutionMode::Verify,
@@ -626,7 +629,7 @@ fn base_proof_agent_configuration(
         trusted_checker_environment_policy: trusted_checker_environment_policy(),
         proof_agent_launcher_environment_policy: proof_agent_launcher_environment_policy(),
         docker_image: options.proof_docker_image.clone(),
-        static_prompt_and_primer_bytes: static_prompt_and_primer_bytes(),
+        static_prompt_and_primer_bytes: ablation::static_bytes(options.lemma_availability),
         trusted_environment_preflight: None,
         context,
     })
@@ -1075,6 +1078,7 @@ pub(super) fn run_proof_stage(
                 .generation_path(proof_agent_session_generation)?;
             write_proof_agent_round_prompt(
                 artifacts,
+                options.lemma_availability,
                 options.verification_mode,
                 round,
                 remaining,
@@ -2954,6 +2958,7 @@ fn render_proof_agent_prompt(
 
 fn write_proof_agent_round_prompt(
     artifacts: &ArtifactWriter,
+    lemma_availability: crate::engine::config::LemmaAvailability,
     verification_mode: VerificationMode,
     round: usize,
     remaining: Duration,
@@ -2973,7 +2978,10 @@ fn write_proof_agent_round_prompt(
         )),
         feedback,
     );
-    artifacts.write_text("proof-stage/formal-sql/proof-agent-prompt.md", &prompt)
+    artifacts.write_text(
+        "proof-stage/formal-sql/proof-agent-prompt.md",
+        &ablation::select_prompt(prompt, lemma_availability),
+    )
 }
 
 /// Materialize one generation's sources and validate its context exactly once.
@@ -2997,6 +3005,7 @@ fn write_proof_workspace(
     artifacts.write_text("proof-stage/formal-sql/Problem.v", problem_module)?;
     write_formal_sql_witness_modules(artifacts, witness_modules)?;
     artifacts.write_text("proof-stage/formal-sql/Goal.v", goal_module)?;
+    ablation::prepare(artifacts, options)?;
     let proof_modules_dir = artifacts
         .root()
         .join("proof-stage/formal-sql")
@@ -3032,6 +3041,7 @@ fn write_proof_workspace(
         artifacts,
         input,
         options.verification_mode,
+        options.lemma_availability,
         &query_shape.text,
         &query_shape.ordered_signatures_text,
         &observation_certificates,
@@ -3041,7 +3051,10 @@ fn write_proof_workspace(
         problem_module,
         goal_module,
     )?;
-    let proof_prompt = render_proof_agent_prompt(options.verification_mode, None, None);
+    let proof_prompt = ablation::select_prompt(
+        render_proof_agent_prompt(options.verification_mode, None, None),
+        options.lemma_availability,
+    );
     artifacts.write_text(
         "proof-stage/formal-sql/proof-agent-prompt.md",
         &proof_prompt,

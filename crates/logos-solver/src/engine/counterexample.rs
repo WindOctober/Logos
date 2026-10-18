@@ -1529,6 +1529,7 @@ mod tests {
 
     fn counterexample_test_options(root: &Path) -> Config {
         Config {
+            lemma_availability: Default::default(),
             calcite_ir_command: String::new(),
             execution_mode: ExecutionMode::Verify,
             disable_counterexample_search: false,

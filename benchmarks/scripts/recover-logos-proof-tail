@@ -329,13 +329,35 @@ def validate_formal_context(
         "semanticPrimerBytes",
         "generatedContextBytes",
     }
-    if schema_version == 8:
+    if schema_version in {8, 9}:
         expected_manifest_keys.add("declarationSearch")
         expected_context_keys.update(
             {"declarationSearchSha256", "declarationSearchBytes"}
         )
     elif schema_version != 7:
         raise RecoveryError("proof context manifest schemaVersion is unsupported")
+    binding_paths = dict(CONTEXT_BINDING_PATHS)
+    if schema_version == 9:
+        expected_manifest_keys.update({"lemmaAvailability", "lemmaPolicy"})
+        binding_paths["lemmaPolicy"] = "lemma-availability.json"
+        availability = manifest.get("lemmaAvailability")
+        if (not isinstance(availability, dict)
+                or set(availability) != {"bag", "other"}
+                or any(type(value) is not bool for value in availability.values())
+                or configuration.get("lemmaAvailability") != availability):
+            raise RecoveryError("lemma availability differs from recorded configuration")
+        if not all(availability.values()):
+            summary = read_object(case_dir / "proof-stage/formal-sql/lemma-availability.json", "lemma availability")
+            launcher = case_dir / "proof-stage/proof-agent/trusted-launcher"
+            policy = regular_file(launcher / "lemma-policy.json", "lemma policy")
+            if sha256_file(policy) != summary.get("policySha256"):
+                raise RecoveryError("lemma policy differs from recorded context")
+            policy_record = read_object(policy, "lemma policy")
+            for filename, digest_key in (("lemma-ablation.py", "helperSha256"),
+                                         ("search-rocq-declarations.py", "searchHelperSha256")):
+                helper = regular_file(launcher / filename, "lemma helper")
+                if sha256_file(helper) != policy_record.get(digest_key):
+                    raise RecoveryError("lemma helper differs from recorded policy")
     if set(manifest) != expected_manifest_keys or set(context) != expected_context_keys:
         raise RecoveryError("proof context manifest or report schema is incompatible")
     if (
@@ -354,7 +376,7 @@ def validate_formal_context(
 
     bindings: dict[str, dict[str, Any]] = {}
     formal_relative = Path("proof-stage/formal-sql")
-    for key, expected_name in CONTEXT_BINDING_PATHS.items():
+    for key, expected_name in binding_paths.items():
         if key == "declarationSearch" and schema_version == 7:
             continue
         binding = manifest.get(key)

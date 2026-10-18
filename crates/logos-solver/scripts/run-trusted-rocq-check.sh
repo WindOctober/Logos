@@ -146,6 +146,7 @@ export PATH="$ROCQ_BIN_DIR:/usr/bin:/bin"
 BWRAP_BIN="$(realpath "$BWRAP_COMMAND")"
 
 CHECKER_PATH="$(realpath "${BASH_SOURCE[0]}")"
+LEMMA_POLICY="${CHECKER_PATH%/*}/lemma-policy.json"
 LOGOS_REPO_ROOT="$(cd "$LOGOS_REPO_ROOT" && pwd)"
 WORKDIR="$(cd "$LOGOS_PROOF_WORKDIR" && pwd)"
 CACHE_PATH_INPUT="$LOGOS_TRUSTED_ROCQ_CACHE_DIR"
@@ -1693,7 +1694,7 @@ fi
 # Only the output directory's already checked .vo prefix is visible through the
 # LogosGenerated logical root. Source files are read-only and cannot replace a
 # prior object while the compiler runs.
-sandbox_compile() {
+sandbox_compile_raw() {
   local input_root="$1"
   local output_root="$2"
   local source_relative="$3"
@@ -1766,6 +1767,28 @@ sandbox_compile() {
       "${rocq_input[@]}"
 }
 
+# Keep inspection on the host: candidates cannot choose the policy, and private
+# elaborated proof terms never enter the agent's diagnostic transcript.
+sandbox_compile() {
+  if [[ ! -f "$LEMMA_POLICY" || "$mode" == interactive-diagnostic ]]; then
+    sandbox_compile_raw "$@"
+    return
+  fi
+  local input_root="$1" output_root="$2" source_relative="$3"
+  local helper="${CHECKER_PATH%/*}/lemma-ablation.py"
+  # Rocq requires source and object basenames to agree even with -top.
+  local instrumented=".lemma-inspection/$source_relative"
+  local transcript="$output_root/lemma-inspection.log"
+  local status=0
+  mkdir -p "$(dirname "$input_root/$instrumented")"
+  python3 "$helper" instrument --policy "$LEMMA_POLICY" \
+    --source "$input_root/$source_relative" --target "$input_root/$instrumented" || return "$?"
+  sandbox_compile_raw "$input_root" "$output_root" "$instrumented" "$4" "$5" \
+    > "$transcript" 2>&1 || status="$?"
+  python3 "$helper" check-output --policy "$LEMMA_POLICY" \
+    --source "$transcript" --compile-status "$status"
+}
+
 if [[ "$mode" == interactive-diagnostic ]]; then
   sandbox_compile "$PROBLEMDIR" "$PROBLEMOUTDIR" "" "$interactive_logical_name" ""
   exit "$?"
@@ -1821,7 +1844,7 @@ if [[ "$mode" == final ]]; then
   copy_trusted_cache_objects "$PROBLEMOUTDIR"
 fi
 
-if [[ "$mode" == final ]] && reuse_problem_cache; then
+if [[ "$mode" == final && ! -f "$LEMMA_POLICY" ]] && reuse_problem_cache; then
   : # Reused exact Problem.vo from the latest digest-bound passing diagnostic.
 else
   sandbox_compile \

@@ -1483,6 +1483,7 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             case_dir = Path(temporary).resolve()
             config = mock.Mock(
+                solver_args=(),
                 verification_mode="outcome-unconditional",
                 sql_time_zone="UTC",
                 sql_default_collation="C",
@@ -1606,6 +1607,7 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
             )
             config = mock.Mock(
                 proof_check_timeout_seconds=5,
+                solver_args=(),
                 verification_mode="outcome-unconditional",
                 input_files={
                     case.case_id: {

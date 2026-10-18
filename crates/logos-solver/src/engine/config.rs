@@ -2,6 +2,29 @@ use std::path::PathBuf;
 
 use crate::core::{SqlEnvironment, SqlTimeZone, VerificationMode};
 
+/// Independent availability of pre-proved facts; never changes SQL semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LemmaAvailability {
+    pub bag: bool,
+    pub other: bool,
+}
+
+impl Default for LemmaAvailability {
+    fn default() -> Self {
+        Self {
+            bag: true,
+            other: true,
+        }
+    }
+}
+
+impl LemmaAvailability {
+    pub fn is_full(self) -> bool {
+        self.bag && self.other
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub calcite_ir_command: String,
@@ -17,6 +40,7 @@ pub struct Config {
     pub sql_time_zone: SqlTimeZone,
     pub sql_environment: SqlEnvironment,
     pub verification_mode: VerificationMode,
+    pub lemma_availability: LemmaAvailability,
     pub proof_agent_command: String,
     pub proof_agent_resume_command: String,
     pub proof_agent_memory_limit_mib: u64,

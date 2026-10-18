@@ -79,6 +79,7 @@ pub(super) fn audit_proof_workspace_for_mode(
         }
         if *name == "Problem.v" {
             findings.extend(audit_rocq_text(&relative, &text));
+            findings.extend(super::ablation::audit(artifacts.root(), &relative, &text));
             problem_text = Some(text);
             problem_path = Some(relative);
         }
@@ -96,6 +97,7 @@ pub(super) fn audit_proof_workspace_for_mode(
             .expect("validated proof module source remains UTF-8");
         scanned_files.push(relative.clone());
         findings.extend(audit_proof_module_rocq_text(&relative, text));
+        findings.extend(super::ablation::audit(artifacts.root(), &relative, text));
     }
     let problem_path = problem_path
         .as_deref()

@@ -635,6 +635,20 @@ with tarfile.open(archive, mode="r:*") as bundle:
 PY
 }
 
+AGENT_AUTHORITY="$LOGOS_REPO_ROOT"
+AGENT_CONTEXT="$WORKDIR"
+LEMMA_POLICY="${LAUNCHER%/*}/lemma-policy.json"
+if [[ -f "$LEMMA_POLICY" ]]; then
+  AGENT_AUTHORITY="${LAUNCHER%/*}/lemma-surface"
+  [[ -f "$AGENT_AUTHORITY/lemma-surface.json" ]] || {
+    echo "missing filtered lemma surface" >&2
+    exit 2
+  }
+  AGENT_CONTEXT="$AUTHORITY_STAGE/ablation-context"
+  python3 "${LAUNCHER%/*}/lemma-ablation.py" context-tree \
+    --policy "$LEMMA_POLICY" --source "$WORKDIR" --target "$AGENT_CONTEXT"
+fi
+
 docker_args=(
   --rm
   --cidfile "$CONTAINER_CID_FILE"
@@ -659,10 +673,10 @@ docker_args=(
   -e LOGOS_PROOF_AGENT_GID="$HOST_GID"
   -e HOME=/workspace/home
   -e TMPDIR=/workspace/tmp
-  -v "$LOGOS_REPO_ROOT":/workspace/logos:ro
+  -v "$AGENT_AUTHORITY":/workspace/logos:ro
   -v "$DIAGNOSTIC_SOCKET_DIR":/seed/diagnostic:ro
   -v "$AGENT_STAGE":/seed/problem:ro
-  -v "$WORKDIR":/seed/context:ro
+  -v "$AGENT_CONTEXT":/seed/context:ro
   -v "$HANDOFF_INCOMING":/handoff-export:rw
 )
 
@@ -735,7 +749,7 @@ install -m 0600 /seed/problem/Problem.v /workspace/problem/Problem.v
 
 for name in Schema.v Queries.v WitnessData.v Witness.v Goal.v source.sql target.sql query-shape.json \
   ordered-signatures.json observation-certificates.json semantic-primer.md \
-  search-rocq-declarations.py context-manifest.json proof-agent-prompt.md run-rocq-check.sh; do
+  search-rocq-declarations.py context-manifest.json lemma-availability.json proof-agent-prompt.md run-rocq-check.sh; do
   ln -s "/seed/context/$name" "/workspace/problem/$name"
 done
 ln -s /seed/context/WitnessModules /workspace/problem/WitnessModules

@@ -14,7 +14,7 @@ use crate::proposal::CommandProvider;
 use crate::validation::{FormalWitnessColumn, FormalWitnessSnapshot, FormalWitnessTable};
 use logos_ir::ShellSqlIrFrontend;
 
-pub use config::{Config, ExecutionMode};
+pub use config::{Config, ExecutionMode, LemmaAvailability};
 use counterexample::{
     CounterexampleStageResult, resume_counterexample_search, run_counterexample_search,
     run_output_schema_preflight,
