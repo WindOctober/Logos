@@ -302,7 +302,7 @@ MODEL = "gpt-5.6-sol"
 REASONING_EFFORT = "medium"
 FULL_RUN_JOBS = 32
 CASE_TIMEOUT_SECONDS = 4 * 3600
-MAX_COUNTEREXAMPLE_ROUNDS = 3
+COUNTEREXAMPLE_FRESH_ATTEMPTS = 2
 TRUSTED_CHECK_TIMEOUT_SECONDS = 420
 PROOF_AGENT_MEMORY_LIMIT_MIB = 6144
 PROOF_AGENT_STORAGE_LIMIT_MIB = 2048
@@ -3291,674 +3291,6 @@ def validate_postgres_profile(record: Any, run_root: Path) -> dict[str, Any]:
     return {"path": path, "sha256": digest, "urlSha256": document["urlSha256"]}
 
 
-def cohort16_selected_authority_digests(
-    expected: list[str],
-    input_rows: dict[str, dict[str, str]],
-    semantic_rows: dict[str, dict[str, Any]],
-) -> tuple[str, str]:
-    """Derive both selected-cohort authorities from their canonical rows."""
-
-    if not set(expected) <= set(input_rows) or not set(expected) <= set(semantic_rows):
-        raise PublishError("cohort16 gate inputs are missing frozen authority rows")
-    selected_document = {
-        "schemaVersion": 1,
-        "algorithm": INPUT_MANIFEST_ALGORITHM,
-        "caseCount": len(expected),
-        "cases": [input_rows[case] for case in sorted(expected)],
-    }
-    selected_semantic_document = {
-        "schemaVersion": 1,
-        "algorithm": SEMANTIC_INPUT_AUTHORITY_ALGORITHM,
-        "caseCount": len(expected),
-        "cases": [semantic_rows[case] for case in sorted(expected)],
-    }
-    return (
-        sha256_text(
-            json.dumps(selected_document, sort_keys=True, separators=(",", ":"))
-            + "\n"
-        ),
-        sha256_text(
-            json.dumps(
-                selected_semantic_document,
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            + "\n"
-        ),
-    )
-
-
-def validate_cohort16_gate_case_input_authority(
-    case: str,
-    input_files: Any,
-    input_row: dict[str, str],
-    semantic_row: dict[str, Any],
-    run_root: Path,
-) -> tuple[dict[str, str], dict[str, Path], Path]:
-    """Validate one gate row against SQL, metadata, and sidecar authority."""
-
-    expected_input_names = {"schema", "source", "target", "metadata"}
-    if semantic_row.get("semanticSidecarPath") is not None:
-        expected_input_names.add("semanticSidecar")
-    if not isinstance(input_files, dict) or set(input_files) != expected_input_names:
-        raise PublishError(f"cohort16 gate case {case} input binding is malformed")
-    input_digests: dict[str, str] = {}
-    input_paths: dict[str, Path] = {}
-    for name, manifest_key in (
-        ("schema", "schemaSha256"),
-        ("source", "sql1Sha256"),
-        ("target", "sql2Sha256"),
-    ):
-        input_path, digest = validate_file_binding(
-            input_files[name],
-            path_key="path",
-            digest_key="sha256",
-            location=f"cohort16 gate {case}.inputFiles.{name}",
-            run_root=run_root,
-        )
-        if digest != input_row[manifest_key]:
-            raise PublishError(f"cohort16 gate case {case} exact input drifted")
-        input_digests[name] = digest
-        input_paths[name] = input_path
-    metadata_path, metadata_digest = validate_file_binding(
-        input_files["metadata"],
-        path_key="path",
-        digest_key="sha256",
-        location=f"cohort16 gate {case}.inputFiles.metadata",
-        run_root=run_root,
-    )
-    metadata = load_json(metadata_path)
-    if (
-        metadata_digest != semantic_row.get("metadataSha256")
-        or not isinstance(metadata, dict)
-        or metadata.get("flatCaseId") != semantic_row.get("flatCaseId")
-    ):
-        raise PublishError(
-            f"cohort16 gate case {case} metadata semantic authority drifted"
-        )
-    input_digests["metadata"] = metadata_digest
-    sidecar_declared = semantic_row.get("semanticSidecarPath")
-    if sidecar_declared is not None:
-        expected_sidecar = resolve_recorded_file(
-            sidecar_declared,
-            f"cohort16 gate {case}.semanticAuthority.semanticSidecarPath",
-            run_root,
-        )
-        sidecar_path, sidecar_digest = validate_file_binding(
-            input_files["semanticSidecar"],
-            path_key="path",
-            digest_key="sha256",
-            location=f"cohort16 gate {case}.inputFiles.semanticSidecar",
-            run_root=run_root,
-            expected_path=expected_sidecar,
-        )
-        if sidecar_digest != semantic_row.get("semanticSidecarSha256"):
-            raise PublishError(
-                f"cohort16 gate case {case} semantic sidecar authority drifted"
-            )
-        input_digests["semanticSidecar"] = sidecar_digest
-        input_paths["semanticSidecar"] = sidecar_path
-    return input_digests, input_paths, metadata_path
-
-
-def validate_cohort16_gate_report_with_runner(
-    case: str,
-    report_path: Path,
-    row: dict[str, Any],
-    metadata_path: Path,
-    semantic_row: dict[str, Any],
-    input_paths: dict[str, Path],
-    input_files: dict[str, Any],
-    full_configuration: dict[str, Any],
-) -> None:
-    """Delegate gate proof/lowering/recovery authority to the runner policy."""
-
-    gate_case_authority = types.SimpleNamespace(
-        case_id=case,
-        cohort=case.split("__", 1)[0],
-        input_dir=metadata_path.parent,
-        relative_dir=metadata_path.parent.name,
-        flat_case_id=semantic_row["flatCaseId"],
-        schema=input_paths["schema"],
-        source=input_paths["source"],
-        target=input_paths["target"],
-    )
-    gate_config_authority = types.SimpleNamespace(
-        verification_mode=VERIFICATION_MODE,
-        case_timeout_seconds=CASE_TIMEOUT_SECONDS,
-        proof_check_timeout_seconds=TRUSTED_CHECK_TIMEOUT_SECONDS,
-        proof_agent_memory_limit_mib=PROOF_AGENT_MEMORY_LIMIT_MIB,
-        proof_agent_storage_limit_mib=PROOF_AGENT_STORAGE_LIMIT_MIB,
-        proof_docker_image_effective=nested(
-            full_configuration, "proofAgent", "dockerImage", "imageId"
-        ),
-        input_files={case: input_files},
-        trusted_stack=full_configuration.get("trustedStack"),
-        sql_default_collation=nested(
-            full_configuration, "sqlEnvironment", "defaultCollation"
-        ),
-        sql_character_classification=nested(
-            full_configuration,
-            "sqlEnvironment",
-            "characterClassification",
-        ),
-        sql_locale_provider=nested(
-            full_configuration, "sqlEnvironment", "localeProvider"
-        ),
-        sql_server_encoding=nested(
-            full_configuration, "sqlEnvironment", "serverEncoding"
-        ),
-    )
-    try:
-        runner_validators()["validate_gate_report"](
-            report_path,
-            gate_case_authority,
-            gate_config_authority,
-            row.get("proofMetrics"),
-        )
-    except Exception as error:
-        raise PublishError(
-            f"cohort16 gate case {case} failed shared runner proof validation: "
-            f"{error}"
-        ) from error
-
-
-def validate_cohort16_rocq_snapshot_bindings(
-    record: Any,
-    gate_configuration: Any,
-    gate_integrity: Any,
-    rows: Any,
-    expected_authority_digest: str,
-    expected_runtime: dict[str, Any],
-) -> None:
-    """Bind every gate summary surface to one immutable Rocq snapshot."""
-
-    if (
-        not isinstance(record, dict)
-        or record.get("rocqAuthoritySnapshotManifestSha256")
-        != expected_authority_digest
-        or record.get("rocqRuntimeSnapshotManifestSha256")
-        != expected_runtime.get("manifestSha256")
-        or not isinstance(gate_configuration, dict)
-        or gate_configuration.get("rocqRuntimeSnapshot") != expected_runtime
-        or nested(gate_configuration, "trustedStack", "rocqRuntimeSnapshot")
-        != expected_runtime
-        or nested(gate_configuration, "proofAgent", "rocqOpamSwitch")
-        != expected_runtime.get("root")
-        or gate_configuration.get("rocqAuthoritySnapshotPolicy")
-        != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or nested(gate_configuration, "rocqAuthoritySnapshot", "policy")
-        != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or nested(gate_configuration, "rocqAuthoritySnapshot", "manifestSha256")
-        != expected_authority_digest
-        or not isinstance(gate_integrity, dict)
-        or gate_integrity.get("rocqAuthoritySnapshotManifestSha256")
-        != expected_authority_digest
-        or gate_integrity.get("rocqRuntimeSnapshotManifestSha256")
-        != expected_runtime.get("manifestSha256")
-        or not isinstance(rows, list)
-    ):
-        raise PublishError("cohort16 gate Rocq authority snapshot drifted")
-    for row in rows:
-        effective = row.get("effectiveConfiguration") if isinstance(row, dict) else None
-        if (
-            not isinstance(effective, dict)
-            or effective.get("rocqRuntimeSnapshotPolicy")
-            != TRUSTED_ROCQ_RUNTIME_SNAPSHOT_POLICY
-            or effective.get("rocqRuntimeSnapshotManifestSha256")
-            != expected_runtime.get("manifestSha256")
-            or effective.get("rocqAuthoritySnapshotPolicy")
-            != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-            or effective.get("rocqAuthoritySnapshotManifestSha256")
-            != expected_authority_digest
-        ):
-            raise PublishError("cohort16 gate case Rocq authority snapshot drifted")
-
-
-def validate_cohort16_gate(
-    record: Any,
-    run_root: Path,
-    source_digest: str,
-    full_started_at: Any,
-    input_rows: dict[str, dict[str, str]],
-    semantic_rows: dict[str, dict[str, Any]],
-    solver_digest: str,
-    rocq_snapshot_digest: str,
-    trusted_stack_digest: str,
-    frontend_stack_digest: str,
-    codex_provider: dict[str, Any],
-    postgres_profile_digest: str,
-    full_configuration: dict[str, Any],
-    *,
-    legacy_catalog: bool,
-) -> dict[str, Any]:
-    gate_path, gate_digest = validate_file_binding(
-        record,
-        path_key="path",
-        digest_key="sha256",
-        location="configuration.cohort16Gate",
-        run_root=run_root,
-    )
-    scope_path, scope_digest = validate_file_binding(
-        record,
-        path_key="scopePath",
-        digest_key="scopeSha256",
-        location="configuration.cohort16Gate scope",
-        run_root=run_root,
-    )
-    assert isinstance(record, dict)
-    validate_legacy_catalog_marker(
-        record,
-        "catalogGuidanceEnabled",
-        legacy_catalog=legacy_catalog,
-        location="configuration.cohort16Gate",
-    )
-    if record.get("frameworkSourceTreeManifestSha256") != source_digest:
-        raise PublishError(
-            "cohort16 gate and full run use different framework source trees"
-        )
-    scope = load_json(scope_path)
-    cases = scope.get("ablationCases")
-    extension = scope.get("extensionCases")
-    if not isinstance(cases, list) or not isinstance(extension, list):
-        raise PublishError("cohort16 gate scope has no frozen 8+8 cohort")
-    expected = string_array(cases + extension, "cohort16 gate scope cases")
-    if len(expected) != 16 or len(set(expected)) != 16:
-        raise PublishError("cohort16 gate scope is not 16 unique cases")
-    expected_digest = sha256_text("\n".join(sorted(expected)) + "\n")
-    selected_input_digest, selected_semantic_digest = (
-        cohort16_selected_authority_digests(expected, input_rows, semantic_rows)
-    )
-    if (
-        record.get("caseSetSha256") != expected_digest
-        or record.get("selectedInputManifestSha256") != selected_input_digest
-        or record.get("semanticAuthoritySha256")
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-        or record.get("selectedSemanticAuthoritySha256")
-        != selected_semantic_digest
-        or record.get("solverBinarySha256") != solver_digest
-        or record.get("rocqAuthoritySnapshotManifestSha256")
-        != rocq_snapshot_digest
-        or record.get("trustedStackManifestSha256") != trusted_stack_digest
-        or record.get("frontendStackManifestSha256") != frontend_stack_digest
-        or record.get("codexProviderManifestSha256") != codex_provider["sha256"]
-        or record.get("codexConfigSha256") != codex_provider["configSha256"]
-        or record.get("providerEndpointSha256") != codex_provider["endpointSha256"]
-        or record.get("postgresServerProfileSha256") != postgres_profile_digest
-        or record.get("verificationMode") != VERIFICATION_MODE
-    ):
-        raise PublishError("cohort16 gate records the wrong frozen treatment/bindings")
-    gate = load_json(gate_path)
-    gate_cases = string_array(gate.get("cases"), "cohort16 gate cases")
-    rows = gate.get("results")
-    gate_configuration = gate.get("configuration")
-    gate_integrity = gate.get("integrityVerification")
-    full_proof_agent = full_configuration.get("proofAgent")
-    gate_proof_agent = (
-        gate_configuration.get("proofAgent")
-        if isinstance(gate_configuration, dict)
-        else None
-    )
-    validate_cohort16_rocq_snapshot_bindings(
-        record,
-        gate_configuration,
-        gate_integrity,
-        rows,
-        rocq_snapshot_digest,
-        full_configuration["rocqRuntimeSnapshot"],
-    )
-    validate_legacy_catalog_marker(
-        gate,
-        "proofAgentCatalogGuidanceEnabled",
-        legacy_catalog=legacy_catalog,
-        location="cohort16 gate",
-    )
-    validate_legacy_catalog_marker(
-        gate_proof_agent,
-        "catalogGuidanceEnabled",
-        legacy_catalog=legacy_catalog,
-        location="cohort16 configuration.proofAgent",
-    )
-    validate_fixed_fields(
-        full_proof_agent,
-        proof_agent_diagnostic_configuration(legacy_catalog=legacy_catalog),
-        "full configuration.proofAgent",
-    )
-    validate_fixed_fields(
-        gate_proof_agent,
-        proof_agent_diagnostic_configuration(legacy_catalog=legacy_catalog),
-        "cohort16 configuration.proofAgent",
-    )
-    if (
-        gate.get("status") != "complete"
-        or len(gate_cases) != 16
-        or set(gate_cases) != set(expected)
-        or not isinstance(rows, list)
-        or len(rows) != 16
-        or gate.get("verificationMode") != VERIFICATION_MODE
-        or gate.get("model") != MODEL
-        or gate.get("reasoningEffort") != REASONING_EFFORT
-        or gate.get("usageComplete") is not True
-        or gate.get("caseTimeoutSeconds") != CASE_TIMEOUT_SECONDS
-        or gate.get("counts")
-        != {
-            "selected": 16,
-            "pending": 0,
-            "completed": 16,
-            "timedOut": 0,
-            "failed": 0,
-            "cancelled": 0,
-        }
-        or nested(gate, "configuration", "frameworkSourceTree", "manifestSha256")
-        != source_digest
-        or nested(gate, "configuration", "solverBinary", "sha256") != solver_digest
-        or nested(
-            gate,
-            "configuration",
-            "rocqAuthoritySnapshot",
-            "manifestSha256",
-        )
-        != rocq_snapshot_digest
-        or nested(gate, "configuration", "rocqAuthoritySnapshot", "policy")
-        != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or nested(gate, "configuration", "rocqAuthoritySnapshotPolicy")
-        != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or nested(gate, "configuration", "trustedStack", "manifestSha256")
-        != trusted_stack_digest
-        or nested(gate, "configuration", "frontendStack", "manifestSha256")
-        != frontend_stack_digest
-        or nested(gate, "configuration", "codexProvider", "manifestSha256")
-        != codex_provider["sha256"]
-        or nested(gate, "configuration", "codexProvider", "configSha256")
-        != codex_provider["configSha256"]
-        or nested(gate, "configuration", "postgresServerProfile", "manifestSha256")
-        != postgres_profile_digest
-        or nested(gate, "configuration", "inputManifest", "selectedSha256")
-        != selected_input_digest
-        or nested(
-            gate,
-            "configuration",
-            "inputManifest",
-            "semanticAuthoritySha256",
-        )
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-        or nested(
-            gate,
-            "configuration",
-            "inputManifest",
-            "selectedSemanticAuthoritySha256",
-        )
-        != selected_semantic_digest
-        or not isinstance(gate_configuration, dict)
-        or gate_configuration.get("verificationMode")
-        != full_configuration.get("verificationMode")
-        or gate_configuration.get("model") != full_configuration.get("model")
-        or gate_configuration.get("reasoningEffort")
-        != full_configuration.get("reasoningEffort")
-        or gate_configuration.get("caseTimeoutSeconds")
-        != full_configuration.get("caseTimeoutSeconds")
-        or gate_configuration.get("terminationGraceSeconds")
-        != full_configuration.get("terminationGraceSeconds")
-        or gate_configuration.get("solverArgs") != full_configuration.get("solverArgs")
-        or gate_configuration.get("effectiveSolverArgs")
-        != full_configuration.get("effectiveSolverArgs")
-        or gate_configuration.get("postgresUrl")
-        != full_configuration.get("postgresUrl")
-        or gate_configuration.get("sqlEnvironment")
-        != full_configuration.get("sqlEnvironment")
-        or gate_configuration.get("solverLaunchEnvironmentPolicy")
-        != full_configuration.get("solverLaunchEnvironmentPolicy")
-        or gate_configuration.get("solverEnvironment")
-        != full_configuration.get("solverEnvironment")
-        or gate_configuration.get("frontendLaunchEnvironmentPolicy")
-        != full_configuration.get("frontendLaunchEnvironmentPolicy")
-        or gate_configuration.get("commandProviderEnvironmentPolicy")
-        != full_configuration.get("commandProviderEnvironmentPolicy")
-        or not isinstance(gate_proof_agent, dict)
-        or not isinstance(full_proof_agent, dict)
-        or gate_proof_agent.get("model") != full_proof_agent.get("model")
-        or gate_proof_agent.get("reasoningEffort")
-        != full_proof_agent.get("reasoningEffort")
-        or gate_proof_agent.get("sessionRestartAfterFailedRounds")
-        != full_proof_agent.get("sessionRestartAfterFailedRounds")
-        or gate_proof_agent.get("sessionHomePolicy")
-        != full_proof_agent.get("sessionHomePolicy")
-        or gate_proof_agent.get("totalTimeoutSeconds")
-        != full_proof_agent.get("totalTimeoutSeconds")
-        or gate_proof_agent.get("trustedCheckTimeoutSeconds")
-        != full_proof_agent.get("trustedCheckTimeoutSeconds")
-        or gate_proof_agent.get("resourcePolicy")
-        != full_proof_agent.get("resourcePolicy")
-        or nested(gate_proof_agent, "dockerImage", "imageId")
-        != nested(full_proof_agent, "dockerImage", "imageId")
-        or not isinstance(gate_integrity, dict)
-        or gate_integrity.get("verified") is not True
-        or gate.get("integrityError") is not None
-        or gate_integrity.get("frontendStackManifestSha256") != frontend_stack_digest
-        or gate_integrity.get("codexProviderManifestSha256") != codex_provider["sha256"]
-        or gate_integrity.get("codexConfigSha256") != codex_provider["configSha256"]
-        or gate_integrity.get("providerEndpointSha256")
-        != codex_provider["endpointSha256"]
-        or gate_integrity.get("solverEnvironmentSha256")
-        != nested(full_configuration, "solverEnvironment", "sha256")
-        or gate_integrity.get("postgresServerProfileSha256") != postgres_profile_digest
-        or gate_integrity.get("rocqAuthoritySnapshotManifestSha256")
-        != rocq_snapshot_digest
-        or gate_integrity.get("semanticAuthoritySha256")
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-        or gate_integrity.get("selectedSemanticAuthoritySha256")
-        != selected_semantic_digest
-    ):
-        raise PublishError("cohort16 gate is not a complete compatible 16-case run")
-    by_case = {
-        row.get("caseId"): row
-        for row in rows
-        if isinstance(row, dict) and isinstance(row.get("caseId"), str)
-    }
-    if set(by_case) != set(expected) or len(by_case) != len(rows):
-        raise PublishError("cohort16 gate result IDs do not match its frozen cohort")
-    for case, row in by_case.items():
-        if (
-            row.get("status") != "completed"
-            or not completed_return_code_is_coherent(row)
-            or row.get("outcome") != "outcome_unconditional"
-            or row.get("backendStatus") != "proof_complete"
-            or row.get("certification") != "OUTCOME-UNCONDITIONAL"
-            or row.get("usageComplete") is not True
-        ):
-            raise PublishError(
-                f"cohort16 gate case {case} lacks a trusted EQ certificate"
-            )
-        effective = row.get("effectiveConfiguration")
-        validate_legacy_catalog_marker(
-            effective,
-            "catalogGuidanceEnabled",
-            legacy_catalog=legacy_catalog,
-            location=f"cohort16 gate case {case}.effectiveConfiguration",
-        )
-        validate_fixed_fields(
-            effective,
-            effective_proof_agent_diagnostic_configuration(
-                legacy_catalog=legacy_catalog
-            ),
-            f"cohort16 gate case {case}.effectiveConfiguration",
-        )
-        if (
-            not isinstance(effective, dict)
-            or effective.get("frameworkSourceTreeManifestSha256") != source_digest
-            or effective.get("selectedInputManifestSha256") != selected_input_digest
-            or effective.get("semanticAuthoritySha256")
-            != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-            or effective.get("selectedSemanticAuthoritySha256")
-            != selected_semantic_digest
-            or effective.get("verificationMode") != VERIFICATION_MODE
-            or effective.get("model") != MODEL
-            or effective.get("reasoningEffort") != REASONING_EFFORT
-            or effective.get("caseTimeoutSeconds") != CASE_TIMEOUT_SECONDS
-            or effective.get("terminationGraceSeconds")
-            != full_configuration.get("terminationGraceSeconds")
-            or effective.get("proofAgentTotalTimeoutSeconds")
-            != nested(full_configuration, "proofAgent", "totalTimeoutSeconds")
-            or effective.get("proofAgentSessionRestartAfterFailedRounds")
-            != nested(
-                full_configuration,
-                "proofAgent",
-                "sessionRestartAfterFailedRounds",
-            )
-            or effective.get("proofAgentSessionHomePolicy")
-            != nested(full_configuration, "proofAgent", "sessionHomePolicy")
-            or effective.get("resourcePolicy")
-            != nested(full_configuration, "proofAgent", "resourcePolicy")
-            or effective.get("trustedCheckTimeoutSeconds")
-            != TRUSTED_CHECK_TIMEOUT_SECONDS
-            or effective.get("dockerImage")
-            != nested(full_configuration, "proofAgent", "dockerImage", "imageId")
-            or effective.get("solverArgs") != full_configuration.get("solverArgs")
-            or effective.get("effectiveSolverArgs")
-            != full_configuration.get("effectiveSolverArgs")
-            or effective.get("postgresUrl") != full_configuration.get("postgresUrl")
-            or effective.get("sqlEnvironment")
-            != full_configuration.get("sqlEnvironment")
-            or effective.get("solverLaunchEnvironmentPolicy")
-            != full_configuration.get("solverLaunchEnvironmentPolicy")
-            or effective.get("solverEnvironment")
-            != full_configuration.get("solverEnvironment")
-            or effective.get("frontendLaunchEnvironmentPolicy")
-            != full_configuration.get("frontendLaunchEnvironmentPolicy")
-            or effective.get("commandProviderEnvironmentPolicy")
-            != full_configuration.get("commandProviderEnvironmentPolicy")
-            or effective.get("solverBinarySha256") != solver_digest
-            or effective.get("rocqAuthoritySnapshotPolicy")
-            != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-            or effective.get("rocqAuthoritySnapshotManifestSha256")
-            != rocq_snapshot_digest
-            or effective.get("trustedStackManifestSha256") != trusted_stack_digest
-            or effective.get("frontendStackManifestSha256") != frontend_stack_digest
-            or effective.get("codexProviderManifestSha256") != codex_provider["sha256"]
-            or effective.get("codexConfigSha256") != codex_provider["configSha256"]
-            or effective.get("providerEndpointSha256")
-            != codex_provider["endpointSha256"]
-            or effective.get("postgresServerProfileSha256") != postgres_profile_digest
-        ):
-            raise PublishError(f"cohort16 gate case {case} treatment binding drifted")
-        input_files = row.get("inputFiles")
-        semantic_row = semantic_rows.get(case)
-        if not isinstance(semantic_row, dict):
-            raise PublishError(
-                f"cohort16 gate case {case} semantic authority is missing"
-            )
-        input_digests, input_paths, metadata_path = (
-            validate_cohort16_gate_case_input_authority(
-                case,
-                input_files,
-                input_rows[case],
-                semantic_row,
-                gate_path.parent,
-            )
-        )
-        evidence = row.get("reportEvidence")
-        report_path, _ = validate_file_binding(
-            evidence,
-            path_key="path",
-            digest_key="sha256",
-            location=f"cohort16 gate {case}.reportEvidence",
-            run_root=gate_path.parent,
-        )
-        if not isinstance(evidence, dict) or evidence.get("present") is not True:
-            raise PublishError(f"cohort16 gate case {case} has no report evidence")
-        report = load_json(report_path)
-        validate_cohort16_gate_report_with_runner(
-            case,
-            report_path,
-            row,
-            metadata_path,
-            semantic_row,
-            input_paths,
-            input_files,
-            full_configuration,
-        )
-        validate_counterexample_provider_commands(report, f"cohort16 gate {case}")
-        proof = report.get("proof")
-        agent = proof.get("proofAgent") if isinstance(proof, dict) else None
-        agent_configuration = (
-            proof.get("proofAgentConfiguration") if isinstance(proof, dict) else None
-        )
-        context = (
-            agent_configuration.get("context")
-            if isinstance(agent_configuration, dict)
-            else None
-        )
-        validate_legacy_catalog_marker(
-            agent_configuration,
-            "catalogGuidance",
-            legacy_catalog=legacy_catalog,
-            location=f"cohort16 gate case {case}.proofAgentConfiguration",
-        )
-        validate_fixed_fields(
-            agent_configuration,
-            proof_agent_diagnostic_configuration(legacy_catalog=legacy_catalog),
-            f"cohort16 gate case {case}.proofAgentConfiguration",
-        )
-        assert isinstance(agent_configuration, dict)
-        validate_trusted_diagnostic_cache(
-            f"cohort16 gate case {case}", report_path.parent, agent_configuration
-        )
-        if (
-            report.get("outcome") != "outcome_unconditional"
-            or not isinstance(proof, dict)
-            or proof.get("verificationMode") != "outcome_unconditional"
-            or proof.get("backendStatus") != "proof_complete"
-            or proof.get("certification") != "OUTCOME-UNCONDITIONAL"
-            or proof.get("sqlEnvironment")
-            != {
-                key: value
-                for key, value in full_configuration.get("sqlEnvironment", {}).items()
-                if key != "timeZone"
-            }
-            or not isinstance(agent_configuration, dict)
-            or agent_configuration.get("enabled") is not True
-            or agent_configuration.get("command") != DEFAULT_PROOF_AGENT_COMMAND
-            or agent_configuration.get("resumeCommand")
-            != DEFAULT_PROOF_AGENT_RESUME_COMMAND
-            or agent_configuration.get("memoryLimitMib") != PROOF_AGENT_MEMORY_LIMIT_MIB
-            or agent_configuration.get("writableStorageLimitBytes")
-            != PROOF_AGENT_STORAGE_LIMIT_MIB * 1024 * 1024
-            or agent_configuration.get("writableStoragePolicy")
-            != PROOF_AGENT_WRITABLE_STORAGE_POLICY
-            or agent_configuration.get("sessionRestartAfterFailedRounds")
-            != PROOF_AGENT_SESSION_RESTART_AFTER_FAILED_ROUNDS
-            or agent_configuration.get("sessionHomePolicy")
-            != PROOF_AGENT_SESSION_HOME_POLICY
-            or agent_configuration.get("timeoutSeconds") != CASE_TIMEOUT_SECONDS - 300
-            or agent_configuration.get("trustedCheckTimeoutSeconds")
-            != TRUSTED_CHECK_TIMEOUT_SECONDS
-            or agent_configuration.get("dockerImage")
-            != nested(full_configuration, "proofAgent", "dockerImage", "imageId")
-            or not isinstance(context, dict)
-            or context.get("sourceSqlSha256") != input_digests["source"]
-            or context.get("targetSqlSha256") != input_digests["target"]
-        ):
-            raise PublishError(
-                f"cohort16 gate case {case} report is not a trusted proof"
-            )
-    gate_completed_at = parse_timestamp(
-        gate.get("updatedAt"), "cohort16 gate updatedAt"
-    )
-    if gate_completed_at > parse_timestamp(full_started_at, "full run startedAt"):
-        raise PublishError("cohort16 gate did not complete before the full run started")
-    return {
-        "path": gate_path,
-        "sha256": gate_digest,
-        "scopePath": scope_path,
-        "scopeSha256": scope_digest,
-        "caseSetSha256": expected_digest,
-        "selectedInputManifestSha256": selected_input_digest,
-        "semanticAuthoritySha256": FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256,
-        "selectedSemanticAuthoritySha256": selected_semantic_digest,
-        "rocqAuthoritySnapshotManifestSha256": rocq_snapshot_digest,
-    }
-
-
 def resolve_case_input_directory(value: Any, case: str, run_root: Path) -> Path:
     if not isinstance(value, str) or not value:
         raise PublishError(f"{case}: inputDir must be a nonempty path")
@@ -3992,7 +3324,7 @@ def expected_case_configuration(
         "trustedCheckTimeoutSeconds": TRUSTED_CHECK_TIMEOUT_SECONDS,
         "dockerImage": bindings["dockerImage"],
         "caseTimeoutSeconds": CASE_TIMEOUT_SECONDS,
-        "maxCounterexampleRounds": MAX_COUNTEREXAMPLE_ROUNDS,
+        "maxCounterexampleRounds": COUNTEREXAMPLE_FRESH_ATTEMPTS,
         "statementTimeoutSeconds": STATEMENT_TIMEOUT_SECONDS,
         "terminationGraceSeconds": configuration.get("terminationGraceSeconds"),
         "proofAgentTotalTimeoutSeconds": nested(
@@ -4049,7 +3381,6 @@ def expected_case_configuration(
         "codexConfigSha256": bindings["codexProvider"]["configSha256"],
         "providerEndpointSha256": bindings["codexProvider"]["endpointSha256"],
         "postgresServerProfileSha256": bindings["postgresServerProfile"]["sha256"],
-        "cohort16GateSha256": bindings["cohort16Gate"]["sha256"],
     }
     if legacy_catalog:
         expected["catalogGuidanceEnabled"] = True
@@ -7466,7 +6797,7 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         document.get("status") != "complete"
         or document.get("jobs") != FULL_RUN_JOBS
         or document.get("caseTimeoutSeconds") != CASE_TIMEOUT_SECONDS
-        or document.get("maxCounterexampleRounds") != MAX_COUNTEREXAMPLE_ROUNDS
+        or document.get("maxCounterexampleRounds") != COUNTEREXAMPLE_FRESH_ATTEMPTS
         or document.get("verificationMode") != VERIFICATION_MODE
         or document.get("model") != MODEL
         or document.get("reasoningEffort") != REASONING_EFFORT
@@ -7482,7 +6813,7 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         or configuration.get("jobs") != FULL_RUN_JOBS
         or configuration.get("caseTimeoutSeconds") != CASE_TIMEOUT_SECONDS
         or configuration.get("maxCounterexampleRounds")
-        != MAX_COUNTEREXAMPLE_ROUNDS
+        != COUNTEREXAMPLE_FRESH_ATTEMPTS
         or configuration.get("verificationMode") != VERIFICATION_MODE
         or configuration.get("model") != MODEL
         or configuration.get("reasoningEffort") != REASONING_EFFORT
@@ -7693,22 +7024,6 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "sha256": postgres_profile["urlSha256"],
     }:
         raise PublishError("PostgreSQL URL fingerprint and server profile differ")
-    gate = validate_cohort16_gate(
-        configuration.get("cohort16Gate"),
-        path,
-        source_digest,
-        document.get("startedAt"),
-        input_manifest["rows"],
-        input_manifest["semanticRows"],
-        solver_digest,
-        rocq_snapshot["manifestSha256"],
-        trusted_digest,
-        frontend_stack["sha256"],
-        codex_provider,
-        postgres_profile["sha256"],
-        configuration,
-        legacy_catalog=legacy_catalog,
-    )
     expected_integrity = {
         "frameworkSourceTreeManifestSha256": source_digest,
         "solverBinarySha256": solver_digest,
@@ -7727,7 +7042,6 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "selectedSemanticAuthoritySha256": input_manifest[
             "selectedSemanticSha256"
         ],
-        "cohort16GateSha256": gate["sha256"],
     }
     for key, expected in expected_integrity.items():
         if integrity.get(key) != expected:
@@ -7773,7 +7087,6 @@ def validate_full_summary(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "codexProvider": codex_provider,
         "launchEnvironments": launch_environments,
         "postgresServerProfile": postgres_profile,
-        "cohort16Gate": gate,
         "inputManifest": input_manifest,
         "dockerImage": image_id,
         "effectiveSolverArgs": effective_solver_args,
@@ -8293,14 +7606,6 @@ def main() -> int:
                 bindings["postgresServerProfile"]["path"],
                 bindings["postgresServerProfile"]["sha256"],
             ),
-            "cohort16-gate-summary.json": (
-                bindings["cohort16Gate"]["path"],
-                bindings["cohort16Gate"]["sha256"],
-            ),
-            "cohort16-scope.json": (
-                bindings["cohort16Gate"]["scopePath"],
-                bindings["cohort16Gate"]["scopeSha256"],
-            ),
         }
         for destination_name, (source_path, expected_digest) in evidence_copies.items():
             destination_path = staging / destination_name
@@ -8385,10 +7690,6 @@ def main() -> int:
                 "selectedSemanticAuthoritySha256": bindings["inputManifest"][
                     "selectedSemanticSha256"
                 ],
-                "cohort16Gate": "cohort16-gate-summary.json",
-                "cohort16GateSha256": bindings["cohort16Gate"]["sha256"],
-                "cohort16Scope": "cohort16-scope.json",
-                "cohort16ScopeSha256": bindings["cohort16Gate"]["scopeSha256"],
                 "solverBinaryPath": nested(
                     full_summary, "configuration", "solverBinary", "path"
                 ),
@@ -8490,8 +7791,6 @@ def main() -> int:
             "codex-provider-manifest.json",
             "codex-provider-config.toml",
             "postgres-server-profile.json",
-            "cohort16-gate-summary.json",
-            "cohort16-scope.json",
             "runner-summary.json",
             "results.jsonl",
             "summary.json",

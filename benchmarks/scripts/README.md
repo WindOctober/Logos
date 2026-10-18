@@ -11,19 +11,37 @@ multi-hour batch. The full runner performs its own fail-closed launch preflight;
 
 `benchmarks/scripts/run-logos` is the canonical full-pipeline benchmark
 runner. It invokes `logos-solver check` once per case. The normal path is static
-output/analysis preflight, lowering, counterexample search and proof search,
-then trusted Rocq acceptance. Static mismatches and unsupported inputs can
+output/analysis preflight, lowering and proof search, with counterexample
+synthesis requested by the proof agent as needed, then trusted Rocq acceptance.
+Static mismatches and unsupported inputs can
 terminate before agents run; not every selected case reaches the proof stage.
+
+The solver has one execution mode per invocation. The following flags are
+mutually exclusive; without one, it runs normal verification:
+
+| Solver flag | Execution mode |
+| --- | --- |
+| None | Normal verification with proof-directed counterexample synthesis |
+| `--transform-only` | Offline lowering/workspace generation, no PostgreSQL preflight or agents |
+| `--llm-assessment-only` | Preflight and lowering followed by counterexample assessment, no proof agent |
+| `--disable-proof-agent` | Preflight and workspace preparation, no proof-agent execution |
+| `--typed-witness-empty-audit` (hidden) | Offline generation of an empty typed witness for coverage auditing |
+
+`run-logos-transform` passes only `--transform-only`; no extra agent-disable
+flags are needed. `--disable-proof-agent` alone retains input preflight and is
+therefore not an alias for offline transformation. The full `run-logos` runner
+does not accept pipeline-shortening mode flags through `--solver-arg`.
 
 Defaults and explicitly selected campaign settings are different:
 
-| Entry point / selection | Concurrent cases | Total timeout per case | Gate |
-| --- | ---: | ---: | --- |
-| `run-logos` on `.generated/logos` (default input root) | 16 | 70m | No legacy frozen-cohort gate is enforced |
-| `run-logos-regression` | 16 | 1h | Selects the regression cohort; not automatically an accepted frozen gate |
-| `run-logos-transform` | 16 | 20m | No agent or EQ/NEQ proof gate |
-| Exact legacy `.generated/sqlsolver` 389-case selection | 32 (required) | 1h (required) | Matching `--cohort16-gate-summary` required |
-| Same legacy selection with `--allow-ungated-full-run` | 32 (required) | 4h (required) | Explicitly recorded bypass, not a passed gate |
+| Entry point | Default concurrent cases | Default total timeout per case |
+| --- | ---: | ---: |
+| `run-logos` | 16 | 70m |
+| `run-logos-regression` | 16 | 1h |
+| `run-logos-transform` | 16 | 20m |
+
+Concurrency and timeouts are configurable with `--jobs` and `--case-timeout`.
+No input selection requires a prior cohort run or a gate-bypass option.
 
 `--jobs` is the number of simultaneous cases, not a CPU-core/thread limit.
 Within each proof invocation, host diagnostics are serialized; frontend, solver,
@@ -43,7 +61,6 @@ benchmarks/scripts/run-logos \
   --proof-agent-memory-limit-mib 6144 \
   --proof-agent-storage-limit-mib 2048 \
   --statement-timeout-seconds 600 \
-  --max-counterexample-rounds 3 \
   --proof-check-timeout-seconds 420 \
   --proof-docker-image sha256:bba804128f28ee6948ed601afac7bd158bab3617d784e2479ef588d03a97459b \
   --proof-rocq-opam-switch .opam-rocq \
@@ -55,16 +72,9 @@ benchmarks/scripts/run-logos \
   --sql-server-encoding UTF8
 ```
 
-This command is not a legacy gated launch merely because it selects 389 cases.
-Legacy gate enforcement requires the exact resolved `.generated/sqlsolver`
-root and full 389-case membership. For that gated path, use
-`--input-root benchmarks/core/.generated/sqlsolver --jobs 32 --case-timeout 1h`
-and `--cohort16-gate-summary <gate-run>/runner-summary.json`; the gate must match
-the framework, executable, trusted stack, model, resource policy, SQL environment,
-and immutable image. The explicit ungated legacy override instead requires
-`--allow-ungated-full-run --case-timeout 4h` and must not be reported as a passed
-gate. Other legacy full-run constraints still apply. Selecting the current
-`.generated/logos` profile does not waive the full runner's runtime checks below.
+The same launch options apply to full runs and subsets. Each run still performs
+the input, runtime, and proof-evidence checks described below; none depends on
+a previous experiment's gate summary.
 
 Every actual execution, including a selected subset, requires either
 `--postgres-url` or `LOGOS_POSTGRES_URL`. `--list` only inspects inputs and does
@@ -178,8 +188,7 @@ The runner performs an incremental `cargo build -p logos-solver` unless
 `--no-build` is given. Before scheduling any case it resolves an immutable,
 content-addressed Rocq runtime and FormalSQL/Logos authority closure. A cache
 miss forces a fresh source build; a hit verifies and reuses the same read-only
-bytes. `--no-rocq-build` is retained only for CLI compatibility and cannot
-bypass this resolution. After the one-time Rust
+bytes. This authority resolution cannot be skipped. After the one-time Rust
 build, the runner atomically copies `logos-solver` to the run-private,
 read-only `runtime/logos-solver` path. Every queued worker and every resume uses
 that exact snapshot; a later external `cargo build` cannot change the binary
@@ -215,8 +224,12 @@ solver would otherwise reuse its assessment cache. Static preflight exits do
 not invoke that agent. The summary records the model, caller
 `solverArgs`, effective solver arguments, PostgreSQL URL fingerprint, complete
 SQL environment, and exact solver/provider launch policies in its
-`configuration` object. `--max-counterexample-rounds` is an explicit recorded
-pipeline parameter rather than an implicit solver default. The solver process starts from an empty environment
+`configuration` object. Each proof-directed counterexample search has a fixed
+budget of two fresh attempts; assessment-only mode uses one. Each fresh attempt
+may receive one same-session output-contract repair, which does not consume a
+fresh attempt. This is not a case-wide limit: a later proof-agent handoff starts
+a new search. `maxCounterexampleRounds` records this fixed policy, not a CLI
+setting. The solver process starts from an empty environment
 with a manifest-bound Codex/Node PATH, fixed locale/home/temp values, and only
 the isolated Codex and frontend contract variables. The counterexample command
 then clears its environment again. Ambient provider URLs, credentials, proxy
@@ -370,10 +383,8 @@ benchmarks/scripts/run-logos-regression \
 benchmarks/scripts/run-logos-regression --list
 ```
 
-This is a development regression workload. A successful invocation on the
-default `.generated/logos` root is not, by itself, the legacy `cohort16` gate:
-the frozen gate validator also checks input authority, recorded outcomes and
-exact treatment identity. See the selection table above before reusing a summary.
+This is a development regression workload, not a prerequisite for launching a
+full benchmark. Each invocation independently validates its inputs and results.
 
 The cohort deliberately spans small, medium, and large queries. It covers
 schema/NOT NULL reasoning, output-signature rejection, SQL three-valued logic,

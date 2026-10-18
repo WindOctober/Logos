@@ -14,7 +14,7 @@ use crate::proposal::CommandProvider;
 use crate::validation::{FormalWitnessColumn, FormalWitnessSnapshot, FormalWitnessTable};
 use logos_ir::ShellSqlIrFrontend;
 
-pub use config::Config;
+pub use config::{Config, ExecutionMode};
 use counterexample::{
     CounterexampleStageResult, resume_counterexample_search, run_counterexample_search,
     run_output_schema_preflight,
@@ -61,12 +61,8 @@ pub fn solve(
         &input.integrity_contract().validation_checks(),
     )?;
 
-    if options.typed_witness_empty_audit {
-        let audit_options = Config {
-            run_proof_agent: false,
-            ..options.clone()
-        };
-        let prepared = prepare_formal_input(&artifacts, &input, &audit_options)?;
+    if options.execution_mode == ExecutionMode::TypedWitnessAudit {
+        let prepared = prepare_formal_input(&artifacts, &input, &options)?;
         let schema = prepared
             .lowering_report
             .schema
@@ -116,20 +112,9 @@ pub fn solve(
         return Ok(report);
     }
 
-    if options.transform_only {
-        let transform_options = Config {
-            run_proof_agent: false,
-            ..options
-        };
-        let verification_report = run_proof_stage(
-            &artifacts,
-            &input,
-            &transform_options,
-            None,
-            None,
-            None,
-            None,
-        )?;
+    if options.execution_mode == ExecutionMode::TransformOnly {
+        let verification_report =
+            run_proof_stage(&artifacts, &input, &options, None, None, None, None)?;
         let report = SolverReport::finished(
             SolverOutcome::TransformOnly,
             verification_report.status_reason.clone(),
@@ -161,7 +146,7 @@ pub fn solve(
         &observation_certificates,
     )?;
 
-    if options.llm_assessment_only {
+    if options.execution_mode == ExecutionMode::AssessmentOnly {
         if options.disable_counterexample_search {
             return Err(Error::ProposalCommand(
                 "LLM assessment-only mode requires counterexample search".to_owned(),

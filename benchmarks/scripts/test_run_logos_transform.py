@@ -403,11 +403,8 @@ class TransformRunnerTests(unittest.TestCase):
             self.assertEqual(result["source"]["status"], "lowered")
             self.assertEqual(result["target"]["status"], "lowered")
             self.assertEqual(result["solverCommand"].count("--transform-only"), 1)
-            self.assertEqual(
-                result["solverCommand"].count("--disable-counterexample-search"),
-                1,
-            )
-            self.assertEqual(result["solverCommand"].count("--disable-proof-agent"), 1)
+            self.assertNotIn("--disable-counterexample-search", result["solverCommand"])
+            self.assertNotIn("--disable-proof-agent", result["solverCommand"])
             self.assertEqual(result["outcome"], "transform_only")
             self.assertEqual(result["backendStatus"], "workspace_generated")
             self.assertEqual(len(result["workspaceEvidence"]), 6)

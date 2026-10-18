@@ -54,7 +54,7 @@ use crate::core::{
     LoweredQuery, LoweringStatus, SqlEnvironment, SqlTimeZone, VerificationInput, VerificationMode,
     emit_rocq_query_expr_proof_module_for_mode, query_expr_output_signature,
 };
-use crate::engine::config::Config;
+use crate::engine::config::{Config, ExecutionMode};
 use crate::engine::report::{
     AcceptedDiagnosticSourceAudit, AgentAudit, AgentRunLog, BackendStatus,
     DiagnosticArtifactBinding, DiagnosticCheckerInvocation, PreconditionSource,
@@ -74,22 +74,18 @@ const ROOT_MAKEFILE: &str = include_str!("../../../../Makefile");
 fn proof_test_config(root: &Path) -> Config {
     Config {
         calcite_ir_command: String::new(),
-        transform_only: false,
-        typed_witness_empty_audit: false,
+        execution_mode: ExecutionMode::Verify,
         disable_counterexample_search: false,
-        llm_assessment_only: false,
         reuse_llm_assessment: false,
         force_llm_assessment: false,
         llm_assessment_cache_dir: root.join("assessment-cache"),
         proposal_command: String::new(),
         proposal_resume_command: String::new(),
-        max_counterexample_rounds: 1,
         postgres_url: None,
         statement_timeout_ms: 1_000,
         sql_time_zone: SqlTimeZone::utc(),
         sql_environment: SqlEnvironment::default(),
         verification_mode: VerificationMode::OutcomeUnconditional,
-        run_proof_agent: true,
         proof_agent_command: String::new(),
         proof_agent_resume_command: String::new(),
         proof_agent_memory_limit_mib: 512,
@@ -100,6 +96,22 @@ fn proof_test_config(root: &Path) -> Config {
         proof_docker_image: "test-image".to_owned(),
         proof_rocq_opam_switch: None,
         logos_repo_root: None,
+    }
+}
+
+#[test]
+fn only_verification_mode_enables_the_proof_agent() {
+    for mode in [
+        ExecutionMode::Verify,
+        ExecutionMode::PrepareWorkspace,
+        ExecutionMode::TransformOnly,
+        ExecutionMode::AssessmentOnly,
+        ExecutionMode::TypedWitnessAudit,
+    ] {
+        let mut config = proof_test_config(Path::new("/unused"));
+        config.execution_mode = mode;
+        let report = super::base_proof_agent_configuration(&config, None).unwrap();
+        assert_eq!(report.enabled, mode == ExecutionMode::Verify);
     }
 }
 

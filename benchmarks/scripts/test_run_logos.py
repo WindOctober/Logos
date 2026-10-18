@@ -68,6 +68,7 @@ TRUSTED_CHECKER_ENVIRONMENT_POLICY = {
     ],
     "hostEnvironmentAllowlist": [],
     "explicitContractVariables": [
+        "LOGOS_ROCQ_VALIDATION_SESSION",
         "LOGOS_REPO_ROOT",
         "LOGOS_PROOF_WORKDIR",
         "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
@@ -143,6 +144,47 @@ class ModelDefaultsUnitTests(unittest.TestCase):
         old_price = dict(usage, estimatedCostUsd=0.00071)
         with self.assertRaisesRegex(self.runner["RunnerError"], "declared pricing"):
             self.runner["validate_llm_usage"](old_price)
+
+
+class CampaignOptionsUnitTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.runner = runpy.run_path(str(RUNNER))
+
+    def test_counterexample_attempt_budget_is_fixed_and_matches_solver(self) -> None:
+        parser = self.runner["argument_parser"]()
+        self.assertNotIn("--max-counterexample-rounds", parser.format_help())
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as raised:
+            parser.parse_args(["--max-counterexample-rounds", "2"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertNotIn("max_counterexample_rounds", self.runner["RunConfig"].__dataclass_fields__)
+        self.assertEqual(self.runner["COUNTEREXAMPLE_FRESH_ATTEMPTS"], 2)
+        source = (self.runner["LOGOS_ROOT"] / "crates/logos-solver/src/engine/counterexample.rs").read_text()
+        self.assertIn("const COUNTEREXAMPLE_FRESH_ATTEMPTS: usize = 2;", source)
+
+    def test_removed_gate_options_are_rejected(self) -> None:
+        parser = self.runner["argument_parser"]()
+        for option in ("--cohort16-gate-summary", "--allow-ungated-full-run"):
+            with self.subTest(option=option):
+                self.assertNotIn(option, parser.format_help())
+                with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as raised:
+                    parser.parse_args([option])
+                self.assertEqual(raised.exception.code, 2)
+
+    def test_scheduling_options_are_independent_of_input_profile(self) -> None:
+        parser = self.runner["argument_parser"]()
+        for root in ("logos", "sqlsolver"):
+            for jobs, timeout in ((1, "20m"), (32, "1h"), (64, "70m")):
+                with self.subTest(root=root, jobs=jobs, timeout=timeout):
+                    args = parser.parse_args([
+                        "--input-root", f"benchmarks/core/.generated/{root}",
+                        "--jobs", str(jobs), "--case-timeout", timeout,
+                    ])
+                    self.runner["validate_args"](args)
+                    self.assertEqual(args.jobs, jobs)
+                    self.assertFalse(hasattr(args, "cohort16_gate_summary"))
+                    self.assertFalse(hasattr(args, "allow_ungated_full_run"))
+        self.assertNotIn("cohort16_gate", self.runner["RunConfig"].__dataclass_fields__)
 
 
 class RocqAuthoritySnapshotUnitTests(unittest.TestCase):
@@ -344,12 +386,13 @@ class RocqAuthoritySnapshotUnitTests(unittest.TestCase):
     def snapshot_root(self) -> Path:
         return self.run_dir / "runtime/trusted-rocq-authority"
 
-    def test_no_rocq_build_flag_cannot_bypass_private_authority_build(self) -> None:
-        parsed = self.runner["argument_parser"]().parse_args(["--no-rocq-build"])
-        self.assertTrue(parsed.no_rocq_build)
-        source = RUNNER.read_text(encoding="utf-8")
-        self.assertNotRegex(source, r"args\.no_rocq_build|if\s+.*no_rocq_build")
-        self.assertIn("Compatibility-only flag with no effect", source)
+    def test_removed_no_rocq_build_flag_is_rejected(self) -> None:
+        parser = self.runner["argument_parser"]()
+        self.assertNotIn("--no-rocq-build", parser.format_help())
+        self.assertFalse(hasattr(parser.parse_args([]), "no_rocq_build"))
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as raised:
+            parser.parse_args(["--no-rocq-build"])
+        self.assertEqual(raised.exception.code, 2)
 
     def test_private_inspection_tool_recheck_rejects_digest_drift(self) -> None:
         records = {
@@ -2091,90 +2134,8 @@ class TrustedStackManifestUnitTests(unittest.TestCase):
                     config,
                 )
 
-    def test_gate_report_accepts_shared_validated_recovered_certificate(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            case_dir = Path(temporary)
-            report_path = case_dir / "report.json"
-            failed_round = {
-                "round": 1,
-                "success": False,
-                "proofCheckExitCode": None,
-                "proofCheckTimedOut": False,
-            }
-            report = {
-                "logDir": str(case_dir),
-                "outcome": "outcome_unconditional",
-                "rounds": [],
-                "proof": {
-                    "verificationMode": "outcome_unconditional",
-                    "backendStatus": "proof_complete",
-                    "certification": "OUTCOME-UNCONDITIONAL",
-                    "proofAgentRounds": [failed_round],
-                    "deterministicTailRecovery": {
-                        "schemaVersion": 1,
-                        "status": "published",
-                        "claim": "equivalence",
-                    },
-                },
-            }
-            report_path.write_text(json.dumps(report), encoding="utf-8")
-            expected_metrics = {
-                "proofRoundCount": 1,
-                "diagnosticInvocationCount": 1,
-                "finalProofCheckElapsedMs": 17,
-            }
-            case = mock.Mock(case_id="fixture")
-            config = mock.Mock(verification_mode="outcome-unconditional")
-            shared_metrics = mock.Mock(return_value=expected_metrics)
 
-            def shared_completion(
-                checked_report: dict,
-                result: dict,
-                checked_case_dir: Path,
-                checked_case: object,
-                checked_config: object,
-            ) -> None:
-                recovery = checked_report["proof"]["deterministicTailRecovery"]
-                self.assertEqual(recovery["status"], "published")
-                self.assertFalse(
-                    any(
-                        row.get("proofCheckExitCode") == 0
-                        for row in checked_report["proof"]["proofAgentRounds"]
-                    )
-                )
-                self.assertEqual(result["proofMetrics"], expected_metrics)
-                self.assertEqual(checked_case_dir, case_dir)
-                self.assertIs(checked_case, case)
-                self.assertIs(checked_config, config)
-
-            validate_gate = self.runner["validate_gate_report"]
-            with mock.patch.dict(
-                validate_gate.__globals__,
-                {
-                    "proof_metrics_from_report": shared_metrics,
-                    "validate_completed_report": shared_completion,
-                },
-            ):
-                validate_gate(
-                    report_path,
-                    case,
-                    config,
-                    expected_metrics,
-                )
-                with self.assertRaisesRegex(
-                    self.runner_error, "proof metrics drifted"
-                ):
-                    validate_gate(
-                        report_path,
-                        case,
-                        config,
-                        {**expected_metrics, "finalProofCheckElapsedMs": 18},
-                    )
-            shared_metrics.assert_called_with(report, case, config, case_dir)
-
-    def test_gate_completed_return_code_allows_only_strict_crash_recovery(
+    def test_completed_return_code_allows_only_strict_crash_recovery(
         self,
     ) -> None:
         coherent = self.runner["completed_return_code_is_coherent"]
@@ -6610,7 +6571,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             "--solver-bin",
             str(self.fake_solver),
             "--no-build",
-            "--no-rocq-build",
             "--proof-rocq-opam-switch",
             str(self.fake_rocq_switch),
             "--trusted-rocq-cache-dir",
@@ -6787,8 +6747,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(solver_argv[storage_index + 1], "2048")
         statement_index = solver_argv.index("--statement-timeout-ms")
         self.assertEqual(solver_argv[statement_index + 1], "600000")
-        counterexample_round_index = solver_argv.index("--max-counterexample-rounds")
-        self.assertEqual(solver_argv[counterexample_round_index + 1], "3")
+        self.assertNotIn("--max-counterexample-rounds", solver_argv)
         check_timeout_index = solver_argv.index("--proof-check-timeout-seconds")
         self.assertEqual(solver_argv[check_timeout_index + 1], "420")
         image_index = solver_argv.index("--proof-docker-image")
@@ -6931,8 +6890,8 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         configuration = summary["configuration"]
         self.assertEqual(summary["statementTimeoutSeconds"], 600)
         self.assertEqual(configuration["statementTimeoutSeconds"], 600)
-        self.assertEqual(summary["maxCounterexampleRounds"], 3)
-        self.assertEqual(configuration["maxCounterexampleRounds"], 3)
+        self.assertEqual(summary["maxCounterexampleRounds"], 2)
+        self.assertEqual(configuration["maxCounterexampleRounds"], 2)
         self.assertEqual(summary["proofAgentStorageLimitMiB"], 2048)
         self.assertEqual(
             proof_agent["resourcePolicy"]["storageLimitMiB"], 2048
@@ -6953,7 +6912,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             summary["results"][0]["effectiveConfiguration"][
                 "maxCounterexampleRounds"
             ],
-            3,
+            2,
         )
 
         self.assertEqual(
@@ -7482,7 +7441,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             and call.func.id
             in {
                 "required_postgres_url",
-                "validate_frozen_full_launch_request",
                 "capture_codex_provider_environment",
                 "postgres_profile_document",
                 "prepare_run_dir",
@@ -7493,7 +7451,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         }
         for preflight in (
             "required_postgres_url",
-            "validate_frozen_full_launch_request",
             "capture_codex_provider_environment",
             "postgres_profile_document",
         ):
@@ -7804,10 +7761,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(
             namespace["FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256"],
             "8ee79987c8f77cb88bc637196931010b7da88e8f4fb3303392527f1e156587a4",
-        )
-        self.assertEqual(
-            hashlib.sha256(namespace["FROZEN_SCOPE"].read_bytes()).hexdigest(),
-            namespace["FROZEN_SCOPE_SHA256"],
         )
         cohort = json.loads(namespace["FROZEN_COHORT"].read_text())
         self.assertEqual(cohort["caseCount"], 389)
@@ -8152,146 +8105,6 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 namespace["validate_solver_args"]((value,))
         namespace["validate_solver_args"](("--force-llm-assessment",))
 
-    def test_frozen_full_launch_requires_exact_scope_configuration_and_gate(
-        self,
-    ) -> None:
-        namespace = runpy.run_path(str(RUNNER))
-        legacy_root = namespace["LEGACY_FROZEN_INPUT_ROOT"]
-        cases = namespace["discover_cases"](legacy_root)
-        parser = namespace["argument_parser"]()
-        bad = parser.parse_args([])
-        with self.assertRaises(namespace["RunnerError"]):
-            namespace["validate_frozen_full_launch_request"](
-                legacy_root, cases, cases, bad
-            )
-        good = parser.parse_args(
-            [
-                "--jobs",
-                "32",
-                "--case-timeout",
-                "3600",
-                "--postgres-url",
-                "postgresql://logos@127.0.0.1:55490/postgres",
-                "--cohort16-gate-summary",
-                "gate.json",
-            ]
-        )
-        namespace["validate_frozen_full_launch_request"](
-            legacy_root, cases, cases, good
-        )
-        source_drift = parser.parse_args(
-            [
-                "--jobs",
-                "32",
-                "--case-timeout",
-                "3600",
-                "--postgres-url",
-                "postgresql://logos@127.0.0.1:55490/postgres",
-                "--cohort16-gate-summary",
-                "gate.json",
-                "--allow-framework-source-drift",
-            ]
-        )
-        with self.assertRaisesRegex(
-            namespace["RunnerError"], "framework-source-drift"
-        ):
-            namespace["validate_frozen_full_launch_request"](
-                legacy_root, cases, cases, source_drift
-            )
-        explicit_four_hour = parser.parse_args(
-            [
-                "--jobs",
-                "32",
-                "--case-timeout",
-                "4h",
-                "--postgres-url",
-                "postgresql://logos@127.0.0.1:55490/postgres",
-                "--allow-ungated-full-run",
-            ]
-        )
-        namespace["validate_frozen_full_launch_request"](
-            legacy_root, cases, cases, explicit_four_hour
-        )
-        explicit_four_hour.case_timeout = 3600
-        with self.assertRaises(namespace["RunnerError"]):
-            namespace["validate_frozen_full_launch_request"](
-                legacy_root, cases, cases, explicit_four_hour
-            )
-
-    def test_cohort16_gate_rejects_unverified_summary(self) -> None:
-        namespace = runpy.run_path(str(RUNNER))
-        scope = json.loads(namespace["FROZEN_SCOPE"].read_text())
-        case_ids = sorted(scope["ablationCases"] + scope["extensionCases"])
-        benchmark_case = namespace["BenchmarkCase"]
-        cases = []
-        for index, case_id in enumerate(case_ids):
-            case_dir = self.root / f"gate-input-{index}"
-            case_dir.mkdir()
-            for name in ("schema.sql", "sql1.sql", "sql2.sql"):
-                (case_dir / name).write_text(f"-- {case_id} {name}\n")
-            cases.append(
-                benchmark_case(
-                    case_id=case_id,
-                    cohort="gate",
-                    input_dir=case_dir,
-                    relative_dir=case_dir.name,
-                    schema=case_dir / "schema.sql",
-                    source=case_dir / "sql1.sql",
-                    target=case_dir / "sql2.sql",
-                    source_benchmark=None,
-                    source_case=None,
-                    flat_case_id=None,
-                )
-            )
-        gate_path = self.root / "unverified-gate.json"
-        gate_path.write_text(
-            json.dumps(
-                {
-                    "schemaVersion": 1,
-                    "status": "complete",
-                    "cases": case_ids,
-                    "counts": {
-                        "selected": 16,
-                        "pending": 0,
-                        "completed": 16,
-                        "timedOut": 0,
-                        "failed": 0,
-                        "cancelled": 0,
-                    },
-                    "verificationMode": "outcome-unconditional",
-                    "model": "gpt-6.1-sol",
-                    "reasoningEffort": "medium",
-                    "usageComplete": True,
-                    "integrityVerification": {"verified": False},
-                }
-            )
-        )
-        args = namespace["argument_parser"]().parse_args([])
-        with self.assertRaisesRegex(namespace["RunnerError"], "integrity verification"):
-            namespace["cohort16_gate_record"](
-                str(gate_path),
-                self.input_root,
-                cases,
-                cases,
-                {},
-                {},
-                {"manifestSha256": "f" * 64},
-                {"sha256": "s" * 64},
-                Path("/usr/bin/bash"),
-                Path("/usr/bin/unshare"),
-                {},
-                {
-                    "manifestSha256": "r" * 64,
-                    "policy": "content-addressed-forced-source-build-closure-v3",
-                },
-                {"manifestSha256": "t" * 64},
-                {"manifestSha256": "u" * 64},
-                {"manifestSha256": "v" * 64},
-                {"manifestSha256": "w" * 64},
-                args,
-                {"effectiveReference": "sha256:" + "d" * 64},
-                None,
-            )
 
     def test_input_drift_prevents_terminal_complete(self) -> None:
         self.make_case(

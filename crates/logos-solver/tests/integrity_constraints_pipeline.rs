@@ -46,11 +46,7 @@ fn authoritative_constraints_reach_every_deterministic_consumer() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_logos-solver"))
         .current_dir(repo)
-        .args([
-            "check",
-            "--transform-only",
-            "--disable-counterexample-search",
-        ])
+        .args(["check", "--transform-only"])
         .arg("--schema")
         .arg(case.join("schema.sql"))
         .arg("--source")

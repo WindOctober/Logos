@@ -1020,8 +1020,6 @@ def solver_command(case: BenchmarkCase, case_dir: Path, config: RunConfig) -> li
         config.sql_locale_provider,
         "--sql-server-encoding",
         config.sql_server_encoding,
-        "--disable-counterexample-search",
-        "--disable-proof-agent",
         "--transform-only",
         "--quiet",
     ]

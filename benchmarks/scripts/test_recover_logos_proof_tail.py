@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import contextlib
 import hashlib
+import io
 import json
 from pathlib import Path
 import runpy
@@ -14,6 +16,37 @@ from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("recover-logos-proof-tail")
+
+
+class RecoveryCliTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.recovery = runpy.run_path(str(SCRIPT), run_name="recovery_cli_test")
+
+    def test_supported_actions_remain_available(self) -> None:
+        parser = self.recovery["argument_parser"]()
+        self.assertNotIn("--publish-live-cases", parser.format_help())
+        for action in ("prepare", "publish", "wait-and-reconcile"):
+            with self.subTest(action=action):
+                args = parser.parse_args(["--run-dir", "/unused", f"--{action}"])
+                self.assertTrue(getattr(args, action.replace("-", "_")))
+                self.assertFalse(hasattr(args, "publish_live_cases"))
+
+    def test_live_publication_is_rejected_before_reading_run_files(self) -> None:
+        main = self.recovery["main"]
+        for extra in ([], ["--publish"]):
+            with self.subTest(extra=extra):
+                stderr = io.StringIO()
+                with mock.patch.object(sys, "argv", [
+                    str(SCRIPT), "--run-dir", "/unused", *extra,
+                    "--publish-live-cases",
+                ]), mock.patch.dict(main.__globals__, {
+                    "read_object": mock.Mock(side_effect=AssertionError("unexpected file read")),
+                }), contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
+                    main()
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("--publish-live-cases has been removed", stderr.getvalue())
+                self.assertIn("--wait-and-reconcile", stderr.getvalue())
 
 
 class RecoveryAuthorityTests(unittest.TestCase):
@@ -201,7 +234,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             "jobs": 8,
             "caseTimeoutSeconds": 14400.0,
             "statementTimeoutSeconds": 600,
-            "maxCounterexampleRounds": 3,
+            "maxCounterexampleRounds": 2,
             "terminationGraceSeconds": 10.0,
             "verificationMode": "outcome-unconditional",
             "model": "gpt-6.1-sol",
@@ -231,7 +264,6 @@ class RecoveryAuthorityTests(unittest.TestCase):
                 "endpointSha256": "b" * 64,
             },
             "postgresServerProfile": {"manifestSha256": "c" * 64},
-            "cohort16Gate": None,
             "frozenBenchmark": None,
             "rbotAuthority": None,
             "proofAgent": proof_agent,
@@ -251,7 +283,7 @@ class RecoveryAuthorityTests(unittest.TestCase):
             "proofAgentMemoryLimitMiB": 6144,
             "proofAgentStorageLimitMiB": 2048,
             "statementTimeoutSeconds": 600,
-            "maxCounterexampleRounds": 3,
+            "maxCounterexampleRounds": 2,
             "proofCheckTimeoutSeconds": 1200,
             "proofDockerImage": "sha256:image",
             "proofDockerImageRequested": "image:requested",

@@ -14,7 +14,7 @@ use crate::artifacts::ArtifactWriter;
 use crate::core::{SqlEnvironment, SqlTimeZone, VerificationInput, VerificationMode};
 use crate::engine::{
     BackendStatus, Config, DEFAULT_PROOF_AGENT_COMMAND, DEFAULT_PROOF_AGENT_RESUME_COMMAND,
-    Evidence, SolverOutcome, SolverReport, solve,
+    Evidence, ExecutionMode, SolverOutcome, SolverReport, solve,
 };
 use crate::error::Error;
 use crate::error::Result;
@@ -44,23 +44,8 @@ enum Command {
         calcite_ir_command: Option<String>,
         #[arg(long)]
         disable_counterexample_search: bool,
-        #[arg(long, conflicts_with = "llm_assessment_only")]
-        transform_only: bool,
-        /// Deterministically generate an available typed Witness.v whose
-        /// lowered tables are all empty. This is an offline coverage gate,
-        /// never an equivalence or counterexample result.
-        #[arg(
-            long,
-            hide = true,
-            conflicts_with_all = [
-                "transform_only",
-                "llm_assessment_only",
-                "disable_counterexample_search"
-            ]
-        )]
-        typed_witness_empty_audit: bool,
-        #[arg(long, conflicts_with = "disable_counterexample_search")]
-        llm_assessment_only: bool,
+        #[command(flatten)]
+        execution: ExecutionOptions,
         #[arg(long, conflicts_with = "force_llm_assessment")]
         reuse_llm_assessment: bool,
         #[arg(long)]
@@ -80,8 +65,6 @@ enum Command {
             default_value = DEFAULT_CODEX_PROPOSAL_RESUME_COMMAND
         )]
         proposal_resume_command: String,
-        #[arg(long, default_value_t = 3)]
-        max_counterexample_rounds: usize,
         #[arg(long, env = "LOGOS_POSTGRES_URL")]
         postgres_url: Option<String>,
         #[arg(long)]
@@ -108,8 +91,6 @@ enum Command {
         sql_server_encoding: String,
         #[arg(long, value_enum, default_value_t = VerificationMode::OutcomeUnconditional)]
         verification_mode: VerificationMode,
-        #[arg(long)]
-        disable_proof_agent: bool,
         #[arg(
             long,
             env = "LOGOS_PROOF_AGENT_COMMAND",
@@ -173,6 +154,40 @@ enum Command {
     },
 }
 
+/// CLI spellings select exactly one internal execution mode.
+#[derive(Debug, clap::Args)]
+#[group(multiple = false)]
+struct ExecutionOptions {
+    /// Generate the lowered workspace offline, without running either agent.
+    #[arg(long)]
+    transform_only: bool,
+    /// Generate an empty typed witness for offline coverage auditing.
+    #[arg(long, hide = true, conflicts_with = "disable_counterexample_search")]
+    typed_witness_empty_audit: bool,
+    /// Run only counterexample assessment after input preflight and lowering.
+    #[arg(long, conflicts_with = "disable_counterexample_search")]
+    llm_assessment_only: bool,
+    /// Run input preflight and prepare the workspace, without a proof agent.
+    #[arg(long)]
+    disable_proof_agent: bool,
+}
+
+impl ExecutionOptions {
+    fn mode(&self) -> ExecutionMode {
+        if self.transform_only {
+            ExecutionMode::TransformOnly
+        } else if self.typed_witness_empty_audit {
+            ExecutionMode::TypedWitnessAudit
+        } else if self.llm_assessment_only {
+            ExecutionMode::AssessmentOnly
+        } else if self.disable_proof_agent {
+            ExecutionMode::PrepareWorkspace
+        } else {
+            ExecutionMode::Verify
+        }
+    }
+}
+
 const SOLVER_WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
 
 fn main() -> Result<()> {
@@ -196,15 +211,12 @@ fn run() -> Result<()> {
             target,
             calcite_ir_command,
             disable_counterexample_search,
-            transform_only,
-            typed_witness_empty_audit,
-            llm_assessment_only,
+            execution,
             reuse_llm_assessment,
             force_llm_assessment,
             llm_assessment_cache_dir,
             proposal_command,
             proposal_resume_command,
-            max_counterexample_rounds,
             postgres_url,
             log_dir,
             statement_timeout_ms,
@@ -214,7 +226,6 @@ fn run() -> Result<()> {
             sql_locale_provider,
             sql_server_encoding,
             verification_mode,
-            disable_proof_agent,
             proof_agent_command,
             proof_agent_resume_command,
             proof_agent_memory_limit_mib,
@@ -250,23 +261,19 @@ fn run() -> Result<()> {
                 input,
                 Config {
                     calcite_ir_command,
-                    transform_only,
-                    typed_witness_empty_audit,
+                    execution_mode: execution.mode(),
                     disable_counterexample_search,
-                    llm_assessment_only,
                     reuse_llm_assessment: reuse_llm_assessment
                         || (cfg!(debug_assertions) && !force_llm_assessment),
                     force_llm_assessment,
                     llm_assessment_cache_dir,
                     proposal_command,
                     proposal_resume_command,
-                    max_counterexample_rounds,
                     postgres_url,
                     statement_timeout_ms,
                     sql_time_zone,
                     sql_environment,
                     verification_mode,
-                    run_proof_agent: !disable_proof_agent,
                     proof_agent_command,
                     proof_agent_resume_command,
                     proof_agent_memory_limit_mib,
@@ -396,6 +403,48 @@ mod tests {
     }
 
     #[test]
+    fn execution_flags_select_one_mode() {
+        for (flag, expected) in [
+            (None, ExecutionMode::Verify),
+            (Some("--transform-only"), ExecutionMode::TransformOnly),
+            (Some("--llm-assessment-only"), ExecutionMode::AssessmentOnly),
+            (
+                Some("--disable-proof-agent"),
+                ExecutionMode::PrepareWorkspace,
+            ),
+            (
+                Some("--typed-witness-empty-audit"),
+                ExecutionMode::TypedWitnessAudit,
+            ),
+        ] {
+            let extra: Vec<_> = flag.into_iter().collect();
+            let args = Args::try_parse_from(check_args(&extra)).unwrap();
+            let Command::Check { execution, .. } = args.command;
+            assert_eq!(execution.mode(), expected);
+        }
+    }
+
+    #[test]
+    fn execution_flags_are_pairwise_exclusive() {
+        let flags = [
+            "--transform-only",
+            "--llm-assessment-only",
+            "--disable-proof-agent",
+            "--typed-witness-empty-audit",
+        ];
+        for first in flags {
+            for second in flags {
+                if first != second {
+                    assert!(
+                        Args::try_parse_from(check_args(&[first, second])).is_err(),
+                        "{first} and {second} must not be combined"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn rejects_conflicting_execution_modes() {
         assert!(
             Args::try_parse_from(check_args(&["--transform-only", "--llm-assessment-only"]))
@@ -415,6 +464,11 @@ mod tests {
             ]))
             .is_err()
         );
+    }
+
+    #[test]
+    fn counterexample_round_budget_is_not_configurable() {
+        assert!(Args::try_parse_from(check_args(&["--max-counterexample-rounds", "2"])).is_err());
     }
 
     #[test]

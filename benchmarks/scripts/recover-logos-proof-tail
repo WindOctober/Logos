@@ -127,7 +127,6 @@ SUMMARY_CONFIGURATION_KEYS = frozenset(
         "frontendStack",
         "codexProvider",
         "postgresServerProfile",
-        "cohort16Gate",
         "frozenBenchmark",
         "rbotAuthority",
         "proofAgent",
@@ -801,7 +800,8 @@ def validate_summary_configuration(
                 f"runner summary {summary_name} differs from its preserved configuration"
             )
     if (
-        configuration.get("counterexampleAssessmentPolicy") != "force-fresh"
+        configuration.get("maxCounterexampleRounds") != RUNNER["COUNTEREXAMPLE_FRESH_ATTEMPTS"]
+        or configuration.get("counterexampleAssessmentPolicy") != "force-fresh"
         or configuration.get("frameworkSourceTreeDigestPolicy")
         not in {"required", "record-only"}
         or not isinstance(configuration.get("sqlEnvironment"), dict)
@@ -1925,6 +1925,8 @@ def config_and_case(
         case_process_supervisor=case_process_supervisor,
         case_process_isolation=isolation,
         proof_authority_root=authority.proof_authority_root,
+        # Reconciliation validates artifacts; it must not populate a new shared cache.
+        trusted_rocq_cache_root=authority.run_dir / ".unused-trusted-rocq-cache",
         run_dir=authority.run_dir,
         case_timeout_seconds=configuration["caseTimeoutSeconds"],
         termination_grace_seconds=configuration["terminationGraceSeconds"],
@@ -1939,7 +1941,6 @@ def config_and_case(
         proof_agent_memory_limit_mib=summary["proofAgentMemoryLimitMiB"],
         proof_agent_storage_limit_mib=summary["proofAgentStorageLimitMiB"],
         statement_timeout_seconds=summary["statementTimeoutSeconds"],
-        max_counterexample_rounds=summary["maxCounterexampleRounds"],
         proof_check_timeout_seconds=summary["proofCheckTimeoutSeconds"],
         proof_docker_image=summary.get(
             "proofDockerImageRequested", summary["proofDockerImage"]
@@ -1960,7 +1961,6 @@ def config_and_case(
         codex_provider=configuration["codexProvider"],
         postgres_server_profile=configuration["postgresServerProfile"],
         codex_runtime_home=authority.run_dir / "runtime/unused-recovery-codex-home",
-        cohort16_gate=configuration.get("cohort16Gate"),
         frozen_benchmark=configuration.get("frozenBenchmark"),
         rbot_authority=configuration.get("rbotAuthority"),
         model=configuration["model"],
@@ -3062,6 +3062,15 @@ def selected_case_dirs(run_dir: Path, selectors: list[str]) -> list[Path]:
     return roots
 
 
+class RemovedLivePublication(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        parser.error(
+            "--publish-live-cases has been removed: publication while the runner is "
+            "active is unsafe; use --prepare now and --publish after the runner exits, "
+            "or use --wait-and-reconcile"
+        )
+
+
 def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -3069,10 +3078,14 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--all-eligible", action="store_true")
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--postgres-url")
+    # Reject the obsolete spelling at parse time, before accessing any run files.
+    parser.add_argument(
+        "--publish-live-cases", action=RemovedLivePublication, nargs=0,
+        help=argparse.SUPPRESS, default=argparse.SUPPRESS,
+    )
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--prepare", action="store_true")
     actions.add_argument("--publish", action="store_true")
-    actions.add_argument("--publish-live-cases", action="store_true")
     actions.add_argument("--wait-and-reconcile", action="store_true")
     return parser
 
@@ -3081,10 +3094,6 @@ def main() -> int:
     args = argument_parser().parse_args()
     run_dir = args.run_dir.resolve()
     summary = read_object(run_dir / "runner-summary.json", "runner summary")
-    if args.publish_live_cases:
-        raise RecoveryError(
-            "--publish-live-cases is unsafe without runner coordination; prepare now and publish after the runner exits"
-        )
     if args.wait_and_reconcile:
         if args.case or args.all_eligible:
             raise RecoveryError(

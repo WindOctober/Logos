@@ -21,7 +21,7 @@ use crate::core::{
     ProofLoweringReport, VerificationInput, VerificationIr, VerificationMode,
     analyze_observation_certificates, lower_verification_input_with_mode,
 };
-use crate::engine::config::Config;
+use crate::engine::config::{Config, ExecutionMode};
 use crate::engine::now_ms_since_epoch;
 use crate::engine::report::{
     AgentRunLog, Backend, BackendStatus, CertificationLevel, DiagnosticCheckerInvocation,
@@ -598,7 +598,7 @@ fn base_proof_agent_configuration(
     Ok(ProofAgentConfiguration {
         rocq_session_pool_size: options.rocq_session_limits.max_sessions,
         rocq_session_pool_rss_mib: options.rocq_session_limits.retained_rss_mib,
-        enabled: options.run_proof_agent,
+        enabled: options.execution_mode == ExecutionMode::Verify,
         command: options.proof_agent_command.clone(),
         resume_command: options.proof_agent_resume_command.clone(),
         timeout_seconds: options.proof_agent_timeout_seconds,
@@ -986,11 +986,12 @@ pub(super) fn run_proof_stage(
         "proof-stage/proof-agent/config.json",
         &proof_agent_configuration,
     )?;
-    let mut trusted_sources = if options.run_proof_agent && proof_workspace.is_some() {
-        Some(capture_trusted_proof_sources(artifacts)?)
-    } else {
-        None
-    };
+    let mut trusted_sources =
+        if options.execution_mode == ExecutionMode::Verify && proof_workspace.is_some() {
+            Some(capture_trusted_proof_sources(artifacts)?)
+        } else {
+            None
+        };
     let mut proof_workspace_generation = 1usize;
     let mut initial_problem_compile_checkpoint = None;
     if trusted_sources.is_some() {

@@ -172,7 +172,6 @@ def run_solver_assessment_case(args: argparse.Namespace, case: SolverCase) -> di
         "--calcite-ir-command",
         case.calcite_ir_command,
         "--llm-assessment-only",
-        "--disable-proof-agent",
         "--quiet",
         "--llm-assessment-cache-dir",
         str(args.cache_dir),

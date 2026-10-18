@@ -9,7 +9,7 @@ use crate::artifacts::ArtifactWriter;
 use crate::core::{
     FormalSchema, ObservationCertificateReport, VerificationInput, VerificationMode,
 };
-use crate::engine::config::Config;
+use crate::engine::config::{Config, ExecutionMode};
 use crate::engine::now_ms_since_epoch;
 use crate::engine::report::{
     Evidence, LlmAssessmentCacheLog, LlmAssessmentCacheStatus, LlmAssessmentLog, LlmParseLog,
@@ -30,6 +30,9 @@ pub(super) use reporting::CounterexampleStageResult;
 use reporting::{RecordedRound, SearchRun};
 
 const ASSESSMENT_CACHE_VERSION: u32 = 2;
+// Fresh attempts per proof-directed handoff, not a case-wide limit. A bounded
+// same-session contract repair does not consume another fresh attempt.
+const COUNTEREXAMPLE_FRESH_ATTEMPTS: usize = 2;
 const COUNTEREXAMPLE_CONTRACT_REPAIR_LIMIT: usize = 1;
 const COUNTEREXAMPLE_CANDIDATE_CONTRACT: &str = "counterexample_candidate requires a non-empty witnessSql containing only top-level direct INSERT, UPDATE, or DELETE statements; if no finite executable witness can be constructed, return needs_review";
 
@@ -210,10 +213,11 @@ fn run_counterexample_search_with_run(
     artifacts: &ArtifactWriter,
     mut run: SearchRun<'_>,
 ) -> Result<CounterexampleStageResult> {
-    let round_budget = if options.llm_assessment_only {
+    let assessment_only = options.execution_mode == ExecutionMode::AssessmentOnly;
+    let round_budget = if assessment_only {
         1
     } else {
-        options.max_counterexample_rounds.max(1)
+        COUNTEREXAMPLE_FRESH_ATTEMPTS
     };
     let input_key = input.stable_cache_key();
     let first_round = run.next_round();
@@ -282,7 +286,7 @@ fn run_counterexample_search_with_run(
                     if repairing_current_session {
                         return finish_manual_review(
                             run,
-                            options.llm_assessment_only,
+                            assessment_only,
                             format!(
                                 "counterexample agent still violated its output contract after one same-session repair: {reason}"
                             ),
@@ -291,7 +295,7 @@ fn run_counterexample_search_with_run(
                     let Some(cumulative_usage) = cumulative_usage else {
                         return finish_manual_review(
                             run,
-                            options.llm_assessment_only,
+                            assessment_only,
                             format!(
                                 "counterexample agent violated its output contract, but no validated Codex session was available for the required repair: {reason}"
                             ),
@@ -340,7 +344,7 @@ fn run_counterexample_search_with_run(
             if repairing_current_session {
                 return finish_manual_review(
                     run,
-                    options.llm_assessment_only,
+                    assessment_only,
                     format!(
                         "counterexample agent still violated its output contract after one same-session repair: {reason}"
                     ),
@@ -349,7 +353,7 @@ fn run_counterexample_search_with_run(
             let Some(cumulative_usage) = cumulative_usage else {
                 return finish_manual_review(
                     run,
-                    options.llm_assessment_only,
+                    assessment_only,
                     format!(
                         "counterexample agent violated its output contract, but no validated Codex session was available for the required repair: {reason}"
                     ),
@@ -372,7 +376,7 @@ fn run_counterexample_search_with_run(
                     RoundOutcome::NoCandidate,
                     None,
                 ))?;
-                if options.llm_assessment_only {
+                if assessment_only {
                     return run.finish_terminal(
                         SolverOutcome::LlmAssessmentOnly,
                         SearchStatus::LlmAssessmentOnly,
@@ -396,7 +400,7 @@ fn run_counterexample_search_with_run(
                     RoundOutcome::ManualReview,
                     None,
                 ))?;
-                return finish_manual_review(run, options.llm_assessment_only, reason);
+                return finish_manual_review(run, assessment_only, reason);
             }
             Decision::CounterexampleCandidate => {
                 artifacts.write_text(
@@ -463,7 +467,7 @@ fn run_counterexample_search_with_run(
                         RoundOutcome::FormalWitnessPrepared,
                         None,
                     ))?;
-                    if options.llm_assessment_only {
+                    if assessment_only {
                         return run.finish_terminal(
                             SolverOutcome::LlmAssessmentOnly,
                             SearchStatus::LlmAssessmentOnly,
@@ -499,7 +503,7 @@ fn run_counterexample_search_with_run(
         round = round.saturating_add(1);
     }
 
-    if options.llm_assessment_only {
+    if assessment_only {
         return run.finish_terminal(
             SolverOutcome::LlmAssessmentOnly,
             SearchStatus::LlmAssessmentOnly,
@@ -1526,22 +1530,18 @@ mod tests {
     fn counterexample_test_options(root: &Path) -> Config {
         Config {
             calcite_ir_command: String::new(),
-            transform_only: false,
-            typed_witness_empty_audit: false,
+            execution_mode: ExecutionMode::Verify,
             disable_counterexample_search: false,
-            llm_assessment_only: false,
             reuse_llm_assessment: false,
             force_llm_assessment: true,
             llm_assessment_cache_dir: root.join("assessment-cache"),
             proposal_command: "codex exec".to_owned(),
             proposal_resume_command: "codex exec resume {session_id}".to_owned(),
-            max_counterexample_rounds: 1,
             postgres_url: Some("postgresql://unused.invalid/logos".to_owned()),
             statement_timeout_ms: 1_000,
             sql_time_zone: SqlTimeZone::utc(),
             sql_environment: SqlEnvironment::default(),
             verification_mode: VerificationMode::OutcomeUnconditional,
-            run_proof_agent: false,
             proof_agent_command: String::new(),
             proof_agent_resume_command: String::new(),
             proof_agent_memory_limit_mib: 512,
@@ -1709,13 +1709,85 @@ mod tests {
     }
 
     #[test]
+    fn fixed_fresh_attempt_budget_resets_per_handoff_and_assessment_uses_one() {
+        struct RejectedWitnessProvider(Mutex<usize>);
+        impl Provider for RejectedWitnessProvider {
+            fn complete(&self, _prompt: &str, output_path: &Path) -> Result<Completion> {
+                *self.0.lock().unwrap() += 1;
+                PerSessionRepairProvider::write(
+                    output_path,
+                    r#"{"decision":"counterexample_candidate","reason":"candidate witness","witnessSql":"INSERT INTO t VALUES (NULL);"}"#,
+                )?;
+                Ok(ContractRepairProvider::completion_for(
+                    PerSessionRepairProvider::SESSION_A,
+                    "codex exec",
+                    100,
+                    50,
+                    10,
+                ))
+            }
+        }
+
+        for assessment_only in [false, true] {
+            let root = TestDirectory::new("fixed-counterexample-budget");
+            let input = verification_input(root.path(), "SELECT x FROM t;\n");
+            let artifacts = ArtifactWriter::new(Some(root.path().join("artifacts"))).unwrap();
+            let mut options = counterexample_test_options(root.path());
+            options.execution_mode = if assessment_only {
+                ExecutionMode::AssessmentOnly
+            } else {
+                ExecutionMode::Verify
+            };
+            options.postgres_url = Some("postgresql://127.0.0.1:1/logos".to_owned());
+            let provider = RejectedWitnessProvider(Mutex::new(0));
+            let certificates = empty_observation_certificates(&input);
+            let result = run_counterexample_search(
+                &input,
+                None,
+                &certificates,
+                &options,
+                &provider,
+                &artifacts,
+                Instant::now(),
+            )
+            .unwrap();
+            if assessment_only {
+                assert!(matches!(result, CounterexampleStageResult::Terminal(_)));
+                assert_eq!(*provider.0.lock().unwrap(), 1);
+            } else {
+                let CounterexampleStageResult::ProceedToProof(report) = result else {
+                    panic!("exhausted witness search must return to proof");
+                };
+                assert_eq!(report.rounds.len(), 2);
+                assert_eq!(*provider.0.lock().unwrap(), 2);
+                let resumed = resume_counterexample_search(
+                    &input,
+                    None,
+                    &certificates,
+                    &options,
+                    &provider,
+                    &artifacts,
+                    Instant::now(),
+                    &report,
+                    "try a new witness".to_owned(),
+                )
+                .unwrap();
+                let CounterexampleStageResult::ProceedToProof(report) = resumed else {
+                    panic!("exhausted resumed search must return to proof");
+                };
+                assert_eq!(report.rounds.len(), 4);
+                assert_eq!(*provider.0.lock().unwrap(), 4);
+            }
+        }
+    }
+
+    #[test]
     fn each_fresh_round_receives_its_own_non_consuming_contract_repair() {
         let root = TestDirectory::new("counterexample-contract-per-session");
         let input = verification_input(root.path(), "SELECT x FROM t;\n");
         let artifacts =
             ArtifactWriter::new(Some(root.path().join("artifacts"))).expect("create artifacts");
         let mut options = counterexample_test_options(root.path());
-        options.max_counterexample_rounds = 2;
         options.postgres_url = Some("postgresql://127.0.0.1:1/logos".to_owned());
         let provider = PerSessionRepairProvider {
             step: Mutex::new(0),

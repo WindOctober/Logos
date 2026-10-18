@@ -33,7 +33,6 @@ load_logos_env(LOGOS_ROOT)
 PUBLISHER = LOGOS_ROOT / "scripts/publish-logos-canonical.py"
 RUNNER = LOGOS_ROOT / "benchmarks/scripts/run-logos"
 COHORT_AUTHORITY = LOGOS_ROOT / "benchmarks/core/authority/cohort-389.json"
-SCOPE = LOGOS_ROOT / "benchmarks/core/authority/proof-gate-16.json"
 INPUT_ROOT = LOGOS_ROOT / "benchmarks/core/.generated/sqlsolver"
 SOURCE_TREE_DIGEST_HELPER_RECORD = {
     "path": "scripts/logos_source_tree_digest.py",
@@ -1189,152 +1188,6 @@ class PublisherSessionSequenceTest(unittest.TestCase):
             )
         )
 
-    def test_cohort_gate_binds_selected_semantics_metadata_and_sidecar(self) -> None:
-        publisher = runpy.run_path(str(PUBLISHER), run_name="publisher_gate_unit_test")
-        validate = publisher["validate_cohort16_gate_case_input_authority"]
-        digest_authority = publisher["cohort16_selected_authority_digests"]
-        publish_error = publisher["PublishError"]
-        with tempfile.TemporaryDirectory(prefix="logos-gate-semantic-") as raw:
-            root = Path(raw)
-            paths = {
-                "schema": root / "schema.sql",
-                "source": root / "sql1.sql",
-                "target": root / "sql2.sql",
-                "metadata": root / "metadata.json",
-                "semanticSidecar": root / "semantic-sidecar.json",
-            }
-            paths["schema"].write_text("CREATE TABLE t (x int);\n", encoding="utf-8")
-            paths["source"].write_text("SELECT x FROM t;\n", encoding="utf-8")
-            paths["target"].write_text("SELECT x FROM t;\n", encoding="utf-8")
-            write_json(paths["metadata"], {"flatCaseId": "fixture-flat"})
-            write_json(paths["semanticSidecar"], {"tables": []})
-            input_files = {
-                name: {"path": str(path), "sha256": sha256(path)}
-                for name, path in paths.items()
-            }
-            input_row = {
-                "caseId": "fixture-case",
-                "schemaSha256": input_files["schema"]["sha256"],
-                "sql1Sha256": input_files["source"]["sha256"],
-                "sql2Sha256": input_files["target"]["sha256"],
-            }
-            semantic_row = {
-                "caseId": "fixture-case",
-                "flatCaseId": "fixture-flat",
-                "metadataSha256": input_files["metadata"]["sha256"],
-                "semanticSidecarPath": str(paths["semanticSidecar"]),
-                "semanticSidecarSha256": input_files["semanticSidecar"]["sha256"],
-            }
-            input_digest, semantic_digest = digest_authority(
-                ["fixture-case"],
-                {"fixture-case": input_row},
-                {"fixture-case": semantic_row},
-            )
-            changed_semantic = dict(semantic_row)
-            changed_semantic["metadataSha256"] = "a" * 64
-            self.assertEqual(
-                input_digest,
-                digest_authority(
-                    ["fixture-case"],
-                    {"fixture-case": input_row},
-                    {"fixture-case": changed_semantic},
-                )[0],
-            )
-            self.assertNotEqual(
-                semantic_digest,
-                digest_authority(
-                    ["fixture-case"],
-                    {"fixture-case": input_row},
-                    {"fixture-case": changed_semantic},
-                )[1],
-            )
-            digests, _, metadata_path = validate(
-                "fixture-case", input_files, input_row, semantic_row, root
-            )
-            self.assertEqual(digests["metadata"], semantic_row["metadataSha256"])
-            self.assertEqual(metadata_path, paths["metadata"].resolve())
-
-            write_json(paths["metadata"], {"flatCaseId": "tampered-flat"})
-            input_files["metadata"]["sha256"] = sha256(paths["metadata"])
-            with self.assertRaisesRegex(publish_error, "metadata semantic authority"):
-                validate("fixture-case", input_files, input_row, semantic_row, root)
-            write_json(paths["metadata"], {"flatCaseId": "fixture-flat"})
-            input_files["metadata"]["sha256"] = sha256(paths["metadata"])
-
-            write_json(paths["semanticSidecar"], {"tables": [{"name": "t"}]})
-            input_files["semanticSidecar"]["sha256"] = sha256(
-                paths["semanticSidecar"]
-            )
-            with self.assertRaisesRegex(publish_error, "sidecar authority drifted"):
-                validate("fixture-case", input_files, input_row, semantic_row, root)
-
-    def test_publisher_delegates_recovered_cohort_gate_certificate_to_runner(
-        self,
-    ) -> None:
-        publisher = runpy.run_path(
-            str(PUBLISHER), run_name="publisher_gate_delegation_test"
-        )
-        calls = []
-
-        def validate_gate_report(report_path, case, config, expected_metrics):
-            calls.append((report_path, case, config, expected_metrics))
-            if expected_metrics.get("deterministicTailRecoveryAccepted") is not True:
-                raise RuntimeError("recovery evidence was not delegated")
-
-        publisher["validate_cohort16_gate_report_with_runner"].__globals__[
-            "_RUNNER_VALIDATORS"
-        ] = {"validate_gate_report": validate_gate_report}
-        with tempfile.TemporaryDirectory(prefix="logos-gate-delegation-") as raw:
-            root = Path(raw)
-            report_path = root / "report.json"
-            report_path.write_text("{}\n", encoding="utf-8")
-            input_paths = {}
-            input_files = {}
-            for name, contents in (
-                ("schema", "CREATE TABLE t (x int);\n"),
-                ("source", "SELECT x FROM t;\n"),
-                ("target", "SELECT x FROM t;\n"),
-            ):
-                path = root / f"{name}.sql"
-                path.write_text(contents, encoding="utf-8")
-                input_paths[name] = path.resolve()
-                input_files[name] = {"path": str(path), "sha256": sha256(path)}
-            metadata_path = root / "metadata.json"
-            write_json(metadata_path, {"flatCaseId": "fixture-flat"})
-            input_files["metadata"] = {
-                "path": str(metadata_path),
-                "sha256": sha256(metadata_path),
-            }
-            metrics = {"deterministicTailRecoveryAccepted": True}
-            publisher["validate_cohort16_gate_report_with_runner"](
-                "fixture__case",
-                report_path,
-                {"proofMetrics": metrics},
-                metadata_path,
-                {"flatCaseId": "fixture-flat"},
-                input_paths,
-                input_files,
-                {
-                    "proofAgent": {
-                        "dockerImage": {"imageId": "sha256:" + "a" * 64}
-                    },
-                    "trustedStack": {
-                        "manifestPath": str(root / "trusted-stack.json"),
-                        "manifestSha256": "b" * 64,
-                    },
-                    "sqlEnvironment": {
-                        "defaultCollation": "C",
-                        "characterClassification": "C",
-                        "localeProvider": "libc",
-                        "serverEncoding": "UTF8",
-                    },
-                },
-            )
-        self.assertEqual(len(calls), 1)
-        _, delegated_case, delegated_config, delegated_metrics = calls[0]
-        self.assertEqual(delegated_case.flat_case_id, "fixture-flat")
-        self.assertEqual(delegated_config.input_files["fixture__case"], input_files)
-        self.assertIs(delegated_metrics, metrics)
 
     def test_publisher_validates_cross_binds_and_copies_rocq_snapshot(self) -> None:
         publisher = runpy.run_path(
@@ -1553,91 +1406,6 @@ class PublisherSessionSequenceTest(unittest.TestCase):
                     record, run_root, runtime_snapshot, framework_source_tree
                 )
 
-    def test_cohort_gate_rejects_rocq_snapshot_drift_on_every_surface(self) -> None:
-        publisher = runpy.run_path(
-            str(PUBLISHER), run_name="publisher_gate_rocq_binding_test"
-        )
-        validate = publisher["validate_cohort16_rocq_snapshot_bindings"]
-        digest = "a" * 64
-        runtime_digest = "c" * 64
-        policy = "run-private-forced-source-build-closure-v2"
-        runtime = {
-            "root": "Logos/fixture/runtime/trusted-rocq-switch",
-            "manifestPath": "Logos/fixture/trusted-rocq-runtime-manifest.json",
-            "manifestSha256": runtime_digest,
-            "schemaVersion": 1,
-            "algorithm": "logos-trusted-rocq-runtime-snapshot-v1",
-            "policy": "run-private-immutable-rocq-runtime-bwrap-closure-v1",
-            "directoryCount": 3,
-            "fileCount": 7,
-            "totalBytes": 101,
-        }
-        record = {
-            "rocqAuthoritySnapshotManifestSha256": digest,
-            "rocqRuntimeSnapshotManifestSha256": runtime_digest,
-        }
-        configuration = {
-            "rocqRuntimeSnapshot": runtime,
-            "trustedStack": {"rocqRuntimeSnapshot": runtime},
-            "proofAgent": {"rocqOpamSwitch": runtime["root"]},
-            "rocqAuthoritySnapshotPolicy": policy,
-            "rocqAuthoritySnapshot": {
-                "policy": policy,
-                "manifestSha256": digest,
-            },
-        }
-        integrity = {
-            "rocqAuthoritySnapshotManifestSha256": digest,
-            "rocqRuntimeSnapshotManifestSha256": runtime_digest,
-        }
-        rows = [
-            {
-                "effectiveConfiguration": {
-                    "rocqRuntimeSnapshotPolicy": runtime["policy"],
-                    "rocqRuntimeSnapshotManifestSha256": runtime_digest,
-                    "rocqAuthoritySnapshotPolicy": policy,
-                    "rocqAuthoritySnapshotManifestSha256": digest,
-                }
-            }
-        ]
-        validate(record, configuration, integrity, rows, digest, runtime)
-        mutations = []
-        bad_record = json.loads(json.dumps(record))
-        bad_record["rocqAuthoritySnapshotManifestSha256"] = "b" * 64
-        mutations.append((bad_record, configuration, integrity, rows))
-        bad_configuration = json.loads(json.dumps(configuration))
-        bad_configuration["rocqAuthoritySnapshot"]["manifestSha256"] = "b" * 64
-        mutations.append((record, bad_configuration, integrity, rows))
-        bad_integrity = json.loads(json.dumps(integrity))
-        bad_integrity["rocqAuthoritySnapshotManifestSha256"] = "b" * 64
-        mutations.append((record, configuration, bad_integrity, rows))
-        bad_rows = json.loads(json.dumps(rows))
-        bad_rows[0]["effectiveConfiguration"][
-            "rocqAuthoritySnapshotManifestSha256"
-        ] = "b" * 64
-        mutations.append((record, configuration, integrity, bad_rows))
-        for values in mutations:
-            with self.subTest(surface=values):
-                with self.assertRaisesRegex(
-                    publisher["PublishError"], "Rocq authority snapshot drifted"
-                ):
-                    validate(*values, digest, runtime)
-
-        bad_runtime_configuration = json.loads(json.dumps(configuration))
-        bad_runtime_configuration["proofAgent"]["rocqOpamSwitch"] = (
-            "Logos/fixture/runtime/untrusted-switch"
-        )
-        with self.assertRaisesRegex(
-            publisher["PublishError"], "Rocq authority snapshot drifted"
-        ):
-            validate(
-                record,
-                bad_runtime_configuration,
-                integrity,
-                rows,
-                digest,
-                runtime,
-            )
 
     def test_final_theorem_detection_ignores_nested_rocq_comments(self) -> None:
         publisher = runpy.run_path(str(PUBLISHER), run_name="publisher_unit_test")
@@ -3090,244 +2858,6 @@ class CanonicalPublisherTest(unittest.TestCase):
             ).hexdigest(),
         }
 
-        scope = json.loads(SCOPE.read_text(encoding="utf-8"))
-        gate_cases = scope["ablationCases"] + scope["extensionCases"]
-        manifest_document = json.loads(manifest_bytes)
-        manifest_by_case = {row["caseId"]: row for row in manifest_document["cases"]}
-        gate_input_document = {
-            "schemaVersion": 1,
-            "algorithm": INPUT_MANIFEST_ALGORITHM,
-            "caseCount": 16,
-            "cases": [manifest_by_case[case] for case in sorted(gate_cases)],
-        }
-        cls.gate_input_digest = hashlib.sha256(
-            (
-                json.dumps(gate_input_document, sort_keys=True, separators=(",", ":"))
-                + "\n"
-            ).encode("utf-8")
-        ).hexdigest()
-        gate_rows = []
-        for case in gate_cases:
-            paths = cls.inputs[case]
-            input_files = {
-                "schema": {
-                    "path": str(paths["schema"]),
-                    "sha256": sha256(paths["schema"]),
-                },
-                "source": {
-                    "path": str(paths["source"]),
-                    "sha256": sha256(paths["source"]),
-                },
-                "target": {
-                    "path": str(paths["target"]),
-                    "sha256": sha256(paths["target"]),
-                },
-            }
-            gate_report = cls.root / "gate-cases" / case / "report.json"
-            _, gate_cache_digest = make_diagnostic_cache(gate_report.parent)
-            write_json(
-                gate_report,
-                {
-                    "outcome": "outcome_unconditional",
-                    "rounds": [],
-                    "proof": {
-                        "sqlEnvironment": {
-                            key: value
-                            for key, value in sql_environment.items()
-                            if key != "timeZone"
-                        },
-                        "verificationMode": "outcome_unconditional",
-                        "backendStatus": "proof_complete",
-                        "certification": "OUTCOME-UNCONDITIONAL",
-                        "proofAgentConfiguration": {
-                            "enabled": True,
-                            "catalogGuidance": True,
-                            "command": DEFAULT_PROOF_AGENT_COMMAND,
-                            "resumeCommand": DEFAULT_PROOF_AGENT_RESUME_COMMAND,
-                            "memoryLimitMib": 6144,
-                            "sessionRestartAfterFailedRounds": 16,
-                            "sessionHomePolicy": "isolated_per_generation",
-                            **PROOF_AGENT_DIAGNOSTIC_CONFIGURATION,
-                            "diagnosticCacheManifestPath": (
-                                "proof-stage/proof-agent/trusted-diagnostic-cache/"
-                                "SHA256SUMS"
-                            ),
-                            "diagnosticCacheManifestSha256": gate_cache_digest,
-                            "timeoutSeconds": 14100,
-                            "trustedCheckTimeoutSeconds": 420,
-                            "dockerImage": image_id,
-                            "context": {
-                                "sourceSqlSha256": input_files["source"]["sha256"],
-                                "targetSqlSha256": input_files["target"]["sha256"],
-                            },
-                        },
-                        "proofAgent": {
-                            "proofCheckExitCode": 0,
-                            "proofCheckTimedOut": False,
-                            "audit": {"passed": True, "findings": []},
-                        },
-                    },
-                },
-            )
-            gate_rows.append(
-                {
-                    "caseId": case,
-                    "status": "completed",
-                    "returnCode": 0,
-                    "outcome": "outcome_unconditional",
-                    "backendStatus": "proof_complete",
-                    "certification": "OUTCOME-UNCONDITIONAL",
-                    "usageComplete": True,
-                    "effectiveConfiguration": {
-                        "verificationMode": "outcome-unconditional",
-                        "model": "gpt-5.6-sol",
-                        "reasoningEffort": "medium",
-                        "catalogGuidanceEnabled": True,
-                        "trustedCheckTimeoutSeconds": 420,
-                        "dockerImage": image_id,
-                        "caseTimeoutSeconds": 14400,
-                        "terminationGraceSeconds": 10.0,
-                        "proofAgentTotalTimeoutSeconds": 14100,
-                        "proofAgentSessionRestartAfterFailedRounds": 16,
-                        "proofAgentSessionHomePolicy": "isolated_per_generation",
-                        **EFFECTIVE_PROOF_AGENT_DIAGNOSTIC_CONFIGURATION,
-                        "solverLaunchEnvironmentPolicy": (
-                            solver_launch_environment_policy
-                        ),
-                        "solverEnvironment": solver_environment,
-                        "frontendLaunchEnvironmentPolicy": (
-                            frontend_launch_environment
-                        ),
-                        "commandProviderEnvironmentPolicy": (
-                            command_environment_policy
-                        ),
-                        "resourcePolicy": {
-                            "memoryLimitMiB": 6144,
-                            "storageLimitMiB": 2048,
-                            "cpuLimit": None,
-                        },
-                        "solverArgs": [],
-                        "effectiveSolverArgs": ["--force-llm-assessment"],
-                        "postgresUrl": postgres_url,
-                        "sqlEnvironment": sql_environment,
-                        "frameworkSourceTreeManifestSha256": cls.source_digest,
-                        "inputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
-                        "selectedInputManifestSha256": cls.gate_input_digest,
-                        "solverBinarySha256": cls.solver_digest,
-                        "trustedStackManifestSha256": cls.trusted_digest,
-                        "frontendStackManifestSha256": cls.frontend_digest,
-                        "codexProviderManifestSha256": cls.codex_digest,
-                        "codexConfigSha256": cls.codex_config_digest,
-                        "providerEndpointSha256": cls.endpoint_digest,
-                        "postgresServerProfileSha256": cls.postgres_digest,
-                        "cohort16GateSha256": None,
-                    },
-                    "inputFiles": input_files,
-                    "reportEvidence": {
-                        "path": str(gate_report),
-                        "present": True,
-                        "sha256": sha256(gate_report),
-                    },
-                }
-            )
-        cls.gate_summary = cls.full_run / "cohort16-gate-summary.json"
-        write_json(
-            cls.gate_summary,
-            {
-                "schemaVersion": 1,
-                "status": "complete",
-                "startedAt": "2026-07-23T00:00:00Z",
-                "updatedAt": "2026-07-23T01:00:00Z",
-                "verificationMode": "outcome-unconditional",
-                "proofAgentCatalogGuidanceEnabled": True,
-                "model": "gpt-5.6-sol",
-                "reasoningEffort": "medium",
-                "caseTimeoutSeconds": 14400,
-                "usageComplete": True,
-                "configuration": {
-                    "verificationMode": "outcome-unconditional",
-                    "model": "gpt-5.6-sol",
-                    "reasoningEffort": "medium",
-                    "caseTimeoutSeconds": 14400,
-                    "terminationGraceSeconds": 10.0,
-                    "solverArgs": [],
-                    "effectiveSolverArgs": ["--force-llm-assessment"],
-                    "postgresUrl": postgres_url,
-                    "sqlEnvironment": sql_environment,
-                    "solverLaunchEnvironmentPolicy": (solver_launch_environment_policy),
-                    "solverEnvironment": solver_environment,
-                    "frontendLaunchEnvironmentPolicy": frontend_launch_environment,
-                    "commandProviderEnvironmentPolicy": command_environment_policy,
-                    "frameworkSourceTree": {
-                        "manifestSha256": cls.source_digest,
-                        "sourceTreeDigestHelper": copy.deepcopy(
-                            SOURCE_TREE_DIGEST_HELPER_RECORD
-                        ),
-                    },
-                    "solverBinary": {"sha256": cls.solver_digest},
-                    "trustedStack": {"manifestSha256": cls.trusted_digest},
-                    "frontendStack": {"manifestSha256": cls.frontend_digest},
-                    "codexProvider": {
-                        "manifestSha256": cls.codex_digest,
-                        "configSha256": cls.codex_config_digest,
-                        "endpointSha256": cls.endpoint_digest,
-                    },
-                    "postgresServerProfile": {
-                        "manifestSha256": cls.postgres_digest,
-                    },
-                    "inputManifest": {
-                        "selectedSha256": cls.gate_input_digest,
-                    },
-                    "proofAgent": {
-                        "catalogGuidanceEnabled": True,
-                        "model": "gpt-5.6-sol",
-                        "reasoningEffort": "medium",
-                        "sessionRestartAfterFailedRounds": 16,
-                        "sessionHomePolicy": "isolated_per_generation",
-                        **PROOF_AGENT_DIAGNOSTIC_CONFIGURATION,
-                        "totalTimeoutSeconds": 14100,
-                        "trustedCheckTimeoutSeconds": 420,
-                        "resourcePolicy": {
-                            "memoryLimitMiB": 6144,
-                            "storageLimitMiB": 2048,
-                            "cpuLimit": None,
-                        },
-                        "dockerImage": {"imageId": image_id},
-                    },
-                },
-                "cases": gate_cases,
-                "counts": {
-                    "selected": 16,
-                    "pending": 0,
-                    "completed": 16,
-                    "timedOut": 0,
-                    "failed": 0,
-                    "cancelled": 0,
-                },
-                "results": gate_rows,
-                "integrityVerification": {
-                    "verified": True,
-                    "frameworkSourceTreeManifestSha256": cls.source_digest,
-                    "solverBinarySha256": cls.solver_digest,
-                    "trustedStackManifestSha256": cls.trusted_digest,
-                    "frontendStackManifestSha256": cls.frontend_digest,
-                    "codexProviderManifestSha256": cls.codex_digest,
-                    "codexConfigSha256": cls.codex_config_digest,
-                    "providerEndpointSha256": cls.endpoint_digest,
-                    "solverEnvironmentSha256": solver_environment["sha256"],
-                    "postgresServerProfileSha256": cls.postgres_digest,
-                    "inputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
-                    "selectedInputManifestSha256": cls.gate_input_digest,
-                    "cohort16GateSha256": None,
-                },
-            },
-        )
-        cls.gate_digest = sha256(cls.gate_summary)
-        cls.scope_digest = sha256(SCOPE)
-        cls.gate_case_set_digest = hashlib.sha256(
-            ("\n".join(sorted(gate_cases)) + "\n").encode("utf-8")
-        ).hexdigest()
-
         cls.final_audit = cls.root / "final-audit.json"
         write_json(
             cls.final_audit,
@@ -3367,7 +2897,7 @@ class CanonicalPublisherTest(unittest.TestCase):
             "trustedCheckTimeoutSeconds": 420,
             "dockerImage": image_id,
             "caseTimeoutSeconds": 14400,
-            "maxCounterexampleRounds": 3,
+            "maxCounterexampleRounds": 2,
             "statementTimeoutSeconds": 600,
             "terminationGraceSeconds": 10.0,
             "proofAgentTotalTimeoutSeconds": 14100,
@@ -3397,7 +2927,6 @@ class CanonicalPublisherTest(unittest.TestCase):
             "codexConfigSha256": cls.codex_config_digest,
             "providerEndpointSha256": cls.endpoint_digest,
             "postgresServerProfileSha256": cls.postgres_digest,
-            "cohort16GateSha256": cls.gate_digest,
         }
 
         results = []
@@ -3823,7 +3352,7 @@ class CanonicalPublisherTest(unittest.TestCase):
             "solverBin": str(cls.solver_binary),
             "jobs": 32,
             "caseTimeoutSeconds": 14400,
-            "maxCounterexampleRounds": 3,
+            "maxCounterexampleRounds": 2,
             "terminationGraceSeconds": 10.0,
             "verificationMode": "outcome-unconditional",
             "model": "gpt-5.6-sol",
@@ -3922,24 +3451,6 @@ class CanonicalPublisherTest(unittest.TestCase):
             "frontendStack": cls.frontend_record,
             "codexProvider": cls.codex_record,
             "postgresServerProfile": cls.postgres_record,
-            "cohort16Gate": {
-                "path": str(cls.gate_summary),
-                "sha256": cls.gate_digest,
-                "scopePath": str(SCOPE),
-                "scopeSha256": cls.scope_digest,
-                "caseSetSha256": cls.gate_case_set_digest,
-                "frameworkSourceTreeManifestSha256": cls.source_digest,
-                "selectedInputManifestSha256": cls.gate_input_digest,
-                "solverBinarySha256": cls.solver_digest,
-                "trustedStackManifestSha256": cls.trusted_digest,
-                "frontendStackManifestSha256": cls.frontend_digest,
-                "codexProviderManifestSha256": cls.codex_digest,
-                "codexConfigSha256": cls.codex_config_digest,
-                "providerEndpointSha256": cls.endpoint_digest,
-                "postgresServerProfileSha256": cls.postgres_digest,
-                "catalogGuidanceEnabled": True,
-                "verificationMode": "outcome-unconditional",
-            },
             "proofAgent": {
                 "catalogGuidanceEnabled": True,
                 "model": "gpt-5.6-sol",
@@ -3972,7 +3483,7 @@ class CanonicalPublisherTest(unittest.TestCase):
                 "updatedAt": "2026-07-23T03:00:00Z",
                 "jobs": 32,
                 "caseTimeoutSeconds": 14400,
-                "maxCounterexampleRounds": 3,
+                "maxCounterexampleRounds": 2,
                 "terminationGraceSeconds": 10.0,
                 "solverBin": str(cls.solver_binary),
                 "verificationMode": "outcome-unconditional",
@@ -4013,7 +3524,6 @@ class CanonicalPublisherTest(unittest.TestCase):
                     "postgresServerProfileSha256": cls.postgres_digest,
                     "inputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
                     "selectedInputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
-                    "cohort16GateSha256": cls.gate_digest,
                 },
                 "provenance": {
                     "benchmarkFingerprint": (
@@ -4037,7 +3547,6 @@ class CanonicalPublisherTest(unittest.TestCase):
             },
         )
         cls.original_summary = cls.summary_path.read_bytes()
-        cls.original_gate = cls.gate_summary.read_bytes()
         cls.original_report = cls.first_report.read_bytes()
         cls.original_trusted_manifest = cls.trusted_manifest.read_bytes()
         cls.original_frontend_manifest = cls.frontend_manifest.read_bytes()
@@ -4088,7 +3597,6 @@ class CanonicalPublisherTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.summary_path.write_bytes(self.original_summary)
-        self.gate_summary.write_bytes(self.original_gate)
         self.first_report.write_bytes(self.original_report)
         self.trusted_manifest.write_bytes(self.original_trusted_manifest)
         self.frontend_manifest.write_bytes(self.original_frontend_manifest)
@@ -4160,20 +3668,6 @@ class CanonicalPublisherTest(unittest.TestCase):
                     if isinstance(round_record, dict):
                         round_record.pop("catalogGuidance", None)
 
-        gate = json.loads(self.original_gate)
-        gate.pop("proofAgentCatalogGuidanceEnabled", None)
-        gate_proof_agent = gate["configuration"]["proofAgent"]
-        gate_proof_agent.pop("catalogGuidanceEnabled", None)
-        gate_proof_agent["proofAgentLauncherEnvironmentPolicy"] = current_policy()
-        for row in gate["results"]:
-            strip_effective_configuration(row["effectiveConfiguration"])
-            report_path = Path(row["reportEvidence"]["path"])
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-            strip_report(report)
-            rewrite(report_path, report)
-            row["reportEvidence"]["sha256"] = sha256(report_path)
-        rewrite(self.gate_summary, gate)
-        gate_digest = sha256(self.gate_summary)
 
         summary = json.loads(self.original_summary)
         summary.pop("proofAgentCatalogGuidanceEnabled", None)
@@ -4183,13 +3677,8 @@ class CanonicalPublisherTest(unittest.TestCase):
         summary["configuration"]["trustedStack"][
             "proofAgentLauncherEnvironmentPolicy"
         ] = current_policy()
-        cohort16_gate = summary["configuration"]["cohort16Gate"]
-        cohort16_gate.pop("catalogGuidanceEnabled", None)
-        cohort16_gate["sha256"] = gate_digest
-        summary["integrityVerification"]["cohort16GateSha256"] = gate_digest
         for row in summary["results"]:
             strip_effective_configuration(row["effectiveConfiguration"])
-            row["effectiveConfiguration"]["cohort16GateSha256"] = gate_digest
             row["proofMetrics"].pop("catalogBytes", None)
             report_path = Path(row["reportEvidence"]["path"])
             report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -5120,31 +4609,6 @@ class CanonicalPublisherTest(unittest.TestCase):
                 else:
                     path.write_bytes(original)
 
-    def test_rejects_gate_that_completed_after_full_run(self) -> None:
-        gate = json.loads(self.original_gate)
-        gate["updatedAt"] = "2026-07-23T04:00:00Z"
-        write_json(self.gate_summary, gate)
-        new_digest = sha256(self.gate_summary)
-        summary = json.loads(self.original_summary)
-        summary["configuration"]["cohort16Gate"]["sha256"] = new_digest
-        for row in summary["results"]:
-            row["effectiveConfiguration"]["cohort16GateSha256"] = new_digest
-        write_json(self.summary_path, summary)
-        self.assert_rejected("did not complete before the full run")
-
-    def test_rejects_gate_treatment_drift_even_when_rehashed(self) -> None:
-        gate = json.loads(self.original_gate)
-        gate["configuration"]["proofAgent"]["dockerImage"]["imageId"] = (
-            "sha256:" + "9" * 64
-        )
-        write_json(self.gate_summary, gate)
-        new_digest = sha256(self.gate_summary)
-        summary = json.loads(self.original_summary)
-        summary["configuration"]["cohort16Gate"]["sha256"] = new_digest
-        for row in summary["results"]:
-            row["effectiveConfiguration"]["cohort16GateSha256"] = new_digest
-        write_json(self.summary_path, summary)
-        self.assert_rejected("cohort16 gate is not a complete compatible 16-case run")
 
     def test_rejects_current_source_tree_drift(self) -> None:
         self.source_file.write_text("value = 2\n", encoding="utf-8")

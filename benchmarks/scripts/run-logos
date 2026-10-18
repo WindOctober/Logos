@@ -59,7 +59,8 @@ DEFAULT_PROOF_CHECK_TIMEOUT_SECONDS = 420
 DEFAULT_PROOF_AGENT_MEMORY_LIMIT_MIB = 6144
 DEFAULT_PROOF_AGENT_STORAGE_LIMIT_MIB = 2048
 DEFAULT_STATEMENT_TIMEOUT_SECONDS = 600
-DEFAULT_MAX_COUNTEREXAMPLE_ROUNDS = 3
+# Fixed solver policy: fresh attempts per proof-directed counterexample search.
+COUNTEREXAMPLE_FRESH_ATTEMPTS = 2
 FRAMEWORK_SOURCE_DIGEST_POLICY_REQUIRED = "required"
 FRAMEWORK_SOURCE_DIGEST_POLICY_RECORD_ONLY = "record-only"
 SOLVER_BINARY_SNAPSHOT_POLICY = "run-private-immutable-copy-v1"
@@ -183,8 +184,6 @@ FROZEN_COHORT_SHA256 = (
 FROZEN_BENCHMARK_FINGERPRINT = (
     "0c25cb9d500bce29545ede21d42df355fd23efbef32d1725db11ad026b6be91f"
 )
-FROZEN_SCOPE = BENCHMARK_AUTHORITY_ROOT / "proof-gate-16.json"
-FROZEN_SCOPE_SHA256 = "eed6bdea2cdd091f20ea4081c1ac43b6bf477d21556df680bdbda991c3632a82"
 INPUT_MANIFEST_ALGORITHM = "logos-input-manifest-v2"
 LEGACY_INPUT_MANIFEST_ALGORITHM = "logos-frozen-input-manifest-v1"
 SEMANTIC_INPUT_AUTHORITY_ALGORITHM = "logos-semantic-input-authority-v1"
@@ -643,7 +642,6 @@ class RunConfig:
     proof_agent_memory_limit_mib: int
     proof_agent_storage_limit_mib: int
     statement_timeout_seconds: int
-    max_counterexample_rounds: int
     proof_check_timeout_seconds: int
     proof_docker_image: str
     proof_docker_image_effective: str
@@ -661,7 +659,6 @@ class RunConfig:
     codex_provider: dict[str, Any]
     postgres_server_profile: dict[str, Any]
     codex_runtime_home: Path
-    cohort16_gate: dict[str, Any] | None
     frozen_benchmark: dict[str, Any] | None
     rbot_authority: dict[str, Any] | None
     model: str = EXPECTED_MODEL
@@ -778,13 +775,6 @@ def main() -> int:
             return 0
 
         effective_postgres_url = required_postgres_url(args)
-        validate_frozen_full_launch_request(
-            input_root,
-            cases,
-            selected,
-            args,
-            effective_postgres_url,
-        )
         codex_provider_capture = capture_codex_provider_environment()
         postgres_profile = postgres_profile_document(effective_postgres_url)
 
@@ -885,29 +875,7 @@ def main() -> int:
             run_dir,
             effective_postgres_url,
             postgres_profile,
-            require_frozen=is_frozen_full_selection(input_root, cases, selected),
             resume=args.resume,
-        )
-        cohort16_gate = cohort16_gate_record(
-            args.cohort16_gate_summary,
-            input_root,
-            cases,
-            selected,
-            input_files,
-            input_manifest,
-            framework_source_tree,
-            solver_binary,
-            case_process_bootstrap,
-            case_process_supervisor,
-            case_process_isolation,
-            rocq_authority_snapshot,
-            trusted_stack,
-            frontend_stack,
-            codex_provider,
-            postgres_server_profile,
-            args,
-            proof_docker_image_identity,
-            effective_postgres_url,
         )
         codex_runtime_home = stage_codex_runtime_home(
             codex_source_home,
@@ -934,7 +902,6 @@ def main() -> int:
             proof_agent_memory_limit_mib=args.proof_agent_memory_limit_mib,
             proof_agent_storage_limit_mib=args.proof_agent_storage_limit_mib,
             statement_timeout_seconds=args.statement_timeout_seconds,
-            max_counterexample_rounds=args.max_counterexample_rounds,
             proof_check_timeout_seconds=args.proof_check_timeout_seconds,
             proof_docker_image=args.proof_docker_image,
             proof_docker_image_effective=proof_docker_image_identity[
@@ -954,7 +921,6 @@ def main() -> int:
             codex_provider=codex_provider,
             postgres_server_profile=postgres_server_profile,
             codex_runtime_home=codex_runtime_home,
-            cohort16_gate=cohort16_gate,
             frozen_benchmark=frozen_benchmark,
             rbot_authority=rbot_authority,
         )
@@ -1063,14 +1029,6 @@ def argument_parser() -> argparse.ArgumentParser:
         help="Do not run the incremental Rust build before the benchmark.",
     )
     parser.add_argument(
-        "--no-rocq-build",
-        action="store_true",
-        help=(
-            "Compatibility-only flag with no effect: the runner always resolves or "
-            "builds the exact content-addressed trusted Rocq authority."
-        ),
-    )
-    parser.add_argument(
         "--verification-mode",
         choices=("safe-unconditional", "outcome-unconditional", "conditional"),
         default="outcome-unconditional",
@@ -1100,15 +1058,6 @@ def argument_parser() -> argparse.ArgumentParser:
         help=(
             "PostgreSQL timeout for each deterministic validation statement "
             f"(default: {DEFAULT_STATEMENT_TIMEOUT_SECONDS}s)."
-        ),
-    )
-    parser.add_argument(
-        "--max-counterexample-rounds",
-        type=int,
-        default=DEFAULT_MAX_COUNTEREXAMPLE_ROUNDS,
-        help=(
-            "Maximum fresh counterexample-agent attempts before equivalence proof "
-            f"search begins (default: {DEFAULT_MAX_COUNTEREXAMPLE_ROUNDS})."
         ),
     )
     parser.add_argument(
@@ -1145,22 +1094,6 @@ def argument_parser() -> argparse.ArgumentParser:
         help=(
             "Content-addressed immutable Rocq runtime/authority cache "
             "(default: var/logos-solver/cache/trusted-rocq)."
-        ),
-    )
-    parser.add_argument(
-        "--cohort16-gate-summary",
-        help=(
-            "Prior complete frozen cohort16 runner-summary.json. "
-            "Required before launching the frozen full 389-case run."
-        ),
-    )
-    parser.add_argument(
-        "--allow-ungated-full-run",
-        action="store_true",
-        help=(
-            "Explicitly authorize the exact frozen 389-case campaign without a "
-            "current-source cohort16 gate. This recorded override requires jobs=32, "
-            "case-timeout=4h, outcome-unconditional verification, and PostgreSQL."
         ),
     )
     parser.add_argument(
@@ -1215,8 +1148,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise RunnerError("--proof-agent-storage-limit-mib must be at least 1")
     if args.statement_timeout_seconds < 1:
         raise RunnerError("--statement-timeout-seconds must be at least 1")
-    if args.max_counterexample_rounds < 1:
-        raise RunnerError("--max-counterexample-rounds must be at least 1")
     if not args.proof_docker_image.strip():
         raise RunnerError("--proof-docker-image cannot be empty")
     if args.limit is not None and args.limit < 1:
@@ -1225,11 +1156,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise RunnerError("--resume requires an explicit --run-dir")
     if args.resume and args.list:
         raise RunnerError("--resume cannot be combined with --list")
-    if args.allow_ungated_full_run and args.cohort16_gate_summary:
-        raise RunnerError(
-            "--allow-ungated-full-run cannot be combined with "
-            "--cohort16-gate-summary"
-        )
     validate_solver_args(tuple(args.solver_arg or ()))
 
 
@@ -2853,7 +2779,6 @@ def postgres_server_profile_record(
     postgres_url: str,
     document: dict[str, Any],
     *,
-    require_frozen: bool,
     resume: bool,
 ) -> dict[str, Any]:
     expected_url_sha256 = hashlib.sha256(postgres_url.encode("utf-8")).hexdigest()
@@ -2863,10 +2788,6 @@ def postgres_server_profile_record(
         or not isinstance(document.get("profile"), dict)
     ):
         raise RunnerError("early PostgreSQL server-profile capture is inconsistent")
-    if require_frozen and document["profile"].get("serverVersionNum") != (
-        EXPECTED_POSTGRES_VERSION_NUM
-    ):
-        raise RunnerError("frozen full run requires the attested PostgreSQL profile")
     path = run_dir / "postgres-server-profile.json"
     digest = write_or_validate_manifest(
         path,
@@ -4114,6 +4035,7 @@ def trusted_checker_environment_policy_record() -> dict[str, Any]:
         ],
         "hostEnvironmentAllowlist": [],
         "explicitContractVariables": [
+            "LOGOS_ROCQ_VALIDATION_SESSION",
             "LOGOS_REPO_ROOT",
             "LOGOS_PROOF_WORKDIR",
             "LOGOS_TRUSTED_ROCQ_CACHE_DIR",
@@ -4881,66 +4803,6 @@ def frozen_benchmark_record(
     }
 
 
-def is_frozen_full_selection(
-    input_root: Path,
-    available_cases: list[BenchmarkCase],
-    selected_cases: list[BenchmarkCase],
-) -> bool:
-    return (
-        input_root.resolve() == LEGACY_FROZEN_INPUT_ROOT.resolve()
-        and len(available_cases) == 389
-        and len(selected_cases) == 389
-        and {case.case_id for case in available_cases}
-        == {case.case_id for case in selected_cases}
-    )
-
-
-def validate_frozen_full_launch_request(
-    input_root: Path,
-    available_cases: list[BenchmarkCase],
-    selected_cases: list[BenchmarkCase],
-    args: argparse.Namespace,
-    effective_postgres_url: str | None = None,
-) -> None:
-    effective_postgres_url = (
-        effective_postgres_url
-        or args.postgres_url
-        or os.environ.get("LOGOS_POSTGRES_URL")
-    )
-    full = is_frozen_full_selection(input_root, available_cases, selected_cases)
-    if not full:
-        if args.allow_ungated_full_run:
-            raise RunnerError(
-                "--allow-ungated-full-run is valid only for the exact frozen "
-                "389-case selection"
-            )
-        return
-    errors = []
-    if args.jobs != 32:
-        errors.append(f"--jobs must be 32, got {args.jobs}")
-    expected_timeout = 14400 if args.allow_ungated_full_run else 3600
-    if args.case_timeout != expected_timeout:
-        errors.append(
-            "--case-timeout must be exactly "
-            f"{expected_timeout} seconds, got {args.case_timeout}"
-        )
-    if args.verification_mode != "outcome-unconditional":
-        errors.append("--verification-mode must be outcome-unconditional")
-    if args.allow_framework_source_drift:
-        errors.append(
-            "--allow-framework-source-drift is not permitted for the exact frozen "
-            "389-case campaign"
-        )
-    if not effective_postgres_url:
-        errors.append("--postgres-url is required for the frozen full run")
-    if not args.allow_ungated_full_run and not args.cohort16_gate_summary:
-        errors.append("--cohort16-gate-summary is required")
-    if errors:
-        raise RunnerError(
-            "frozen full 389-case launch configuration is invalid: " + "; ".join(errors)
-        )
-
-
 def required_postgres_url(args: argparse.Namespace) -> str:
     value = args.postgres_url or os.environ.get("LOGOS_POSTGRES_URL")
     if not isinstance(value, str) or not value.strip():
@@ -4966,36 +4828,6 @@ def resolve_artifact_path(value: str) -> Path:
     return (LOGOS_ROOT / path).resolve()
 
 
-def frozen_scope_record() -> tuple[dict[str, Any], str, list[str]]:
-    if not FROZEN_SCOPE.is_file() or FROZEN_SCOPE.is_symlink():
-        raise RunnerError(f"frozen campaign scope is missing: {FROZEN_SCOPE}")
-    scope_sha256 = sha256_file(FROZEN_SCOPE)
-    if scope_sha256 != FROZEN_SCOPE_SHA256:
-        raise RunnerError(
-            "verifier-owned frozen campaign scope changed: expected "
-            f"{FROZEN_SCOPE_SHA256}, got {scope_sha256}"
-        )
-    try:
-        scope = json.loads(FROZEN_SCOPE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise RunnerError(f"cannot read frozen campaign scope: {error}") from error
-    if not isinstance(scope, dict) or scope.get("schemaVersion") != 1:
-        raise RunnerError("frozen campaign scope is not schemaVersion 1")
-    ablation = scope.get("ablationCases")
-    extension = scope.get("extensionCases")
-    if not isinstance(ablation, list) or not isinstance(extension, list):
-        raise RunnerError("frozen campaign scope has no 8+8 case lists")
-    cases = [*ablation, *extension]
-    if (
-        len(ablation) != 8
-        or len(extension) != 8
-        or len(cases) != len(set(cases))
-        or not all(isinstance(case_id, str) and case_id for case_id in cases)
-    ):
-        raise RunnerError("frozen campaign scope does not contain 16 unique case IDs")
-    return scope, scope_sha256, sorted(cases)
-
-
 def completed_return_code_is_coherent(row: dict[str, Any]) -> bool:
     """Accept unknown exit telemetry only for strict crash-window recovery."""
     return_code = row.get("returnCode")
@@ -5019,521 +4851,6 @@ def completed_return_code_is_coherent(row: dict[str, Any]) -> bool:
         and evidence.get("present") is True
         and row.get("runnerError") is None
     )
-
-
-def validate_gate_report(
-    report_path: Path,
-    case: BenchmarkCase,
-    config: RunConfig,
-    expected_metrics: dict[str, Any],
-) -> None:
-    """Validate one gate report through the ordinary trusted publication path.
-
-    In particular, do not infer acceptance from an individual proof-agent
-    round.  A deterministic-tail publication deliberately has no successful
-    original round; its accepted final Rocq check lives in the separately
-    digest-bound recovery record validated by the shared report validators.
-    """
-    report = read_json_object(report_path, "cohort16 solver report")
-    validate_counterexample_provider_commands(report)
-    if report.get("outcome") != "outcome_unconditional":
-        raise RunnerError(
-            f"cohort16 report is not outcome_unconditional: {report_path}"
-        )
-    proof = report.get("proof")
-    if (
-        not isinstance(proof, dict)
-        or proof.get("verificationMode") != "outcome_unconditional"
-        or proof.get("backendStatus") != "proof_complete"
-        or proof.get("certification") != "OUTCOME-UNCONDITIONAL"
-    ):
-        raise RunnerError(
-            f"cohort16 report has no trusted outcome certificate: {report_path}"
-        )
-    metrics = proof_metrics_from_report(report, case, config, report_path.parent)
-    if metrics != expected_metrics:
-        raise RunnerError(f"cohort16 report proof metrics drifted: {report_path}")
-    validate_completed_report(
-        report,
-        {"proofMetrics": metrics},
-        report_path.parent,
-        case,
-        config,
-    )
-
-
-def cohort16_gate_record(
-    value: str | None,
-    input_root: Path,
-    available_cases: list[BenchmarkCase],
-    selected_cases: list[BenchmarkCase],
-    input_files: dict[str, dict[str, Any]],
-    input_manifest: dict[str, Any],
-    framework_source_tree: dict[str, Any],
-    solver_binary: dict[str, Any],
-    case_process_bootstrap: Path,
-    case_process_supervisor: Path,
-    case_process_isolation: dict[str, Any],
-    rocq_authority_snapshot: dict[str, Any],
-    trusted_stack: dict[str, Any],
-    frontend_stack: dict[str, Any],
-    codex_provider: dict[str, Any],
-    postgres_server_profile: dict[str, Any],
-    args: argparse.Namespace,
-    proof_docker_image_identity: dict[str, Any],
-    effective_postgres_url: str | None,
-) -> dict[str, Any] | None:
-    full = is_frozen_full_selection(input_root, available_cases, selected_cases)
-    if value is None:
-        if full and not args.allow_ungated_full_run:
-            raise RunnerError("frozen full run requires a cohort16 gate summary")
-        return None
-    gate_path = resolve_path(value)
-    if not gate_path.is_file() or gate_path.is_symlink():
-        raise RunnerError(f"cohort16 gate summary is missing or symlinked: {gate_path}")
-    gate_sha256 = sha256_file(gate_path)
-    gate = read_json_object(gate_path, "cohort16 gate summary")
-    scope, scope_sha256, expected_cases = frozen_scope_record()
-    gate_cases = gate.get("cases")
-    if (
-        gate.get("schemaVersion") != 1
-        or gate.get("status") != "complete"
-        or not isinstance(gate_cases, list)
-        or sorted(gate_cases) != expected_cases
-        or len(gate_cases) != 16
-    ):
-        raise RunnerError("cohort16 gate is not one complete exact frozen 16-case run")
-    counts = gate.get("counts")
-    if (
-        not isinstance(counts, dict)
-        or counts.get("selected") != 16
-        or counts.get("pending") != 0
-        or counts.get("completed") != 16
-        or counts.get("timedOut") != 0
-        or counts.get("failed") != 0
-        or counts.get("cancelled") != 0
-    ):
-        raise RunnerError("cohort16 gate terminal accounting is incomplete")
-    if (
-        gate.get("verificationMode") != "outcome-unconditional"
-        or gate.get("model") != EXPECTED_MODEL
-        or gate.get("reasoningEffort") != EXPECTED_REASONING_EFFORT
-        or gate.get("usageComplete") is not True
-    ):
-        raise RunnerError("cohort16 gate treatment or usage configuration is invalid")
-    integrity = gate.get("integrityVerification")
-    if (
-        not isinstance(integrity, dict)
-        or integrity.get("verified") is not True
-        or gate.get("integrityError") is not None
-    ):
-        raise RunnerError("cohort16 gate did not pass terminal integrity verification")
-
-    configuration = gate.get("configuration")
-    if not isinstance(configuration, dict):
-        raise RunnerError("cohort16 gate has no configuration record")
-    gate_framework = configuration.get("frameworkSourceTree")
-    if (
-        not isinstance(gate_framework, dict)
-        or gate_framework.get("manifestSha256")
-        != framework_source_tree["manifestSha256"]
-    ):
-        raise RunnerError("cohort16 gate framework digest differs from this run")
-    gate_solver = configuration.get("solverBinary")
-    if (
-        not isinstance(gate_solver, dict)
-        or gate_solver.get("sha256") != solver_binary["sha256"]
-    ):
-        raise RunnerError(
-            "cohort16 gate solver executable digest differs from this run"
-        )
-    gate_stack = configuration.get("trustedStack")
-    if (
-        not isinstance(gate_stack, dict)
-        or gate_stack.get("manifestSha256") != trusted_stack["manifestSha256"]
-    ):
-        raise RunnerError(
-            "cohort16 gate trusted proof-stack digest differs from this run"
-        )
-    gate_runtime = configuration.get("rocqRuntimeSnapshot")
-    expected_runtime = trusted_stack.get("rocqRuntimeSnapshot")
-    if gate_runtime != expected_runtime:
-        raise RunnerError("cohort16 gate trusted Rocq runtime differs from this run")
-    gate_authority = configuration.get("rocqAuthoritySnapshot")
-    if (
-        not isinstance(gate_authority, dict)
-        or gate_authority.get("policy") != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or gate_authority.get("manifestSha256")
-        != rocq_authority_snapshot["manifestSha256"]
-    ):
-        raise RunnerError(
-            "cohort16 gate trusted Rocq authority differs from this run"
-        )
-    gate_frontend = configuration.get("frontendStack")
-    gate_provider = configuration.get("codexProvider")
-    gate_postgres = configuration.get("postgresServerProfile")
-    if (
-        not isinstance(gate_frontend, dict)
-        or gate_frontend.get("manifestSha256") != frontend_stack["manifestSha256"]
-        or not isinstance(gate_provider, dict)
-        or gate_provider.get("manifestSha256") != codex_provider["manifestSha256"]
-        or gate_provider.get("configSha256") != codex_provider["configSha256"]
-        or gate_provider.get("endpointSha256") != codex_provider["endpointSha256"]
-        or not isinstance(gate_postgres, dict)
-        or gate_postgres.get("manifestSha256")
-        != postgres_server_profile["manifestSha256"]
-    ):
-        raise RunnerError(
-            "cohort16 gate frontend/provider/PostgreSQL provenance differs from this run"
-        )
-    expected_sql_environment = {
-        "timeZone": args.sql_time_zone,
-        "defaultCollation": args.sql_default_collation,
-        "characterClassification": args.sql_character_classification,
-        "localeProvider": args.sql_locale_provider,
-        "serverEncoding": args.sql_server_encoding,
-    }
-    requested_solver_args = tuple(args.solver_arg or ())
-    effective_args = (
-        requested_solver_args
-        if FORCED_COUNTEREXAMPLE_ARGUMENT in requested_solver_args
-        else (FORCED_COUNTEREXAMPLE_ARGUMENT, *requested_solver_args)
-    )
-    proof_agent = configuration.get("proofAgent")
-    if (
-        configuration.get("caseTimeoutSeconds") != args.case_timeout
-        or configuration.get("terminationGraceSeconds") != args.termination_grace
-        or configuration.get("verificationMode") != args.verification_mode
-        or configuration.get("model") != EXPECTED_MODEL
-        or configuration.get("reasoningEffort") != EXPECTED_REASONING_EFFORT
-        or configuration.get("effectiveSolverArgs") != list(effective_args)
-        or configuration.get("solverBinarySnapshotPolicy")
-        != SOLVER_BINARY_SNAPSHOT_POLICY
-        or configuration.get("caseProcessIsolation")
-        != case_process_isolation
-        or configuration.get("rocqRuntimeSnapshot") != expected_runtime
-        or configuration.get("rocqAuthoritySnapshotPolicy")
-        != TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY
-        or configuration.get("frameworkSourceTreeDigestPolicy")
-        != FRAMEWORK_SOURCE_DIGEST_POLICY_REQUIRED
-        or configuration.get("postgresUrl")
-        != postgres_url_value_record(effective_postgres_url)
-        or configuration.get("sqlEnvironment") != expected_sql_environment
-        or not isinstance(proof_agent, dict)
-        or not isinstance(proof_agent.get("rocqOpamSwitch"), str)
-        or resolve_artifact_path(proof_agent["rocqOpamSwitch"])
-        != resolve_artifact_path(expected_runtime["root"])
-        or proof_agent.get("model") != EXPECTED_MODEL
-        or proof_agent.get("reasoningEffort") != EXPECTED_REASONING_EFFORT
-        or proof_agent.get("totalTimeoutSeconds")
-        != max(1, int(args.case_timeout) - 300)
-        or proof_agent.get("trustedCheckTimeoutSeconds")
-        != args.proof_check_timeout_seconds
-        or proof_agent.get("trustedCheckerEnvironmentPolicy")
-        != trusted_checker_environment_policy_record()
-        or proof_agent.get("proofAgentLauncherEnvironmentPolicy")
-        != proof_agent_launcher_environment_policy_record()
-        or proof_agent.get("resourcePolicy")
-        != {
-            "memoryLimitMiB": args.proof_agent_memory_limit_mib,
-            "storageLimitMiB": args.proof_agent_storage_limit_mib,
-            "cpuLimit": None,
-        }
-        or proof_agent.get("dockerImage") != proof_docker_image_identity
-    ):
-        raise RunnerError(
-            "cohort16 gate differs from the full run's immutable treatment/configuration"
-        )
-
-    available_by_id = {case.case_id: case for case in available_cases}
-    if not set(expected_cases) <= set(available_by_id):
-        raise RunnerError("current frozen inputs do not contain every cohort16 case")
-    expected_selected_manifest = build_input_manifest(
-        (available_by_id[case_id] for case_id in expected_cases), legacy=True
-    )
-    expected_selected_digest = input_manifest_sha256(expected_selected_manifest)
-    expected_selected_semantic_manifest = build_semantic_input_authority_manifest(
-        available_by_id[case_id] for case_id in expected_cases
-    )
-    expected_selected_semantic_digest = input_manifest_sha256(
-        expected_selected_semantic_manifest
-    )
-    if (
-        input_manifest.get("semanticAuthoritySha256")
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-        or input_manifest.get("selectedSemanticAuthoritySha256")
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-    ):
-        raise RunnerError("current frozen semantic-input authority is not exact")
-    gate_input = configuration.get("inputManifest")
-    if (
-        not isinstance(gate_input, dict)
-        or gate_input.get("selectedSha256") != expected_selected_digest
-        or gate_input.get("semanticAuthoritySha256")
-        != FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256
-        or gate_input.get("selectedSemanticAuthoritySha256")
-        != expected_selected_semantic_digest
-    ):
-        raise RunnerError(
-            "cohort16 gate selected semantic/input digest differs from frozen inputs"
-        )
-    if gate_input.get("sha256") != FROZEN_INPUT_MANIFEST_SHA256:
-        raise RunnerError("cohort16 gate full-input manifest digest is not frozen")
-    expected_integrity_bindings = {
-        "frameworkSourceTreeManifestSha256": framework_source_tree["manifestSha256"],
-        "solverBinarySha256": solver_binary["sha256"],
-        "caseProcessIsolationSha256": hashlib.sha256(
-            canonical_json_bytes(case_process_isolation)
-        ).hexdigest(),
-        "rocqRuntimeSnapshotManifestSha256": trusted_stack[
-            "rocqRuntimeSnapshot"
-        ]["manifestSha256"],
-        "rocqAuthoritySnapshotManifestSha256": rocq_authority_snapshot[
-            "manifestSha256"
-        ],
-        "trustedStackManifestSha256": trusted_stack["manifestSha256"],
-        "frontendStackManifestSha256": frontend_stack["manifestSha256"],
-        "codexProviderManifestSha256": codex_provider["manifestSha256"],
-        "codexConfigSha256": codex_provider["configSha256"],
-        "providerEndpointSha256": codex_provider["endpointSha256"],
-        "postgresServerProfileSha256": postgres_server_profile["manifestSha256"],
-        "inputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
-        "selectedInputManifestSha256": expected_selected_digest,
-        "semanticAuthoritySha256": FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256,
-        "selectedSemanticAuthoritySha256": expected_selected_semantic_digest,
-    }
-    for key, expected in expected_integrity_bindings.items():
-        if integrity.get(key) != expected:
-            raise RunnerError(f"cohort16 gate integrity binding drifted: {key}")
-
-    expected_effective_configuration = {
-        "verificationMode": args.verification_mode,
-        "model": EXPECTED_MODEL,
-        "reasoningEffort": EXPECTED_REASONING_EFFORT,
-        "trustedCheckTimeoutSeconds": args.proof_check_timeout_seconds,
-        "dockerImage": proof_docker_image_identity["effectiveReference"],
-        "caseTimeoutSeconds": args.case_timeout,
-        "statementTimeoutSeconds": args.statement_timeout_seconds,
-        "maxCounterexampleRounds": args.max_counterexample_rounds,
-        "terminationGraceSeconds": args.termination_grace,
-        "proofAgentTotalTimeoutSeconds": max(1, int(args.case_timeout) - 300),
-        "proofAgentSessionRestartAfterFailedRounds": (
-            PROOF_AGENT_SESSION_RESTART_AFTER_FAILED_ROUNDS
-        ),
-        "proofAgentSessionHomePolicy": PROOF_AGENT_SESSION_HOME_POLICY,
-        "proofAgentDiagnosticTransport": PROOF_AGENT_DIAGNOSTIC_TRANSPORT,
-        "proofAgentDiagnosticCachePolicy": PROOF_AGENT_DIAGNOSTIC_CACHE_POLICY,
-        "proofAgentDiagnosticTimeoutPolicy": PROOF_AGENT_DIAGNOSTIC_TIMEOUT_POLICY,
-        "proofAgentDiagnosticBudgetPolicy": PROOF_AGENT_DIAGNOSTIC_BUDGET_POLICY,
-        "proofAgentDiagnosticCheckerParallelismMax": (
-            PROOF_AGENT_DIAGNOSTIC_CHECKER_PARALLELISM_MAX
-        ),
-        "proofAgentDiagnosticCheckerSchedulingPolicy": (
-            PROOF_AGENT_DIAGNOSTIC_CHECKER_SCHEDULING_POLICY
-        ),
-        "proofAgentCompileCheckpointPolicy": PROOF_AGENT_COMPILE_CHECKPOINT_POLICY,
-        "proofAgentScratchPersistencePolicy": PROOF_AGENT_SCRATCH_PERSISTENCE_POLICY,
-        "proofAgentWritableStorageLimitBytes": (
-            args.proof_agent_storage_limit_mib * 1024 * 1024
-        ),
-        "proofAgentWritableStoragePolicy": PROOF_AGENT_WRITABLE_STORAGE_POLICY,
-        "proofAgentScratchAllowedExtensions": list(
-            PROOF_AGENT_SCRATCH_ALLOWED_EXTENSIONS
-        ),
-        "trustedCheckerEnvironmentPolicy": (
-            trusted_checker_environment_policy_record()
-        ),
-        "proofAgentLauncherEnvironmentPolicy": (
-            proof_agent_launcher_environment_policy_record()
-        ),
-        "resourcePolicy": {
-            "memoryLimitMiB": args.proof_agent_memory_limit_mib,
-            "storageLimitMiB": args.proof_agent_storage_limit_mib,
-            "cpuLimit": None,
-        },
-        "solverArgs": list(requested_solver_args),
-        "effectiveSolverArgs": list(effective_args),
-        "postgresUrl": postgres_url_value_record(effective_postgres_url),
-        "sqlEnvironment": expected_sql_environment,
-        "solverLaunchEnvironmentPolicy": configuration.get(
-            "solverLaunchEnvironmentPolicy"
-        ),
-        "solverEnvironment": configuration.get("solverEnvironment"),
-        "frontendLaunchEnvironmentPolicy": configuration.get(
-            "frontendLaunchEnvironmentPolicy"
-        ),
-        "commandProviderEnvironmentPolicy": configuration.get(
-            "commandProviderEnvironmentPolicy"
-        ),
-        "solverBinarySnapshotPolicy": SOLVER_BINARY_SNAPSHOT_POLICY,
-        "caseProcessIsolation": case_process_isolation,
-        "rocqRuntimeSnapshotPolicy": TRUSTED_ROCQ_RUNTIME_SNAPSHOT_POLICY,
-        "rocqRuntimeSnapshotManifestSha256": trusted_stack[
-            "rocqRuntimeSnapshot"
-        ]["manifestSha256"],
-        "rocqAuthoritySnapshotPolicy": TRUSTED_ROCQ_AUTHORITY_SNAPSHOT_POLICY,
-        "rocqAuthoritySnapshotManifestSha256": rocq_authority_snapshot[
-            "manifestSha256"
-        ],
-        "frameworkSourceTreeDigestPolicy": (
-            FRAMEWORK_SOURCE_DIGEST_POLICY_REQUIRED
-        ),
-        "frameworkSourceTreeManifestSha256": framework_source_tree["manifestSha256"],
-        "inputManifestSha256": FROZEN_INPUT_MANIFEST_SHA256,
-        "selectedInputManifestSha256": expected_selected_digest,
-        "semanticAuthoritySha256": FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256,
-        "selectedSemanticAuthoritySha256": expected_selected_semantic_digest,
-        "solverBinarySha256": solver_binary["sha256"],
-        "trustedStackManifestSha256": trusted_stack["manifestSha256"],
-        "frontendStackManifestSha256": frontend_stack["manifestSha256"],
-        "codexProviderManifestSha256": codex_provider["manifestSha256"],
-        "codexConfigSha256": codex_provider["configSha256"],
-        "providerEndpointSha256": codex_provider["endpointSha256"],
-        "postgresServerProfileSha256": postgres_server_profile["manifestSha256"],
-        "cohort16GateSha256": None,
-    }
-
-    gate_validation_config = RunConfig(
-        solver_bin=resolve_artifact_path(solver_binary["path"]),
-        case_process_bootstrap=case_process_bootstrap,
-        case_process_supervisor=case_process_supervisor,
-        case_process_isolation=case_process_isolation,
-        proof_authority_root=resolve_artifact_path(
-            rocq_authority_snapshot["root"]
-        ),
-        run_dir=gate_path.parent.resolve(),
-        case_timeout_seconds=args.case_timeout,
-        termination_grace_seconds=args.termination_grace,
-        verification_mode=args.verification_mode,
-        postgres_url=effective_postgres_url,
-        sql_time_zone=args.sql_time_zone,
-        sql_default_collation=args.sql_default_collation,
-        sql_character_classification=args.sql_character_classification,
-        sql_locale_provider=args.sql_locale_provider,
-        sql_server_encoding=args.sql_server_encoding,
-        solver_args=requested_solver_args,
-        proof_agent_memory_limit_mib=args.proof_agent_memory_limit_mib,
-        proof_agent_storage_limit_mib=args.proof_agent_storage_limit_mib,
-        statement_timeout_seconds=args.statement_timeout_seconds,
-        max_counterexample_rounds=args.max_counterexample_rounds,
-        proof_check_timeout_seconds=args.proof_check_timeout_seconds,
-        proof_docker_image=args.proof_docker_image,
-        proof_docker_image_effective=proof_docker_image_identity[
-            "effectiveReference"
-        ],
-        proof_docker_image_identity=proof_docker_image_identity,
-        proof_rocq_opam_switch=resolve_artifact_path(
-            trusted_stack["rocqRuntimeSnapshot"]["root"]
-        ),
-        trusted_rocq_cache_root=gate_path.parent / ".unused-trusted-rocq-cache",
-        allow_framework_source_drift=args.allow_framework_source_drift,
-        framework_source_tree=framework_source_tree,
-        input_manifest=input_manifest,
-        input_files=input_files,
-        solver_binary=solver_binary,
-        rocq_authority_snapshot=rocq_authority_snapshot,
-        trusted_stack=trusted_stack,
-        frontend_stack=frontend_stack,
-        codex_provider=codex_provider,
-        postgres_server_profile=postgres_server_profile,
-        codex_runtime_home=gate_path.parent / ".unused-codex-runtime-home",
-        cohort16_gate=None,
-        frozen_benchmark=None,
-        rbot_authority=None,
-    )
-
-    results = gate.get("results")
-    if not isinstance(results, list) or len(results) != 16:
-        raise RunnerError("cohort16 gate has no complete 16-row result array")
-    by_case = {
-        row.get("caseId"): row
-        for row in results
-        if isinstance(row, dict) and isinstance(row.get("caseId"), str)
-    }
-    if sorted(by_case) != expected_cases or len(by_case) != 16:
-        raise RunnerError("cohort16 gate results do not match the frozen case set")
-    for case_id in expected_cases:
-        row = by_case[case_id]
-        if (
-            row.get("status") != "completed"
-            or not completed_return_code_is_coherent(row)
-            or row.get("outcome") != "outcome_unconditional"
-            or row.get("backendStatus") != "proof_complete"
-            or row.get("certification") != "OUTCOME-UNCONDITIONAL"
-            or row.get("usageComplete") is not True
-        ):
-            raise RunnerError(
-                f"cohort16 gate case lacks a trusted certificate: {case_id}"
-            )
-        effective = row.get("effectiveConfiguration")
-        if effective != expected_effective_configuration:
-            raise RunnerError(
-                f"cohort16 gate case treatment binding is invalid: {case_id}"
-            )
-        metrics = row.get("proofMetrics")
-        if (
-            not isinstance(metrics, dict)
-            or not isinstance(metrics.get("proofRoundCount"), int)
-            or metrics.get("proofRoundCount", 0) < 1
-            or not isinstance(metrics.get("diagnosticInvocationCount"), int)
-            or metrics.get("diagnosticInvocationCount", -1) < 1
-            or not isinstance(metrics.get("finalProofCheckElapsedMs"), int)
-            or metrics.get("finalProofCheckElapsedMs", -1) < 0
-        ):
-            raise RunnerError(
-                f"cohort16 gate case has no trusted proof metrics: {case_id}"
-            )
-        evidence = row.get("reportEvidence")
-        if not isinstance(evidence, dict) or evidence.get("present") is not True:
-            raise RunnerError(f"cohort16 gate case has no report evidence: {case_id}")
-        report_path_value = evidence.get("path")
-        if not isinstance(report_path_value, str) or not report_path_value:
-            raise RunnerError(f"cohort16 gate report path is invalid: {case_id}")
-        report_path = resolve_artifact_path(report_path_value)
-        if not report_path.is_file() or report_path.is_symlink():
-            raise RunnerError(f"cohort16 gate report is missing: {report_path}")
-        if evidence.get("sha256") != sha256_file(report_path):
-            raise RunnerError(f"cohort16 gate report digest drifted: {report_path}")
-        expected_files = input_files.get(case_id)
-        if not isinstance(expected_files, dict):
-            raise RunnerError(f"current cohort16 input binding is missing: {case_id}")
-        if row.get("inputFiles") != expected_files:
-            raise RunnerError(f"cohort16 gate case input binding drifted: {case_id}")
-        validate_gate_report(
-            report_path,
-            available_by_id[case_id],
-            gate_validation_config,
-            metrics,
-        )
-
-    return {
-        "path": workspace_display_path(gate_path),
-        "sha256": gate_sha256,
-        "scopePath": workspace_display_path(FROZEN_SCOPE),
-        "scopeSha256": scope_sha256,
-        "caseSetSha256": sha256_text("\n".join(expected_cases) + "\n"),
-        "frameworkSourceTreeManifestSha256": framework_source_tree["manifestSha256"],
-        "selectedInputManifestSha256": expected_selected_digest,
-        "semanticAuthoritySha256": FROZEN_SEMANTIC_INPUT_AUTHORITY_SHA256,
-        "selectedSemanticAuthoritySha256": expected_selected_semantic_digest,
-        "solverBinarySha256": solver_binary["sha256"],
-        "caseProcessIsolationSha256": hashlib.sha256(
-            canonical_json_bytes(case_process_isolation)
-        ).hexdigest(),
-        "rocqRuntimeSnapshotManifestSha256": trusted_stack[
-            "rocqRuntimeSnapshot"
-        ]["manifestSha256"],
-        "rocqAuthoritySnapshotManifestSha256": rocq_authority_snapshot[
-            "manifestSha256"
-        ],
-        "trustedStackManifestSha256": trusted_stack["manifestSha256"],
-        "frontendStackManifestSha256": frontend_stack["manifestSha256"],
-        "codexProviderManifestSha256": codex_provider["manifestSha256"],
-        "codexConfigSha256": codex_provider["configSha256"],
-        "providerEndpointSha256": codex_provider["endpointSha256"],
-        "postgresServerProfileSha256": postgres_server_profile["manifestSha256"],
-        "verificationMode": scope.get("verificationMode"),
-    }
 
 
 def docker_image_identity(reference: str) -> dict[str, Any]:
@@ -7620,7 +6937,7 @@ def configuration_record(
         "jobs": jobs,
         "caseTimeoutSeconds": config.case_timeout_seconds,
         "statementTimeoutSeconds": config.statement_timeout_seconds,
-        "maxCounterexampleRounds": config.max_counterexample_rounds,
+        "maxCounterexampleRounds": COUNTEREXAMPLE_FRESH_ATTEMPTS,
         "terminationGraceSeconds": config.termination_grace_seconds,
         "verificationMode": config.verification_mode,
         "model": config.model,
@@ -7649,7 +6966,6 @@ def configuration_record(
         "frontendStack": config.frontend_stack,
         "codexProvider": config.codex_provider,
         "postgresServerProfile": config.postgres_server_profile,
-        "cohort16Gate": config.cohort16_gate,
         "frozenBenchmark": config.frozen_benchmark,
         "rbotAuthority": config.rbot_authority,
         "proofAgent": {
@@ -7778,7 +7094,6 @@ def selection_record(args: argparse.Namespace) -> dict[str, Any]:
         "caseFiles": list(args.case_file or ()),
         "patterns": list(args.match or ()),
         "limit": args.limit,
-        "allowUngatedFullRun": args.allow_ungated_full_run,
         "allowFrameworkSourceDrift": args.allow_framework_source_drift,
     }
 
@@ -8266,10 +7581,6 @@ def verify_run_integrity(
     if current_rbot_authority != config.rbot_authority:
         raise RunnerError("frozen R-Bot input authority changed while the run was active")
 
-    if config.cohort16_gate is not None:
-        gate_path = resolve_artifact_path(config.cohort16_gate["path"])
-        if sha256_file(gate_path) != config.cohort16_gate["sha256"]:
-            raise RunnerError("cohort16 gate summary changed while the run was active")
 
     expected_effective = effective_configuration_record(config)
     expected_by_case = {case.case_id: case for case in cases}
@@ -8387,11 +7698,6 @@ def verify_run_integrity(
         "rbotManifestSha256": (
             config.rbot_authority.get("manifestSha256")
             if config.rbot_authority is not None
-            else None
-        ),
-        "cohort16GateSha256": (
-            config.cohort16_gate.get("sha256")
-            if config.cohort16_gate is not None
             else None
         ),
         "proofDockerImage": config.proof_docker_image_effective,
@@ -8518,7 +7824,7 @@ def run_selected_cases(
                 "proofAgentMemoryLimitMiB": config.proof_agent_memory_limit_mib,
                 "proofAgentStorageLimitMiB": config.proof_agent_storage_limit_mib,
                 "statementTimeoutSeconds": config.statement_timeout_seconds,
-                "maxCounterexampleRounds": config.max_counterexample_rounds,
+                "maxCounterexampleRounds": COUNTEREXAMPLE_FRESH_ATTEMPTS,
                 "proofCheckTimeoutSeconds": config.proof_check_timeout_seconds,
                 "proofDockerImage": config.proof_docker_image_effective,
                 "proofDockerImageRequested": config.proof_docker_image,
@@ -8858,8 +8164,6 @@ def solver_command(case: BenchmarkCase, case_dir: Path, config: RunConfig) -> li
         str(config.proof_check_timeout_seconds),
         "--statement-timeout-ms",
         str(config.statement_timeout_seconds * 1000),
-        "--max-counterexample-rounds",
-        str(config.max_counterexample_rounds),
         "--proof-docker-image",
         config.proof_docker_image_effective,
         "--proof-rocq-opam-switch",
@@ -8978,7 +8282,7 @@ def effective_configuration_record(config: RunConfig) -> dict[str, Any]:
         "dockerImage": config.proof_docker_image_effective,
         "caseTimeoutSeconds": config.case_timeout_seconds,
         "statementTimeoutSeconds": config.statement_timeout_seconds,
-        "maxCounterexampleRounds": config.max_counterexample_rounds,
+        "maxCounterexampleRounds": COUNTEREXAMPLE_FRESH_ATTEMPTS,
         "terminationGraceSeconds": config.termination_grace_seconds,
         "proofAgentTotalTimeoutSeconds": max(1, int(config.case_timeout_seconds) - 300),
         "proofAgentSessionRestartAfterFailedRounds": (
@@ -9060,11 +8364,6 @@ def effective_configuration_record(config: RunConfig) -> dict[str, Any]:
         "codexConfigSha256": config.codex_provider["configSha256"],
         "providerEndpointSha256": config.codex_provider["endpointSha256"],
         "postgresServerProfileSha256": config.postgres_server_profile["manifestSha256"],
-        "cohort16GateSha256": (
-            config.cohort16_gate.get("sha256")
-            if config.cohort16_gate is not None
-            else None
-        ),
     }
 
 
