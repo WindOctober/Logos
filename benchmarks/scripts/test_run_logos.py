@@ -1,4 +1,3 @@
-import ast
 import hashlib
 import json
 import os
@@ -7401,7 +7400,7 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
             ).allow_framework_source_drift
         )
 
-    def test_framework_source_precedes_build_and_binds_loaded_runner_bytes(self) -> None:
+    def test_framework_manifest_binds_loaded_runner_bytes(self) -> None:
         namespace = runpy.run_path(str(RUNNER), run_name="runner_launch_binding_test")
         manifest = namespace["build_source_tree_manifest"](namespace["LOGOS_ROOT"])
         manifest_path = self.root / "launch-framework-source-tree-manifest.json"
@@ -7429,42 +7428,43 @@ class LogosBenchmarkRunnerTests(unittest.TestCase):
                 tampered, manifest_path, "0" * 64
             )
 
-        module = ast.parse(RUNNER.read_text(encoding="utf-8"))
-        main_node = next(
-            node
-            for node in module.body
-            if isinstance(node, ast.FunctionDef) and node.name == "main"
-        )
-        call_lines = {
-            call.func.id: call.lineno
-            for call in ast.walk(main_node)
-            if isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Name)
-            and call.func.id
-            in {
-                "required_postgres_url",
-                "capture_codex_provider_environment",
-                "postgres_profile_document",
-                "prepare_run_dir",
-                "framework_source_tree_record",
-                "build_solver",
-                "prepare_frontend_stack",
-            }
-        }
-        for preflight in (
-            "required_postgres_url",
-            "capture_codex_provider_environment",
-            "postgres_profile_document",
+    def test_framework_manifest_exists_before_builds_execute(self) -> None:
+        self.make_case("cohort", "one", "bench-a", "one", "bench-a__one")
+        namespace = runpy.run_path(str(RUNNER), run_name="runner_build_order_test")
+        run_dir = self.root / "manifest-before-build"
+        args = self.common_args(run_dir)
+        args.remove("--no-build")
+        events = []
+
+        class StopAfterBuilds(Exception):
+            pass
+
+        def observe_build(name):
+            # Observe the actual persisted input to a build, not source line order.
+            manifest_path = run_dir / "framework-source-tree-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(
+                namespace["framework_source_tree_summary"](
+                    manifest, manifest_path,
+                    namespace["source_tree_manifest_sha256"](manifest),
+                )["runnerScriptSha256"],
+                namespace["RUNNER_LAUNCH_RECORD"]["sha256"],
+            )
+            events.append(name)
+            if len(events) == 2:
+                raise StopAfterBuilds
+
+        with (
+            mock.patch.dict(os.environ, self.environment, clear=True),
+            mock.patch.object(sys, "argv", [str(RUNNER), *args]),
+            mock.patch.dict(namespace["main"].__globals__, {
+                "build_solver": lambda: observe_build("solver"),
+                "prepare_frontend_stack": lambda: observe_build("frontend"),
+            }),
+            self.assertRaises(StopAfterBuilds),
         ):
-            self.assertLess(call_lines[preflight], call_lines["prepare_run_dir"])
-            self.assertLess(call_lines[preflight], call_lines["build_solver"])
-        self.assertLess(
-            call_lines["framework_source_tree_record"], call_lines["build_solver"]
-        )
-        self.assertLess(
-            call_lines["framework_source_tree_record"],
-            call_lines["prepare_frontend_stack"],
-        )
+            namespace["main"]()
+        self.assertCountEqual(events, ["solver", "frontend"])
 
     def test_record_only_resume_rejects_mutable_digest_helper_before_execution(
         self,

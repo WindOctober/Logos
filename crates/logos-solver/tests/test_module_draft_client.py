@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Module-named WIP uses the existing strict module broker protocol exactly once."""
+"""Exercise the diagnostic CLI and broker protocol, not its shell/Python spelling."""
 
 import hashlib
 import json
@@ -28,7 +28,8 @@ class ModuleDraftClientTests(unittest.TestCase):
         self.draft.write_bytes(self.source)
         self.socket_path = self.root / "broker.sock"
 
-    def client(self, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=()):
+    def client(self, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=(),
+               purpose="semantic-equivalence"):
         return subprocess.run(
             [
                 "bash",
@@ -38,7 +39,7 @@ class ModuleDraftClientTests(unittest.TestCase):
                 "--candidate",
                 path,
                 "--purpose",
-                "semantic-equivalence",
+                purpose,
                 "--timeout-seconds",
                 "5",
                 *extra,
@@ -54,7 +55,8 @@ class ModuleDraftClientTests(unittest.TestCase):
         )
 
     def exchange(
-        self, overrides=None, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=()
+        self, overrides=None, path="scratch/ProofModules/CoreBridge.v", mode="module", extra=(),
+        purpose="semantic-equivalence",
     ):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
             listener.bind(str(self.socket_path))
@@ -85,7 +87,7 @@ class ModuleDraftClientTests(unittest.TestCase):
 
             with ThreadPoolExecutor(max_workers=1) as executor:
                 response = executor.submit(serve)
-                completed = self.client(path, mode, extra)
+                completed = self.client(path, mode, extra, purpose)
                 request, uploaded = response.result(timeout=6)
         self.socket_path.unlink()
         return completed, request, uploaded
@@ -93,6 +95,10 @@ class ModuleDraftClientTests(unittest.TestCase):
     def test_draft_is_uploaded_once_as_final_module_without_local_publication(self):
         result, request, uploaded = self.exchange()
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(request["schemaVersion"], 2)
+        self.assertEqual(request["nonce"], "a" * 64)
+        self.assertEqual(request["requestedTimeoutSeconds"], 5)
+        self.assertEqual(request["purpose"], "semantic-equivalence")
         self.assertEqual(request["mode"], "module")
         self.assertEqual(request["candidatePath"], "ProofModules/CoreBridge.v")
         self.assertEqual(
@@ -100,7 +106,6 @@ class ModuleDraftClientTests(unittest.TestCase):
         )
         self.assertEqual(request["candidateBytes"], len(self.source))
         self.assertEqual(uploaded, self.source)
-        self.assertIn("No copy or second module check is needed", result.stdout)
         self.assertIn("ProofModules/CoreBridge.v", result.stdout)
         self.assertEqual(self.draft.read_bytes(), self.source)
         self.assertFalse((self.root / "ProofModules").exists())
@@ -152,6 +157,7 @@ class ModuleDraftClientTests(unittest.TestCase):
 
     def test_response_must_bind_final_name_mode_and_digest(self):
         for field, wrong in (
+            ("mode", None),
             ("candidatePath", "scratch/ProofModules/CoreBridge.v"),
             ("candidatePath", "ProofModules/Other.v"),
             ("mode", "scratch"),
@@ -162,9 +168,57 @@ class ModuleDraftClientTests(unittest.TestCase):
                 result, _, _ = self.exchange({field: wrong})
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("response identity mismatch", result.stderr)
-        result, _, _ = self.exchange({"compileCheckpointAdvanced": True})
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("incorrectly classified", result.stderr)
+
+    def test_unsupported_response_schema_is_rejected(self):
+        for version in (None, 1, 3, "2"):
+            with self.subTest(version=version):
+                result, _, _ = self.exchange({"schemaVersion": version})
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_problem_success_requires_both_checkpoint_flags(self):
+        (self.root / "Problem.v").write_bytes(self.source)
+        for passed in (False, True):
+            for advanced in (False, True):
+                with self.subTest(passed=passed, advanced=advanced):
+                    result, request, uploaded = self.exchange(
+                        {"problemCompilePassed": passed, "compileCheckpointAdvanced": advanced},
+                        path="Problem.v", mode="problem", purpose="assembly",
+                    )
+                    self.assertEqual(result.returncode == 0, passed and advanced, result.stderr)
+                    self.assertEqual(request["candidatePath"], "Problem.v")
+                    self.assertEqual(request["purpose"], "assembly")
+                    self.assertEqual(uploaded, self.source)
+
+    def test_auxiliary_success_cannot_advance_problem_checkpoint(self):
+        for mode in ("module", "scratch"):
+            for field in ("problemCompilePassed", "compileCheckpointAdvanced"):
+                with self.subTest(mode=mode, field=field):
+                    result, _, _ = self.exchange({field: True}, mode=mode)
+                    self.assertNotEqual(result.returncode, 0)
+
+    def test_cli_purposes_and_failure_exit_codes(self):
+        for purpose in ("static-obligation", "semantic-equivalence", "assembly"):
+            with self.subTest(purpose=purpose):
+                result, request, _ = self.exchange(purpose=purpose)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(request["purpose"], purpose)
+        for response, expected in (
+            ({"compilePassed": False, "exitCode": 1}, 1),
+            ({"compilePassed": False, "exitCode": 86}, 86),
+            ({"compilePassed": False, "timedOut": True}, 124),
+        ):
+            with self.subTest(response=response):
+                result, _, _ = self.exchange(response)
+                self.assertEqual(result.returncode, expected)
+
+    def test_invalid_mode_purpose_and_missing_required_options_fail_before_connect(self):
+        self.assertEqual(self.client(mode="unknown").returncode, 64)
+        self.assertEqual(self.client(purpose="unknown").returncode, 64)
+        result = subprocess.run(
+            ["bash", str(self.script), "--timeout-seconds", "5"],
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(result.returncode, 64, result.stderr)
 
     def test_legacy_module_and_disposable_scratch_modes_keep_their_identity(self):
         source = self.root / "ProofModules/CoreBridge.v"

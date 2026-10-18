@@ -72,6 +72,55 @@ impl ManualReviewRequest {
 pub(super) type ProofHandoffHandler<'a> =
     dyn FnMut(&ProofCounterexampleHandoff) -> Result<ProofHandoffResolution> + 'a;
 
+/// A terminal result or a new witness never needs the old agent session.
+pub(super) enum ProofRoundDisposition {
+    Complete,
+    NeedsManualReview(String),
+    RestartWithFormalWitness {
+        feedback: String,
+        snapshot: FormalWitnessSnapshot,
+    },
+    Continue(Option<String>),
+    ResumeUnavailable(Option<String>),
+}
+
+pub(super) fn resolve_proof_round(
+    log: &AgentRunLog,
+    session_resumable: bool,
+    handler: Option<&mut ProofHandoffHandler<'_>>,
+) -> Result<ProofRoundDisposition> {
+    if log.success {
+        return Ok(ProofRoundDisposition::Complete);
+    }
+    let mut feedback = None;
+    if let Some(handoff) = &log.counterexample_handoff {
+        let round = log.round;
+        match resolve_handoff(handoff, handler)? {
+            ProofHandoffResolution::Continue(reason) => {
+                feedback = Some(format!(
+                    "The handoff from proof round {round} did not terminate the search. Resume the proof and account for this feedback:\n{reason}"
+                ));
+            }
+            ProofHandoffResolution::NeedsManualReview(request) => match request.validate(log) {
+                Ok(reason) => return Ok(ProofRoundDisposition::NeedsManualReview(reason)),
+                Err(reason) => {
+                    feedback = Some(format!(
+                        "Manual review rejected in round {round}: {reason}. Continue from the trusted checkpoint; address this finding before submitting another request."
+                    ))
+                }
+            },
+            ProofHandoffResolution::RestartWithFormalWitness { feedback, snapshot } => {
+                return Ok(ProofRoundDisposition::RestartWithFormalWitness { feedback, snapshot });
+            }
+        }
+    }
+    Ok(if session_resumable {
+        ProofRoundDisposition::Continue(feedback)
+    } else {
+        ProofRoundDisposition::ResumeUnavailable(feedback)
+    })
+}
+
 pub(super) fn resolve_handoff(
     handoff: &ProofCounterexampleHandoff,
     handler: Option<&mut ProofHandoffHandler<'_>>,

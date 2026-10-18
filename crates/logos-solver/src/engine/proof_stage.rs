@@ -60,7 +60,7 @@ use context::{
 use diagnostics::{CandidateKind, CompileCheckpoint, DiagnosticBroker, ReadOnlyMappedFile};
 use goal::{formal_sql_bound_goal_module, formal_sql_goal_module};
 pub(super) use handoff::{ManualReviewRequest, ProofHandoffResolution};
-use handoff::{ProofHandoffHandler, resolve_handoff};
+use handoff::{ProofHandoffHandler, ProofRoundDisposition, resolve_proof_round};
 use navigation::build_query_shape;
 pub(super) use witness::write_typed_witness_audit_workspace;
 use witness::{WitnessModules, formal_sql_witness_modules, write_formal_sql_witness_modules};
@@ -1142,124 +1142,111 @@ pub(super) fn run_proof_stage(
             }
             proof_agent_rounds.push(round_result.log);
 
-            if round_success {
-                break;
-            }
-
-            // A typed fixed witness deliberately creates a fresh generation
-            // and therefore does not need the failed Codex session. Resolve
-            // the materialized handoff before deciding whether missing resume
-            // telemetry is fatal.
-            if let Some(handoff) = handoff {
-                match resolve_handoff(&handoff, handoff_handler.as_deref_mut())? {
-                    ProofHandoffResolution::Continue(feedback) => {
-                        repair_feedback = Some(format!(
-                            "The handoff from proof round {round} did not terminate the search. Resume the proof and account for this feedback:\n{feedback}"
-                        ));
-                    }
-                    ProofHandoffResolution::NeedsManualReview(request) => {
-                        match request.validate(
-                            proof_agent_rounds
-                                .last()
-                                .expect("the handoff round was recorded"),
-                        ) {
-                            Ok(reason) => {
-                                proof_manual_review_reason = Some(reason);
-                                break;
-                            }
-                            Err(reason) => {
-                                repair_feedback = Some(format!(
-                                    "Manual review rejected in round {round}: {reason}. Continue from the trusted checkpoint; address this finding before submitting another request."
-                                ))
-                            }
-                        }
-                    }
-                    ProofHandoffResolution::RestartWithFormalWitness { feedback, snapshot } => {
-                        let from_workspace_generation = proof_workspace_generation;
-                        let to_workspace_generation =
-                            from_workspace_generation.checked_add(1).ok_or_else(|| {
-                                Error::ProofAgentCommand(
-                                    "proof workspace generation overflowed".to_owned(),
-                                )
-                            })?;
-                        let from_context_manifest_sha256 = proof_agent_context
-                            .as_ref()
-                            .expect("an enabled proof agent has a validated context")
-                            .report
-                            .manifest_sha256
-                            .clone();
-                        let triggering_handoff_sha256 = canonical_json_sha256(&handoff)?;
-                        let from_trusted_diagnostic_cache =
-                            archive_trusted_diagnostic_cache(artifacts, from_workspace_generation)?;
-                        let (
-                            restarted_workspace,
-                            restarted_context,
-                            restarted_trusted_sources,
-                            restarted_preflight,
-                            restarted_checkpoint,
-                            restarted_session_home,
-                        ) = restart_proof_workspace_with_formal_witness(
-                            artifacts,
-                            input,
-                            &ir_input,
-                            &lowering_report,
-                            &observation_certificates,
-                            &snapshot,
-                            options,
-                            to_workspace_generation,
-                        )?;
-                        let to_context_manifest_sha256 =
-                            restarted_context.report.manifest_sha256.clone();
-                        let checkpoint_evidence =
-                            restarted_checkpoint.report_evidence(artifacts)?;
-                        proof_workspace_transitions.push(ProofWorkspaceTransition {
-                            after_round: round,
-                            from_workspace_generation,
-                            to_workspace_generation,
-                            reason: ProofWorkspaceTransitionReason::FixedWitnessReplacement,
-                            triggering_handoff_sha256,
-                            from_context_manifest_sha256,
-                            to_context_manifest_sha256,
-                            from_trusted_diagnostic_cache,
-                            new_trusted_environment_preflight: restarted_preflight,
-                            new_initial_problem_compile_checkpoint: checkpoint_evidence,
-                        });
-                        proof_workspace = Some(restarted_workspace);
-                        proof_agent_configuration.context = Some(restarted_context.report.clone());
-                        proof_agent_context = Some(restarted_context);
-                        trusted_sources = Some(restarted_trusted_sources);
-                        bind_trusted_diagnostic_cache_manifest(
-                            artifacts,
-                            &mut proof_agent_configuration,
-                        )?;
-                        problem_compile_checkpoint = Some(restarted_checkpoint);
-                        proof_workspace_generation = to_workspace_generation;
-                        proof_agent_session_home = Some(restarted_session_home);
-                        proof_agent_session_id = None;
-                        proof_agent_cumulative_usage = None;
-                        proof_agent_session_generation =
-                            proof_agent_session_generation.saturating_add(1);
-                        next_session_restart_reason =
-                            Some(ProofSessionRestartReason::FixedWitnessReplacement);
-                        next_checkpoint_transition = ProofCheckpointTransition::NewWorkspaceInitial;
-                        failed_rounds_in_session = 0;
-                        proof_resume_unavailable = false;
-                        repair_feedback = Some(format!(
-                            "The counterexample stage type-checked the candidate DML and losslessly froze a new typed database after proof round {round}. PostgreSQL did not execute the query pair or certify divergence. The host replaced the live FormalSQL proof workspace, regenerated Witness.v and its context manifest, created a fresh generated Problem.v checkpoint while preserving prior generation evidence, discarded witness-bound scratch, and started a fresh proof session. Use the unified trusted Rocq selector to prove either equivalence or complete outcome separation on exactly this fixed witness. Counterexample-stage feedback:\n{feedback}"
-                        ));
-                        artifacts.write_json(
-                            "proof-stage/proof-agent/config.json",
-                            &proof_agent_configuration,
-                        )?;
-                        round = round.saturating_add(1);
-                        continue;
+            match resolve_proof_round(
+                proof_agent_rounds.last().expect("the round was recorded"),
+                session_resumable,
+                handoff_handler.as_deref_mut(),
+            )? {
+                ProofRoundDisposition::Complete => break,
+                ProofRoundDisposition::NeedsManualReview(reason) => {
+                    proof_manual_review_reason = Some(reason);
+                    break;
+                }
+                ProofRoundDisposition::Continue(feedback) => {
+                    if feedback.is_some() {
+                        repair_feedback = feedback;
                     }
                 }
-            }
-
-            if !session_resumable {
-                proof_resume_unavailable = true;
-                break;
+                ProofRoundDisposition::ResumeUnavailable(feedback) => {
+                    if feedback.is_some() {
+                        repair_feedback = feedback;
+                    }
+                    proof_resume_unavailable = true;
+                    break;
+                }
+                ProofRoundDisposition::RestartWithFormalWitness { feedback, snapshot } => {
+                    let from_workspace_generation = proof_workspace_generation;
+                    let to_workspace_generation =
+                        from_workspace_generation.checked_add(1).ok_or_else(|| {
+                            Error::ProofAgentCommand(
+                                "proof workspace generation overflowed".to_owned(),
+                            )
+                        })?;
+                    let from_context_manifest_sha256 = proof_agent_context
+                        .as_ref()
+                        .expect("an enabled proof agent has a validated context")
+                        .report
+                        .manifest_sha256
+                        .clone();
+                    let triggering_handoff_sha256 = canonical_json_sha256(
+                        handoff
+                            .as_ref()
+                            .expect("witness restart requires a handoff"),
+                    )?;
+                    let from_trusted_diagnostic_cache =
+                        archive_trusted_diagnostic_cache(artifacts, from_workspace_generation)?;
+                    let (
+                        restarted_workspace,
+                        restarted_context,
+                        restarted_trusted_sources,
+                        restarted_preflight,
+                        restarted_checkpoint,
+                        restarted_session_home,
+                    ) = restart_proof_workspace_with_formal_witness(
+                        artifacts,
+                        input,
+                        &ir_input,
+                        &lowering_report,
+                        &observation_certificates,
+                        &snapshot,
+                        options,
+                        to_workspace_generation,
+                    )?;
+                    let to_context_manifest_sha256 =
+                        restarted_context.report.manifest_sha256.clone();
+                    let checkpoint_evidence = restarted_checkpoint.report_evidence(artifacts)?;
+                    proof_workspace_transitions.push(ProofWorkspaceTransition {
+                        after_round: round,
+                        from_workspace_generation,
+                        to_workspace_generation,
+                        reason: ProofWorkspaceTransitionReason::FixedWitnessReplacement,
+                        triggering_handoff_sha256,
+                        from_context_manifest_sha256,
+                        to_context_manifest_sha256,
+                        from_trusted_diagnostic_cache,
+                        new_trusted_environment_preflight: restarted_preflight,
+                        new_initial_problem_compile_checkpoint: checkpoint_evidence,
+                    });
+                    proof_workspace = Some(restarted_workspace);
+                    proof_agent_configuration.context = Some(restarted_context.report.clone());
+                    proof_agent_context = Some(restarted_context);
+                    trusted_sources = Some(restarted_trusted_sources);
+                    bind_trusted_diagnostic_cache_manifest(
+                        artifacts,
+                        &mut proof_agent_configuration,
+                    )?;
+                    problem_compile_checkpoint = Some(restarted_checkpoint);
+                    proof_workspace_generation = to_workspace_generation;
+                    proof_agent_session_home = Some(restarted_session_home);
+                    proof_agent_session_id = None;
+                    proof_agent_cumulative_usage = None;
+                    proof_agent_session_generation =
+                        proof_agent_session_generation.saturating_add(1);
+                    next_session_restart_reason =
+                        Some(ProofSessionRestartReason::FixedWitnessReplacement);
+                    next_checkpoint_transition = ProofCheckpointTransition::NewWorkspaceInitial;
+                    failed_rounds_in_session = 0;
+                    proof_resume_unavailable = false;
+                    repair_feedback = Some(format!(
+                        "The counterexample stage type-checked the candidate DML and losslessly froze a new typed database after proof round {round}. PostgreSQL did not execute the query pair or certify divergence. The host replaced the live FormalSQL proof workspace, regenerated Witness.v and its context manifest, created a fresh generated Problem.v checkpoint while preserving prior generation evidence, discarded witness-bound scratch, and started a fresh proof session. Use the unified trusted Rocq selector to prove either equivalence or complete outcome separation on exactly this fixed witness. Counterexample-stage feedback:\n{feedback}"
+                    ));
+                    artifacts.write_json(
+                        "proof-stage/proof-agent/config.json",
+                        &proof_agent_configuration,
+                    )?;
+                    round = round.saturating_add(1);
+                    continue;
+                }
             }
 
             if proof_deadline

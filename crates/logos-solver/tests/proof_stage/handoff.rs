@@ -1,5 +1,8 @@
 use super::super::audit::{AuditPurpose, audit_proof_workspace_for_mode};
-use super::super::handoff::{ManualReviewRequest, ProofHandoffResolution, resolve_handoff};
+use super::super::handoff::{
+    ManualReviewRequest, ProofHandoffResolution, ProofRoundDisposition, resolve_handoff,
+    resolve_proof_round,
+};
 use super::*;
 
 fn review_log() -> AgentRunLog {
@@ -15,6 +18,111 @@ fn request() -> ProofCounterexampleHandoff {
         decision: ProofAgentDecision::NeedsManualReview,
         reason: "the trusted demand-safety contract is obstructed".to_owned(),
         guidance: "inspect the checked safety obstruction".to_owned(),
+    }
+}
+
+#[test]
+fn round_resolution_prioritizes_certificates_review_and_new_witness_over_resume() {
+    for resumable in [false, true] {
+        let mut log = review_log();
+        log.session_id = None;
+        log.counterexample_handoff = Some(request());
+        assert!(matches!(
+            resolve_proof_round(&log, resumable, None).unwrap(),
+            ProofRoundDisposition::NeedsManualReview(_)
+        ));
+
+        log.counterexample_handoff.as_mut().unwrap().decision =
+            ProofAgentDecision::CounterexampleCandidate;
+        log.success = true;
+        let mut forbidden = |_: &ProofCounterexampleHandoff| {
+            panic!("an accepted certificate must not invoke counterexample synthesis")
+        };
+        assert!(matches!(
+            resolve_proof_round(&log, resumable, Some(&mut forbidden)).unwrap(),
+            ProofRoundDisposition::Complete
+        ));
+
+        log.success = false;
+        let mut calls = 0;
+        let mut replacement = |handoff: &ProofCounterexampleHandoff| {
+            calls += 1;
+            assert_eq!(
+                handoff.reason,
+                log.counterexample_handoff.as_ref().unwrap().reason
+            );
+            Ok(ProofHandoffResolution::RestartWithFormalWitness {
+                feedback: "typed replacement".into(),
+                snapshot: FormalWitnessSnapshot {
+                    schema_version: 1,
+                    tables: vec![],
+                },
+            })
+        };
+        let ProofRoundDisposition::RestartWithFormalWitness { feedback, snapshot } =
+            resolve_proof_round(&log, resumable, Some(&mut replacement)).unwrap()
+        else {
+            panic!("a typed replacement must not depend on the old session")
+        };
+        assert_eq!(calls, 1);
+        assert_eq!(feedback, "typed replacement");
+        assert_eq!(snapshot.schema_version, 1);
+        assert!(snapshot.tables.is_empty());
+
+        let mut assessment = |_: &ProofCounterexampleHandoff| {
+            Ok(ProofHandoffResolution::NeedsManualReview(
+                ManualReviewRequest::CounterexampleAssessment {
+                    reason: "no finite executable witness".into(),
+                },
+            ))
+        };
+        assert!(matches!(
+            resolve_proof_round(&log, resumable, Some(&mut assessment)).unwrap(),
+            ProofRoundDisposition::NeedsManualReview(_)
+        ));
+
+        let mut failed_handler = |_: &ProofCounterexampleHandoff| {
+            Err(crate::error::Error::ProofAgentCommand(
+                "handoff failed".into(),
+            ))
+        };
+        assert!(resolve_proof_round(&log, resumable, Some(&mut failed_handler)).is_err());
+    }
+}
+
+#[test]
+fn nonterminal_rounds_require_resume_and_preserve_handoff_feedback() {
+    for resumable in [false, true] {
+        for (handoff, unsafe_source) in [(None, false), (Some(request()), true)] {
+            let mut log = review_log();
+            log.counterexample_handoff = handoff;
+            log.audit.passed = !unsafe_source;
+            let disposition = resolve_proof_round(&log, resumable, None).unwrap();
+            let feedback = match (resumable, disposition) {
+                (true, ProofRoundDisposition::Continue(feedback))
+                | (false, ProofRoundDisposition::ResumeUnavailable(feedback)) => feedback,
+                _ => panic!("an invalid review must not terminate as manual review"),
+            };
+            assert_eq!(feedback.is_some(), unsafe_source);
+            if let Some(feedback) = feedback {
+                assert!(feedback.contains("source safety"));
+            }
+        }
+        let mut log = review_log();
+        let mut candidate = request();
+        candidate.decision = ProofAgentDecision::CounterexampleCandidate;
+        log.counterexample_handoff = Some(candidate);
+        let mut handler = |_: &ProofCounterexampleHandoff| {
+            Ok(ProofHandoffResolution::Continue(
+                "no materializable witness".into(),
+            ))
+        };
+        let feedback = match resolve_proof_round(&log, resumable, Some(&mut handler)).unwrap() {
+            ProofRoundDisposition::Continue(feedback) if resumable => feedback,
+            ProofRoundDisposition::ResumeUnavailable(feedback) if !resumable => feedback,
+            _ => panic!("nonterminal handoff must obey session availability"),
+        };
+        assert!(feedback.unwrap().contains("no materializable witness"));
     }
 }
 
